@@ -1,0 +1,20 @@
+{
+  "name": "redweb",
+  "version": "0.1.1",
+  "description": "A way to quickly set up an express server",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "jest": "^29.7.0"
+  }
+}dfd
