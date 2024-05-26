@@ -1,6 +1,6 @@
 # RedWeb
 
-RedWeb is a simple and flexible Node.js framework built on top of Express.js. It allows you to quickly set up a web server with customizable options, including serving static files and defining custom API endpoints.
+RedWeb is a simple and flexible Node.js framework built on top of Express.js. It allows you to quickly set up a web server with customizable options, including serving static files, defining custom API endpoints, and integrating WebSocket communication.
 
 ## Installation
 
@@ -17,9 +17,9 @@ npm install redweb
 To get started with RedWeb, simply initialize your RedWeb instance with the default options:
 
 ```javascript
-const { RedWeb } = require('redweb');
+const { HttpServer } = require('redweb');
 
-const app = new RedWeb();
+const app = new HttpServer();
 ```
 
 ### Custom Configuration
@@ -27,7 +27,7 @@ const app = new RedWeb();
 You can also configure RedWeb according to your needs:
 
 ```javascript
-const { RedWeb, METHODS } = require('redweb');
+const { HttpServer, METHODS } = require('redweb');
 
 const services = [
     {
@@ -55,12 +55,77 @@ const options = {
     services: services
 };
 
-const app = new RedWeb(options);
+const app = new HttpServer(options);
+```
+
+### HTTPS Server
+
+To create an HTTPS server, provide the SSL options including the paths to your SSL key and certificate files:
+
+```javascript
+const { HttpsServer } = require('redweb');
+
+const options = {
+    port: 3443,
+    ssl: {
+        key: './path/to/key.pem',
+        cert: './path/to/cert.pem'
+    },
+    publicPaths: ['./public']
+};
+
+const app = new HttpsServer(options);
+```
+
+### WebSocket Server
+
+To create a WebSocket server, use the `SocketServer` function:
+
+```javascript
+const { SocketServer } = require('redweb');
+
+const options = {
+    port: 3000,
+    connectionCallback: (socket) => {
+        console.log('New client connected');
+        socket.on('message', (data) => {
+            console.log('Message received:', data);
+        });
+    }
+};
+
+const socketServer = new SocketServer(options);
+```
+
+### Secure WebSocket Server
+
+To create a secure WebSocket server, provide the SSL options:
+
+```javascript
+const { SecureSocketServer } = require('redweb');
+
+const options = {
+    port: 4443,
+    ssl: {
+        key: './path/to/key.pem',
+        cert: './path/to/cert.pem'
+    },
+    connectionCallback: (socket) => {
+        console.log('New client connected');
+        socket.on('message', (data) => {
+            console.log('Message received:', data);
+        });
+    }
+};
+
+const secureSocketServer = new SecureSocketServer(options);
 ```
 
 ## Options
 
-The `RedWeb` constructor accepts an options object with the following properties:
+### HTTP/HTTPS Options
+
+The `HttpServer` and `HttpsServer` constructors accept an options object with the following properties:
 
 - **port**: The port number to bind the server (default: `80`).
 - **bind**: The bind address for the server (default: `0.0.0.0`).
@@ -68,6 +133,15 @@ The `RedWeb` constructor accepts an options object with the following properties
 - **services**: An array of services with their endpoints and handlers (default: `[]`).
 - **listenCallback**: A callback function to execute once the server starts listening (default: `undefined`).
 - **encoding**: The encoding type for the request bodies. It can be either `'json'` or `'urlencoded'` (default: `'json'`).
+- **ssl**: SSL configuration for the HTTPS server. It should include `key` and `cert` paths.
+
+### WebSocket/Secure WebSocket Options
+
+The `SocketServer` and `SecureSocketServer` constructors accept an options object with the following properties:
+
+- **port**: The port number to bind the socket server (default: `3000`).
+- **connectionCallback**: A callback function to execute once a client connects (default: `undefined`).
+- **ssl**: SSL configuration for the secure WebSocket server. It should include `key` and `cert` paths.
 
 ### Example Options Object
 
