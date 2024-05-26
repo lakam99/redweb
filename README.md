@@ -1,6 +1,3 @@
-Sure, here is a concise version of the `README.md`:
-
-```markdown
 # RedWeb
 
 RedWeb is a simple and flexible Node.js framework built on top of Express.js and WebSocket. It allows you to quickly set up web servers and WebSocket servers with customizable options.
@@ -180,6 +177,3 @@ console.log(socketServer.clients); // Map of clients by their IP addresses
 ## License
 
 MIT License
-```
-
-This `README.md` is now more concise, providing a clear overview of the basic and custom configurations for both HTTP and WebSocket servers, along with their available options.
