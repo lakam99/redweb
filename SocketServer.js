@@ -21,7 +21,7 @@ const SOCKET_OPTIONS = {
     connectionCloseCallback: undefined,
     messageCallback: undefined,
     messageHandlers: {
-        'ping': function(data) { this.send(JSON.stringify({ type: 'pong' })); }
+        'ping': function(socket, data) { socket.send(JSON.stringify({ type: 'pong' })); }
     },
     ssl: null
 };
@@ -51,7 +51,7 @@ function BaseSocketServer(server, options = {}) {
                 const { type, data } = parsedMessage;
 
                 if (this.messageHandlers[type]) {
-                    this.messageHandlers[type].call(socket, data);
+                    this.messageHandlers[type](socket, data);
                 }
             } catch (error) {
                 console.error(`Error handling message from ${ip}:`, error);

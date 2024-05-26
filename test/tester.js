@@ -13,4 +13,4 @@ new RedWeb.HttpServer({
 });
 
 // WebSocket server on port 3000
-new RedWeb.SocketServer({messageHandlers: {'msg': function (data) {console.log(data); this.send('guuuuuurl')}}});
+new RedWeb.SocketServer({messageHandlers: {'msg': function (socket, data) {console.log(data); socket.send('guuuuuurl')}}});
