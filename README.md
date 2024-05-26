@@ -1,6 +1,6 @@
 # RedWeb
 
-RedWeb is a simple and flexible Node.js framework built on top of Express.js. It allows you to quickly set up a web server with customizable options, including serving static files, defining custom API endpoints, and integrating WebSocket communication.
+RedWeb is a simple and flexible Node.js framework built on top of Express.js and WebSocket. It allows you to quickly set up a web server with customizable options, including serving static files, defining custom API endpoints, and integrating WebSocket communication.
 
 ## Installation
 
@@ -86,11 +86,17 @@ const { SocketServer } = require('redweb');
 
 const options = {
     port: 3000,
-    connectionCallback: (socket) => {
-        console.log('New client connected');
-        socket.on('message', (data) => {
-            console.log('Message received:', data);
-        });
+    connectionOpenCallback: (socket) => {
+        console.log('WebSocket client connected');
+    },
+    connectionCloseCallback: (socket) => {
+        console.log('WebSocket client disconnected');
+    },
+    messageHandlers: {
+        'msg': function (data) {
+            console.log(data);
+            this.send('guuuuuurl');
+        }
     }
 };
 
@@ -110,22 +116,53 @@ const options = {
         key: './path/to/key.pem',
         cert: './path/to/cert.pem'
     },
-    connectionCallback: (socket) => {
-        console.log('New client connected');
-        socket.on('message', (data) => {
-            console.log('Message received:', data);
-        });
+    connectionOpenCallback: (socket) => {
+        console.log('WebSocket client connected');
+    },
+    connectionCloseCallback: (socket) => {
+        console.log('WebSocket client disconnected');
+    },
+    messageHandlers: {
+        'msg': function (data) {
+            console.log(data);
+            this.send('guuuuuurl');
+        }
     }
 };
 
 const secureSocketServer = new SecureSocketServer(options);
 ```
 
+### Managing Connected Clients
+
+RedWeb's WebSocket server maintains a list of connected clients by their IP addresses. This list is automatically updated when clients connect or disconnect.
+
+```javascript
+const { SocketServer } = require('redweb');
+
+const socketServer = new SocketServer({
+    port: 3000,
+    connectionOpenCallback: (socket) => {
+        console.log('WebSocket client connected');
+    },
+    connectionCloseCallback: (socket) => {
+        console.log('WebSocket client disconnected');
+    },
+    messageHandlers: {
+        'msg': function (data) {
+            console.log(data);
+            this.send('guuuuuurl');
+        }
+    }
+});
+
+// Access the list of connected clients
+console.log(socketServer.clients); // Map of clients by their IP addresses
+```
+
 ## Options
 
-### HTTP/HTTPS Options
-
-The `HttpServer` and `HttpsServer` constructors accept an options object with the following properties:
+### HttpServer and HttpsServer Options
 
 - **port**: The port number to bind the server (default: `80`).
 - **bind**: The bind address for the server (default: `0.0.0.0`).
@@ -133,44 +170,18 @@ The `HttpServer` and `HttpsServer` constructors accept an options object with th
 - **services**: An array of services with their endpoints and handlers (default: `[]`).
 - **listenCallback**: A callback function to execute once the server starts listening (default: `undefined`).
 - **encoding**: The encoding type for the request bodies. It can be either `'json'` or `'urlencoded'` (default: `'json'`).
-- **ssl**: SSL configuration for the HTTPS server. It should include `key` and `cert` paths.
+- **ssl**: SSL configuration for the HTTPS server. An object containing the paths to the SSL key and certificate files.
 
-### WebSocket/Secure WebSocket Options
-
-The `SocketServer` and `SecureSocketServer` constructors accept an options object with the following properties:
+### SocketServer and SecureSocketServer Options
 
 - **port**: The port number to bind the socket server (default: `3000`).
-- **connectionCallback**: A callback function to execute once a client connects (default: `undefined`).
-- **ssl**: SSL configuration for the secure WebSocket server. It should include `key` and `cert` paths.
-
-### Example Options Object
-
-```javascript
-const options = {
-    port: 3000,
-    bind: '127.0.0.1',
-    publicPaths: ['./public', './assets'],
-    services: [
-        {
-            serviceName: '/api/data',
-            method: METHODS.GET,
-            function: (req, res) => {
-                res.json({ message: 'Hello, world!' });
-            }
-        }
-    ],
-    listenCallback: () => console.log('Server is running...'),
-    encoding: 'json'
-};
-```
-
-## Methods
-
-RedWeb provides a `METHODS` object that contains the HTTP methods you can use for defining services:
-
-- `METHODS.POST` - 'post'
-- `METHODS.GET` - 'get'
+- **connectionOpenCallback**: Callback function to execute once a client connects.
+- **connectionCloseCallback**: Callback function to execute once a client disconnects.
+- **messageCallback**: Callback function to execute for every message received.
+- **messageHandlers**: Object containing message handlers based on message type.
+- **ssl**: SSL configuration for the SecureSocketServer. An object containing the paths to the SSL key and certificate files.
 
 ## License
 
 MIT License
+```

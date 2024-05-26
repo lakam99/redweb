@@ -1,6 +1,6 @@
 const http = require('http');
 const https = require('https');
-const socketIo = require('socket.io');
+const WebSocket = require('ws');
 const loadSslConfig = require('./sslConfig');
 
 /**
@@ -21,7 +21,7 @@ const SOCKET_OPTIONS = {
     connectionCloseCallback: undefined,
     messageCallback: undefined,
     messageHandlers: {
-        'ping': (socket) => socket.send('pong')
+        'ping': function(data) { this.send(JSON.stringify({ type: 'pong' })); }
     },
     ssl: null
 };
@@ -30,65 +30,71 @@ const SOCKET_OPTIONS = {
  * Base Socket Server
  * @param {Object} server - The HTTP or HTTPS server instance.
  * @param {SocketServerOptions} options - Configuration options for SocketServer.
- * @return {Object} Socket.IO server instance.
  */
 function BaseSocketServer(server, options = {}) {
-    this.io = socketIo(server);
+    this.wss = new WebSocket.Server({ server });
+    this.clients = new Map();  // Use a Map to store clients by their IP addresses
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
 
-    this.io.on('connection', socket => {
-        console.log('New client connected');
+    this.wss.on('connection', (socket, req) => {
+        const ip = req.socket.remoteAddress;
+        console.log(`New client connected: ${ip}`);
+        this.clients.set(ip, socket);
+
         if (this.connectionOpenCallback) this.connectionOpenCallback(socket);
 
         socket.on('message', (message) => {
             try {
+                console.info(`Received message from ${ip}: ${message}`);
+                if (this.messageCallback) this.messageCallback(socket, message);
                 const parsedMessage = JSON.parse(message);
                 const { type, data } = parsedMessage;
 
                 if (this.messageHandlers[type]) {
-                    this.messageHandlers[type](socket, data);
+                    this.messageHandlers[type].call(socket, data);
                 }
-
-                if (this.messageCallback) this.messageCallback(socket, message);
             } catch (error) {
-                console.error('Error handling message:', error);
+                console.error(`Error handling message from ${ip}:`, error);
             }
         });
 
-        socket.on('disconnect', () => {
-            console.log('Client disconnected');
+        socket.on('close', () => {
+            console.log(`Client disconnected: ${ip}`);
+            this.clients.delete(ip);
             if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
         });
 
         socket.on('error', (error) => {
-            console.error('Socket error:', error);
+            console.error(`Socket error from ${ip}:`, error);
         });
     });
+
+    return this;
 }
 
 /**
  * WebSocket Server
  * @param {SocketServerOptions} options - Configuration options for SocketServer.
- * @return {Object} Socket.IO server instance.
+ * @return {Object} WebSocket server instance.
  */
 function SocketServer(options = {}) {
     const server = http.createServer();
     BaseSocketServer.call(this, server, options);
     server.listen(this.port, () => console.log(`RedWeb SocketServer listening on port ${this.port}`));
-    return this.io;
+    return this;
 }
 
 /**
  * Secure WebSocket Server
  * @param {SocketServerOptions} options - Configuration options for SecureSocketServer.
- * @return {Object} Socket.IO server instance.
+ * @return {Object} WebSocket server instance.
  */
 function SecureSocketServer(options = {}) {
     const sslOptions = loadSslConfig(options.ssl);
     const server = https.createServer(sslOptions);
     BaseSocketServer.call(this, server, options);
     server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
-    return this.io;
+    return this;
 }
 
 module.exports = {
