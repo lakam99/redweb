@@ -1,8 +1,3 @@
-You're right, let's provide more detailed instructions for setting up an HTTP server, including details about the `publicPaths` property and providing a sample HTML file.
-
-### `README.md`
-
-```markdown
 # RedWeb
 
 RedWeb is a simple and flexible Node.js framework built on top of Express.js and WebSocket. It allows you to quickly set up web servers and WebSocket servers with customizable options.
@@ -258,6 +253,3 @@ console.log(socketServer.clients); // Map of clients by their IP addresses
 ## License
 
 MIT License
-```
-
-This `README.md` now includes more detailed instructions for setting up an HTTP server, including the creation of a `public` directory and a sample `index.html` file.
