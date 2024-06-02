@@ -10,6 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "redweb": "^0.2.6"
+    "redweb": "^0.2.9"
   }
 }

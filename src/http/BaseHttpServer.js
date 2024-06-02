@@ -1,8 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
-const https = require('https');
-const loadSslConfig = require('./sslConfig');
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -23,8 +21,6 @@ const loadSslConfig = require('./sslConfig');
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
-const METHODS = { POST: 'post', GET: 'get' };
-
 const HTTP_OPTIONS = {
     port: 80,
     bind: '0.0.0.0',
@@ -56,33 +52,8 @@ function BaseHttpServer(options = {}) {
     this.publicPaths.forEach(public_path => this.app.use(express.static(path.join(process.cwd(), public_path))));
 }
 
-/**
- * HTTP Server
- * @param {RedWebOptions} options - Configuration options for RedWeb.
- * @return {Object} Express application instance.
- */
-function HttpServer(options = {}) {
-    BaseHttpServer.call(this, options);
-    this.app.listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpServer listening on port ${this.port}`));
-    return this;
-}
-
-/**
- * HTTPS Server
- * @param {RedWebOptions} options - Configuration options for RedWeb.
- * @return {Object} Express application instance.
- */
-function HttpsServer(options = {}) {
-    BaseHttpServer.call(this, options);
-    const sslOptions = loadSslConfig(this.ssl);
-    https.createServer(sslOptions, this.app).listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpsServer listening on port ${this.port}`));
-    return this;
-}
-
 module.exports = {
-    HttpServer,
-    HttpsServer,
+    BaseHttpServer,
     ENCODINGS,
-    METHODS,
     HTTP_OPTIONS
 };

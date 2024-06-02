@@ -1,3 +1,8 @@
+You're right, let's provide more detailed instructions for setting up an HTTP server, including details about the `publicPaths` property and providing a sample HTML file.
+
+### `README.md`
+
+```markdown
 # RedWeb
 
 RedWeb is a simple and flexible Node.js framework built on top of Express.js and WebSocket. It allows you to quickly set up web servers and WebSocket servers with customizable options.
@@ -88,7 +93,7 @@ const options = {
         console.log('WebSocket client disconnected');
     },
     messageHandlers: {
-        'msg': () => (socket, data) => {
+        'msg': (socket, data) => {
             console.log(data);
             socket.send('guuuuuurl');
         }
@@ -116,7 +121,7 @@ const options = {
         console.log('WebSocket client disconnected');
     },
     messageHandlers: {
-        'msg': () (socket, data) => {
+        'msg': (socket, data) => {
             console.log(data);
             socket.send('guuuuuurl');
         }
@@ -142,7 +147,7 @@ const socketServer = new SocketServer({
         console.log('WebSocket client disconnected');
     },
     messageHandlers: {
-        'msg': () => (socket, data) {
+        'msg': (socket, data) => {
             console.log(data);
             socket.send('guuuuuurl');
         }
@@ -174,6 +179,85 @@ console.log(socketServer.clients); // Map of clients by their IP addresses
 - **messageHandlers**: Object containing message handlers based on message type.
 - **ssl**: SSL configuration for SecureSocketServer (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
 
+## HowTo
+
+### Setting Up an HTTP Server
+
+1. **Install RedWeb**: Run `npm install redweb`.
+2. **Create a new directory** (e.g., `public`) to store your static files and add an `index.html` file:
+
+    ```html
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RedWeb HTTP Server</title>
+    </head>
+    <body>
+        <h1>Welcome to RedWeb HTTP Server!</h1>
+    </body>
+    </html>
+    ```
+
+3. **Create a new file** (e.g., `server.js`) and add the following code:
+
+    ```javascript
+    const { HttpServer } = require('redweb');
+
+    const services = [
+        {
+            serviceName: '/api/hello',
+            method: 'get',
+            function: (req, res) => {
+                res.send('Hello World!');
+            }
+        }
+    ];
+
+    const options = {
+        port: 3000,
+        publicPaths: ['./public'],
+        services: services
+    };
+
+    const app = new HttpServer(options);
+    ```
+
+4. **Run your server**: Execute `node server.js`.
+
+### Setting Up a WebSocket Server
+
+1. **Install RedWeb**: Run `npm install redweb`.
+2. **Create a new file** (e.g., `socketServer.js`) and add the following code:
+
+    ```javascript
+    const { SocketServer } = require('redweb');
+
+    const options = {
+        port: 3000,
+        connectionOpenCallback: (socket) => {
+            console.log('WebSocket client connected');
+        },
+        connectionCloseCallback: (socket) => {
+            console.log('WebSocket client disconnected');
+        },
+        messageHandlers: {
+            'msg': (socket, data) => {
+                console.log(data);
+                socket.send('guuuuuurl');
+            }
+        }
+    };
+
+    const socketServer = new SocketServer(options);
+    ```
+
+3. **Run your server**: Execute `node socketServer.js`.
+
 ## License
 
 MIT License
+```
+
+This `README.md` now includes more detailed instructions for setting up an HTTP server, including the creation of a `public` directory and a sample `index.html` file.

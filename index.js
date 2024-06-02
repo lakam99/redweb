@@ -1,13 +1,9 @@
-const { HttpServer, HttpsServer, ENCODINGS, METHODS, HTTP_OPTIONS } = require('./HttpServer');
-const { SocketServer, SecureSocketServer, SOCKET_OPTIONS } = require('./SocketServer');
+const SocketServer = require('./SocketServer');
+const SecureSocketServer = require('./SecureSocketServer');
+const { SOCKET_OPTIONS } = require('./BaseSocketServer');
 
 module.exports = {
-    HttpServer,
-    HttpsServer,
     SocketServer,
     SecureSocketServer,
-    ENCODINGS,
-    METHODS,
-    HTTP_OPTIONS,
     SOCKET_OPTIONS
 };

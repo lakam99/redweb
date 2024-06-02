@@ -1,16 +1,13 @@
 {
   "name": "redweb",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "scripts": {
     "test": "jest"
   },
   "files": [
-    "index.js",
-    "HttpServer.js",
-    "SocketServer.js",
-    "sslConfig.js"
+    "src/*"
   ],
   "keywords": [],
   "author": "",
