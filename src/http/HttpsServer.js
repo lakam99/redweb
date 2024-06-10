@@ -1,6 +1,6 @@
 const https = require('https');
 const { BaseHttpServer } = require('./BaseHttpServer');
-const loadSslConfig = require('./sslConfig');
+const loadSslConfig = require('../sslConfig');
 
 /**
  * HTTPS Server

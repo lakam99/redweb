@@ -1,18 +1,20 @@
 const https = require('https');
 const loadSslConfig = require('../sslConfig');
-const BaseSocketServer = require('./BaseSocketServer');
+const { BaseSocketServer } = require('./baseSocketServer');
 
 /**
  * Secure WebSocket Server
  * @param {SocketServerOptions} options - Configuration options for SecureSocketServer.
  * @return {Object} WebSocket server instance.
  */
-function SecureSocketServer(options = {}) {
-    const sslOptions = loadSslConfig(options.ssl);
-    const server = https.createServer(sslOptions);
-    BaseSocketServer.call(this, server, options);
-    server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
-    return this;
+class SecureSocketServer extends BaseSocketServer {
+    constructor(options = {}) {
+        const sslOptions = loadSslConfig(options.ssl);
+        const server = https.createServer(sslOptions);
+        super(server, options);
+        server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
+        return this;
+    }
 }
 
 module.exports = SecureSocketServer;

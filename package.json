@@ -4,7 +4,7 @@
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "node tester.js"
   },
   "files": [
     "src/*"
