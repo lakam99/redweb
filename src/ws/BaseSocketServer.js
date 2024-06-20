@@ -23,6 +23,15 @@ const SOCKET_OPTIONS = {
     ssl: null
 };
 
+/**
+ * 
+ * @param {BaseSocketServer} socketServer 
+ * @param {Object} message 
+ */
+function broadcast(socketServer, message) {
+    socketServer.clients.forEach(client => client.send(JSON.stringify(message)));
+}
+
 class BaseSocketServer {
     /**
      * Base Socket Server
@@ -71,6 +80,15 @@ class BaseSocketServer {
 
     handleError(socket, error, ip) {
         console.error(`Socket error from ${ip}:`, error);
+    }
+    
+/**
+ * 
+ * This sends the same message to all clients.
+ * @param {Object} message 
+ */
+    broadcast(message) {
+        broadcast(this, message);
     }
 }
 
