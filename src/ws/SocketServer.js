@@ -1,5 +1,5 @@
 const http = require('http');
-const { BaseSocketServer } = require('./baseSocketServer');
+const { BaseSocketServer } = require('./BaseSocketServer');
 
 /**
  * WebSocket Server

@@ -1,13 +1,13 @@
 {
   "name": "redweb",
-  "version": "0.4.2",
+  "version": "0.4.6",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "scripts": {
     "test": "node tester.js"
   },
   "files": [
-    "src/*"
+    "src/*", "index.d.ts"
   ],
   "keywords": [],
   "author": "",
