@@ -1,6 +1,6 @@
 const https = require('https');
 const loadSslConfig = require('../sslConfig');
-const { BaseSocketServer } = require('./baseSocketServer');
+const { BaseSocketServer } = require('./BaseSocketServer');
 
 /**
  * Secure WebSocket Server

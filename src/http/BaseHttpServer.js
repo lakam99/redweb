@@ -18,6 +18,7 @@ const path = require('path');
  * @property {Object} [ssl] - SSL configuration for HTTPS server.
  * @property {string} [ssl.key] - Path to the SSL key file.
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
+ * @property {import('express').Application} [server] - Whether to automatically start listening.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -28,7 +29,8 @@ const HTTP_OPTIONS = {
     services: [],
     listenCallback: undefined,
     encoding: ENCODINGS.json,
-    ssl: null
+    ssl: null,
+    server: undefined
 };
 
 /**
@@ -38,7 +40,7 @@ const HTTP_OPTIONS = {
  */
 function BaseHttpServer(options = {}) {
     this.options = { ...HTTP_OPTIONS, ...options };
-    this.app = express();
+    this.app = express() || this.options.server;
     Object.assign(this, this.options);
 
     // Middleware to parse request bodies based on the specified encoding
@@ -50,6 +52,7 @@ function BaseHttpServer(options = {}) {
 
     this.services.forEach(service => this.app[service.method](service.serviceName, service.function));
     this.publicPaths.forEach(public_path => this.app.use(express.static(path.join(process.cwd(), public_path))));
+    return this;
 }
 
 module.exports = {

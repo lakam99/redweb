@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 
 /**
  * @typedef {Object} SocketServerOptions
+ * @property {import('express').Application} [server] - The existing server instance.
  * @property {number} [port=3000] - The port number to bind the socket server.
  * @property {Function} [connectionOpenCallback] - Callback function to execute once a client connects.
  * @property {Function} [connectionCloseCallback] - Callback function to execute once a client disconnects.
@@ -35,7 +36,7 @@ function broadcast(socketServer, message) {
 class BaseSocketServer {
     /**
      * Base Socket Server
-     * @param {Object} server - The HTTP or HTTPS server instance.
+     * @param {import('express').Application} server - The express application instance.
      * @param {SocketServerOptions} options - Configuration options for SocketServer.
      */
     constructor(server, options = {}) {
@@ -63,7 +64,7 @@ class BaseSocketServer {
             console.info(`Received message from ${ip}: ${message}`);
             if (this.messageCallback) this.messageCallback(socket, message);
 
-            const { type, data } = JSON.parse(message);
+            const { type, ...data } = JSON.parse(message);
             if (this.messageHandlers[type]) {
                 this.messageHandlers[type](socket, data);
             }

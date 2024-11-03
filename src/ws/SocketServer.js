@@ -1,5 +1,5 @@
 const http = require('http');
-const { BaseSocketServer } = require('./baseSocketServer');
+const { BaseSocketServer } = require('./BaseSocketServer');
 
 /**
  * WebSocket Server
@@ -8,7 +8,7 @@ const { BaseSocketServer } = require('./baseSocketServer');
  */
 class SocketServer extends BaseSocketServer {
     constructor(options = {}) {
-        const server = http.createServer();
+        const server = options?.server || http.createServer();
         super(server, options);
         server.listen(this.port, () => console.log(`RedWeb SocketServer listening on port ${this.port}`));
         return this;
