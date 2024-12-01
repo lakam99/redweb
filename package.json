@@ -1,19 +1,22 @@
 {
   "name": "redweb",
-  "version": "0.4.8",
+  "version": "0.5.5",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "scripts": {
     "test": "node tester.js"
   },
   "files": [
-    "src/*", "index.d.ts"
+    "src/*",
+    "index.d.ts"
   ],
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.19.2",
+    "react-dom": "^18.3.1",
     "ws": "^8.17.0"
   },
   "devDependencies": {

@@ -35,6 +35,16 @@ declare module 'redweb' {
     }
 
     /**
+     * Handler configuration for WebSocket.
+     */
+    export interface HandlerConfig {
+        name: string;
+        handlers: {
+            [type: string]: (socket: WebSocket, data: any) => void;
+        };
+    }
+
+    /**
      * Options for configuring a WebSocket server.
      */
     export interface SocketServerOptions {
@@ -49,78 +59,88 @@ declare module 'redweb' {
             key: string;
             cert: string;
         };
+        handlerConfig?: Array<new () => BaseHandler>;
     }
 
     /**
-     * Base class for HTTP servers.
+     * Base class for WebSocket handlers.
      */
-    export class BaseHttpServer {
-        app: any;
-        port: number;
-        publicPaths: string[];
-        services: Service[];
-        listenCallback?: () => void;
-        encoding: RedWebEncoding;
-        ssl?: { key: string; cert: string; };
+    export class BaseHandler {
+        /**
+         * The name of the handler (used to identify it in the server).
+         */
+        name: string;
 
-        constructor(options?: RedWebOptions);
+        /**
+         * Dictionary of message handlers for this handler.
+         */
+        messageHandlers: {
+            [type: string]: (socket: WebSocket, data: any) => void;
+        };
 
-        // Additional methods can be added as needed.
+        /**
+         * List of active WebSocket connections managed by this handler.
+         */
+        connections: WebSocket[];
+
+        /**
+         * Creates a new handler instance.
+         * @param config - Configuration for the handler.
+         */
+        constructor(config: HandlerConfig);
+
+        /**
+         * Adds a new WebSocket connection and sets up message handling for this handler.
+         * @param socket - The WebSocket connection to add.
+         */
+        newConnection(socket: WebSocket): void;
+
+        /**
+         * Handles an incoming message and routes it to the appropriate handler function.
+         * @param socket - The WebSocket connection that sent the message.
+         * @param message - The incoming message in JSON string format.
+         */
+        handleMessage(socket: WebSocket, message: string): void;
+
+        /**
+         * Broadcasts a message to all connections managed by this handler.
+         * @param message - The message to broadcast.
+         */
+        broadcast(message: object): void;
     }
 
     /**
      * HTTP server class.
      */
-    export class HttpServer extends BaseHttpServer {
+    export class HttpServer {
         constructor(options?: RedWebOptions);
     }
 
     /**
      * HTTPS server class.
      */
-    export class HttpsServer extends BaseHttpServer {
+    export class HttpsServer {
         constructor(options?: RedWebOptions);
-    }
-
-    /**
-     * Base class for WebSocket servers.
-     */
-    export class BaseSocketServer {
-        wss: WebSocket.Server;
-        clients: Map<string, WebSocket>;
-        port: number;
-        connectionOpenCallback?: (socket: WebSocket) => void;
-        connectionCloseCallback?: (socket: WebSocket) => void;
-        messageCallback?: (socket: WebSocket, message: string) => void;
-        messageHandlers?: { [type: string]: (socket: WebSocket, data: any) => void; };
-        ssl?: { key: string; cert: string; };
-
-        constructor(server: HTTPServer | HTTPSServer, options?: SocketServerOptions);
-
-        handleConnection(socket: WebSocket, req: Request): void;
-        handleMessage(socket: WebSocket, message: string, ip: string): void;
-        handleClose(socket: WebSocket, ip: string): void;
-        handleError(socket: WebSocket, error: Error, ip: string): void;
     }
 
     /**
      * WebSocket server class.
      */
-    export class SocketServer extends BaseSocketServer {
+    export class SocketServer {
         constructor(options?: SocketServerOptions);
     }
 
     /**
      * Secure WebSocket server class.
      */
-    export class SecureSocketServer extends BaseSocketServer {
+    export class SecureSocketServer {
         constructor(options?: SocketServerOptions);
     }
 
     /**
      * SSL configuration loader.
      */
-    export function loadSslConfig(sslOptions: { key: string; cert: string; }): { key: string; cert: string; };
+    export function loadSslConfig(sslOptions: { key: string; cert: string }): { key: string; cert: string };
 
     /**
      * Constants for encoding types.

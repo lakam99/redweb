@@ -37,7 +37,7 @@ const services = [
     {
         serviceName: '/submit-form',
         method: METHODS.POST,
-        'function': (req, res) => {
+        function: (req, res) => {
             const { name, email, message } = req.body;
             if (!name || !email || !message) {
                 return res.status(400).json({ error: 'All fields are required' });
@@ -74,56 +74,76 @@ const options = {
 const app = new HttpsServer(options);
 ```
 
-#### WebSocket Server
+### WebSocket Server with Handlers
+
+RedWeb now supports **handler-based routing** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
+
+#### Defining a Custom Handler
+
+Handlers extend the `BaseHandler` class and manage their own connections and message types.
+
+```javascript
+const { BaseHandler } = require('redweb');
+
+class ChatHandler extends BaseHandler {
+    constructor() {
+        super({
+            name: 'ChatHandler',
+            handlers: {
+                chat: (socket, data) => {
+                    console.log(`Received chat message: ${data.message}`);
+                    socket.send(JSON.stringify({ type: 'chatResponse', message: 'Hello!' }));
+                }
+            }
+        });
+    }
+}
+
+module.exports = ChatHandler;
+```
+
+#### Setting Up a WebSocket Server with Handlers
 
 ```javascript
 const { SocketServer } = require('redweb');
+const ChatHandler = require('./ChatHandler');
 
 const options = {
     port: 3000,
+    handlerConfig: [ChatHandler],
     connectionOpenCallback: (socket) => {
         console.log('WebSocket client connected');
     },
     connectionCloseCallback: (socket) => {
         console.log('WebSocket client disconnected');
-    },
-    messageHandlers: {
-        'msg': (socket, data) => {
-            console.log(data);
-            socket.send('guuuuuurl');
-        }
     }
 };
 
 const socketServer = new SocketServer(options);
 ```
 
-#### Secure WebSocket Server
+#### Client Communication with a Handler
+
+The client must identify the handler during the initial connection with a `__handlerConnect` message.
 
 ```javascript
-const { SecureSocketServer } = require('redweb');
+const WebSocket = require('ws');
 
-const options = {
-    port: 4443,
-    ssl: {
-        key: './path/to/key.pem',
-        cert: './path/to/cert.pem'
-    },
-    connectionOpenCallback: (socket) => {
-        console.log('WebSocket client connected');
-    },
-    connectionCloseCallback: (socket) => {
-        console.log('WebSocket client disconnected');
-    },
-    messageHandlers: {
-        'msg': (socket, data) => {
-            console.log(data);
-            socket.send('guuuuuurl');
-        }
-    }
-};
+const ws = new WebSocket('ws://localhost:3000');
 
-const secureSocketServer = new SecureSocketServer(options);
+ws.on('open', () => {
+    ws.send(JSON.stringify({
+        type: '__handlerConnect',
+        data: { handlerName: 'ChatHandler' }
+    }));
+
+    // Send a message to the handler
+    ws.send(JSON.stringify({ type: 'chat', message: 'Hi there!' }));
+});
+
+ws.on('message', (message) => {
+    console.log('Received:', message);
+});
 ```
 
 ### Managing Connected Clients
@@ -140,17 +160,30 @@ const socketServer = new SocketServer({
     },
     connectionCloseCallback: (socket) => {
         console.log('WebSocket client disconnected');
-    },
-    messageHandlers: {
-        'msg': (socket, data) => {
-            console.log(data);
-            socket.send('guuuuuurl');
-        }
     }
 });
 
 // Access the list of connected clients
 console.log(socketServer.clients); // Map of clients by their IP addresses
+```
+
+### Backward-Compatible Message Handlers
+
+If no handler is assigned during the initial connection, you can still use traditional `messageHandlers`.
+
+```javascript
+const { SocketServer } = require('redweb');
+
+const options = {
+    port: 3000,
+    messageHandlers: {
+        echo: (socket, data) => {
+            socket.send(JSON.stringify({ type: 'echoResponse', message: data.message }));
+        }
+    }
+};
+
+const socketServer = new SocketServer(options);
 ```
 
 ## Options
@@ -172,83 +205,8 @@ console.log(socketServer.clients); // Map of clients by their IP addresses
 - **connectionCloseCallback**: Function to execute once a client disconnects.
 - **messageCallback**: Function to execute for every message received.
 - **messageHandlers**: Object containing message handlers based on message type.
+- **handlerConfig**: Array of handler classes to support handler-based routing.
 - **ssl**: SSL configuration for SecureSocketServer (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
-
-## HowTo
-
-### Setting Up an HTTP Server
-
-1. **Install RedWeb**: Run `npm install redweb`.
-2. **Create a new directory** (e.g., `public`) to store your static files and add an `index.html` file:
-
-    ```html
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>RedWeb HTTP Server</title>
-    </head>
-    <body>
-        <h1>Welcome to RedWeb HTTP Server!</h1>
-    </body>
-    </html>
-    ```
-
-3. **Create a new file** (e.g., `server.js`) and add the following code:
-
-    ```javascript
-    const { HttpServer } = require('redweb');
-
-    const services = [
-        {
-            serviceName: '/api/hello',
-            method: 'get',
-            function: (req, res) => {
-                res.send('Hello World!');
-            }
-        }
-    ];
-
-    const options = {
-        port: 3000,
-        publicPaths: ['./public'],
-        services: services
-    };
-
-    const app = new HttpServer(options);
-    ```
-
-4. **Run your server**: Execute `node server.js`.
-
-### Setting Up a WebSocket Server
-
-1. **Install RedWeb**: Run `npm install redweb`.
-2. **Create a new file** (e.g., `socketServer.js`) and add the following code:
-
-    ```javascript
-    const { SocketServer } = require('redweb');
-
-    const options = {
-        port: 3000,
-        connectionOpenCallback: (socket) => {
-            console.log('WebSocket client connected');
-        },
-        connectionCloseCallback: (socket) => {
-            console.log('WebSocket client disconnected');
-        },
-        messageHandlers: {
-            'msg': (socket, data) => {
-                console.log(data);
-                socket.send('guuuuuurl');
-            }
-        }
-    };
-
-    const socketServer = new SocketServer(options);
-    ```
-
-3. **Run your server**: Execute `node socketServer.js`.
 
 ## License
 
