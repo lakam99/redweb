@@ -35,7 +35,7 @@ declare module 'redweb' {
     }
 
     /**
-     * Handler configuration for WebSocket.
+     * Configuration for a WebSocket handler.
      */
     export interface HandlerConfig {
         name: string;
@@ -110,6 +110,29 @@ declare module 'redweb' {
     }
 
     /**
+     * Base WebSocket server class.
+     */
+    export class BaseSocketServer {
+        /**
+         * Map of connected WebSocket clients by their IP address.
+         */
+        clients: Map<string, WebSocket>;
+
+        /**
+         * List of handler instances currently registered with the server.
+         */
+        handlers: BaseHandler[];
+
+        constructor(server: HTTPServer | HTTPSServer, options?: SocketServerOptions);
+
+        /**
+         * Adds a new handler to the WebSocket server.
+         * @param HandlerClass - A class extending `BaseHandler` to add to the server.
+         */
+        addHandler(HandlerClass: new () => BaseHandler): void;
+    }
+
+    /**
      * HTTP server class.
      */
     export class HttpServer {
@@ -126,14 +149,14 @@ declare module 'redweb' {
     /**
      * WebSocket server class.
      */
-    export class SocketServer {
+    export class SocketServer extends BaseSocketServer {
         constructor(options?: SocketServerOptions);
     }
 
     /**
      * Secure WebSocket server class.
      */
-    export class SecureSocketServer {
+    export class SecureSocketServer extends BaseSocketServer {
         constructor(options?: SocketServerOptions);
     }
 
