@@ -90,10 +90,11 @@ declare module 'redweb' {
         constructor(config: HandlerConfig);
 
         /**
-         * Adds a new WebSocket connection and sets up message handling for this handler.
+         * Adds a new WebSocket connection, processes initial data, and sets up message handling for this handler.
          * @param socket - The WebSocket connection to add.
+         * @param data - Optional initial data sent during the connection handshake.
          */
-        newConnection(socket: WebSocket): void;
+        newConnection(socket: WebSocket, data?: any): void;
 
         /**
          * Handles an incoming message and routes it to the appropriate handler function.

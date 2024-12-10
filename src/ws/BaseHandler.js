@@ -28,22 +28,32 @@ class BaseHandler {
         this.connections = [];
     }
 
-    /**
-     * Adds a new WebSocket connection and sets up message handling for this handler.
-     * @param {WebSocket} socket - The WebSocket connection to add.
-     */
-    newConnection(socket) {
-        this.connections.push(socket);
-
+    handleSocketMessages(socket) {
         socket.on('message', (message) => this.handleMessage(socket, message));
+    }
 
+    handleSocketClose(socket) {
         socket.on('close', () => {
             this.connections = this.connections.filter((conn) => conn !== socket);
             console.log(`Connection closed for handler "${this.name}".`);
         });
+    }
 
+    handleNewConnection(socket) {
+        this.connections.push(socket);
+        this.handleSocketMessages(socket);
+        this.handleSocketClose(socket);
         socket.isAssigned = true;
         console.log(`New connection added to handler "${this.name}".`);
+    }
+
+    /**
+     * Adds a new WebSocket connection and sets up message handling for this handler.
+     * @param {WebSocket} socket - The WebSocket connection to add.
+     */
+    newConnection(socket, data) {
+        console.log(`Received newConnection data ${data}`);
+        this.handleNewConnection(socket);
     }
 
     /**

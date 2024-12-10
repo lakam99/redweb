@@ -120,4 +120,27 @@ describe('BaseSocketServer', () => {
 
         expect(addedHandler.newConnection).toHaveBeenCalledWith(mockSocket, { handlerName: 'DynamicHandler' });
     });
+
+    test('should pass initial data to newConnection', () => {
+        class DataHandler {
+            constructor() {
+                this.name = 'DataHandler';
+                this.newConnection = jest.fn();
+            }
+        }
+
+        socketServer.addHandler(DataHandler);
+
+        const mockSocket = new MockWebSocket();
+        const initialMessage = JSON.stringify({
+            type: '__handlerConnect',
+            data: { handlerName: 'DataHandler', additionalInfo: 'Some Info' },
+        });
+
+        const addedHandler = socketServer.handlers.find(handler => handler.name === 'DataHandler');
+
+        socketServer.initialMessageHandler(mockSocket, initialMessage, '127.0.0.1');
+
+        expect(addedHandler.newConnection).toHaveBeenCalledWith(mockSocket, { handlerName: 'DataHandler', additionalInfo: 'Some Info' });
+    });
 });
