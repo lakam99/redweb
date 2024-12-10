@@ -59,6 +59,20 @@ class BaseSocketServer {
     }
 
     /**
+     * Adds a new handler to the WebSocket server.
+     * @param {new () => BaseHandler} HandlerClass - The handler class to add.
+     */
+    addHandler(HandlerClass) {
+        const newHandler = new HandlerClass();
+        if (this.handlers.find(handler => handler.name === newHandler.name)) {
+            console.warn(`Handler with name '${newHandler.name}' already exists.`);
+            return;
+        }
+        this.handlers.push(newHandler);
+        console.log(`Handler '${newHandler.name}' added successfully.`);
+    }
+
+    /**
      * Handles a new WebSocket connection.
      * @param {WebSocket} socket - The WebSocket connection instance.
      * @param {import('http').IncomingMessage} req - The HTTP request object associated with the connection.
@@ -69,7 +83,9 @@ class BaseSocketServer {
         if (this.clients.get(ip) !== undefined) {
             const oldClient = this.clients.get(ip);
             console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
-            oldClient.send(JSON.stringify({msg: 'You are being disconnected because a new client is connected with your IP address.'}));
+            oldClient.send(
+                JSON.stringify({ msg: 'You are being disconnected because a new client is connected with your IP address.' })
+            );
             oldClient.close();
         }
         this.clients.set(ip, socket);
@@ -77,9 +93,9 @@ class BaseSocketServer {
 
         if (this.connectionOpenCallback) this.connectionOpenCallback(socket);
 
-        socket.on('message', (message) => this.initialMessageHandler(socket, message, ip));
+        socket.on('message', message => this.initialMessageHandler(socket, message, ip));
         socket.on('close', () => this.handleClose(socket, ip));
-        socket.on('error', (error) => this.handleError(socket, error, ip));
+        socket.on('error', error => this.handleError(socket, error, ip));
     }
 
     /**
@@ -132,7 +148,7 @@ class BaseSocketServer {
 
         // Optional: Perform authentication with `key`
         socket.removeAllListeners('message');
-        handler.newConnection(socket, data);
+        handler.newConnection(socket, connectMessage.data);
     }
 
     /**
