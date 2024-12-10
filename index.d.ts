@@ -97,6 +97,12 @@ declare module 'redweb' {
         newConnection(socket: WebSocket, data?: any): void;
 
         /**
+         * Method called when a WebSocket connection is closed. Can be overridden in subclasses.
+         * @param socket - The WebSocket connection being closed.
+         */
+        onClose(socket: WebSocket): void;
+
+        /**
          * Handles an incoming message and routes it to the appropriate handler function.
          * @param socket - The WebSocket connection that sent the message.
          * @param message - The incoming message in JSON string format.

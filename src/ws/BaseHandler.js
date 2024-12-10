@@ -34,6 +34,7 @@ class BaseHandler {
 
     handleSocketClose(socket) {
         socket.on('close', () => {
+            this.onClose(socket);
             this.connections = this.connections.filter((conn) => conn !== socket);
             console.log(`Connection closed for handler "${this.name}".`);
         });
@@ -54,6 +55,10 @@ class BaseHandler {
     newConnection(socket, data) {
         console.log(`Received newConnection data ${data}`);
         this.handleNewConnection(socket);
+    }
+
+    onClose(socket) {
+        console.log(`Closing socket ${socket.remoteAddress}`);
     }
 
     /**
