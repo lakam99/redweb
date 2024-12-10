@@ -76,7 +76,7 @@ const app = new HttpsServer(options);
 
 ### WebSocket Server with Handlers
 
-RedWeb now supports **handler-based routing** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
+RedWeb supports **handler-based routing** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
 
 #### Defining a Custom Handler
 
@@ -120,6 +120,34 @@ const options = {
 };
 
 const socketServer = new SocketServer(options);
+```
+
+#### Adding Handlers Dynamically
+
+Handlers can be added after the WebSocket server has started using the `addHandler` method.
+
+```javascript
+class DynamicHandler {
+    constructor() {
+        this.name = 'DynamicHandler';
+        this.handlers = {
+            dynamicMessage: (socket, data) => {
+                console.log(`Received dynamic message: ${data.message}`);
+                socket.send(JSON.stringify({ type: 'dynamicResponse', message: 'Handled dynamically!' }));
+            }
+        };
+    }
+
+    newConnection(socket) {
+        console.log('DynamicHandler: New connection established');
+    }
+}
+
+const { SocketServer } = require('redweb');
+const socketServer = new SocketServer({ port: 3000 });
+
+// Dynamically add a new handler
+socketServer.addHandler(DynamicHandler);
 ```
 
 #### Client Communication with a Handler
