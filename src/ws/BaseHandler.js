@@ -53,7 +53,7 @@ class BaseHandler {
      * @param {WebSocket} socket - The WebSocket connection to add.
      */
     newConnection(socket, data) {
-        console.log(`Received newConnection data ${data}`);
+        console.log(`Received newConnection data ${JSON.stringify(data)}`);
         this.handleNewConnection(socket);
     }
 
