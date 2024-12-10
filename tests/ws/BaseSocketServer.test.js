@@ -60,13 +60,12 @@ describe('BaseSocketServer', () => {
         const mockSocket = new MockWebSocket();
         const mockHandler = { name: 'TestHandler', newConnection: jest.fn() };
         socketServer.handlers = [mockHandler];
-    
+
         const initialMessage = JSON.stringify({ type: '__handlerConnect', data: { handlerName: 'TestHandler' } });
         socketServer.initialMessageHandler(mockSocket, initialMessage, '127.0.0.1');
-    
+
         expect(mockHandler.newConnection).toHaveBeenCalledWith(mockSocket, { handlerName: 'TestHandler' });
     });
-    
 
     test('should broadcast a message to all connected clients', () => {
         const mockSocket1 = new MockWebSocket();
@@ -75,12 +74,50 @@ describe('BaseSocketServer', () => {
         mockSocket2.send = jest.fn();
         socketServer.clients.set('127.0.0.1', mockSocket1);
         socketServer.clients.set('127.0.0.2', mockSocket2);
-    
+
         const message = { type: 'broadcast', data: 'Hello World' };
         socketServer.broadcast(message);
-    
+
         expect(mockSocket1.send).toHaveBeenCalledWith(JSON.stringify(message));
         expect(mockSocket2.send).toHaveBeenCalledWith(JSON.stringify(message));
     });
-    
+
+    test('should add a new handler dynamically', () => {
+        class DynamicHandler {
+            constructor() {
+                this.name = 'DynamicHandler';
+                this.newConnection = jest.fn();
+            }
+        }
+
+        socketServer.addHandler(DynamicHandler);
+
+        const addedHandler = socketServer.handlers.find(handler => handler.name === 'DynamicHandler');
+        expect(addedHandler).toBeDefined();
+        expect(addedHandler.name).toBe('DynamicHandler');
+    });
+
+    test('should process a message with dynamically added handler', () => {
+        class DynamicHandler {
+            constructor() {
+                this.name = 'DynamicHandler';
+                this.newConnection = jest.fn();
+            }
+        }
+
+        socketServer.addHandler(DynamicHandler);
+
+        const mockSocket = new MockWebSocket();
+        const initialMessage = JSON.stringify({
+            type: '__handlerConnect',
+            data: { handlerName: 'DynamicHandler' },
+        });
+
+        const addedHandler = socketServer.handlers.find(handler => handler.name === 'DynamicHandler');
+        addedHandler.newConnection = jest.fn();
+
+        socketServer.initialMessageHandler(mockSocket, initialMessage, '127.0.0.1');
+
+        expect(addedHandler.newConnection).toHaveBeenCalledWith(mockSocket, { handlerName: 'DynamicHandler' });
+    });
 });
