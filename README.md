@@ -74,9 +74,9 @@ const options = {
 const app = new HttpsServer(options);
 ```
 
-### WebSocket Server with Handlers
+### WebSocket Server with Routes and Handlers
 
-RedWeb supports **handler-based routing** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
+RedWeb uses **route-based architecture** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
 
 #### Defining a Custom Handler
 
@@ -87,86 +87,85 @@ const { BaseHandler } = require('redweb');
 
 class ChatHandler extends BaseHandler {
     constructor() {
-        super({
-            name: 'ChatHandler',
-            handlers: {
-                chat: (socket, data) => {
-                    console.log(`Received chat message: ${data.message}`);
-                    socket.send(JSON.stringify({ type: 'chatResponse', message: 'Hello!' }));
-                }
-            }
-        });
+        super('chat');
+    }
+
+    onMessage(socket, message) {
+        console.log(`Received chat message: ${message.text}`);
+        socket.send(JSON.stringify({ type: 'chatResponse', message: 'Hello!' }));
     }
 }
 
 module.exports = ChatHandler;
 ```
 
-#### Setting Up a WebSocket Server with Handlers
+#### Defining a WebSocket Route
+
+Routes group handlers and specify the WebSocket path.
 
 ```javascript
-const { SocketServer } = require('redweb');
+const { SocketRoute } = require('redweb');
 const ChatHandler = require('./ChatHandler');
 
-const options = {
-    port: 3000,
-    handlerConfig: [ChatHandler],
-    connectionOpenCallback: (socket) => {
-        console.log('WebSocket client connected');
-    },
-    connectionCloseCallback: (socket) => {
-        console.log('WebSocket client disconnected');
-    }
-};
-
-const socketServer = new SocketServer(options);
-```
-
-#### Adding Handlers Dynamically
-
-Handlers can be added after the WebSocket server has started using the `addHandler` method.
-
-```javascript
-class DynamicHandler {
+class ChatRoute extends SocketRoute {
     constructor() {
-        this.name = 'DynamicHandler';
-        this.handlers = {
-            dynamicMessage: (socket, data) => {
-                console.log(`Received dynamic message: ${data.message}`);
-                socket.send(JSON.stringify({ type: 'dynamicResponse', message: 'Handled dynamically!' }));
-            }
-        };
-    }
-
-    newConnection(socket) {
-        console.log('DynamicHandler: New connection established');
+        super({
+            path: '/chat',
+            handlers: [ChatHandler]
+        });
     }
 }
 
-const { SocketServer } = require('redweb');
-const socketServer = new SocketServer({ port: 3000 });
-
-// Dynamically add a new handler
-socketServer.addHandler(DynamicHandler);
+module.exports = ChatRoute;
 ```
 
-#### Client Communication with a Handler
+#### Setting Up a WebSocket Server with Routes
 
-The client must identify the handler during the initial connection with a `__handlerConnect` message.
+```javascript
+const { SocketServer } = require('redweb');
+const ChatRoute = require('./ChatRoute');
+
+new SocketServer({
+    port: 3000,
+    routes: [ChatRoute]
+});
+```
+
+### Adding Routes Dynamically
+
+Routes can be added to the WebSocket server after initialization.
+
+```javascript
+const { SocketServer, SocketRoute } = require('redweb');
+const ChatHandler = require('./ChatHandler');
+
+class ChatRoute extends SocketRoute {
+    constructor() {
+        super({
+            path: '/chat',
+            handlers: [ChatHandler]
+        });
+    }
+}
+
+const socketServer = new SocketServer({ port: 3000 });
+
+// Dynamically add a new route
+const chatRoute = new ChatRoute();
+socketServer.routes.push(chatRoute);
+```
+
+### Client Communication with a Route
+
+The client connects to the WebSocket server using the specified route.
 
 ```javascript
 const WebSocket = require('ws');
 
-const ws = new WebSocket('ws://localhost:3000');
+const ws = new WebSocket('ws://localhost:3000/chat');
 
 ws.on('open', () => {
-    ws.send(JSON.stringify({
-        type: '__handlerConnect',
-        data: { handlerName: 'ChatHandler' }
-    }));
-
-    // Send a message to the handler
-    ws.send(JSON.stringify({ type: 'chat', message: 'Hi there!' }));
+    ws.send(JSON.stringify({ type: 'chat', text: 'Hello there!' }));
 });
 
 ws.on('message', (message) => {
@@ -176,42 +175,25 @@ ws.on('message', (message) => {
 
 ### Managing Connected Clients
 
-RedWeb's WebSocket server maintains a list of connected clients by their IP addresses. This list is automatically updated when clients connect or disconnect.
+RedWeb's WebSocket server maintains a list of connected clients by their IP addresses for each route. This list is automatically updated when clients connect or disconnect.
 
 ```javascript
-const { SocketServer } = require('redweb');
+const { SocketRoute } = require('redweb');
 
-const socketServer = new SocketServer({
-    port: 3000,
-    connectionOpenCallback: (socket) => {
-        console.log('WebSocket client connected');
-    },
-    connectionCloseCallback: (socket) => {
-        console.log('WebSocket client disconnected');
+class ChatRoute extends SocketRoute {
+    constructor() {
+        super({
+            path: '/chat',
+            handlers: []
+        });
     }
-});
 
-// Access the list of connected clients
-console.log(socketServer.clients); // Map of clients by their IP addresses
-```
-
-### Backward-Compatible Message Handlers
-
-If no handler is assigned during the initial connection, you can still use traditional `messageHandlers`.
-
-```javascript
-const { SocketServer } = require('redweb');
-
-const options = {
-    port: 3000,
-    messageHandlers: {
-        echo: (socket, data) => {
-            socket.send(JSON.stringify({ type: 'echoResponse', message: data.message }));
-        }
+    onConnection(socket) {
+        console.log('New client connected:', socket.remoteAddress);
     }
-};
+}
 
-const socketServer = new SocketServer(options);
+module.exports = ChatRoute;
 ```
 
 ## Options
@@ -226,14 +208,10 @@ const socketServer = new SocketServer(options);
 - **encoding**: Encoding type for request bodies (`'json'` or `'urlencoded'`).
 - **ssl**: SSL configuration for HTTPS server (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
 
-### SocketServer and SecureSocketServer Options
+### SocketServer Options
 
 - **port**: Port number (default: `3000`).
-- **connectionOpenCallback**: Function to execute once a client connects.
-- **connectionCloseCallback**: Function to execute once a client disconnects.
-- **messageCallback**: Function to execute for every message received.
-- **messageHandlers**: Object containing message handlers based on message type.
-- **handlerConfig**: Array of handler classes to support handler-based routing.
+- **routes**: Array of `SocketRoute` classes to define WebSocket routes and handlers.
 - **ssl**: SSL configuration for SecureSocketServer (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
 
 ## License

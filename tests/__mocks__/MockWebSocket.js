@@ -1,21 +1,22 @@
 class MockWebSocket {
     constructor() {
-        this.readyState = MockWebSocket.OPEN;
         this.listeners = {};
+        this.readyState = MockWebSocket.OPEN;
     }
 
-    static OPEN = 1;
-    static CLOSED = 3;
+    static get OPEN() {
+        return 1;
+    }
 
     on(event, callback) {
         this.listeners[event] = callback;
     }
 
-    send(message) {
+    send(data) {
         if (this.readyState === MockWebSocket.OPEN) {
-            if (this.listeners['message']) {
-                this.listeners['message'](message);
-            }
+            console.log(`MockWebSocket sent: ${data}`);
+        } else {
+            throw new Error('WebSocket is not open');
         }
     }
 
@@ -25,19 +26,8 @@ class MockWebSocket {
             this.listeners['close']();
         }
     }
-
-    emit(event, data) {
-        if (this.listeners[event]) {
-            this.listeners[event](data);
-        }
-    }
-
-    /**
-     * Removes all event listeners.
-     */
-    removeAllListeners() {
-        this.listeners = {};
-    }
 }
+
+MockWebSocket.CLOSED = 3;
 
 module.exports = MockWebSocket;

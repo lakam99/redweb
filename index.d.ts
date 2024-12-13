@@ -59,7 +59,69 @@ declare module 'redweb' {
             key: string;
             cert: string;
         };
-        handlerConfig?: Array<new () => BaseHandler>;
+        routes?: Array<new () => SocketRoute>;
+    }
+
+    /**
+     * WebSocket route configuration.
+     */
+    export interface SocketRouteConfig {
+        path: string; // The WebSocket route path (e.g., "/chat").
+        handlers: Array<new () => BaseHandler>; // Array of handler classes for the route.
+    }
+
+    /**
+     * Represents a WebSocket route.
+     */
+    export class SocketRoute {
+        /**
+         * The path for the WebSocket route.
+         */
+        path: string;
+
+        /**
+         * Handlers associated with the route.
+         */
+        handlers: BaseHandler[];
+
+        /**
+         * Creates a new `SocketRoute` instance.
+         * @param config - Configuration options for the route.
+         */
+        constructor(config: SocketRouteConfig);
+
+        /**
+         * Adds a new handler dynamically.
+         * @param HandlerClass - A class extending `BaseHandler`.
+         */
+        addHandler(HandlerClass: new () => BaseHandler): void;
+
+        /**
+         * Handles a new WebSocket connection.
+         * @param socket - The WebSocket connection instance.
+         * @param req - The HTTP request associated with the connection.
+         */
+        handleConnection(socket: WebSocket, req: import('http').IncomingMessage): void;
+
+        /**
+         * Handles incoming WebSocket messages.
+         * @param socket - The WebSocket connection instance.
+         * @param data - The message data.
+         */
+        handleMessage(socket: WebSocket, data: any): void;
+
+        /**
+         * Handles WebSocket disconnections.
+         * @param socket - The WebSocket connection instance.
+         */
+        handleClose(socket: WebSocket): void;
+
+        /**
+         * Handles WebSocket errors.
+         * @param socket - The WebSocket connection instance.
+         * @param error - The error object.
+         */
+        handleError(socket: WebSocket, error: Error): void;
     }
 
     /**
@@ -70,50 +132,30 @@ declare module 'redweb' {
          * The name of the handler (used to identify it in the server).
          */
         name: string;
-
-        /**
-         * Dictionary of message handlers for this handler.
-         */
-        messageHandlers: {
-            [type: string]: (socket: WebSocket, data: any) => void;
-        };
-
-        /**
-         * List of active WebSocket connections managed by this handler.
-         */
-        connections: WebSocket[];
-
         /**
          * Creates a new handler instance.
-         * @param config - Configuration for the handler.
+         * @param name - The name of the handler.
          */
-        constructor(config: HandlerConfig);
+        constructor(name: string);
 
         /**
-         * Adds a new WebSocket connection, processes initial data, and sets up message handling for this handler.
-         * @param socket - The WebSocket connection to add.
-         * @param data - Optional initial data sent during the connection handshake.
+         * Handles an incoming message.
+         * @param socket - The WebSocket connection that sent the message.
+         * @param message - The message data.
          */
-        newConnection(socket: WebSocket, data?: any): void;
+        onMessage(socket: WebSocket, message: Object): void;
 
         /**
-         * Method called when a WebSocket connection is closed. Can be overridden in subclasses.
-         * @param socket - The WebSocket connection being closed.
+         * Called during the first contact with a new WebSocket connection.
+         * @param socket - The WebSocket connection instance.
+         */
+        onInitialContact(socket: WebSocket): void;
+
+        /**
+         * Called when a WebSocket connection closes.
+         * @param socket - The WebSocket connection instance.
          */
         onClose(socket: WebSocket): void;
-
-        /**
-         * Handles an incoming message and routes it to the appropriate handler function.
-         * @param socket - The WebSocket connection that sent the message.
-         * @param message - The incoming message in JSON string format.
-         */
-        handleMessage(socket: WebSocket, message: string): void;
-
-        /**
-         * Broadcasts a message to all connections managed by this handler.
-         * @param message - The message to broadcast.
-         */
-        broadcast(message: object): void;
     }
 
     /**
@@ -121,22 +163,30 @@ declare module 'redweb' {
      */
     export class BaseSocketServer {
         /**
-         * Map of connected WebSocket clients by their IP address.
+         * List of WebSocket routes.
          */
-        clients: Map<string, WebSocket>;
+        routes: SocketRoute[];
 
         /**
-         * List of handler instances currently registered with the server.
+         * Creates a new `BaseSocketServer`.
+         * @param server - The HTTP server instance.
+         * @param options - Configuration options.
          */
-        handlers: BaseHandler[];
-
         constructor(server: HTTPServer | HTTPSServer, options?: SocketServerOptions);
 
         /**
-         * Adds a new handler to the WebSocket server.
-         * @param HandlerClass - A class extending `BaseHandler` to add to the server.
+         * Handles WebSocket upgrade requests.
+         * @param req - The incoming HTTP upgrade request.
+         * @param socket - The raw network socket.
+         * @param head - The initial data chunk.
          */
-        addHandler(HandlerClass: new () => BaseHandler): void;
+        handleUpgrade(req: import('http').IncomingMessage, socket: import('net').Socket, head: Buffer): void;
+
+        /**
+         * 
+         * @param route 
+         */
+        addRoute(route: new () => SocketRoute);
     }
 
     /**
