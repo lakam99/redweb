@@ -1,0 +1,1 @@
+module.exports = {a: 5, doStuff: (arg) => `You sent ${arg}`}
