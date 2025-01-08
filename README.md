@@ -28,33 +28,51 @@ const socketServer = new SocketServer();
 
 ### Custom Configuration
 
-#### HTTP Server
+#### HTTP Server with HTMX Rendering
+
+RedWeb now supports dynamic rendering of `.htmx` files using `enableHtmxRendering`.
 
 ```javascript
 const { HttpServer, METHODS } = require('redweb');
 
-const services = [
-    {
-        serviceName: '/submit-form',
-        method: METHODS.POST,
-        function: (req, res) => {
-            const { name, email, message } = req.body;
-            if (!name || !email || !message) {
-                return res.status(400).json({ error: 'All fields are required' });
-            }
-            res.status(200).json({ success: 'Form submitted successfully' });
-        }
-    }
-];
-
 const options = {
     port: 3000,
     publicPaths: ['./public'],
-    encoding: 'urlencoded',
-    services: services
+    enableHtmxRendering: true, // Enable .htmx rendering
+    services: [
+        {
+            serviceName: '/submit-form',
+            method: METHODS.POST,
+            function: (req, res) => {
+                const { name, email, message } = req.body;
+                if (!name || !email || !message) {
+                    return res.status(400).json({ error: 'All fields are required' });
+                }
+                res.status(200).json({ success: 'Form submitted successfully' });
+            }
+        }
+    ]
 };
 
 const app = new HttpServer(options);
+```
+
+Place `.htmx` files in the specified `publicPaths`, and they will be dynamically rendered.
+
+Example:
+
+**File: `public/index.htmx`**
+```javascript
+const name = 'RedWeb User';
+
+<@>
+    <h1>Hello, {{name}}!</h1>
+<@/>
+```
+
+Accessing `/index.htmx` will render:
+```html
+<h1>Hello, RedWeb User!</h1>
 ```
 
 #### HTTPS Server
@@ -68,7 +86,8 @@ const options = {
         key: './path/to/key.pem',
         cert: './path/to/cert.pem'
     },
-    publicPaths: ['./public']
+    publicPaths: ['./public'],
+    enableHtmxRendering: true // Enable .htmx rendering
 };
 
 const app = new HttpsServer(options);
@@ -207,6 +226,7 @@ module.exports = ChatRoute;
 - **listenCallback**: Function to execute once the server starts listening.
 - **encoding**: Encoding type for request bodies (`'json'` or `'urlencoded'`).
 - **ssl**: SSL configuration for HTTPS server (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
+- **enableHtmxRendering**: Enable dynamic rendering of `.htmx` files (default: `false`).
 
 ### SocketServer Options
 

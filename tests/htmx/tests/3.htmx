@@ -1,0 +1,6 @@
+const { a, doStuff } = require('./test');
+
+<@>
+    <h1>{{a}}</h1>
+    <b>{{doStuff(12)}}</b>
+<@/>

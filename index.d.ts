@@ -32,6 +32,8 @@ declare module 'redweb' {
             key: string;
             cert: string;
         };
+        corsOptions?: import('cors').CorsOptions;
+        enableHtmxRendering?: boolean; // New flag to enable HTMX rendering
     }
 
     /**
@@ -66,61 +68,23 @@ declare module 'redweb' {
      * WebSocket route configuration.
      */
     export interface SocketRouteConfig {
-        path: string; // The WebSocket route path (e.g., "/chat").
-        handlers: Array<new () => BaseHandler>; // Array of handler classes for the route.
+        path: string;
+        handlers: Array<new () => BaseHandler>;
     }
 
     /**
      * Represents a WebSocket route.
      */
     export class SocketRoute {
-        /**
-         * The path for the WebSocket route.
-         */
         path: string;
-
-        /**
-         * Handlers associated with the route.
-         */
         handlers: BaseHandler[];
 
-        /**
-         * Creates a new `SocketRoute` instance.
-         * @param config - Configuration options for the route.
-         */
         constructor(config: SocketRouteConfig);
 
-        /**
-         * Adds a new handler dynamically.
-         * @param HandlerClass - A class extending `BaseHandler`.
-         */
         addHandler(HandlerClass: new () => BaseHandler): void;
-
-        /**
-         * Handles a new WebSocket connection.
-         * @param socket - The WebSocket connection instance.
-         * @param req - The HTTP request associated with the connection.
-         */
         handleConnection(socket: WebSocket, req: import('http').IncomingMessage): void;
-
-        /**
-         * Handles incoming WebSocket messages.
-         * @param socket - The WebSocket connection instance.
-         * @param data - The message data.
-         */
         handleMessage(socket: WebSocket, data: any): void;
-
-        /**
-         * Handles WebSocket disconnections.
-         * @param socket - The WebSocket connection instance.
-         */
         handleClose(socket: WebSocket): void;
-
-        /**
-         * Handles WebSocket errors.
-         * @param socket - The WebSocket connection instance.
-         * @param error - The error object.
-         */
         handleError(socket: WebSocket, error: Error): void;
     }
 
@@ -128,33 +92,11 @@ declare module 'redweb' {
      * Base class for WebSocket handlers.
      */
     export class BaseHandler {
-        /**
-         * The name of the handler (used to identify it in the server).
-         */
         name: string;
-        /**
-         * Creates a new handler instance.
-         * @param name - The name of the handler.
-         */
+
         constructor(name: string);
-
-        /**
-         * Handles an incoming message.
-         * @param socket - The WebSocket connection that sent the message.
-         * @param message - The message data.
-         */
         onMessage(socket: WebSocket, message: Object): void;
-
-        /**
-         * Called during the first contact with a new WebSocket connection.
-         * @param socket - The WebSocket connection instance.
-         */
         onInitialContact(socket: WebSocket): void;
-
-        /**
-         * Called when a WebSocket connection closes.
-         * @param socket - The WebSocket connection instance.
-         */
         onClose(socket: WebSocket): void;
     }
 
@@ -162,31 +104,11 @@ declare module 'redweb' {
      * Base WebSocket server class.
      */
     export class BaseSocketServer {
-        /**
-         * List of WebSocket routes.
-         */
         routes: SocketRoute[];
 
-        /**
-         * Creates a new `BaseSocketServer`.
-         * @param server - The HTTP server instance.
-         * @param options - Configuration options.
-         */
         constructor(server: HTTPServer | HTTPSServer, options?: SocketServerOptions);
-
-        /**
-         * Handles WebSocket upgrade requests.
-         * @param req - The incoming HTTP upgrade request.
-         * @param socket - The raw network socket.
-         * @param head - The initial data chunk.
-         */
         handleUpgrade(req: import('http').IncomingMessage, socket: import('net').Socket, head: Buffer): void;
-
-        /**
-         * 
-         * @param route 
-         */
-        addRoute(route: new () => SocketRoute);
+        addRoute(route: new () => SocketRoute): void;
     }
 
     /**
