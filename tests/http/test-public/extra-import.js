@@ -1,0 +1,1 @@
+module.exports = {test_num: 5, test_fn: () => 'Cheesecake!'};

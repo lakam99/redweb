@@ -10,8 +10,9 @@ const http = new HttpServer({
             method: METHODS.GET,
             function: (req, res) => res.send('<h1>Goodbye~!</h1>')
         }
-    ]
+    ],
+    enableJSXRendering: true
 });
 
 // WebSocket server on port 3000
-new SocketServer({server: http.server, messageHandlers: {'msg': function (socket, data) {console.log(data); socket.send('guuuuuurl')}}});
+// new SocketServer({server: http.server, messageHandlers: {'msg': function (socket, data) {console.log(data); socket.send('guuuuuurl')}}});

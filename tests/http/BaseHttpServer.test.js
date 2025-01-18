@@ -1,6 +1,14 @@
-const request = require('supertest'); // For testing HTTP routes
+const request = require('supertest');
 const path = require('path');
+const fs = require('fs');
 const { BaseHttpServer, ENCODINGS, HTTP_OPTIONS } = require('../../src/http/BaseHttpServer');
+
+// Mocks
+jest.mock('../../src/jsx/JSXRenderer', () => ({
+    render: jest.fn(),
+}));
+
+const JSXRenderer = require('../../src/jsx/JSXRenderer');
 
 describe('BaseHttpServer', () => {
     let serverInstance;
@@ -38,15 +46,13 @@ describe('BaseHttpServer', () => {
     });
 
     test('should serve static files from public paths', async () => {
-        const mockPath = path.join(process.cwd(), './public');
-        jest.spyOn(path, 'join').mockReturnValue(mockPath);
-
         serverInstance = new BaseHttpServer();
         const app = serverInstance.app;
 
         app.use('/test-file', (req, res) => res.send('File served!'));
 
         const res = await request(app).get('/test-file');
+        expect(res.status).toBe(200);
         expect(res.text).toBe('File served!');
     });
 
@@ -126,5 +132,57 @@ describe('BaseHttpServer', () => {
         serverInstance = new BaseHttpServer({ listenCallback: mockCallback });
 
         expect(mockCallback).toHaveBeenCalledTimes(0); // Callback is set but not executed here
+    });
+
+    // -------------------------------
+    // JSX Rendering Tests
+    // -------------------------------
+    describe('JSX Rendering', () => {
+        beforeEach(() => {
+            JSXRenderer.render.mockClear();
+            jest.spyOn(fs, 'existsSync');
+            jest.spyOn(fs, 'readFileSync');
+        });
+
+        test('should render .jsx file if enableJSXRendering = true and file exists', async () => {
+            fs.existsSync.mockReturnValue(true); // pretend .jsx file is found
+            JSXRenderer.render.mockReturnValue('<div>Hello JSX!</div>');
+
+            serverInstance = new BaseHttpServer({ enableJSXRendering: true });
+            const app = serverInstance.app;
+
+            const res = await request(app).get('/component.jsx');
+            expect(res.status).toBe(200);
+            expect(res.text).toBe('<div>Hello JSX!</div>');
+            expect(JSXRenderer.render).toHaveBeenCalledWith(
+                expect.stringContaining('component.jsx'),
+                {}
+            );
+        });
+
+        test('should return 404 if .jsx file not found', async () => {
+            fs.existsSync.mockReturnValue(false);
+
+            serverInstance = new BaseHttpServer({ enableJSXRendering: true });
+            const app = serverInstance.app;
+
+            const res = await request(app).get('/missing.jsx');
+            expect(res.status).toBe(404);
+            expect(res.text).toMatch(/File not found: \/missing.jsx/);
+        });
+
+        test('should return 500 if error occurs in rendering .jsx', async () => {
+            fs.existsSync.mockReturnValue(true);
+            JSXRenderer.render.mockImplementation(() => {
+                throw new Error('JSX rendering failed');
+            });
+
+            serverInstance = new BaseHttpServer({ enableJSXRendering: true });
+            const app = serverInstance.app;
+
+            const res = await request(app).get('/broken.jsx');
+            expect(res.status).toBe(500);
+            expect(res.text).toMatch(/Error rendering JSX file: JSX rendering failed/);
+        });
     });
 });

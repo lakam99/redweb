@@ -3,7 +3,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
-const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer module
+const JSXRenderer = require('../jsx/JSXRenderer'); // Import JSX renderer
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -23,7 +23,7 @@ const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
  * @property {import('express').Application} [server] - Whether to automatically start listening.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
- * @property {boolean} [enableHtmxRendering=false] - Enable dynamic HTMX file rendering.
+ * @property {boolean} [enableJSXRendering=false] - Enable dynamic JSX file rendering.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -37,7 +37,7 @@ const HTTP_OPTIONS = {
     ssl: null,
     server: undefined,
     corsOptions: undefined,
-    enableHtmxRendering: false, // New option for HTMX rendering
+    enableJSXRendering: false, // New option for JSX rendering
 };
 
 /**
@@ -59,33 +59,37 @@ function BaseHttpServer(options = {}) {
 
     this.app.use(cors(this.options.corsOptions));
 
-    // Enable HTMX rendering if the flag is set
-    if (this.enableHtmxRendering) {
-        this.app.get('*.htmx', (req, res) => {
+    // Enable JSX rendering if the flag is set
+    if (this.enableJSXRendering) {
+        this.app.get('*.jsx', (req, res) => {
             // Find the file in one of the publicPaths
             const filePath = this.publicPaths
                 .map(publicPath => path.join(process.cwd(), publicPath, req.path))
-                .find(fullPath => fs.existsSync(fullPath)); // Check if the file exists
-    
+                .find(fullPath => fs.existsSync(fullPath));
+
             if (!filePath) {
-                return res.status(404).send(`Error rendering HTMX file: Template file not found: ${req.path}`);
+                return res.status(404).send(`Error rendering JSX file: File not found: ${req.path}`);
             }
-    
+
             try {
-                const renderedContent = HtmxRenderer.render(filePath);
+                // Pass query parameters and request body as props
+                const props = { ...req.query, ...req.body };
+
+                const renderedContent = JSXRenderer.render(filePath, props);
                 res.type('html').send(renderedContent);
             } catch (error) {
-                res.status(500).send(`Error rendering HTMX file: ${error.message}`);
+                console.error(error);
+                res.status(500).send(`Error rendering JSX file: ${error.message}`);
             }
         });
     }
-    
 
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) =>
         this.app.use(express.static(path.join(process.cwd(), publicPath)))
     );
 
+    // Register services
     const catchAll = this.services.find((service) => service.serviceName === '*');
     if (catchAll) this.services.splice(this.services.indexOf(catchAll), 1);
     this.services.forEach((service) =>
@@ -95,7 +99,6 @@ function BaseHttpServer(options = {}) {
 
     return this;
 }
-
 
 module.exports = {
     BaseHttpServer,
