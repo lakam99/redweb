@@ -7,8 +7,10 @@ jest.spyOn(process, 'cwd').mockReturnValue(__dirname); // Mock process.cwd
 
 describe('JSX Integration Test', () => {
     it('should', () => expect(true).toBe(true));
+
     let testFiles = [];
-    const publicPath = path.join(process.cwd(), 'test-public')
+    const publicPath = path.join(process.cwd(), 'test-public');
+
     // Dynamically load JSX and expected HTML files from the test directory
     const files = fs.readdirSync(publicPath);
 
@@ -29,6 +31,14 @@ describe('JSX Integration Test', () => {
         throw new Error('No test files found. Ensure the directory contains valid test and expected files.');
     }
 
+    const normalizeHandlerIds = (html) => {
+        return html
+            .replace(/handler_[a-z0-9]+/g, 'handler_xxxxxx') // Normalize handler IDs
+            .replace(/<script>\s*([\s\S]*?)\s*<\/script>/g, '<script>$1</script>') // Normalize script spacing
+            .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+            .trim(); // Remove leading and trailing whitespace
+    };
+
     testFiles.forEach(({ jsx, expected }) => {
         test(`should render ${jsx} correctly`, async () => {
             const serverInstance = new BaseHttpServer({ enableJSXRendering: true, publicPaths: ['./test-public'] });
@@ -38,7 +48,12 @@ describe('JSX Integration Test', () => {
             expect(res.status).toBe(200);
 
             const expectedContent = fs.readFileSync(path.join(publicPath, expected), 'utf8');
-            expect(res.text).toMatch(expectedContent.trim());
+
+            // Normalize dynamic handler IDs for fair comparison
+            const normalizedReceived = normalizeHandlerIds(res.text);
+            const normalizedExpected = normalizeHandlerIds(expectedContent.trim());
+
+            expect(normalizedReceived).toMatch(normalizedExpected);
         });
     });
 });

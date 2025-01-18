@@ -7,11 +7,20 @@ function createElement(tag, props, ...children) {
         return tag({ ...props, children });
     }
 
+    const eventHandlers = [];
     const attributes = Object.entries(props || {})
-        .map(([key, value]) => `${key}="${value}"`)
+        .map(([key, value]) => {
+            if (/^on[A-Z]/.test(key)) {
+                // Collect event handlers for later script generation
+                const eventName = key.slice(2).toLowerCase(); // e.g., onClick -> click
+                const handlerId = `handler_${Math.random().toString(36).substring(2, 9)}`;
+                eventHandlers.push({ eventName, handler: value, handlerId });
+                return `data-event-${eventName}="${handlerId}"`;
+            }
+            return `${key}="${value}"`;
+        })
         .join(' ');
 
-    // Only add a space before attributes if there are attributes
     const openingTag = attributes ? `<${tag} ${attributes}>` : `<${tag}>`;
 
     const childrenHTML = children
@@ -26,9 +35,21 @@ function createElement(tag, props, ...children) {
         })
         .join('');
 
-    return `${openingTag}${childrenHTML}</${tag}>`;
-}
+    // Generate scripts only for event handlers
+    const eventScripts = eventHandlers
+        .map(({ eventName, handler, handlerId }) => {
+            return `
+                document.querySelectorAll('[data-event-${eventName}="${handlerId}"]').forEach(el => {
+                    el.addEventListener('${eventName}', ${handler.toString()});
+                });
+            `;
+        })
+        .join('');
 
+    const scriptTag = eventScripts ? `<script>${eventScripts}</script>` : '';
+
+    return `${openingTag}${childrenHTML}</${tag}>${scriptTag}`;
+}
 
 function customRequire(parentPath, modulePath) {
     const resolvedPath = path.resolve(path.dirname(parentPath), modulePath);

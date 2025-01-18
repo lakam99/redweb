@@ -3,7 +3,6 @@ const ComponentThree = require('./3-test.jsx');
 const { test_fn, test_num } = require('./extra-import.js');
 
 function ComponentSix() {
-    const items = ['Apple', 'Banana', 'Cherry'];
     return (
         <div>
             <ComponentFive></ComponentFive>

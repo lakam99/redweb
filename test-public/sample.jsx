@@ -1,15 +1,14 @@
-const OtherComponent = require('./other.jsx');
+function ComponentSeven() {
+    const handleClick = () => alert('Button clicked!');
+    const handleMouseOver = () => console.log('Mouse over!');
 
-function SampleComponent() {
     return (
-    <div>
-        <OtherComponent></OtherComponent>
-        Hello from SampleComponent!
-            <p>5 + 5 = {5 + 5}</p>
-            <p>10 + 5 = {10 + 5}</p>
-    </div>
-    )
+        <div>
+            <h1>Component Seven</h1>
+            <button onClick={handleClick}>Click Me</button>
+            <p onMouseOver={handleMouseOver}>Hover over this text</p>
+        </div>
+    );
 }
 
-
-module.exports = SampleComponent;
+module.exports = ComponentSeven;
