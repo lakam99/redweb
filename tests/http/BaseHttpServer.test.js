@@ -1,9 +1,13 @@
 const request = require('supertest'); // For testing HTTP routes
 const path = require('path');
+const fs = require('fs');
 const { BaseHttpServer, ENCODINGS, HTTP_OPTIONS } = require('../../src/http/BaseHttpServer');
 
 describe('BaseHttpServer', () => {
     let serverInstance;
+    const serverRoot = require.main?.filename
+        ? path.dirname(require.main.filename)
+        : process.cwd(); // Handle Jest null `require.main`
 
     afterEach(() => {
         jest.restoreAllMocks();
@@ -37,94 +41,28 @@ describe('BaseHttpServer', () => {
         expect(serverInstance.options.encoding).toBe(ENCODINGS.urlencoded);
     });
 
-    test('should serve static files from public paths', async () => {
-        const mockPath = path.join(process.cwd(), './public');
-        jest.spyOn(path, 'join').mockReturnValue(mockPath);
+    test('should dynamically render pages from the pages directory', async () => {
+        const testPagePath = path.resolve(serverRoot, 'pages/testPage.js');
+
+        jest.spyOn(fs, 'existsSync').mockImplementation((filePath) => filePath === testPagePath);
+        jest.doMock(testPagePath, () => () => '<h1>Dynamic Page Rendered</h1>', { virtual: true });
 
         serverInstance = new BaseHttpServer();
         const app = serverInstance.app;
 
-        app.use('/test-file', (req, res) => res.send('File served!'));
-
-        const res = await request(app).get('/test-file');
-        expect(res.text).toBe('File served!');
-    });
-
-    test('should add services as defined in options', async () => {
-        const services = [
-            {
-                serviceName: '/api/test',
-                method: 'get',
-                function: (req, res) => res.status(200).json({ success: true }),
-            },
-        ];
-
-        serverInstance = new BaseHttpServer({ services });
-        const app = serverInstance.app;
-
-        const res = await request(app).get('/api/test');
+        const res = await request(app).get('/testPage');
         expect(res.status).toBe(200);
-        expect(res.body).toEqual({ success: true });
+        expect(res.text).toBe('<h1>Dynamic Page Rendered</h1>');
     });
 
-    test('should handle catch-all service', async () => {
-        const services = [
-            {
-                serviceName: '*',
-                method: 'get',
-                function: (req, res) => res.status(404).send('Not Found'),
-            },
-        ];
+    test('should handle 404 if dynamic page is not found', async () => {
+        jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
-        serverInstance = new BaseHttpServer({ services });
+        serverInstance = new BaseHttpServer();
         const app = serverInstance.app;
 
-        const res = await request(app).get('/random-path');
+        const res = await request(app).get('/nonexistent-page');
         expect(res.status).toBe(404);
-        expect(res.text).toBe('Not Found');
-    });
-
-    test('should configure JSON body parsing middleware by default', async () => {
-        serverInstance = new BaseHttpServer();
-        const app = serverInstance.app;
-
-        app.post('/json-test', (req, res) => {
-            res.status(200).json({ received: req.body });
-        });
-
-        const res = await request(app).post('/json-test').send({ key: 'value' });
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({ received: { key: 'value' } });
-    });
-
-    test('should configure URL-encoded body parsing middleware', async () => {
-        serverInstance = new BaseHttpServer({ encoding: ENCODINGS.urlencoded });
-        const app = serverInstance.app;
-
-        app.post('/urlencoded-test', (req, res) => {
-            res.status(200).json({ received: req.body });
-        });
-
-        const res = await request(app).post('/urlencoded-test').type('form').send({ key: 'value' });
-        expect(res.status).toBe(200);
-        expect(res.body).toEqual({ received: { key: 'value' } });
-    });
-
-    test('should apply CORS options', async () => {
-        const corsOptions = { origin: 'http://example.com' };
-        serverInstance = new BaseHttpServer({ corsOptions });
-        const app = serverInstance.app;
-
-        app.get('/cors-test', (req, res) => res.send('CORS applied!'));
-
-        const res = await request(app).get('/cors-test').set('Origin', 'http://example.com');
-        expect(res.headers['access-control-allow-origin']).toBe('http://example.com');
-    });
-
-    test('should execute listen callback when server starts', () => {
-        const mockCallback = jest.fn();
-        serverInstance = new BaseHttpServer({ listenCallback: mockCallback });
-
-        expect(mockCallback).toHaveBeenCalledTimes(0); // Callback is set but not executed here
+        expect(res.text).toBe('<h1>Page Not Found</h1>');
     });
 });

@@ -3,7 +3,6 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
-const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer module
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -23,7 +22,7 @@ const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
  * @property {import('express').Application} [server] - Whether to automatically start listening.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
- * @property {boolean} [enableHtmxRendering=false] - Enable dynamic HTMX file rendering.
+ * @property {boolean} [enableDynamicRendering=true] - Enable dynamic page rendering from `pages/` directory.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -37,7 +36,7 @@ const HTTP_OPTIONS = {
     ssl: null,
     server: undefined,
     corsOptions: undefined,
-    enableHtmxRendering: false, // New option for HTMX rendering
+    enableDynamicRendering: true, // Enable dynamic rendering of pages
 };
 
 /**
@@ -59,33 +58,46 @@ function BaseHttpServer(options = {}) {
 
     this.app.use(cors(this.options.corsOptions));
 
-    // Enable HTMX rendering if the flag is set
-    if (this.enableHtmxRendering) {
-        this.app.get('*.htmx', (req, res) => {
-            // Find the file in one of the publicPaths
-            const filePath = this.publicPaths
-                .map(publicPath => path.join(process.cwd(), publicPath, req.path))
-                .find(fullPath => fs.existsSync(fullPath)); // Check if the file exists
-    
-            if (!filePath) {
-                return res.status(404).send(`Error rendering HTMX file: Template file not found: ${req.path}`);
-            }
-    
-            try {
-                const renderedContent = HtmxRenderer.render(filePath);
-                res.type('html').send(renderedContent);
-            } catch (error) {
-                res.status(500).send(`Error rendering HTMX file: ${error.message}`);
-            }
-        });
-    }
-    
+    // Resolve the directory of the script that runs the server
+    const serverRoot = path.dirname(require.main.filename);
 
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) =>
-        this.app.use(express.static(path.join(process.cwd(), publicPath)))
+        this.app.use(express.static(path.resolve(serverRoot, publicPath)))
     );
 
+    // Enable dynamic rendering if the flag is set
+    if (this.enableDynamicRendering) {
+        const pagesDir = path.resolve(serverRoot, 'pages');
+
+        if (fs.existsSync(pagesDir)) {
+            this.app.get('*', async (req, res) => {
+                const route = req.path === '/' ? '/index' : req.path;
+                const pagePath = path.join(pagesDir, `${route}.js`);
+
+                if (fs.existsSync(pagePath)) {
+                    try {
+                        const page = require(pagePath);
+
+                        if (typeof page !== 'function') {
+                            throw new Error(`Page module at ${route} does not export a function.`);
+                        }
+
+                        const html = await page(req); // Execute the page function with the request object
+                        res.send(html); // Send the rendered HTML
+                    } catch (err) {
+                        res.status(500).send(`<h1>Error rendering page</h1><pre>${err.message}</pre>`);
+                    }
+                } else {
+                    res.status(404).send('<h1>Page Not Found</h1>');
+                }
+            });
+        } else {
+            console.warn(`Pages directory not found: ${pagesDir}`);
+        }
+    }
+
+    // Add custom services
     const catchAll = this.services.find((service) => service.serviceName === '*');
     if (catchAll) this.services.splice(this.services.indexOf(catchAll), 1);
     this.services.forEach((service) =>
@@ -95,7 +107,6 @@ function BaseHttpServer(options = {}) {
 
     return this;
 }
-
 
 module.exports = {
     BaseHttpServer,
