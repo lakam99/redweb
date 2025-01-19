@@ -1,6 +1,7 @@
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
+const { JSDOM } = require('jsdom');
 const { BaseHttpServer } = require('../../src/http/BaseHttpServer');
 
 jest.spyOn(process, 'cwd').mockReturnValue(__dirname); // Mock process.cwd
@@ -31,12 +32,19 @@ describe('JSX Integration Test', () => {
         throw new Error('No test files found. Ensure the directory contains valid test and expected files.');
     }
 
-    const normalizeHandlerIds = (html) => {
-        return html
-            .replace(/handler_[a-z0-9]+/g, 'handler_xxxxxx') // Normalize handler IDs
-            .replace(/<script>\s*([\s\S]*?)\s*<\/script>/g, '<script>$1</script>') // Normalize script spacing
-            .replace(/\s+/g, ' ') // Collapse multiple spaces into one
-            .trim(); // Remove leading and trailing whitespace
+    const normalizeHandlerIds = (el) => {
+        Array.from(el.querySelectorAll('[data-event-click], [data-event-mouseover]')).forEach((elem) => {
+            if (elem.hasAttribute('data-event-click')) {
+                elem.setAttribute('data-event-click', 'handler_xxxxxx');
+            }
+            if (elem.hasAttribute('data-event-mouseover')) {
+                elem.setAttribute('data-event-mouseover', 'handler_xxxxxx');
+            }
+        });
+    };
+
+    const compareElements = (receivedEl, expectedEl) => {
+        expect(receivedEl.innerHTML.trim()).toMatch(expectedEl.innerHTML.trim());
     };
 
     testFiles.forEach(({ jsx, expected }) => {
@@ -48,12 +56,13 @@ describe('JSX Integration Test', () => {
             expect(res.status).toBe(200);
 
             const expectedContent = fs.readFileSync(path.join(publicPath, expected), 'utf8');
+            const dom = new JSDOM(res.text);
+            const expectedDom = new JSDOM(expectedContent);
 
-            // Normalize dynamic handler IDs for fair comparison
-            const normalizedReceived = normalizeHandlerIds(res.text);
-            const normalizedExpected = normalizeHandlerIds(expectedContent.trim());
+            normalizeHandlerIds(dom.window.document.body);
+            normalizeHandlerIds(expectedDom.window.document.body);
 
-            expect(normalizedReceived).toMatch(normalizedExpected);
+            compareElements(dom.window.document.body, expectedDom.window.document.body);
         });
     });
 });

@@ -2,19 +2,24 @@ const fs = require('fs');
 const path = require('path');
 const { transformSync } = require('esbuild');
 
+let globalEventScripts = []; // Holds all event handler scripts globally
+
 function createElement(tag, props, ...children) {
     if (typeof tag === 'function') {
         return tag({ ...props, children });
     }
 
-    const eventHandlers = [];
     const attributes = Object.entries(props || {})
         .map(([key, value]) => {
             if (/^on[A-Z]/.test(key)) {
                 // Collect event handlers for later script generation
                 const eventName = key.slice(2).toLowerCase(); // e.g., onClick -> click
                 const handlerId = `handler_${Math.random().toString(36).substring(2, 9)}`;
-                eventHandlers.push({ eventName, handler: value, handlerId });
+                globalEventScripts.push(`
+                    document.querySelectorAll('[data-event-${eventName}="${handlerId}"]').forEach(el => {
+                        el.addEventListener('${eventName}', ${value.toString()});
+                    });
+                `);
                 return `data-event-${eventName}="${handlerId}"`;
             }
             return `${key}="${value}"`;
@@ -24,31 +29,24 @@ function createElement(tag, props, ...children) {
     const openingTag = attributes ? `<${tag} ${attributes}>` : `<${tag}>`;
 
     const childrenHTML = children
-        .map((child) => {
-            if (Array.isArray(child)) {
-                return child.join('');
-            } else if (typeof child === 'object') {
-                return child;
-            } else {
-                return String(child);
-            }
-        })
+        .map((child) => (Array.isArray(child) ? child.join('') : String(child)))
         .join('');
 
-    // Generate scripts only for event handlers
-    const eventScripts = eventHandlers
-        .map(({ eventName, handler, handlerId }) => {
-            return `
-                document.querySelectorAll('[data-event-${eventName}="${handlerId}"]').forEach(el => {
-                    el.addEventListener('${eventName}', ${handler.toString()});
-                });
-            `;
-        })
-        .join('');
+    return `${openingTag}${childrenHTML}</${tag}>`;
+}
 
-    const scriptTag = eventScripts ? `<script>${eventScripts}</script>` : '';
-
-    return `${openingTag}${childrenHTML}</${tag}>${scriptTag}`;
+/**
+ * Finalizes the rendered HTML by appending a single script tag with all collected event handlers.
+ * @param {string} html - The main rendered HTML.
+ * @returns {string} - The finalized HTML with a single consolidated <script> tag.
+ */
+function finalizeRender(html) {
+    if (globalEventScripts.length > 0) {
+        const combinedScripts = `<script>${globalEventScripts.join('\n')}</script>`;
+        globalEventScripts = []; // Reset after rendering
+        return `${html}${combinedScripts}`;
+    }
+    return html;
 }
 
 function customRequire(parentPath, modulePath) {
@@ -136,7 +134,8 @@ function render(filePath, props = {}) {
         throw new Error(`Invalid export from ${filePath}: Expected a function.`);
     }
 
-    return Component(props);
+    const html = Component(props);
+    return finalizeRender(html);
 }
 
 module.exports = { render, createElement };

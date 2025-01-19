@@ -4,4 +4,4 @@ function OtherComponent() {
     )
 }
 
-module.exports = OtherComponent;
+module.exports = { OtherComponent }
