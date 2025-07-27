@@ -1,239 +1,192 @@
+Here is the **fully updated and cleaned-up `README.md`** for RedWeb, now featuring a **working broadcast chat example** using `allowDuplicateConnections`:
+
+---
+
 # RedWeb
 
-RedWeb is a simple and flexible Node.js framework built on top of Express.js and WebSocket. It allows you to quickly set up web servers and WebSocket servers with customizable options.
+**RedWeb** is a flexible Node.js framework built on top of **Express.js** and **WebSocket**. It enables quick setup of HTTP(S) and WebSocket servers with a modular route and handler system.
 
-## Installation
+---
 
-To install RedWeb, use npm:
+## 📦 Installation
 
 ```bash
 npm install redweb
 ```
 
-## Usage
+---
 
-### Basic Example
+## 🚀 Quick Start
 
-Initialize your RedWeb instance with the default options:
-
-```javascript
+```js
 const { HttpServer, SocketServer } = require('redweb');
 
-// HTTP server with default configuration
 const httpServer = new HttpServer();
-
-// WebSocket server with default configuration
 const socketServer = new SocketServer();
 ```
 
-### Custom Configuration
+---
 
-#### HTTP Server with HTMX Rendering
+## 🌐 HTTP Server Example (HTMX Support)
 
-RedWeb now supports dynamic rendering of `.htmx` files using `enableHtmxRendering`.
-
-```javascript
+```js
 const { HttpServer, METHODS } = require('redweb');
 
-const options = {
-    port: 3000,
-    publicPaths: ['./public'],
-    enableHtmxRendering: true, // Enable .htmx rendering
-    services: [
-        {
-            serviceName: '/submit-form',
-            method: METHODS.POST,
-            function: (req, res) => {
-                const { name, email, message } = req.body;
-                if (!name || !email || !message) {
-                    return res.status(400).json({ error: 'All fields are required' });
-                }
-                res.status(200).json({ success: 'Form submitted successfully' });
-            }
-        }
-    ]
-};
-
-const app = new HttpServer(options);
+new HttpServer({
+  port: 3000,
+  publicPaths: ['./public'],
+  enableHtmxRendering: true,
+  services: [
+    {
+      serviceName: '/submit',
+      method: METHODS.POST,
+      function: (req, res) => {
+        if (!req.body.name) return res.status(400).json({ error: 'Missing name' });
+        res.status(200).json({ message: `Thanks, ${req.body.name}!` });
+      }
+    }
+  ]
+});
 ```
 
-Place `.htmx` files in the specified `publicPaths`, and they will be dynamically rendered.
-
+`.htmx` files under `public/` will render server-side.
 Example:
 
-**File: `public/index.htmx`**
-```javascript
-const name = 'RedWeb User';
-
+```html
+<!-- public/hello.htmx -->
 <@>
-    <h1>Hello, {{name}}!</h1>
+  <h1>Hello, {{name}}!</h1>
 <@/>
 ```
 
-Accessing `/index.htmx` will render:
-```html
-<h1>Hello, RedWeb User!</h1>
-```
+---
 
-#### HTTPS Server
+## 🔌 WebSocket Broadcast Chat (🔥 Instant Testing)
 
-```javascript
-const { HttpsServer } = require('redweb');
+### 1. `ChatHandler.js`
 
-const options = {
-    port: 3443,
-    ssl: {
-        key: './path/to/key.pem',
-        cert: './path/to/cert.pem'
-    },
-    publicPaths: ['./public'],
-    enableHtmxRendering: true // Enable .htmx rendering
-};
-
-const app = new HttpsServer(options);
-```
-
-### WebSocket Server with Routes and Handlers
-
-RedWeb uses **route-based architecture** for WebSocket connections, allowing you to modularize and secure your WebSocket message handling logic.
-
-#### Defining a Custom Handler
-
-Handlers extend the `BaseHandler` class and manage their own connections and message types.
-
-```javascript
+```js
 const { BaseHandler } = require('redweb');
 
 class ChatHandler extends BaseHandler {
-    constructor() {
-        super('chat');
-    }
+  constructor() {
+    super('chat');
+  }
 
-    onMessage(socket, message) {
-        console.log(`Received chat message: ${message.text}`);
-        socket.send(JSON.stringify({ type: 'chatResponse', message: 'Hello!' }));
-    }
+  onMessage(socket, message) {
+    const text = message.text;
+    console.log(`Broadcasting: ${text}`);
+    socket.broadcast({ type: 'chat', text });
+  }
 }
 
 module.exports = ChatHandler;
 ```
 
-#### Defining a WebSocket Route
+---
 
-Routes group handlers and specify the WebSocket path.
+### 2. `ChatRoute.js`
 
-```javascript
+```js
 const { SocketRoute } = require('redweb');
 const ChatHandler = require('./ChatHandler');
 
 class ChatRoute extends SocketRoute {
-    constructor() {
-        super({
-            path: '/chat',
-            handlers: [ChatHandler]
-        });
-    }
+  constructor() {
+    super({
+      path: '/chat',
+      handlers: [ChatHandler],
+      allowDuplicateConnections: true // key for local testing!
+    });
+  }
 }
 
 module.exports = ChatRoute;
 ```
 
-#### Setting Up a WebSocket Server with Routes
+---
 
-```javascript
+### 3. `server.js`
+
+```js
 const { SocketServer } = require('redweb');
 const ChatRoute = require('./ChatRoute');
 
 new SocketServer({
-    port: 3000,
-    routes: [ChatRoute]
+  port: 3000,
+  routes: [ChatRoute]
 });
 ```
 
-### Adding Routes Dynamically
+---
 
-Routes can be added to the WebSocket server after initialization.
+### 4. `client.html`
 
-```javascript
-const { SocketServer, SocketRoute } = require('redweb');
-const ChatHandler = require('./ChatHandler');
+```html
+<!DOCTYPE html>
+<html>
+  <body>
+    <h1>Broadcast Chat</h1>
+    <input id="msg" placeholder="Type message..." />
+    <button onclick="send()">Send</button>
+    <pre id="log"></pre>
 
-class ChatRoute extends SocketRoute {
-    constructor() {
-        super({
-            path: '/chat',
-            handlers: [ChatHandler]
-        });
-    }
-}
+    <script>
+      const log = document.getElementById('log');
+      const ws = new WebSocket('ws://localhost:3000/chat');
 
-const socketServer = new SocketServer({ port: 3000 });
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        log.textContent += `\n${msg.text}`;
+      };
 
-// Dynamically add a new route
-const chatRoute = new ChatRoute();
-socketServer.routes.push(chatRoute);
+      function send() {
+        const text = document.getElementById('msg').value;
+        ws.send(JSON.stringify({ type: 'chat', text }));
+      }
+    </script>
+  </body>
+</html>
 ```
 
-### Client Communication with a Route
+Open multiple tabs to test!
 
-The client connects to the WebSocket server using the specified route.
+---
 
-```javascript
-const WebSocket = require('ws');
+## 🔧 Options
 
-const ws = new WebSocket('ws://localhost:3000/chat');
+### HTTP / HTTPS Server Options
 
-ws.on('open', () => {
-    ws.send(JSON.stringify({ type: 'chat', text: 'Hello there!' }));
-});
+| Option                | Type      | Default        | Description                    |
+| --------------------- | --------- | -------------- | ------------------------------ |
+| `port`                | number    | `80`           | Port to listen on              |
+| `bind`                | string    | `'0.0.0.0'`    | Bind address                   |
+| `publicPaths`         | string\[] | `['./public']` | Serve static and `.htmx` files |
+| `services`            | object\[] | `[]`           | REST endpoints                 |
+| `enableHtmxRendering` | boolean   | `false`        | Enables `.htmx` file rendering |
+| `ssl`                 | object    | `undefined`    | Used in `HttpsServer`          |
 
-ws.on('message', (message) => {
-    console.log('Received:', message);
-});
-```
+---
 
-### Managing Connected Clients
+### WebSocket Server Options
 
-RedWeb's WebSocket server maintains a list of connected clients by their IP addresses for each route. This list is automatically updated when clients connect or disconnect.
+| Option                      | Type                | Default | Description                         |
+| --------------------------- | ------------------- | ------- | ----------------------------------- |
+| `port`                      | number              | `3000`  | WebSocket port                      |
+| `routes`                    | `SocketRoute[]`     | `[]`    | List of custom route classes        |
+| `allowDuplicateConnections` | boolean (per route) | `false` | Allow multiple clients from same IP |
 
-```javascript
-const { SocketRoute } = require('redweb');
+---
 
-class ChatRoute extends SocketRoute {
-    constructor() {
-        super({
-            path: '/chat',
-            handlers: []
-        });
-    }
+## 🆕 0.7.0 Update Highlights
 
-    onConnection(socket) {
-        console.log('New client connected:', socket.remoteAddress);
-    }
-}
+* ✅ `allowDuplicateConnections` for multi-tab testing
+* ✅ Robust message validation
+* ✅ `socket.broadcast()` now excludes sender
+* ✅ Better error handling
 
-module.exports = ChatRoute;
-```
+---
 
-## Options
+## 🪪 License
 
-### HttpServer and HttpsServer Options
-
-- **port**: Port number (default: `80`).
-- **bind**: Bind address (default: `0.0.0.0`).
-- **publicPaths**: Array of paths to serve static files (default: `['./public']`).
-- **services**: Array of services with endpoints and handlers (default: `[]`).
-- **listenCallback**: Function to execute once the server starts listening.
-- **encoding**: Encoding type for request bodies (`'json'` or `'urlencoded'`).
-- **ssl**: SSL configuration for HTTPS server (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
-- **enableHtmxRendering**: Enable dynamic rendering of `.htmx` files (default: `false`).
-
-### SocketServer Options
-
-- **port**: Port number (default: `3000`).
-- **routes**: Array of `SocketRoute` classes to define WebSocket routes and handlers.
-- **ssl**: SSL configuration for SecureSocketServer (`{ key: './path/to/key.pem', cert: './path/to/cert.pem' }`).
-
-## License
-
-MIT License
+MIT
