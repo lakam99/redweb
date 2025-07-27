@@ -1,5 +1,6 @@
 const { WebSocketServer } = require("ws");
 const { sendJson, broadcast } = require("./util");
+const { randomUUID } = require("crypto");
 
 /**
  * Represents a WebSocket route configuration.
@@ -10,9 +11,10 @@ class SocketRoute {
      * Creates a new instance of `SocketRoute`.
      * @param {Object} options - Configuration options for the WebSocket route.
      * @param {string} options.path - The path of the WebSocket route (e.g., `/chat`, `/lobby`).
+     * @param {boolean} options.allowDuplicateConnections - Whether to allow multiple connections from the same client IP address.
      * @param {import('./BaseHandler').BaseHandler[]} options.handlers - An array of handler instances that manage connections and messages for this route.
      */
-    constructor({path, handlers } = {}) {
+    constructor({path, handlers, allowDuplicateConnections } = {}) {
         if (!path) {
             throw new Error('A `path` must be specified for the SocketRoute.');
         }
@@ -34,6 +36,7 @@ class SocketRoute {
         this.clients = new Map();
         this.server = new WebSocketServer({ noServer: true, path });
         this.server.on('connection', this.handleConnection.bind(this));
+        this.allowDuplicateConnections = allowDuplicateConnections;
     }
     /**
      * Adds a new handler to the WebSocket server.
@@ -56,23 +59,37 @@ class SocketRoute {
     handleConnection(socket, req) {
         const ip = req.socket.remoteAddress;
         console.log(`New client connected: ${ip}`);
-        if (this.clients.get(ip) !== undefined) {
-            const oldClient = this.clients.get(ip);
-            console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
-            oldClient.send(
-                JSON.stringify({ msg: 'You are being disconnected because a new client is connected with your IP address.' })
-            );
-            oldClient.close();
+        if (this.allowDuplicateConnections) {
+            this.clients.set(randomUUID(), socket);
+        } else {
+            if (this.clients.get(ip) !== undefined) {
+                const oldClient = this.clients.get(ip);
+                console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
+                oldClient.send(
+                    JSON.stringify({ msg: 'You are being disconnected because a new client is connected with your IP address.' })
+                );
+                oldClient.close();
+            }
+            this.clients.set(ip, socket);
         }
-        this.clients.set(ip, socket);
         socket.isAssigned = false; // Tracks whether the socket has been assigned a handler.
         socket.sendJson = (data) => sendJson(socket, data);
-        socket.broadcast = (data) => broadcast([...this.clients.values()], data);
+        socket.broadcast = (data) => broadcast([...this.clients.values()].filter(sock => sock !== socket), data);
 
         this.connectionOpenCallback(socket);
-        socket.on('message', (message) => this.handleMessage(socket, JSON.parse(message)));
         socket.on('close', this.handleClose.bind(this));
         socket.on('error', this.handleError.bind(this));
+        socket.on('message', (message) => {
+            try {
+                const parsed = JSON.parse(message);
+                this.handleMessage(socket, parsed);
+            } catch (error) {
+                console.error(`Error parsing message from ${ip}:`, error);
+                socket.sendJson({ error: 'Invalid JSON format' });
+                socket.close();
+                return;
+            }
+        });
     }
 
     connectionOpenCallback(socket) {
@@ -85,7 +102,13 @@ class SocketRoute {
             sendJson(sock, {error: `No such handler ${data.type}`});
             sock.close();
         } else {
-            handler.handleMessage(sock, data);
+            try {
+                handler.handleMessage(sock, data);
+            } catch (error) {
+                console.error(`Error handling message in handler ${handler.name}:`, error);
+                sendJson(sock, { error: `${error.message}` });
+                sock.close();
+            }
         }
     }
 

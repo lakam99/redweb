@@ -16,7 +16,7 @@ class BaseHandler {
     /**
      * Handles an incoming message and routes it to the appropriate handler function.
      * @param {WebSocket & {sendJson: (message: Object) => void, broadcast: (message: Object) => void}} socket - The WebSocket connection that sent the message.
-     * @param {string} message - The incoming message in JSON string format.
+     * @param {any} message - The incoming message in parsed JSON.
      */
     handleMessage(socket, message) {
         this.onMessage(socket, message);
@@ -25,7 +25,7 @@ class BaseHandler {
     /**
      * Method to be overriden to process messages.
      * @param {WebSocket} socket - The WebSocket connection that sent the message.
-     * @param {string} message - The incoming message in JSON string format.
+     * @param {any} message - The incoming message in parsed JSON.
      */
     onMessage(socket, message) {
         throw "Not yet implemented!";
