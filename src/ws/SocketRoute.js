@@ -13,8 +13,9 @@ class SocketRoute {
      * @param {string} options.path - The path of the WebSocket route (e.g., `/chat`, `/lobby`).
      * @param {boolean} options.allowDuplicateConnections - Whether to allow multiple connections from the same client IP address.
      * @param {import('./BaseHandler').BaseHandler[]} options.handlers - An array of handler instances that manage connections and messages for this route.
-     */
-    constructor({path, handlers, allowDuplicateConnections } = {}) {
+     * @param {Array<new () => SocketService>} [options.services] 
+    */
+    constructor({ path, handlers, services = [], allowDuplicateConnections } = {}) {
         if (!path) {
             throw new Error('A `path` must be specified for the SocketRoute.');
         }
@@ -37,6 +38,13 @@ class SocketRoute {
         this.server = new WebSocketServer({ noServer: true, path });
         this.server.on('connection', this.handleConnection.bind(this));
         this.allowDuplicateConnections = allowDuplicateConnections;
+
+        /* ─── ROUTE‑SCOPED SERVICES ─────────────────────────── */
+        this.services = services.map(SvcClass => {
+            const svc = new SvcClass();
+            if (typeof svc.onInit === 'function') svc.onInit(this);
+            return svc;
+        });
     }
     /**
      * Adds a new handler to the WebSocket server.
@@ -99,7 +107,7 @@ class SocketRoute {
     handleMessage(sock, data) {
         const handler = this.handlers.find((handler) => handler.name == data.type);
         if (!handler) {
-            sendJson(sock, {error: `No such handler ${data.type}`});
+            sendJson(sock, { error: `No such handler ${data.type}` });
             sock.close();
         } else {
             try {
@@ -121,6 +129,11 @@ class SocketRoute {
         console.log(`Client disconnected: ${ip}`);
         this.clients.delete(ip);
         if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
+    }
+
+    shutdown() {
+        this.services.forEach(svc => svc.onShutdown && svc.onShutdown());
+        this.server.close();
     }
 
     /**
