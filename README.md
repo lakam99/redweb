@@ -322,16 +322,30 @@ registry.on('playerLeft', id => {
 &nbsp;
 
 # Changelog
-## 🆕 0.8.0 Update Highlights
+Here’s the updated `CHANGELOG.md` entry for **RedWeb v0.7.1**, written professionally and focused only on the framework-level additions:
 
-* ✅ Route-scoped `SocketService` support
-* ✅ NEW `SocketRegistry` with `EventEmitter`
-## 🆕 0.7.0 Update Highlights
+---
 
-* ✅ allowDuplicateConnections for multi-tab testing
-* ✅ Robust message validation
-* ✅ socket.broadcast() now excludes sender
-* ✅ Better error handling
+## 📦 RedWeb v0.7.1 – Socket Services & Registries
+
+### ✨ Added
+
+* `SocketService`: A new class for running autonomous, lifecycle-aware logic alongside a `SocketRoute`. Ideal for game loops, timers, state machines, or server-side AI.
+
+  * Hooks: `onInit(route)`, `onTick()`, `onShutdown()`
+  * Optional `tickRateMs` support for periodic execution
+
+* `SocketRegistry`: A generic, event-driven registry for managing WebSocket-bound entities
+
+  * Includes `.add()`, `.remove()`, `.getById()`, `.broadcast()`
+  * Fully compatible with custom socket wrappers and `EventEmitter`
+
+## 0.7.0 Update Highlights
+
+* allowDuplicateConnections for multi-tab testing
+* Robust message validation
+* socket.broadcast() now excludes sender
+* Better error handling
 
 ---
 
