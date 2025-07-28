@@ -113,26 +113,27 @@ declare module 'redweb' {
     };
 
     /** Generic event‑driven registry for socket objects */
-    export class SocketRegistry<T extends SocketWrapper = SocketWrapper> {
-        protected clients: T[];
-
-        onCreate?: (client: T) => boolean | void;
-        onRemove?: (client: T) => boolean | void;
+    /** Generic event-driven registry for socket objects */
+    export class SocketRegistry<T extends SocketWrapper = SocketWrapper> extends EventEmitter {
+        protected items: T[];
 
         constructor();
 
-        setCreateValidator(fn: (client: T) => boolean | void): void;
-        setRemoveValidator(fn: (client: T) => boolean | void): void;
+        /** Adds a socket-bound object to the registry */
+        add(item: T): void;
 
-        add(client: T): boolean;
-        removeById(id: string): boolean;
+        /**
+         * Removes a socket-bound object by reference or id (default key: 'id')
+         * @param itemOrId Object or ID string
+         * @param by Key name to match against (default is 'id')
+         */
+        remove(itemOrId: T | string, by?: keyof T): boolean;
 
-        getById(id: string): T | undefined;
-        getBySocket(socket: WebSocket): T | undefined;
-        allWithout(socket: WebSocket): T[];
+        /** Returns a shallow copy of all registered items */
+        all(): T[];
 
-        broadcast(message: SocketMessage, excludeSocket?: WebSocket | null): void;
-        getSanitizedList(): Record<string, any>[];
+        /** Returns the number of registered items */
+        count(): number;
     }
 
     /** ─────────────────── CONCRETE SERVERS ─────────────────── */
