@@ -1,7 +1,3 @@
-Here is the **fully updated and cleaned-up `README.md`** for RedWeb, now featuring a **working broadcast chat example** using `allowDuplicateConnections`:
-
----
-
 # RedWeb
 
 **RedWeb** is a flexible Node.js framework built on top of **Express.js** and **WebSocket**. It enables quick setup of HTTP(S) and WebSocket servers with a modular route and handler system.
@@ -21,8 +17,8 @@ npm install redweb
 ```js
 const { HttpServer, SocketServer } = require('redweb');
 
-const httpServer = new HttpServer();
-const socketServer = new SocketServer();
+new HttpServer(); // serves public/ by default
+new SocketServer(); // starts WS on :3000
 ```
 
 ---
@@ -49,8 +45,7 @@ new HttpServer({
 });
 ```
 
-`.htmx` files under `public/` will render server-side.
-Example:
+`.htmx` files under `public/` will render server-side. Example:
 
 ```html
 <!-- public/hello.htmx -->
@@ -75,7 +70,6 @@ class ChatHandler extends BaseHandler {
 
   onMessage(socket, message) {
     const text = message.text;
-    console.log(`Broadcasting: ${text}`);
     socket.broadcast({ type: 'chat', text });
   }
 }
@@ -96,7 +90,7 @@ class ChatRoute extends SocketRoute {
     super({
       path: '/chat',
       handlers: [ChatHandler],
-      allowDuplicateConnections: true // key for local testing!
+      allowDuplicateConnections: true
     });
   }
 }
@@ -149,13 +143,163 @@ new SocketServer({
 </html>
 ```
 
-Open multiple tabs to test!
+Open multiple tabs to test.
 
 ---
 
-## 🔧 Options
+## 🧩 Socket Architecture
 
-### HTTP / HTTPS Server Options
+### `SocketRoute`
+
+Defines a WebSocket path, handlers, and optional route-scoped services:
+
+```js
+new SocketRoute({
+  path: '/game',
+  handlers: [ChatHandler, MoveHandler],
+  services: [MatchService], // ✅ Scoped only to this route
+  allowDuplicateConnections: true
+});
+```
+
+---
+
+### `BaseHandler`
+
+Handlers are message-type keyed classes:
+
+```js
+class MoveHandler extends BaseHandler {
+  constructor() {
+    super('move');
+  }
+
+  onMessage(socket, message) {
+    // handle movement logic
+  }
+}
+```
+
+---
+
+### `SocketService` (NEW)
+
+Socket services run alongside handlers on a route. Use for timers, logic, cleanup.
+
+```js
+class MatchService extends SocketService {
+  constructor() {
+    super('match', 1000); // tick every 1s
+  }
+
+  onInit(route) {
+    route.registry.on('maxPlayersReached', () => this.startMatch());
+  }
+
+  onTick() {
+    // tick logic
+  }
+
+  onShutdown() {
+    // cleanup
+  }
+}
+```
+
+### 📦 `SocketRegistry` (NEW) – Event-Driven Socket Object Store
+
+`SocketRegistry` is a lightweight, extendable class for managing WebSocket-connected clients (or any socket-bound object). It provides add/remove/get/broadcast utilities with full `EventEmitter` support.
+
+Useful for managing players, NPCs, chat members, rooms, etc.
+
+---
+
+### 🔧 Basic Usage
+
+```js
+const { SocketRegistry } = require('redweb');
+
+class Player {
+    constructor(socket, id) {
+        this.socket = socket;
+        this.id = id;
+    }
+
+    send(type, payload) {
+        this.socket.send(JSON.stringify({ type, ...payload }));
+    }
+
+    getSanitized() {
+        return { id: this.id };
+    }
+}
+```
+
+---
+
+### 🚀 Extending `SocketRegistry` to Create a Player Registry
+
+```js
+class PlayerRegistry extends SocketRegistry {
+    create(socket, id) {
+        return new Player(socket, id);
+    }
+
+    addPlayer(socket, id) {
+        const player = this.create(socket, id);
+        const success = this.add(player);
+        if (success) this.emit('playerJoined', player);
+        return success;
+    }
+
+    removePlayer(id) {
+        const success = this.remove(id);
+        if (success) this.emit('playerLeft', id);
+        return success;
+    }
+
+    broadcastToAll(message) {
+        this.items.forEach(player => player.send(message.type, message));
+    }
+}
+```
+
+---
+
+### 📣 Built-in Events
+
+You can listen to events:
+
+```js
+const registry = new PlayerRegistry();
+
+registry.on('playerJoined', player => {
+    console.log('New player:', player.id);
+});
+
+registry.on('playerLeft', id => {
+    console.log('Player left:', id);
+});
+```
+
+---
+
+### 🔄 Built-in Methods
+
+* `add(player)`
+* `remove(id)`
+* `getById(id)`
+* `getBySocket(socket)`
+* `all()`
+* `count()`
+* `broadcast(message, excludeSocket?)`
+* `getSanitizedList()`
+
+---
+
+## 🔧 Configuration
+
+### HTTP / HTTPS Options
 
 | Option                | Type      | Default        | Description                    |
 | --------------------- | --------- | -------------- | ------------------------------ |
@@ -170,20 +314,38 @@ Open multiple tabs to test!
 
 ### WebSocket Server Options
 
-| Option                      | Type                | Default | Description                         |
-| --------------------------- | ------------------- | ------- | ----------------------------------- |
-| `port`                      | number              | `3000`  | WebSocket port                      |
-| `routes`                    | `SocketRoute[]`     | `[]`    | List of custom route classes        |
-| `allowDuplicateConnections` | boolean (per route) | `false` | Allow multiple clients from same IP |
+| Option   | Type            | Default | Description                  |
+| -------- | --------------- | ------- | ---------------------------- |
+| `port`   | number          | `3000`  | WebSocket port               |
+| `routes` | `SocketRoute[]` | `[]`    | List of custom route classes |
+
+&nbsp;
+
+# Changelog
+Here’s the updated `CHANGELOG.md` entry for **RedWeb v0.7.1**, written professionally and focused only on the framework-level additions:
 
 ---
 
-## 🆕 0.7.0 Update Highlights
+## 📦 RedWeb v0.7.1 – Socket Services & Registries
 
-* ✅ `allowDuplicateConnections` for multi-tab testing
-* ✅ Robust message validation
-* ✅ `socket.broadcast()` now excludes sender
-* ✅ Better error handling
+### ✨ Added
+
+* `SocketService`: A new class for running autonomous, lifecycle-aware logic alongside a `SocketRoute`. Ideal for game loops, timers, state machines, or server-side AI.
+
+  * Hooks: `onInit(route)`, `onTick()`, `onShutdown()`
+  * Optional `tickRateMs` support for periodic execution
+
+* `SocketRegistry`: A generic, event-driven registry for managing WebSocket-bound entities
+
+  * Includes `.add()`, `.remove()`, `.getById()`, `.broadcast()`
+  * Fully compatible with custom socket wrappers and `EventEmitter`
+
+## 0.7.0 Update Highlights
+
+* allowDuplicateConnections for multi-tab testing
+* Robust message validation
+* socket.broadcast() now excludes sender
+* Better error handling
 
 ---
 
