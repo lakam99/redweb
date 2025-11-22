@@ -1,10 +1,10 @@
 {
   "name": "redweb",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "scripts": {
-    "test": "node tester.js"
+    "test": "npx jest"
   },
   "files": [
     "src/*",
