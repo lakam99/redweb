@@ -217,7 +217,6 @@ Useful for managing players, NPCs, chat members, rooms, etc.
 ### 🔧 Basic Usage
 
 ```js
-const { SocketRegistry } = require('redweb');
 
 class Player {
     constructor(socket, id) {

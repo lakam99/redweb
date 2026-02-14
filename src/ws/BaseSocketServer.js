@@ -34,7 +34,21 @@ class BaseSocketServer {
   }
 
   handleUpgrade(req, sock, head) {
-    const route = this.routes.find(r => r.path === req.url);
+    // Some websocket clients (e.g., certain UE plugins) are finicky about the
+    // HTTP upgrade path they send. Normalise the path and fall back to a default
+    // route so we can still complete the upgrade instead of tearing the socket down.
+    const path = (() => {
+      try {
+        return new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
+      } catch {
+        return req.url;
+      }
+    })();
+
+    const route =
+      this.routes.find(r => r.path === path) ||
+      this.routes.find(r => r.path === '/');
+
     if (!route) return sock.destroy();
 
     route.server.handleUpgrade(req, sock, head, (s, r) =>
