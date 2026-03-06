@@ -1,29 +1,47 @@
 # RedWeb
 
-**RedWeb** is a flexible Node.js framework built on top of **Express.js** and **WebSocket**. It enables quick setup of HTTP(S) and WebSocket servers with a modular route and handler system.
+RedWeb is a small Node.js helper that wires together Express HTTP/HTTPS servers and `ws` WebSocket servers with simple defaults. Use it to serve static files plus JSON APIs and to route WebSocket traffic to handler classes.
 
----
-
-## 📦 Installation
+## Install
 
 ```bash
 npm install redweb
 ```
 
----
-
-## 🚀 Quick Start
+## Exports
 
 ```js
-const { HttpServer, SocketServer } = require('redweb');
-
-new HttpServer(); // serves public/ by default
-new SocketServer(); // starts WS on :3000
+const {
+  HttpServer,          // HTTP over Express
+  HttpsServer,         // HTTP with TLS (key/cert required)
+  SocketServer,        // WebSocket over HTTP
+  SecureSocketServer,  // WebSocket over HTTPS
+  SocketRoute,         // Per-path WebSocket routing
+  SocketService,       // Route-scoped background/tick logic
+  SocketRegistry,      // Evented in-memory store
+  BaseHandler,         // WebSocket message handler base
+  sendJson,            // Utility to stringify+send
+  SOCKET_OPTIONS,      // Defaults for socket servers
+  METHODS              // Express method helpers: get/post/put/delete
+} = require('redweb');
 ```
 
----
+## HTTP servers (Express)
 
-## 🌐 HTTP Server Example (HTMX Support)
+`new HttpServer(options)` starts listening immediately (default port `80`). `new HttpsServer({ ssl: { key, cert }, ... })` does the same over TLS.
+
+Options:
+
+- `port` (number): defaults to `80`.
+- `bind` (string): defaults to `0.0.0.0`.
+- `publicPaths` (string[]): folders served as static assets.
+- `services` (array): `{ serviceName, method, function }` for REST endpoints.
+- `listenCallback` (function): invoked after `.listen`.
+- `encoding` (`'json' | 'urlencoded'`): body parser selection.
+- `corsOptions`: passed to `cors`.
+- `enableHtmxRendering` (boolean): render `.htmx` files with the built-in renderer.
+
+Example:
 
 ```js
 const { HttpServer, METHODS } = require('redweb');
@@ -31,323 +49,144 @@ const { HttpServer, METHODS } = require('redweb');
 new HttpServer({
   port: 3000,
   publicPaths: ['./public'],
-  enableHtmxRendering: true,
   services: [
     {
-      serviceName: '/submit',
-      method: METHODS.POST,
-      function: (req, res) => {
-        if (!req.body.name) return res.status(400).json({ error: 'Missing name' });
-        res.status(200).json({ message: `Thanks, ${req.body.name}!` });
-      }
+      serviceName: '/api/hello',
+      method: METHODS.GET,
+      function: (req, res) => res.json({ hello: 'world' })
     }
   ]
 });
 ```
 
-`.htmx` files under `public/` will render server-side. Example:
+HTMX rendering example (`enableHtmxRendering: true`):
 
-```html
-<!-- public/hello.htmx -->
+```js
+new HttpServer({ publicPaths: ['./public'], enableHtmxRendering: true });
+```
+
+`public/example.htmx`:
+
+```js
+const name = 'RedWeb';
+
 <@>
   <h1>Hello, {{name}}!</h1>
 <@/>
 ```
 
----
+Requesting `/example.htmx` returns rendered HTML.
 
-## 🔌 WebSocket Broadcast Chat (🔥 Instant Testing)
+## WebSocket servers
 
-### 1. `ChatHandler.js`
+`SocketServer` uses `ws` and routes connections to `SocketRoute` instances. Clients must send JSON containing a `type` that matches a handler name.
+
+Handler:
 
 ```js
 const { BaseHandler } = require('redweb');
 
 class ChatHandler extends BaseHandler {
-  constructor() {
-    super('chat');
-  }
+  constructor() { super('chat'); }
 
   onMessage(socket, message) {
-    const text = message.text;
-    socket.broadcast({ type: 'chat', text });
+    socket.broadcast({ type: 'chat', text: message.text });
   }
 }
-
-module.exports = ChatHandler;
 ```
 
----
-
-### 2. `ChatRoute.js`
+Route:
 
 ```js
 const { SocketRoute } = require('redweb');
-const ChatHandler = require('./ChatHandler');
 
 class ChatRoute extends SocketRoute {
   constructor() {
     super({
       path: '/chat',
       handlers: [ChatHandler],
-      allowDuplicateConnections: true
+      allowDuplicateConnections: true // otherwise one connection per IP
     });
   }
 }
-
-module.exports = ChatRoute;
 ```
 
----
-
-### 3. `server.js`
+Server:
 
 ```js
 const { SocketServer } = require('redweb');
-const ChatRoute = require('./ChatRoute');
 
 new SocketServer({
-  port: 3000,
-  routes: [ChatRoute]
+  port: 3000,          // default
+  routes: [ChatRoute], // defaults to a route at "/" with DefaultHandler if omitted
 });
 ```
 
----
+Each connected socket gets:
 
-### 4. `client.html`
+- `socket.sendJson(data)` to send JSON.
+- `socket.broadcast(data)` to send JSON to all other clients on the same route.
 
-```html
-<!DOCTYPE html>
-<html>
-  <body>
-    <h1>Broadcast Chat</h1>
-    <input id="msg" placeholder="Type message..." />
-    <button onclick="send()">Send</button>
-    <pre id="log"></pre>
+Invalid JSON triggers an error response and closes the socket.
 
-    <script>
-      const log = document.getElementById('log');
-      const ws = new WebSocket('ws://localhost:3000/chat');
+### Sharing an HTTP/HTTPS server
 
-      ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        log.textContent += `\n${msg.text}`;
-      };
-
-      function send() {
-        const text = document.getElementById('msg').value;
-        ws.send(JSON.stringify({ type: 'chat', text }));
-      }
-    </script>
-  </body>
-</html>
-```
-
-Open multiple tabs to test.
-
----
-
-## 🧩 Socket Architecture
-
-### `SocketRoute`
-
-Defines a WebSocket path, handlers, and optional route-scoped services:
+`SocketServer` and `SecureSocketServer` accept a prebuilt Node server via `server`. They attach upgrade handling and then call `.listen(port)`, so only pass a server that is **not** already listening.
 
 ```js
-new SocketRoute({
-  path: '/game',
-  handlers: [ChatHandler, MoveHandler],
-  services: [MatchService], // ✅ Scoped only to this route
-  allowDuplicateConnections: true
-});
+const http = require('http');
+const express = require('express');
+const { SocketServer } = require('redweb');
+
+const app = express();
+const server = http.createServer(app);
+
+app.get('/', (req, res) => res.send('hello'));
+
+new SocketServer({ server, port: 4000, routes: [ChatRoute] });
 ```
 
----
+### Socket services
 
-### `BaseHandler`
-
-Handlers are message-type keyed classes:
+Route-scoped background logic:
 
 ```js
-class MoveHandler extends BaseHandler {
-  constructor() {
-    super('move');
-  }
+const { SocketService } = require('redweb');
 
-  onMessage(socket, message) {
-    // handle movement logic
-  }
-}
-```
-
----
-
-### `SocketService` (NEW)
-
-Socket services run alongside handlers on a route. Use for timers, logic, cleanup.
-
-```js
-class MatchService extends SocketService {
-  constructor() {
-    super('match', 1000); // tick every 1s
-  }
-
-  onInit(route) {
-    route.registry.on('maxPlayersReached', () => this.startMatch());
-  }
-
+class ClockService extends SocketService {
+  constructor() { super('clock', 1000); } // tick every 1s
   onTick() {
-    // tick logic
-  }
-
-  onShutdown() {
-    // cleanup
+    this.route.clients.forEach((socket) => socket.sendJson({ type: 'time', now: Date.now() }));
   }
 }
 ```
 
-### 📦 `SocketRegistry` (NEW) – Event-Driven Socket Object Store
+Add with `services: [ClockService]` when constructing a `SocketRoute`.
 
-`SocketRegistry` is a lightweight, extendable class for managing WebSocket-connected clients (or any socket-bound object). It provides add/remove/get/broadcast utilities with full `EventEmitter` support.
+### Socket registries
 
-Useful for managing players, NPCs, chat members, rooms, etc.
-
----
-
-### 🔧 Basic Usage
+`SocketRegistry` is a small evented list for socket-bound objects.
 
 ```js
+const { SocketRegistry } = require('redweb');
 
-class Player {
-    constructor(socket, id) {
-        this.socket = socket;
-        this.id = id;
-    }
-
-    send(type, payload) {
-        this.socket.send(JSON.stringify({ type, ...payload }));
-    }
-
-    getSanitized() {
-        return { id: this.id };
-    }
-}
-```
-
----
-
-### 🚀 Extending `SocketRegistry` to Create a Player Registry
-
-```js
 class PlayerRegistry extends SocketRegistry {
-    create(socket, id) {
-        return new Player(socket, id);
-    }
-
-    addPlayer(socket, id) {
-        const player = this.create(socket, id);
-        const success = this.add(player);
-        if (success) this.emit('playerJoined', player);
-        return success;
-    }
-
-    removePlayer(id) {
-        const success = this.remove(id);
-        if (success) this.emit('playerLeft', id);
-        return success;
-    }
-
-    broadcastToAll(message) {
-        this.items.forEach(player => player.send(message.type, message));
-    }
+  addPlayer(player) {
+    this.add(player);
+    this.emit('playerJoined', player);
+  }
 }
 ```
 
----
+Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 
-### 📣 Built-in Events
+## Defaults and lifecycle
 
-You can listen to events:
+- HTTP defaults: port `80`, bind `0.0.0.0`.
+- WebSocket defaults: port `3000`, single connection per IP unless `allowDuplicateConnections` is set.
+- If you do not supply `routes`, `SocketServer` registers a default route at `/` with `DefaultHandler` (it expects messages with `type: 'DefaultHandler'`).
+- `BaseSocketServer.shutdown()` closes all routes, services, and the underlying server.
 
-```js
-const registry = new PlayerRegistry();
+## Developing
 
-registry.on('playerJoined', player => {
-    console.log('New player:', player.id);
-});
-
-registry.on('playerLeft', id => {
-    console.log('Player left:', id);
-});
-```
-
----
-
-### 🔄 Built-in Methods
-
-* `add(player)`
-* `remove(id)`
-* `getById(id)`
-* `getBySocket(socket)`
-* `all()`
-* `count()`
-* `broadcast(message, excludeSocket?)`
-* `getSanitizedList()`
-
----
-
-## 🔧 Configuration
-
-### HTTP / HTTPS Options
-
-| Option                | Type      | Default        | Description                    |
-| --------------------- | --------- | -------------- | ------------------------------ |
-| `port`                | number    | `80`           | Port to listen on              |
-| `bind`                | string    | `'0.0.0.0'`    | Bind address                   |
-| `publicPaths`         | string\[] | `['./public']` | Serve static and `.htmx` files |
-| `services`            | object\[] | `[]`           | REST endpoints                 |
-| `enableHtmxRendering` | boolean   | `false`        | Enables `.htmx` file rendering |
-| `ssl`                 | object    | `undefined`    | Used in `HttpsServer`          |
-
----
-
-### WebSocket Server Options
-
-| Option   | Type            | Default | Description                  |
-| -------- | --------------- | ------- | ---------------------------- |
-| `port`   | number          | `3000`  | WebSocket port               |
-| `routes` | `SocketRoute[]` | `[]`    | List of custom route classes |
-
-&nbsp;
-
-# Changelog
-Here’s the updated `CHANGELOG.md` entry for **RedWeb v0.7.1**, written professionally and focused only on the framework-level additions:
-
----
-
-## 📦 RedWeb v0.7.1 – Socket Services & Registries
-
-### ✨ Added
-
-* `SocketService`: A new class for running autonomous, lifecycle-aware logic alongside a `SocketRoute`. Ideal for game loops, timers, state machines, or server-side AI.
-
-  * Hooks: `onInit(route)`, `onTick()`, `onShutdown()`
-  * Optional `tickRateMs` support for periodic execution
-
-* `SocketRegistry`: A generic, event-driven registry for managing WebSocket-bound entities
-
-  * Includes `.add()`, `.remove()`, `.getById()`, `.broadcast()`
-  * Fully compatible with custom socket wrappers and `EventEmitter`
-
-## 0.7.0 Update Highlights
-
-* allowDuplicateConnections for multi-tab testing
-* Robust message validation
-* socket.broadcast() now excludes sender
-* Better error handling
-
----
-
-## 🪪 License
-
-MIT
+- Run tests with `npm test` (Jest).
