@@ -14,8 +14,9 @@ class SocketRoute {
      * @param {boolean} options.allowDuplicateConnections - Whether to allow multiple connections from the same client IP address.
      * @param {import('./BaseHandler').BaseHandler[]} options.handlers - An array of handler instances that manage connections and messages for this route.
      * @param {Array<new () => SocketService>} [options.services] 
+     * @param {import('ws').ServerOptions} [options.websocketOptions] - Options passed to the underlying WebSocketServer.
     */
-    constructor({ path, handlers, services = [], allowDuplicateConnections } = {}) {
+    constructor({ path, handlers, services = [], allowDuplicateConnections, websocketOptions = {} } = {}) {
         if (!path) {
             throw new Error('A `path` must be specified for the SocketRoute.');
         }
@@ -28,6 +29,7 @@ class SocketRoute {
          * @type {string}
          */
         this.path = path;
+        this.websocketOptions = websocketOptions;
         /**
          * The array of handler instances associated with this route.
          * Each handler is responsible for managing WebSocket connections and message handling logic.
@@ -35,7 +37,7 @@ class SocketRoute {
          */
         this.handlers = handlers.map(HandlerClass => new HandlerClass());
         this.clients = new Map();
-        this.server = new WebSocketServer({ noServer: true, path });
+        this.server = new WebSocketServer({ noServer: true, path, ...websocketOptions });
         this.server.on('connection', this.handleConnection.bind(this));
         this.allowDuplicateConnections = allowDuplicateConnections;
 
@@ -66,12 +68,12 @@ class SocketRoute {
      */
     handleConnection(socket, req) {
         const ip = req?.socket?.remoteAddress || 'unknown';
-        const key = this.allowDuplicateConnections ? randomUUID() : ip;
+        const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
 
         console.log(`New client connected: ${ip}`);
 
         if (!this.allowDuplicateConnections) {
-            const existing = this.clients.get(key);
+            const existing = this.clients.get(clientKey);
             if (existing) {
                 console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
                 existing.send(
@@ -81,8 +83,9 @@ class SocketRoute {
             }
         }
 
-        this.clients.set(key, socket);
-        socket.__redwebClientKey = key;
+        this.clients.set(clientKey, socket);
+        socket.clientKey = clientKey;
+        socket.__redwebClientKey = clientKey;
         socket.remoteAddress = socket.remoteAddress || ip;
         socket.isAssigned = false; // Tracks whether the socket has been assigned a handler.
         socket.sendJson = (data) => sendJson(socket, data);
@@ -91,7 +94,12 @@ class SocketRoute {
         this.connectionOpenCallback(socket);
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
-        socket.on('message', (message) => {
+        socket.on('message', (message, isBinary) => {
+            if (isBinary) {
+                this.handleBinaryMessage(socket, message);
+                return;
+            }
+
             try {
                 const parsed = JSON.parse(message);
                 this.handleMessage(socket, parsed);
@@ -124,13 +132,35 @@ class SocketRoute {
         }
     }
 
+    handleBinaryMessage(socket, buffer) {
+        const hasBinaryPredicate = this.handlers.some(handler => typeof handler.acceptsBinary === 'function');
+        const handler = hasBinaryPredicate
+            ? this.handlers.find(handler => handler.acceptsBinary?.(socket, buffer))
+            : this.handlers.find(handler => typeof handler.handleBinaryMessage === 'function');
+
+        if (handler) {
+            try {
+                handler.handleBinaryMessage(socket, buffer);
+            } catch (error) {
+                console.error(`Error handling binary message in handler ${handler.name}:`, error);
+                sendJson(socket, { error: `${error.message}` });
+                socket.close();
+            }
+            return;
+        }
+
+        sendJson(socket, {
+            error: 'Binary messages are not supported on this route'
+        });
+    }
+
     /**
      * Handles socket disconnection.
      * @param {WebSocket} socket - The WebSocket connection instance.
      * @param {string} ip - The client's IP address.
      */
     handleClose(socket) {
-        const key = socket.__redwebClientKey;
+        const key = socket.clientKey || socket.__redwebClientKey;
         const ip = socket.remoteAddress || 'unknown';
         console.log(`Client disconnected: ${ip}`);
         if (key && this.clients.get(key) === socket) this.clients.delete(key);

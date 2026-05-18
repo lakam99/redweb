@@ -2,6 +2,7 @@
  * @typedef {Object} SocketServerOptions
  * @property {import('http').Server} [server]                    HTTP server to bind to
  * @property {number}              [port=3000]                  Port to listen on
+ * @property {boolean}             [listen=true]                Whether owned servers should automatically start listening
  * @property {Array<new () => import('./SocketRoute').SocketRoute>} [routes]
  */
 
@@ -10,6 +11,7 @@ const DefaultRoute = require('./DefaultRoute');
 const SOCKET_OPTIONS = {
   port: 3000,
   ssl:  null,
+  listen: true,
   routes: []
 };
 

@@ -23,12 +23,30 @@ class BaseHandler {
     }
 
     /**
+     * Handles an incoming binary message.
+     * @param {WebSocket & {sendJson: (message: Object) => void}} socket - The WebSocket connection that sent the message.
+     * @param {Buffer} buffer - The incoming binary message.
+     */
+    handleBinaryMessage(socket, buffer) {
+        this.onBinaryMessage(socket, buffer);
+    }
+
+    /**
      * Method to be overriden to process messages.
      * @param {WebSocket} socket - The WebSocket connection that sent the message.
      * @param {any} message - The incoming message in parsed JSON.
      */
     onMessage(socket, message) {
         throw "Not yet implemented!";
+    }
+
+    /**
+     * Method to be overriden to process binary messages.
+     * @param {WebSocket & {sendJson: (message: Object) => void}} socket - The WebSocket connection that sent the message.
+     * @param {Buffer} buffer - The incoming binary message.
+     */
+    onBinaryMessage(socket, buffer) {
+        socket.sendJson({ error: 'Binary messages are not supported by this handler' });
     }
 
     onInitialContact(socket) {

@@ -16,12 +16,13 @@ const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer
  * @property {string} [bind='0.0.0.0'] - The bind address for the server.
  * @property {string[]} [publicPaths=['./public']] - An array of paths to serve static files from.
  * @property {Array<{serviceName: string, method: string, function: Function}>} [services=[]] - An array of services with their endpoints and handlers.
+ * @property {boolean} [listen=true] - Whether HttpServer/HttpsServer should automatically start listening.
  * @property {Function} [listenCallback] - Callback function to execute once the server starts listening.
  * @property {RedWebEncoding} [encoding='json'] - The encoding type for the request bodies ('json' or 'urlencoded').
  * @property {Object} [ssl] - SSL configuration for HTTPS server.
  * @property {string} [ssl.key] - Path to the SSL key file.
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
- * @property {import('express').Application} [server] - Whether to automatically start listening.
+ * @property {import('express').Application} [server] - Existing Express application to configure.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
  * @property {boolean} [enableHtmxRendering=false] - Enable dynamic HTMX file rendering.
  */
@@ -32,6 +33,7 @@ const HTTP_OPTIONS = {
     bind: '0.0.0.0',
     publicPaths: ['./public'],
     services: [],
+    listen: true,
     listenCallback: undefined,
     encoding: ENCODINGS.json,
     ssl: null,

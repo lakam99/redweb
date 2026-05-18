@@ -10,7 +10,12 @@ const loadSslConfig = require('../sslConfig');
 function HttpsServer(options = {}) {
     BaseHttpServer.call(this, options);
     const sslOptions = loadSslConfig(this.ssl);
-    https.createServer(sslOptions, this.app).listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpsServer listening on port ${this.port}`));
+    this.server = https.createServer(sslOptions, this.app);
+    if (this.listen === false) {
+        return this;
+    }
+
+    this.server.listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpsServer listening on port ${this.port}`));
     return this;
 }
 

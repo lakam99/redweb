@@ -19,6 +19,7 @@ const {
   SocketRoute,         // Per-path WebSocket routing
   SocketService,       // Route-scoped background/tick logic
   SocketRegistry,      // Evented in-memory store
+  BaseHttpServer,      // Express app builder for advanced composition
   BaseHandler,         // WebSocket message handler base
   sendJson,            // Utility to stringify+send
   SOCKET_OPTIONS,      // Defaults for socket servers
@@ -36,6 +37,7 @@ Options:
 - `bind` (string): defaults to `0.0.0.0`.
 - `publicPaths` (string[]): folders served as static assets.
 - `services` (array): `{ serviceName, method, function }` for REST endpoints.
+- `listen` (boolean): defaults to `true`; set `false` to build `.app` without binding a port.
 - `listenCallback` (function): invoked after `.listen`.
 - `encoding` (`'json' | 'urlencoded'`): body parser selection.
 - `corsOptions`: passed to `cors`.
@@ -129,21 +131,105 @@ Each connected socket gets:
 
 Invalid JSON triggers an error response and closes the socket.
 
+### Binary WebSocket messages
+
+Text frames are still parsed as JSON and routed by `message.type`. Binary frames are dispatched separately, so handlers can receive raw `Buffer` payloads without triggering JSON parse errors.
+
+```js
+const { BaseHandler, SocketRoute } = require('redweb');
+
+class UploadHandler extends BaseHandler {
+  constructor() { super('upload'); }
+
+  onMessage(socket, message) {
+    socket.sendJson({ type: 'upload:control', action: message.action });
+  }
+
+  onBinaryMessage(socket, buffer) {
+    socket.sendJson({ type: 'upload:chunk', bytes: buffer.length });
+  }
+}
+
+class UploadRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/upload',
+      handlers: [UploadHandler],
+      allowDuplicateConnections: true,
+      websocketOptions: {
+        maxPayload: 2 * 1024 * 1024
+      }
+    });
+  }
+}
+```
+
+`BaseHandler` provides `handleBinaryMessage(socket, buffer)` and `onBinaryMessage(socket, buffer)`. Override `onBinaryMessage` for normal use. If a handler does not override it, RedWeb sends:
+
+```json
+{ "error": "Binary messages are not supported by this handler" }
+```
+
+Routes may also select a binary-capable handler with `acceptsBinary(socket, buffer)`:
+
+```js
+class ImageHandler extends BaseHandler {
+  constructor() { super('image'); }
+
+  acceptsBinary(socket, buffer) {
+    return buffer.length > 0;
+  }
+
+  onMessage(socket, message) {}
+  onBinaryMessage(socket, buffer) {}
+}
+```
+
+### WebSocket route options
+
+`SocketRoute` accepts `websocketOptions`, which are passed to `new WebSocketServer(...)`. Use this for `ws` server settings such as `maxPayload` or `perMessageDeflate`.
+
+```js
+class ClipboardRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/clipboard',
+      handlers: [ClipboardHandler],
+      websocketOptions: {
+        maxPayload: 1024 * 1024,
+        perMessageDeflate: false
+      }
+    });
+  }
+}
+```
+
 ### Sharing an HTTP/HTTPS server
 
-`SocketServer` and `SecureSocketServer` accept a prebuilt Node server via `server`. They attach upgrade handling and then call `.listen(port)`, so only pass a server that is **not** already listening.
+Use `listen: false` on `HttpServer` to build the Express app without binding a port. Then create one Node server from `httpServer.app` and pass it to `SocketServer`. When `SocketServer` receives a prebuilt `server`, it attaches upgrade handling but does not call `.listen()` unless you explicitly set `listen: true`.
 
 ```js
 const http = require('http');
-const express = require('express');
-const { SocketServer } = require('redweb');
+const { HttpServer, METHODS, SocketServer } = require('redweb');
 
-const app = express();
-const server = http.createServer(app);
+const httpServer = new HttpServer({
+  port: 3030,
+  listen: false,
+  publicPaths: ['./public'],
+  services: [
+    { serviceName: '/health', method: METHODS.GET, function: (req, res) => res.json({ ok: true }) },
+    { serviceName: '/session', method: METHODS.POST, function: createSession }
+  ]
+});
 
-app.get('/', (req, res) => res.send('hello'));
+const server = http.createServer(httpServer.app);
 
-new SocketServer({ server, port: 4000, routes: [ChatRoute] });
+new SocketServer({
+  server,
+  routes: [ClipboardRoute]
+});
+
+server.listen(3030, () => console.log('HTTP and WebSocket server listening on 3030'));
 ```
 
 ### Socket services
@@ -182,8 +268,9 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 
 ## Defaults and lifecycle
 
-- HTTP defaults: port `80`, bind `0.0.0.0`.
+- HTTP defaults: port `80`, bind `0.0.0.0`, `listen: true`.
 - WebSocket defaults: port `3000`, single connection per IP unless `allowDuplicateConnections` is set.
+- `SocketServer` owns and listens on its own server by default; if you pass `server`, you own calling `.listen()` unless you also pass `listen: true`.
 - If you do not supply `routes`, `SocketServer` registers a default route at `/` with `DefaultHandler` (it expects messages with `type: 'DefaultHandler'`).
 - `BaseSocketServer.shutdown()` closes all routes, services, and the underlying server.
 

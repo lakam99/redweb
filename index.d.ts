@@ -1,8 +1,9 @@
 declare module 'redweb' {
     import { Application } from 'express';
     import { CorsOptions } from 'cors';
-    import { Server as HttpServer } from 'http';
-    import { WebSocket } from 'ws';
+    import { Server as NodeHttpServer } from 'http';
+    import { WebSocket, ServerOptions } from 'ws';
+    import { Buffer } from 'buffer';
 
     /** ─────────────────── HTTP / CORE ─────────────────── */
 
@@ -13,6 +14,7 @@ declare module 'redweb' {
         bind?: string;
         publicPaths?: string[];
         services?: Array<{ serviceName: string; method: string; function: Function }>;
+        listen?: boolean;
         listenCallback?: () => void;
         encoding?: RedWebEncoding;
         ssl?: { key: string; cert: string };
@@ -24,8 +26,9 @@ declare module 'redweb' {
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
     export interface SocketServerOptions {
-        server?: HttpServer;
+        server?: NodeHttpServer;
         port?: number;
+        listen?: boolean;
         routes?: Array<new () => SocketRoute>;
         ssl?: { key: string; cert: string };
     }
@@ -37,6 +40,7 @@ declare module 'redweb' {
         handlers: Array<new () => BaseHandler>;
         services?: Array<new () => SocketService>;
         allowDuplicateConnections?: boolean;
+        websocketOptions?: ServerOptions;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -71,6 +75,9 @@ declare module 'redweb' {
         ): void;
 
         onMessage(socket: WebSocket, message: any): void;
+        acceptsBinary?(socket: WebSocket, buffer: Buffer): boolean;
+        handleBinaryMessage(socket: WebSocket, buffer: Buffer): void;
+        onBinaryMessage(socket: WebSocket, buffer: Buffer): void;
         onInitialContact(socket: WebSocket): void;
     }
 
@@ -79,21 +86,23 @@ declare module 'redweb' {
         handlers: BaseHandler[];
         clients: Map<string, WebSocket>;
         allowDuplicateConnections?: boolean;
+        websocketOptions?: ServerOptions;
 
         constructor(config: SocketRouteConfig);
 
         addHandler(handler: new () => BaseHandler): void;
         handleMessage(sock: WebSocket, data: any): void;
+        handleBinaryMessage(socket: WebSocket, buffer: Buffer): void;
     }
 
     /** ─────────────────── SERVER BASE ─────────────────── */
 
     export class BaseSocketServer {
         clients: Map<string, WebSocket>;
-        server: HttpServer;
+        server: NodeHttpServer;
         routes: SocketRoute[];
 
-        constructor(server: HttpServer, options?: SocketServerOptions);
+        constructor(server: NodeHttpServer, options?: SocketServerOptions);
 
         addRoute(route: new () => SocketRoute): void;
     }
@@ -146,11 +155,17 @@ declare module 'redweb' {
         constructor(options?: SocketServerOptions);
     }
 
-    export class HttpServer {
+    export class BaseHttpServer {
+        app: Application;
+        server?: NodeHttpServer;
         constructor(options?: RedWebOptions);
     }
 
-    export class HttpsServer {
+    export class HttpServer extends BaseHttpServer {
+        constructor(options?: RedWebOptions);
+    }
+
+    export class HttpsServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
     }
 

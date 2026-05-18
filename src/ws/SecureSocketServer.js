@@ -9,10 +9,13 @@ const { BaseSocketServer } = require('./BaseSocketServer');
  */
 class SecureSocketServer extends BaseSocketServer {
     constructor(options = {}) {
-        const sslOptions = loadSslConfig(options.ssl);
-        const server = https.createServer(sslOptions);
+        const ownsServer = !options?.server;
+        const sslOptions = ownsServer ? loadSslConfig(options.ssl) : null;
+        const server = options?.server || https.createServer(sslOptions);
         super(server, options);
-        server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
+        if ((ownsServer && this.listen !== false) || (!ownsServer && options.listen === true)) {
+            server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
+        }
         return this;
     }
 }
