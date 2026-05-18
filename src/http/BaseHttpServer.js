@@ -47,7 +47,7 @@ const HTTP_OPTIONS = {
  */
 function BaseHttpServer(options = {}) {
     this.options = { ...HTTP_OPTIONS, ...options };
-    this.app = express() || this.options.server;
+    this.app = this.options.server || express();
     Object.assign(this, this.options);
 
     // Middleware to parse request bodies based on the specified encoding

@@ -65,28 +65,32 @@ class SocketRoute {
      * @param {import('http').IncomingMessage} req - The HTTP request object associated with the connection.
      */
     handleConnection(socket, req) {
-        const ip = req.socket.remoteAddress;
+        const ip = req?.socket?.remoteAddress || 'unknown';
+        const key = this.allowDuplicateConnections ? randomUUID() : ip;
+
         console.log(`New client connected: ${ip}`);
-        if (this.allowDuplicateConnections) {
-            this.clients.set(randomUUID(), socket);
-        } else {
-            if (this.clients.get(ip) !== undefined) {
-                const oldClient = this.clients.get(ip);
+
+        if (!this.allowDuplicateConnections) {
+            const existing = this.clients.get(key);
+            if (existing) {
                 console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
-                oldClient.send(
+                existing.send(
                     JSON.stringify({ msg: 'You are being disconnected because a new client is connected with your IP address.' })
                 );
-                oldClient.close();
+                existing.close();
             }
-            this.clients.set(ip, socket);
         }
+
+        this.clients.set(key, socket);
+        socket.__redwebClientKey = key;
+        socket.remoteAddress = socket.remoteAddress || ip;
         socket.isAssigned = false; // Tracks whether the socket has been assigned a handler.
         socket.sendJson = (data) => sendJson(socket, data);
         socket.broadcast = (data) => broadcast([...this.clients.values()].filter(sock => sock !== socket), data);
 
         this.connectionOpenCallback(socket);
-        socket.on('close', this.handleClose.bind(this));
-        socket.on('error', this.handleError.bind(this));
+        socket.on('close', () => this.handleClose(socket));
+        socket.on('error', (error) => this.handleError(socket, error));
         socket.on('message', (message) => {
             try {
                 const parsed = JSON.parse(message);
@@ -125,9 +129,11 @@ class SocketRoute {
      * @param {WebSocket} socket - The WebSocket connection instance.
      * @param {string} ip - The client's IP address.
      */
-    handleClose(socket, ip) {
+    handleClose(socket) {
+        const key = socket.__redwebClientKey;
+        const ip = socket.remoteAddress || 'unknown';
         console.log(`Client disconnected: ${ip}`);
-        this.clients.delete(ip);
+        if (key && this.clients.get(key) === socket) this.clients.delete(key);
         if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
     }
 
@@ -142,7 +148,8 @@ class SocketRoute {
      * @param {Error} error - The error object.
      * @param {string} ip - The client's IP address.
      */
-    handleError(socket, error, ip) {
+    handleError(socket, error) {
+        const ip = socket.remoteAddress || 'unknown';
         console.error(`Socket error from ${ip}:`, error);
     }
 }

@@ -115,13 +115,28 @@ describe('SocketRoute', () => {
     });
 
     test('should handle disconnection and remove client', () => {
-        const mockSocket = { on: jest.fn() };
+        const mockSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const mockReq = { socket: { remoteAddress: '127.0.0.1' } };
 
         route.handleConnection(mockSocket, mockReq);
         expect(route.clients.get('127.0.0.1')).toBe(mockSocket);
 
-        route.handleClose(mockSocket, '127.0.0.1');
+        route.handleClose(mockSocket);
         expect(route.clients.has('127.0.0.1')).toBe(false);
+    });
+
+    test('should not drop a replacement client when the old one closes later', () => {
+        const oldSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
+        const newSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
+        const mockReq = { socket: { remoteAddress: '127.0.0.1' } };
+
+        route.handleConnection(oldSocket, mockReq);
+        route.handleConnection(newSocket, mockReq);
+
+        expect(route.clients.get('127.0.0.1')).toBe(newSocket);
+
+        // Simulate the old socket closing after replacement
+        route.handleClose(oldSocket);
+        expect(route.clients.get('127.0.0.1')).toBe(newSocket);
     });
 });
