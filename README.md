@@ -29,7 +29,7 @@ const {
 
 ## HTTP servers (Express)
 
-`new HttpServer(options)` starts listening immediately (default port `80`). `new HttpsServer({ ssl: { key, cert }, ... })` does the same over TLS.
+`new HttpServer(options)` creates a Node HTTP server and starts listening immediately by default (default port `80`). `new HttpsServer({ ssl: { key, cert }, ... })` does the same over TLS.
 
 Options:
 
@@ -37,7 +37,7 @@ Options:
 - `bind` (string): defaults to `0.0.0.0`.
 - `publicPaths` (string[]): folders served as static assets.
 - `services` (array): `{ serviceName, method, function }` for REST endpoints.
-- `listen` (boolean): defaults to `true`; set `false` to build `.app` without binding a port.
+- `listen` (boolean): defaults to `true`; set `false` to build `.app` and `.server` without binding a port.
 - `listenCallback` (function): invoked after `.listen`.
 - `encoding` (`'json' | 'urlencoded'`): body parser selection.
 - `corsOptions`: passed to `cors`.
@@ -206,10 +206,9 @@ class ClipboardRoute extends SocketRoute {
 
 ### Sharing an HTTP/HTTPS server
 
-Use `listen: false` on `HttpServer` to build the Express app without binding a port. Then create one Node server from `httpServer.app` and pass it to `SocketServer`. When `SocketServer` receives a prebuilt `server`, it attaches upgrade handling but does not call `.listen()` unless you explicitly set `listen: true`.
+Use `listen: false` on `HttpServer` to build the Express app and Node server without binding a port. Then pass `httpServer.server` to `SocketServer`. When `SocketServer` receives a prebuilt `server`, it attaches upgrade handling but does not call `.listen()` unless you explicitly set `listen: true`.
 
 ```js
-const http = require('http');
 const { HttpServer, METHODS, SocketServer } = require('redweb');
 
 const httpServer = new HttpServer({
@@ -222,14 +221,12 @@ const httpServer = new HttpServer({
   ]
 });
 
-const server = http.createServer(httpServer.app);
-
 new SocketServer({
-  server,
+  server: httpServer.server,
   routes: [ClipboardRoute]
 });
 
-server.listen(3030, () => console.log('HTTP and WebSocket server listening on 3030'));
+httpServer.server.listen(3030, () => console.log('HTTP and WebSocket server listening on 3030'));
 ```
 
 ### Socket services

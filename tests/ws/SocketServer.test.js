@@ -1,5 +1,5 @@
 const http = require('http');
-const { SocketServer, SocketRoute, BaseHandler } = require('../..');
+const { HttpServer, SocketServer, SocketRoute, BaseHandler } = require('../..');
 
 class NoopHandler extends BaseHandler {
     constructor() {
@@ -41,6 +41,20 @@ describe('SocketServer', () => {
 
         expect(socketServer.server).toBe(server);
         expect(listenSpy).not.toHaveBeenCalled();
+    });
+
+    test('attaches to a non-listening HttpServer server without starting it', () => {
+        const httpServer = new HttpServer({ listen: false });
+        const listenSpy = jest.spyOn(httpServer.server, 'listen');
+
+        const socketServer = new SocketServer({
+            server: httpServer.server,
+            routes: [NoopRoute],
+        });
+
+        expect(socketServer.server).toBe(httpServer.server);
+        expect(listenSpy).not.toHaveBeenCalled();
+        expect(httpServer.server.listening).toBe(false);
     });
 
     test('listens by default when it owns the server', async () => {

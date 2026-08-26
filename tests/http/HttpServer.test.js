@@ -25,7 +25,8 @@ describe('HttpServer', () => {
         });
 
         expect(server.app).toBeDefined();
-        expect(server.server).toBeUndefined();
+        expect(server.server).toBeDefined();
+        expect(server.server.listening).toBe(false);
 
         const res = await request(server.app).get('/health');
         expect(res.status).toBe(200);

@@ -1,3 +1,4 @@
+const http = require('http');
 const { BaseHttpServer } = require('./BaseHttpServer');
 
 /**
@@ -7,11 +8,10 @@ const { BaseHttpServer } = require('./BaseHttpServer');
  */
 function HttpServer(options = {}) {
     BaseHttpServer.call(this, options);
-    if (this.listen === false) {
-        return this;
+    this.server = http.createServer(this.app);
+    if (this.listen !== false) {
+        this.server.listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpServer listening on port ${this.port}`));
     }
-
-    this.server = this.app.listen(this.port, this.listenCallback ? this.listenCallback : () => console.log(`RedWeb HttpServer listening on port ${this.port}`));
     return this;
 }
 
