@@ -24,6 +24,7 @@ class RouteRuntime {
         this.route = route;
         this.inFlight = drainHandlers ? new Set() : null;
         this.abortController = drainHandlers ? new AbortController() : null;
+        this.acceptingWork = true;
         try {
             this.heartbeat = heartbeat === undefined ? null : new HeartbeatMonitor(heartbeat, route.logger);
             this.rooms = rooms === undefined || rooms === false
@@ -102,6 +103,7 @@ class RouteRuntime {
     }
 
     run(task) {
+        if (!this.acceptingWork) return Promise.resolve(false);
         if (!this.inFlight) return task();
         const promise = Promise.resolve().then(task);
         this.inFlight.add(promise);
@@ -134,6 +136,10 @@ class RouteRuntime {
 
     clearInFlight() {
         this.inFlight?.clear();
+    }
+
+    stopAcceptingWork() {
+        this.acceptingWork = false;
     }
 }
 

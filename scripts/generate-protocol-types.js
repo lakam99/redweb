@@ -35,7 +35,7 @@ export class ProtocolClient {
     readonly version: string;
     envelope<T>(type: string, payload: T, metadata?: ProtocolMetadata): ProtocolEnvelope<T>;
     send<T>(type: string, payload: T, metadata?: ProtocolMetadata): void;
-    parse<T = unknown>(input: string | Uint8Array | { data: string | Uint8Array }): ProtocolEnvelope<T> | ProtocolErrorEnvelope;
+    parse<T = unknown>(input: string | Uint8Array | ArrayBuffer | { data: string | Uint8Array | ArrayBuffer }): ProtocolEnvelope<T> | ProtocolErrorEnvelope;
 }
 
 export const ERROR_CODES: Readonly<Record<RedWebProtocolErrorCode, RedWebProtocolErrorCode>>;

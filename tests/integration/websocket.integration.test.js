@@ -772,6 +772,35 @@ describe('WebSocket integration without mocks', () => {
         expect(peer.destroyed).toBe(true);
     });
 
+    test('bounds explicitly authorized borrowed-server shutdown with an incomplete HTTP peer', async () => {
+        class ShortBorrowedRoute extends SocketRoute {
+            constructor() {
+                super({ path: '/', handlers: [class extends BaseHandler {
+                    constructor() { super('noop'); }
+                    onMessage() {}
+                }], logger: silentLogger, shutdownTimeoutMs: 25 });
+            }
+        }
+        const listener = http.createServer();
+        const server = await start({
+            server: listener,
+            listen: true,
+            closeServerOnShutdown: true,
+            routes: [ShortBorrowedRoute],
+        });
+        const peer = net.connect(listener.address().port, '127.0.0.1');
+        await new Promise((resolve, reject) => {
+            peer.once('connect', resolve);
+            peer.once('error', reject);
+        });
+        peer.write('GET / HTTP/1.1\r\nHost: localhost\r\n');
+        const peerClosed = new Promise(resolve => peer.once('close', resolve));
+        await server.shutdown();
+        socketServers.delete(server);
+        await peerClosed;
+        expect(peer.destroyed).toBe(true);
+    });
+
     test('tracks connection lifecycle hooks within the drain deadline', async () => {
         let initialFinished = false;
         let closeFinished = false;

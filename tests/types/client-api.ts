@@ -8,5 +8,6 @@ const envelope: ProtocolEnvelope<{ x: number }> = client.envelope('move', { x: 1
 });
 client.send('move', envelope.payload);
 const parsed = client.parse<{ x: number }>(JSON.stringify(envelope));
+client.parse(new ArrayBuffer(0));
 void parsed.type;
 void ERROR_CODES.INVALID_MESSAGE;

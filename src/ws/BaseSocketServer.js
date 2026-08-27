@@ -47,7 +47,7 @@ class BaseSocketServer {
     this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
     this.draining = false;
     this.pendingUpgrades = new Map();
-    this.rawConnections = ownsServer ? new Set() : null;
+    this.rawConnections = this.closeServerOnShutdown ? new Set() : null;
     this._connectionHandler = this.rawConnections ? socket => {
       this.rawConnections.add(socket);
       socket.once('close', () => this.rawConnections.delete(socket));

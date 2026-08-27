@@ -254,6 +254,30 @@ describe('SocketRoute units', () => {
         expect(route.clients.size).toBe(0);
     });
 
+    test('does not retain lifecycle work from close events delivered after shutdown', async () => {
+        let closeCallbacks = 0;
+        class SealedRoute extends SocketRoute {
+            connectionCloseCallback() {
+                closeCallbacks += 1;
+                return new Promise(() => {});
+            }
+        }
+        const route = new SealedRoute({
+            path: '/sealed', handlers: [NoopHandler], logger: null,
+            drainHandlers: true, shutdownTimeoutMs: 0,
+        });
+        const socket = createSocket();
+        socket.terminate = jest.fn();
+        route.handleConnection(socket, {});
+        await new Promise(setImmediate);
+        route.server.close = () => {};
+        await route.shutdown();
+        socket.emit('close');
+        await new Promise(setImmediate);
+        expect(closeCallbacks).toBe(0);
+        expect(route.inFlight.size).toBe(0);
+    });
+
     test('preserves legacy send exceptions when transport limits are disabled', () => {
         const route = new SocketRoute({ path: '/legacy-send', handlers: [NoopHandler], logger: null });
         const socket = { readyState: 1, send() { throw new Error('legacy send failure'); } };

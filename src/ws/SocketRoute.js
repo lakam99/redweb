@@ -540,6 +540,7 @@ class SocketRoute {
         } catch (error) {
             errors.push(error);
         }
+        this.runtime.stopAcceptingWork();
         try {
             await withinDeadline(
                 this.inFlight ? Promise.allSettled([...this.inFlight]) : Promise.resolve(),
