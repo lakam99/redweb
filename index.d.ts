@@ -33,7 +33,143 @@ declare module 'redweb' {
         isAssigned: boolean;
         sendJson(data: unknown): boolean;
         broadcast(data: unknown): number;
+        context?: RedWebConnectionContext;
+        joinRoom?(roomId: string): boolean;
+        leaveRoom?(roomId: string): boolean;
+        roomBroadcast?(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        createSession?(sessionId: string, data: unknown): boolean;
+        resumeSession?(sessionId: string): unknown | null;
+        publishEvent?(type: string, payload: unknown): Promise<boolean>;
+        sendEvent?(type: string, payload: unknown, metadata?: ProtocolMetadata): boolean;
+        sendProtocolError?(code: string, message: string, metadata?: ProtocolMetadata): boolean;
+        sendBinaryEvent?(value: unknown): Promise<boolean>;
     };
+
+    export interface RedWebConnectionContext {
+        connectionId: string;
+        principal: unknown;
+        session: unknown | null;
+        metadata: Record<string, unknown>;
+        signal?: AbortSignal;
+        protocol?: Readonly<{ version: string }>;
+    }
+
+    export interface AdmissionContext {
+        signal: AbortSignal;
+        networkIdentity: string;
+        route: SocketRoute;
+    }
+
+    export interface AdmissionOptions {
+        authenticate?: (
+            request: import('http').IncomingMessage,
+            context: AdmissionContext
+        ) => unknown | false | Promise<unknown | false>;
+        origins?: string[] | ((
+            origin: string | undefined,
+            request: import('http').IncomingMessage
+        ) => boolean | Promise<boolean>);
+        place?: (
+            principal: unknown,
+            request: import('http').IncomingMessage,
+            context: AdmissionContext
+        ) => string | false | null | undefined | Promise<string | false | null | undefined>;
+        allowedPlacementOrigins?: string[];
+        allowInsecurePlacement?: boolean;
+        timeoutMs?: number;
+    }
+
+    export interface MessageRateLimit {
+        capacity: number;
+        refillPerSecond: number;
+        action?: 'drop' | 'disconnect';
+    }
+
+    export interface TransportLimits {
+        maxConnections?: number;
+        maxBufferedBytes?: number;
+        maxPendingMessages?: number;
+        messageRate?: MessageRateLimit;
+        slowConsumerAction?: 'drop' | 'disconnect';
+    }
+
+    export interface HeartbeatOptions {
+        intervalMs: number;
+        timeoutMs: number;
+    }
+
+    export interface RoomOptions {
+        maxRooms?: number;
+        maxMembersPerRoom?: number;
+        maxRoomsPerConnection?: number;
+        maxRoomIdLength?: number;
+    }
+
+    export interface SessionOptions {
+        ttlMs?: number;
+        maxSessions?: number;
+        maxSessionIdLength?: number;
+        sweepIntervalMs?: number;
+    }
+
+    export interface MetricsSink {
+        increment?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+        gauge?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+        observe?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+    }
+
+    export interface DistributionEvent<T = unknown> {
+        id: string;
+        source: string;
+        type: string;
+        payload: T;
+    }
+
+    export interface DistributionAdapter {
+        start?(signal?: AbortSignal): void | Promise<void>;
+        publish(channel: string, serializedEvent: string, signal?: AbortSignal): void | Promise<void>;
+        subscribe(
+            channel: string,
+            onEvent: (serializedEvent: string | DistributionEvent) => void,
+            signal?: AbortSignal
+        ): void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
+        unsubscribe?(channel: string, signal?: AbortSignal): void | Promise<void>;
+        close?(signal?: AbortSignal): void | Promise<void>;
+    }
+
+    export interface DistributionOptions {
+        adapter: DistributionAdapter;
+        channel: string;
+        nodeId?: string;
+        maxEventBytes?: number;
+        maxSeenEvents?: number;
+        seenTtlMs?: number;
+        lifecycleTimeoutMs?: number;
+        publishTimeoutMs?: number;
+        maxConcurrentPublishes?: number;
+        maxConcurrentEvents?: number;
+        required?: boolean;
+        onEvent(event: DistributionEvent, route: SocketRoute): void | Promise<void>;
+    }
+
+    export interface ProtocolMetadata {
+        requestId?: string;
+        sequence?: number;
+    }
+
+    export interface ProtocolBinaryCodec {
+        maxBytes?: number;
+        encode(value: unknown, context: RedWebConnectionContext): Buffer | Uint8Array | ArrayBuffer | Promise<Buffer | Uint8Array | ArrayBuffer>;
+        decode(buffer: Buffer, context: RedWebConnectionContext): unknown | Promise<unknown>;
+    }
+
+    export interface ProtocolOptions {
+        versions: string[];
+        required?: boolean;
+        queryParameter?: string;
+        header?: string;
+        binary?: false | ProtocolBinaryCodec;
+    }
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
@@ -69,6 +205,17 @@ declare module 'redweb' {
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
         shutdownTimeoutMs?: number;
+        admission?: AdmissionOptions | AdmissionOptions['authenticate'];
+        limits?: TransportLimits;
+        orderedMessages?: boolean;
+        heartbeat?: HeartbeatOptions;
+        rooms?: boolean | RoomOptions;
+        sessions?: boolean | SessionOptions;
+        metrics?: MetricsSink;
+        distribution?: false | DistributionOptions;
+        drainHandlers?: boolean;
+        protocol?: false | ProtocolOptions;
+        maxPendingUpgrades?: number;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -84,10 +231,23 @@ declare module 'redweb' {
         onInit(route: SocketRoute): void;
 
         /** Optional recurring tick (respecting tickRateMs) */
-        onTick?(): void;
+        onTick?(...args: any[]): unknown;
 
         /** Called on process shutdown / route removal */
         onShutdown(): void;
+    }
+
+    export abstract class FixedStepService extends SocketService {
+        maxCatchUpTicks: number;
+        maxRetainedLagMs: number;
+        tick: number;
+        accumulatorMs: number;
+
+        constructor(name: string, tickRateMs: number, maxCatchUpTicks?: number, maxRetainedLagMs?: number);
+        onTick?(stepMs: number, tick: number): void | Promise<void>;
+        onLagDropped?(droppedLagMs: number): void;
+        pulse(): Promise<void>;
+        onShutdown(): Promise<void>;
     }
 
     /** Message handler, triggered by client messages */
@@ -113,6 +273,11 @@ declare module 'redweb' {
         handlers: BaseHandler[];
         services: SocketService[];
         clients: Map<string, RedWebSocket>;
+        rooms: RoomRegistry | null;
+        sessions: SessionRegistry | null;
+        distribution: unknown | null;
+        protocolPolicy: unknown | null;
+        draining: boolean;
         allowDuplicateConnections?: boolean;
         websocketOptions?: SocketRouteConfig['websocketOptions'];
 
@@ -124,6 +289,9 @@ declare module 'redweb' {
         connectionCloseCallback?(socket: RedWebSocket): unknown;
         handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
         handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
+        beginDrain(): boolean;
+        isReady(): boolean;
+        publish(type: string, payload: unknown): Promise<boolean>;
         shutdown(): Promise<void>;
     }
 
@@ -137,12 +305,39 @@ declare module 'redweb' {
         constructor(server: NodeHttpServer, options?: SocketServerOptions);
 
         addRoute(route: new () => SocketRoute): SocketRoute;
+        isReady(): boolean;
+        beginDrain(): boolean;
         shutdown(): Promise<void>;
     }
 
     /** ─────────────────── REGISTRY & UTIL TYPES ─────────────────── */
 
     export function sendJson(socket: WebSocket, data: unknown): boolean;
+
+    export class RoomRegistry {
+        constructor(options?: RoomOptions);
+        join(roomId: string, socket: RedWebSocket): boolean;
+        leave(roomId: string, socket: RedWebSocket): boolean;
+        leaveAll(socket: RedWebSocket): number;
+        members(roomId: string): RedWebSocket[];
+        has(roomId: string, socket: RedWebSocket): boolean;
+        broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        clear(): void;
+        close(): boolean;
+        readonly size: number;
+    }
+
+    export class SessionRegistry<T = unknown> {
+        constructor(options?: SessionOptions, logger?: RedWebLogger | null);
+        create(sessionId: string, data: T, socket?: RedWebSocket): boolean;
+        resume(sessionId: string, socket: RedWebSocket): T | null;
+        release(socket: RedWebSocket): boolean;
+        remove(sessionId: string): boolean;
+        get(sessionId: string): T | undefined;
+        sweep(): void;
+        stop(): void;
+        readonly size: number;
+    }
 
     export interface SocketWrapper {
         socket: RedWebSocket;
@@ -227,4 +422,15 @@ declare module 'redweb' {
 
     export const HTTP_OPTIONS: RedWebOptions;
     export const SOCKET_OPTIONS: SocketServerOptions;
+
+    export const ERROR_CODES: Readonly<{
+        INVALID_MESSAGE: 'INVALID_MESSAGE';
+        UNKNOWN_HANDLER: 'UNKNOWN_HANDLER';
+        HANDLER_FAILED: 'HANDLER_FAILED';
+        BINARY_UNSUPPORTED: 'BINARY_UNSUPPORTED';
+        RATE_LIMITED: 'RATE_LIMITED';
+        QUEUE_FULL: 'QUEUE_FULL';
+        CAPACITY_REACHED: 'CAPACITY_REACHED';
+        INITIALIZATION_FAILED: 'INITIALIZATION_FAILED';
+    }>;
 }

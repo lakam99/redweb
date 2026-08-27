@@ -1,28 +1,41 @@
 {
   "name": "redweb",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "pretest": "tsc -p tests/types/tsconfig.json",
+    "pretest": "node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json",
+    "generate:protocol-types": "node scripts/generate-protocol-types.js",
+    "verify:overhead": "node scripts/verify-disabled-overhead.js",
+    "verify:soak": "node --expose-gc scripts/verify-soak.js",
+    "verify:memory": "node scripts/verify-memory-overhead.js",
+    "verify:load": "node scripts/verify-load.js",
+    "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
     "test": "npx jest"
   },
   "files": [
     "src/*",
-    "index.d.ts"
+    "client.js",
+    "client.d.ts",
+    "CHANGELOG.md",
+    "index.d.ts",
+    "docs"
   ],
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "@types/express": "^4.17.21",
     "@types/cors": "2.8.19",
+    "@types/express": "^4.17.21",
     "@types/node": "20.19.24",
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "ws": "^8.17.0"
+    "express": "^4.22.2",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

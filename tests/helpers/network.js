@@ -1,9 +1,11 @@
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
+const net = require('net');
 
 const silentLogger = Object.freeze({ log() {}, warn() {}, error() {} });
 
-function withTimeout(promise, label, timeoutMs = 3000) {
+function withTimeout(promise, label, timeoutMs = 10000) {
     let timer;
     return Promise.race([
         promise,
@@ -57,9 +59,23 @@ function waitForOpen(socket) {
 
 function nextMessage(socket) {
     return withTimeout(new Promise((resolve, reject) => {
-        socket.once('message', (data, isBinary) => resolve({ data, isBinary }));
-        socket.once('error', reject);
+        const cleanup = () => {
+            socket.off('message', onMessage);
+            socket.off('error', onError);
+        };
+        const onMessage = (data, isBinary) => { cleanup(); resolve({ data, isBinary }); };
+        const onError = error => { cleanup(); reject(error); };
+        socket.once('message', onMessage);
+        socket.once('error', onError);
     }), 'WebSocket message');
+}
+
+async function waitForCondition(predicate, label, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate()) {
+        if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${label}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
 }
 
 function waitForClose(socket) {
@@ -77,12 +93,41 @@ async function closeWebSocket(socket) {
     await closed;
 }
 
+function openRawWebSocket(port, route) {
+    return withTimeout(new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1');
+        let response = '';
+        socket.once('connect', () => {
+            const key = crypto.randomBytes(16).toString('base64');
+            socket.write([
+                `GET ${route} HTTP/1.1`,
+                `Host: 127.0.0.1:${port}`,
+                'Upgrade: websocket',
+                'Connection: Upgrade',
+                `Sec-WebSocket-Key: ${key}`,
+                'Sec-WebSocket-Version: 13',
+                '',
+                '',
+            ].join('\r\n'));
+        });
+        socket.on('data', chunk => {
+            response += chunk.toString('latin1');
+            if (!response.includes('\r\n\r\n')) return;
+            if (!response.startsWith('HTTP/1.1 101')) return reject(new Error(`Unexpected upgrade response: ${response}`));
+            resolve(socket);
+        });
+        socket.once('error', reject);
+    }), 'raw WebSocket upgrade');
+}
+
 module.exports = {
     closeWebSocket,
     nextMessage,
+    openRawWebSocket,
     request,
     silentLogger,
     waitForClose,
+    waitForCondition,
     waitForListening,
     waitForOpen,
     withTimeout,

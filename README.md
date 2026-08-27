@@ -18,7 +18,10 @@ const {
   SecureSocketServer,  // WebSocket over HTTPS
   SocketRoute,         // Per-path WebSocket routing
   SocketService,       // Route-scoped background/tick logic
+  FixedStepService,    // Drift-aware, non-overlapping simulation ticks
   SocketRegistry,      // Evented in-memory store
+  RoomRegistry,        // Bounded route-local connection groups
+  SessionRegistry,     // Bounded, expiring application-issued sessions
   BaseHttpServer,      // Express app builder for advanced composition
   BaseHandler,         // WebSocket message handler base
   sendJson,            // Utility to stringify+send
@@ -221,6 +224,117 @@ Other route options:
 - `exposeErrors`: return handler exception messages to clients; defaults to `false`.
 - `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
 - `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
+- `admission`: optional pre-upgrade authentication/origin/placement policy. It may be a function or `{ authenticate, origins, place, allowedPlacementOrigins, allowInsecurePlacement, timeoutMs }`. Secure `wss` placement is the default; returned destinations can be origin-allowlisted.
+- `maxPendingUpgrades`: maximum concurrent pre-upgrade authorization/negotiation operations; defaults to `64`.
+- `limits`: opt-in connection, message-rate, pending-message, and outbound-buffer limits.
+- `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
+- `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
+- `rooms` and `sessions`: optional bounded route-local grouping and resumable session registries. Session payload shape and byte size remain the application's responsibility.
+- `distribution`: optional bounded fan-out adapter. Mark it `required` to fail readiness and reject new upgrades after startup or publish failure; adapter operations receive cancellation signals.
+- `drainHandlers`: expose a route shutdown signal to handlers and track their work within `shutdownTimeoutMs`.
+- `protocol`: optional version negotiation, stable envelopes, and binary codec hooks.
+
+Production protections are deliberately opt-in, so existing applications retain their behavior and disabled features add no timers or per-connection queues. A protected route can stay compact:
+
+```js
+class GameRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/game',
+      handlers: [InputHandler],
+      admission: {
+        origins: ['https://game.example'],
+        timeoutMs: 3000,
+        authenticate: (request, { signal }) => verifySession(request, signal)
+      },
+      limits: {
+        maxConnections: 5000,
+        maxBufferedBytes: 1024 * 1024,
+        maxPendingMessages: 64,
+        messageRate: { capacity: 60, refillPerSecond: 30 }
+      },
+      orderedMessages: true,
+      heartbeat: { intervalMs: 30000, timeoutMs: 10000 },
+      websocketOptions: { maxPayload: 64 * 1024 }
+    });
+  }
+}
+```
+
+Admission completes before the WebSocket upgrade and before any handler hook runs. Its return value becomes `socket.context.principal`; the random `connectionId`, authenticated principal, future resumable session, and legacy IP-based `clientKey` remain separate concepts. Authentication errors are never returned to clients.
+
+Rate and backpressure actions are `"drop"` or `"disconnect"`. Slow-consumer checks apply equally to `sendJson` and `broadcast`, and broadcasts still serialize a message once. Ordered processing never keeps more than `maxPendingMessages` waiting behind the active task.
+
+### Rooms, resumable sessions, and metrics
+
+Set `rooms: true` to add bounded route-local rooms, or pass limits such as `{ maxRooms, maxMembersPerRoom, maxRoomsPerConnection, maxRoomIdLength }`. Connected sockets receive `joinRoom`, `leaveRoom`, and `roomBroadcast`. Joins and leaves are idempotent, disconnect removes every membership, and empty rooms are reclaimed.
+
+Set `sessions: true` or provide `{ ttlMs, maxSessions, maxSessionIdLength, sweepIntervalMs }`. Applications supply opaque session IDs; Redweb does not create credentials. Sockets receive `createSession` and `resumeSession`. A successful takeover closes the former owner, and a stale close cannot release the replacement. Disconnected sessions expire through one route scheduler.
+
+The optional `metrics` sink is vendor-neutral and supports `increment`, `gauge`, and `observe`. Framework attributes contain only the static route path—never player IDs, room IDs, tokens, payloads, or exception text.
+
+```js
+class MatchRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/match',
+      handlers: [MatchHandler],
+      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },
+      sessions: { ttlMs: 30000, maxSessions: 10000 },
+      metrics: myMetricsSink
+    });
+  }
+}
+```
+
+### Horizontal composition and draining
+
+Distribution is an opt-in adapter seam, not a bundled broker. Provide `distribution: { adapter, channel, nodeId, onEvent }`; the adapter only needs `publish(channel, serializedEvent)` and `subscribe(channel, listener)`. Optional `start`, `unsubscribe`, and `close` hooks have bounded lifecycles. Redweb validates event size, ignores events published by the same node, and retains a bounded, expiring deduplication window. Delivery remains at-most-effort: partitions can lose events and reconnects can duplicate them, so authoritative games should include their own tick or sequence in payloads.
+
+Sockets on distributed routes receive `publishEvent(type, payload)`. The application decides how a received event affects rooms or state:
+
+```js
+super({
+  path: '/match',
+  handlers: [MatchHandler],
+  rooms: true,
+  distribution: {
+    adapter: brokerAdapter,
+    channel: 'matches',
+    nodeId: process.env.INSTANCE_ID,
+    onEvent(event, route) {
+      route.rooms.broadcast('match-42', event.payload)
+    }
+  }
+})
+```
+
+`server.beginDrain()` flips readiness before rejecting new upgrades with `503`; `server.isReady()` exposes the state. Set `drainHandlers: true` to give connection contexts an `AbortSignal` and make shutdown wait for active handlers. Handlers must cooperate with that signal—JavaScript cannot forcibly cancel arbitrary application promises. This option is off by default, adding no per-message tracking to existing routes.
+
+### Versioned game protocol
+
+Set `protocol: { versions: ['1'] }` to require version negotiation before upgrade. Browser clients use `?redwebVersion=1`; non-browser clients may send `x-redweb-version: 1`. Missing or unsupported versions receive `426 Upgrade Required` with a `Redweb-Versions` response header. The selected value is available as `socket.context.protocol.version`.
+
+Protocol messages use `{ v, type, payload, requestId?, sequence? }`. Protocol routes add `socket.sendEvent(...)` and `socket.sendProtocolError(...)`; framework failures use stable codes exported as `ERROR_CODES`. This affects only opted-in routes. Existing routes retain their existing message and error shapes.
+
+```js
+super({
+  path: '/match',
+  handlers: [MoveHandler],
+  protocol: {
+    versions: ['2', '1'],
+    binary: {
+      maxBytes: 64 * 1024,
+      encode: state => myCodec.encode(state),
+      decode: bytes => myCodec.decode(bytes)
+    }
+  }
+})
+```
+
+The optional binary hooks add no codec dependency. Decoded values pass through the same version/envelope validation and handler dispatch as JSON; `socket.sendBinaryEvent(value)` applies the same slow-consumer policy as other outbound traffic. Without binary hooks, binary frames on a protocol route receive `BINARY_UNSUPPORTED`.
+
+For clients, `require('redweb/client')` exports the dependency-free `ProtocolClient` and the same error codes. Its TypeScript declarations are generated from Redweb's checked-in protocol schema and checked for drift before every test run.
 
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 
@@ -265,6 +379,17 @@ class ClockService extends SocketService {
 ```
 
 Add with `services: [ClockService]` when constructing a `SocketRoute`.
+
+For authoritative simulation timing, extend `FixedStepService`. It compensates for timer drift, caps catch-up work, contains tick failures, and never overlaps an asynchronous tick with itself:
+
+```js
+class Simulation extends FixedStepService {
+  constructor() { super('simulation', 50, 3); }
+  async onTick(stepMs, tick) {
+    await game.update(stepMs, tick);
+  }
+}
+```
 
 ### Socket registries
 

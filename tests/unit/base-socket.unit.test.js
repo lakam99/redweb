@@ -6,6 +6,7 @@ const SocketServer = require('../../src/ws/SocketServer');
 const SecureSocketServer = require('../../src/ws/SecureSocketServer');
 const DefaultRoute = require('../../src/ws/DefaultRoute');
 const { BaseHandler } = require('../../src/ws/BaseHandler');
+const { PLACEMENT_REDIRECT } = require('../../src/ws/AdmissionPolicy');
 
 class NoopHandler extends BaseHandler {
     constructor() { super('noop'); }
@@ -167,6 +168,113 @@ describe('BaseSocketServer units', () => {
         await expect(socketServer.shutdown()).rejects.toMatchObject({
             message: 'One or more WebSocket server cleanup operations failed.',
         });
+    });
+
+    test('contains admission pipeline and rejection-write failures', async () => {
+        class AdmissionRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade() { return Promise.reject(new Error('admission pipeline failed')); }
+        }
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [AdmissionRoute], logger });
+        const rejected = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, rejected, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('WebSocket admission failed:', expect.any(Error));
+        expect(rejected.end).toHaveBeenCalledWith(expect.stringContaining('401 Unauthorized'));
+
+        const destroyed = { destroyed: true, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, destroyed, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(destroyed.end).not.toHaveBeenCalled();
+
+        const fallback = { end() { throw new Error('write failed'); }, destroy: jest.fn() };
+        socketServer.rejectUpgrade(fallback, 503, 'Service Unavailable');
+        expect(fallback.destroy).toHaveBeenCalled();
+    });
+
+    test('rejects upgrades while draining and after admission races with shutdown or close', async () => {
+        let accept;
+        class DeferredAdmissionRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade() { return new Promise(resolve => { accept = resolve; }); }
+        }
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [DeferredAdmissionRoute], logger: null });
+        const drainingSocket = { destroyed: false, end: jest.fn() };
+        socketServer.draining = true;
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, drainingSocket, Buffer.alloc(0));
+        expect(drainingSocket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+
+        socketServer.draining = false;
+        const pendingSocket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, pendingSocket, Buffer.alloc(0));
+        await Promise.resolve();
+        socketServer.draining = true;
+        accept(true);
+        await new Promise(setImmediate);
+        expect(pendingSocket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+
+        socketServer.draining = false;
+        const closedSocket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, closedSocket, Buffer.alloc(0));
+        await Promise.resolve();
+        closedSocket.destroyed = true;
+        accept(true);
+        await new Promise(setImmediate);
+        expect(closedSocket.end).not.toHaveBeenCalled();
+        expect(socketServer.isReady()).toBe(true);
+        expect(socketServer.beginDrain()).toBe(true);
+        expect(socketServer.beginDrain()).toBe(false);
+        expect(socketServer.isReady()).toBe(false);
+    });
+
+    test('rejects upgrades while a required route dependency is unready', () => {
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
+        socketServer.routes[0].isReady = () => false;
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+    });
+
+    test('returns a safe placement redirect before upgrading', async () => {
+        class PlacementRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade(request) {
+                request[PLACEMENT_REDIRECT] = 'wss://node-2.example/game';
+                return false;
+            }
+        }
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [PlacementRoute], logger: null });
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('307 Temporary Redirect'));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('Location: wss://node-2.example/game'));
+    });
+
+    test('contains reservation failures before admission hooks run', () => {
+        class BrokenReservationRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            reserveUpgrade() { throw new Error('reservation failed'); }
+        }
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [BrokenReservationRoute], logger });
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        expect(logger.error).toHaveBeenCalledWith('WebSocket admission reservation failed:', expect.any(Error));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
     });
 
     test('owned servers can be created without listening and shutdown repeatedly', async () => {
