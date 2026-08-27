@@ -22,8 +22,10 @@ const {
   BaseHttpServer,      // Express app builder for advanced composition
   BaseHandler,         // WebSocket message handler base
   sendJson,            // Utility to stringify+send
+  HTTP_OPTIONS,        // Defaults for HTTP servers
+  ENCODINGS,           // json/urlencoded encoding names
   SOCKET_OPTIONS,      // Defaults for socket servers
-  METHODS              // Express method helpers: get/post/put/delete
+  METHODS              // Express method helpers
 } = require('redweb');
 ```
 
@@ -41,7 +43,10 @@ Options:
 - `listenCallback` (function): invoked after `.listen`.
 - `encoding` (`'json' | 'urlencoded'`): body parser selection.
 - `corsOptions`: passed to `cors`.
+- `corsOptions: false`: disables the CORS middleware entirely.
 - `enableHtmxRendering` (boolean): render `.htmx` files with the built-in renderer.
+- `exposeErrors` (boolean): include HTMX rendering details in responses; defaults to `false`.
+- `logger`: an object with optional `log`, `warn`, and `error` methods. Pass `null` to disable library logging.
 
 Example:
 
@@ -78,6 +83,10 @@ const name = 'RedWeb';
 ```
 
 Requesting `/example.htmx` returns rendered HTML.
+
+Templates are trusted server-side code. They may load relative modules within their configured public directory, execute for at most one second by default, and interpolate raw HTML. Never render user-supplied template files.
+
+CORS remains permissive by default for backward compatibility. CORS is not authorization; configure `corsOptions`, add authentication middleware to `server.app`, or disable the middleware as appropriate.
 
 ## WebSocket servers
 
@@ -188,6 +197,7 @@ class ImageHandler extends BaseHandler {
 ### WebSocket route options
 
 `SocketRoute` accepts `websocketOptions`, which are passed to `new WebSocketServer(...)`. Use this for `ws` server settings such as `maxPayload` or `perMessageDeflate`.
+Redweb controls `noServer`, `path`, `server`, and `port`; do not include them in `websocketOptions`. Route selection is performed once by Redweb so strict matching and optional root fallback behave consistently. Handshake authentication can use the `ws` `verifyClient` option, although authenticating in the surrounding HTTP upgrade flow is preferable for complex applications.
 
 ```js
 class ClipboardRoute extends SocketRoute {
@@ -203,6 +213,15 @@ class ClipboardRoute extends SocketRoute {
   }
 }
 ```
+
+Other route options:
+
+- `trustProxy`: use the first `X-Forwarded-For` value as the connection identity. Enable this only behind a trusted proxy.
+- `getClientKey(req)`: provide application-specific connection identity logic instead of IP-based identity.
+- `exposeErrors`: return handler exception messages to clients; defaults to `false`.
+- `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
+
+`BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 
 ### Sharing an HTTP/HTTPS server
 
@@ -268,9 +287,19 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - HTTP defaults: port `80`, bind `0.0.0.0`, `listen: true`.
 - WebSocket defaults: port `3000`, single connection per IP unless `allowDuplicateConnections` is set.
 - `SocketServer` owns and listens on its own server by default; if you pass `server`, you own calling `.listen()` unless you also pass `listen: true`.
+- Upgrade paths are matched strictly by default. Set `fallbackToRoot: true` for legacy behavior that sends unmatched paths to `/`.
 - If you do not supply `routes`, `SocketServer` registers a default route at `/` with `DefaultHandler` (it expects messages with `type: 'DefaultHandler'`).
-- `BaseSocketServer.shutdown()` closes all routes, services, and the underlying server.
+- `shutdown()` closes routes and services. It closes an owned listener, but leaves a supplied listener running unless `closeServerOnShutdown: true` is set.
+- `HttpServer` and `HttpsServer` expose an idempotent async `shutdown()` helper.
+
+## 0.8 migration notes
+
+- Unmatched WebSocket paths are rejected unless `fallbackToRoot: true` is configured.
+- Handler exception details are hidden unless `exposeErrors: true` is configured.
+- Shutting down a WebSocket server no longer closes a caller-supplied HTTP/HTTPS server by default.
+- `bind` is now honored by HTTP, HTTPS, WebSocket, and secure WebSocket listeners.
+- `shutdown()` is asynchronous; await it when deterministic cleanup matters.
 
 ## Developing
 
-- Run tests with `npm test` (Jest).
+- Run tests with `npm test` (Jest). The suite includes mock-free HTTP, HTTPS, WebSocket, and secure WebSocket integration tests plus unit tests, with 100% coverage enforced for statements, branches, functions, and lines.
