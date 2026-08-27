@@ -6,6 +6,11 @@ function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
 }
 
+function instantiate(ClassType, label) {
+    if (typeof ClassType !== 'function') throw new TypeError(`${label} entries must be constructor functions.`);
+    return new ClassType();
+}
+
 /**
  * Represents a WebSocket route configuration.
  * This class is used to define a specific WebSocket endpoint (`path`) and its associated handlers.
@@ -44,6 +49,9 @@ class SocketRoute {
         if (getClientKey !== undefined && typeof getClientKey !== 'function') {
             throw new TypeError('`getClientKey` must be a function.');
         }
+        const reservedOption = ['noServer', 'path', 'server', 'port']
+            .find(option => Object.prototype.hasOwnProperty.call(websocketOptions, option));
+        if (reservedOption) throw new TypeError(`Redweb controls websocketOptions.${reservedOption}.`);
         /**
          * The path of the WebSocket route.
          * This determines the endpoint that clients must connect to (e.g., `ws://localhost:3000/chat`).
@@ -60,7 +68,7 @@ class SocketRoute {
          * Each handler is responsible for managing WebSocket connections and message handling logic.
          * @type {import('./BaseHandler').BaseHandler[]}
          */
-        this.handlers = handlers.map(HandlerClass => new HandlerClass());
+        this.handlers = handlers.map(HandlerClass => instantiate(HandlerClass, 'Handler'));
         const handlerNames = this.handlers.map(handler => handler.name);
         if (handlerNames.some(name => typeof name !== 'string' || !name)) {
             throw new TypeError('Every handler must have a non-empty name.');
@@ -75,7 +83,7 @@ class SocketRoute {
 
         /* ─── ROUTE‑SCOPED SERVICES ─────────────────────────── */
         this.services = services.map(SvcClass => {
-            const svc = new SvcClass();
+            const svc = instantiate(SvcClass, 'Service');
             if (typeof svc.onInit === 'function') svc.onInit(this);
             return svc;
         });
@@ -85,7 +93,7 @@ class SocketRoute {
      * @param {new () => BaseHandler} HandlerClass - The handler class to add.
      */
     addHandler(HandlerClass) {
-        const newHandler = new HandlerClass();
+        const newHandler = instantiate(HandlerClass, 'Handler');
         if (this.handlers.find(handler => handler.name === newHandler.name)) {
             this.logger.warn?.(`Handler with name '${newHandler.name}' already exists.`);
             return false;
@@ -215,7 +223,7 @@ class SocketRoute {
         const key = socket.clientKey || socket.__redwebClientKey;
         const ip = socket.remoteAddress || 'unknown';
         this.logger.log?.(`Client disconnected: ${ip}`);
-        if (key && this.clients.get(key) === socket) this.clients.delete(key);
+        if (key !== undefined && key !== null && this.clients.get(key) === socket) this.clients.delete(key);
         if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
     }
 

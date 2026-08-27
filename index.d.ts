@@ -54,7 +54,7 @@ declare module 'redweb' {
         handlers: Array<new () => BaseHandler>;
         services?: Array<new () => SocketService>;
         allowDuplicateConnections?: boolean;
-        websocketOptions?: Omit<ServerOptions, 'noServer' | 'path'>;
+        websocketOptions?: Omit<ServerOptions, 'noServer' | 'path' | 'server' | 'port'>;
         trustProxy?: boolean;
         getClientKey?: (request: import('http').IncomingMessage) => string;
         exposeErrors?: boolean;

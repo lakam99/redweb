@@ -3,6 +3,7 @@ const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
 const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer module
+const { validateListenerOptions } = require('../serverLifecycle');
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -44,17 +45,15 @@ const HTTP_OPTIONS = {
 };
 
 function assertOptions(options) {
-    if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
-        throw new TypeError('`port` must be an integer between 0 and 65535.');
-    }
-    if (typeof options.bind !== 'string' || !options.bind) {
-        throw new TypeError('`bind` must be a non-empty string.');
-    }
+    validateListenerOptions(options);
     if (!Object.values(ENCODINGS).includes(options.encoding)) {
         throw new TypeError('`encoding` must be either "json" or "urlencoded".');
     }
     if (!Array.isArray(options.publicPaths)) {
         throw new TypeError('`publicPaths` must be an array.');
+    }
+    if (options.publicPaths.some(publicPath => typeof publicPath !== 'string' || !publicPath)) {
+        throw new TypeError('Every public path must be a non-empty string.');
     }
     if (!Array.isArray(options.services)) {
         throw new TypeError('`services` must be an array.');
@@ -71,6 +70,9 @@ function assertOptions(options) {
             throw new TypeError(`Service ${service.serviceName} must provide a function.`);
         }
     });
+    if (options.services.filter(service => service.serviceName === '*').length > 1) {
+        throw new TypeError('Only one catch-all service may be registered.');
+    }
 }
 
 function isWithin(root, candidate) {

@@ -7,7 +7,7 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
-const { listenServer, closeServer } = require('../serverLifecycle');
+const { listenServer, closeServer, validateListenerOptions } = require('../serverLifecycle');
 
 const SOCKET_OPTIONS = {
   port: 3000,
@@ -32,7 +32,7 @@ class BaseSocketServer {
   constructor(server, options = {}, ownsServer = false, name = 'SocketServer') {
     if (!server || typeof server.on !== 'function') throw new TypeError('A Node HTTP(S) server is required.');
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
-    if (!Number.isInteger(this.port) || this.port < 0 || this.port > 65535) throw new TypeError('`port` must be an integer between 0 and 65535.');
+    validateListenerOptions(this);
     if (!Array.isArray(this.routes)) throw new TypeError('`routes` must be an array.');
     this.server = server;
     this.ownsServer = ownsServer;
@@ -40,8 +40,15 @@ class BaseSocketServer {
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
-    this.routes = RouteClasses.map(RouteClass => new RouteClass(server, { logger: this.logger }));
-    this.assertUniqueRoutes();
+    this.routes = [];
+    for (const RouteClass of RouteClasses) {
+      const route = new RouteClass(server, { logger: this.logger });
+      if (this.routes.some(existing => existing.path === route.path)) {
+        this.disposeRoutes([...this.routes, route]);
+        throw new Error('WebSocket route paths must be unique.');
+      }
+      this.routes.push(route);
+    }
 
     this._upgradeHandler = this.handleUpgrade.bind(this);
     this.server.on('upgrade', this._upgradeHandler);
@@ -58,9 +65,10 @@ class BaseSocketServer {
     }
   }
 
-  assertUniqueRoutes() {
-    const paths = this.routes.map(route => route.path);
-    if (new Set(paths).size !== paths.length) throw new Error('WebSocket route paths must be unique.');
+  disposeRoutes(routes) {
+    routes.forEach(route => {
+      Promise.resolve(route.shutdown?.()).catch(error => this.logger?.error?.('Error shutting down route:', error));
+    });
   }
 
   handleUpgrade(req, sock, head) {
@@ -93,7 +101,7 @@ class BaseSocketServer {
   addRoute(RouteClass) {
     const route = new RouteClass(this.server, { logger: this.logger });
     if (this.routes.some(existing => existing.path === route.path)) {
-      route.shutdown?.();
+      this.disposeRoutes([route]);
       throw new Error(`A WebSocket route already exists at ${route.path}.`);
     }
     this.routes.push(route);
