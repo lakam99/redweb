@@ -15,4 +15,15 @@ export class CompiledPage extends LivePage {
     }
 }
 
+class DecoratedBasePage extends LivePage {
+    @action()
+    run() {
+        return 'decorated';
+    }
+}
+
+export class ShadowedCompiledPage extends DecoratedBasePage {
+    run = () => 'shadow';
+}
+
 export const createCompiledServer = () => new LiveHtmlServer({ pages: [CompiledPage], listen: false });

@@ -227,6 +227,9 @@ describe('decorator-first Live HTML units', () => {
         expect(instance.greet().toString()).toBe('<h1>Hello Redweb</h1>');
         instance._setFromClient('name', 'Ada');
         expect(await instance._invoke('greet', [], { socket: {} }).then(value => value.toString())).toBe('<h1>Hello Ada</h1>');
+        const shadowed = new compiled.exports.ShadowedCompiledPage();
+        expect(shadowed.run()).toBe('shadow');
+        await expect(shadowed._invoke('run', [], {})).rejects.toThrow('Unknown page action');
         const server = compiled.exports.createCompiledServer();
         expect(server.manager.records.has('/compiled')).toBe(true);
         await server.shutdown();

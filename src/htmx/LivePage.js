@@ -1,5 +1,5 @@
 const HtmxRenderer = require('./HtmxRenderer');
-const { forEachState, getStateConfig, hasAction } = require('./metadata');
+const { forEachState, getActionImplementation, getStateConfig } = require('./metadata');
 
 class LivePage {
     constructor() {
@@ -58,9 +58,10 @@ class LivePage {
     }
 
     async _invoke(name, args, context) {
-        if (!hasAction(this.constructor, name)) throw new Error(`Unknown page action "${name}".`);
+        const implementation = getActionImplementation(this.constructor, name);
+        if (!implementation || this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
         if (!Array.isArray(args)) throw new TypeError('Action arguments must be an array.');
-        return this[name](...args, context);
+        return implementation.call(this, ...args, context);
     }
 
     async dispose() {

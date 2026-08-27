@@ -30,10 +30,10 @@ function registerState(PageClass, property, config) {
     metadataVersion += 1;
 }
 
-function registerAction(PageClass, method) {
-    const methods = new Set(ACTION_METADATA.get(PageClass) || []);
-    if (methods.has(method)) return;
-    methods.add(method);
+function registerAction(PageClass, method, implementation) {
+    const methods = new Map(ACTION_METADATA.get(PageClass) || []);
+    if (methods.get(method) === implementation) return;
+    methods.set(method, implementation);
     ACTION_METADATA.set(PageClass, methods);
     metadataVersion += 1;
 }
@@ -60,16 +60,16 @@ function resolvedState(PageClass) {
 function resolvedAction(PageClass) {
     const cached = RESOLVED_ACTION.get(PageClass);
     if (cached?.version === metadataVersion) return cached.value;
-    const value = new Set();
+    const value = new Map();
     hierarchy(PageClass).forEach(CurrentClass => {
-        const own = new Set(ACTION_METADATA.get(CurrentClass) || []);
+        const own = new Map(ACTION_METADATA.get(CurrentClass) || []);
         STANDARD_ACTIONS.get(CurrentClass)?.forEach((implementation, method) => {
-            if (CurrentClass.prototype[method] === implementation) own.add(method);
+            if (CurrentClass.prototype[method] === implementation) own.set(method, implementation);
         });
-        value.forEach(method => {
+        value.forEach((_implementation, method) => {
             if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, method) && !own.has(method)) value.delete(method);
         });
-        own.forEach(method => value.add(method));
+        own.forEach((implementation, method) => value.set(method, implementation));
     });
     RESOLVED_ACTION.set(PageClass, { version: metadataVersion, value });
     return value;
@@ -134,7 +134,7 @@ function action() {
         if (typeof method !== 'string' || !method || typeof descriptor?.value !== 'function') {
             throw new TypeError('action() must decorate a method.');
         }
-        registerAction(PageClass, method);
+        registerAction(PageClass, method, descriptor.value);
         return descriptor;
     };
 }
@@ -148,7 +148,7 @@ function getStateMetadata(PageClass) {
 }
 
 function getActionMetadata(PageClass) {
-    return new Set(resolvedAction(PageClass));
+    return new Set(resolvedAction(PageClass).keys());
 }
 
 function getStateConfig(PageClass, property) {
@@ -159,18 +159,18 @@ function forEachState(PageClass, callback) {
     resolvedState(PageClass).forEach(callback);
 }
 
-function hasAction(PageClass, method) {
-    return resolvedAction(PageClass).has(method);
+function getActionImplementation(PageClass, method) {
+    return resolvedAction(PageClass).get(method);
 }
 
 module.exports = {
     action,
     forEachState,
+    getActionImplementation,
     getActionMetadata,
     getPageMetadata,
     getStateConfig,
     getStateMetadata,
-    hasAction,
     page,
     state,
 };
