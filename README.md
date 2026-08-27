@@ -1,6 +1,8 @@
 # RedWeb
 
-RedWeb is a small Node.js helper that wires together Express HTTP/HTTPS servers and `ws` WebSocket servers with simple defaults. Use it to serve static files plus JSON APIs and to route WebSocket traffic to handler classes.
+RedWeb is a small Node.js transport foundation that wires together Express HTTP/HTTPS servers and `ws` WebSocket servers with simple defaults. Use it for ordinary web apps or opt into bounded multiplayer controls without adopting a broker, identity system, or game-state framework.
+
+Version 0.9 adds production-minded multiplayer building blocks while preserving the 0.8 API and wire behavior when they are disabled. Redweb owns transport boundaries and lifecycle; your game remains responsible for authoritative state, rules, matchmaking, persistence, and identity.
 
 ## Install
 
@@ -31,6 +33,23 @@ const {
   METHODS              // Express method helpers
 } = require('redweb');
 ```
+
+## Multiplayer in 0.9
+
+Redweb keeps each production feature independent and opt-in:
+
+| Need | Redweb primitive |
+| --- | --- |
+| Authenticate and place players before upgrade | Bounded `admission` hooks with origin and redirect policy |
+| Contain abusive or slow peers | Connection, rate, queue, payload, and outbound-buffer limits |
+| Detect dead connections cheaply | One heartbeat scheduler per route |
+| Group players and resume ownership | Bounded rooms and expiring application-issued sessions |
+| Run simulation work predictably | Drift-aware, non-overlapping `FixedStepService` ticks |
+| Scale across nodes | Optional broker adapter with bounded fan-out and explicit best-effort semantics |
+| Roll deployments safely | Readiness, draining, cooperative cancellation, and bounded shutdown |
+| Evolve clients | Opt-in version negotiation, stable envelopes/error codes, generated types, and codec hooks |
+
+The framework does not claim exactly-once delivery or durable state. See the [production-readiness contract](docs/PRODUCTION_READINESS.md), [multiplayer operations guide](docs/MULTIPLAYER_OPERATIONS.md), and [release evidence](docs/VERIFICATION_EVIDENCE.md) before running authoritative sessions.
 
 ## HTTP servers (Express)
 
@@ -426,6 +445,13 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - Shutting down a WebSocket server no longer closes a caller-supplied HTTP/HTTPS server by default.
 - `bind` is now honored by HTTP, HTTPS, WebSocket, and secure WebSocket listeners.
 - `shutdown()` is asynchronous; await it when deterministic cleanup matters.
+
+## 0.9 migration notes
+
+- No migration is required when the new multiplayer options are disabled.
+- Production controls are route-local and opt-in; enable and size them from measured capacity rather than copying example limits.
+- `ProtocolClient` is available from `redweb/client` for negotiated protocol routes without adding runtime dependencies.
+- The minimum supported Node.js version is 18.
 
 ## Developing
 
