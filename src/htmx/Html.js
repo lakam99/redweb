@@ -3,6 +3,7 @@ const HTML_ATTRIBUTE = Symbol('redweb.htmlAttribute');
 const HTML_URL = Symbol('redweb.htmlUrl');
 const URL_ATTRIBUTES = new Set(['action', 'background', 'cite', 'data', 'formaction', 'href', 'manifest', 'ping', 'poster', 'src', 'xlink:href']);
 const FORBIDDEN_ATTRIBUTES = new Set(['srcdoc', 'srcset', 'style']);
+const { interpolationContext } = require('./HtmlSyntax');
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -49,29 +50,10 @@ function renderValue(value) {
     return isHtml(value) ? value.toString() : escapeHtml(value);
 }
 
-function assertTextContext(source) {
-    const lastOpen = source.lastIndexOf('<');
-    const lastClose = source.lastIndexOf('>');
-    if (lastOpen > lastClose) throw new TypeError('html interpolations are only allowed in element text.');
-    const withoutClosedRawText = source.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
-    if (/<(script|style)\b[^>]*>[\s\S]*$/i.test(withoutClosedRawText)) {
-        throw new TypeError('html interpolations are not allowed in script or style content.');
-    }
-}
-
-function attributeContext(source) {
-    const lastOpen = source.lastIndexOf('<');
-    const lastClose = source.lastIndexOf('>');
-    if (lastOpen <= lastClose) return null;
-    const tag = source.slice(lastOpen);
-    if (!/^<[A-Za-z]/.test(tag)) return null;
-    const match = /([A-Za-z_:][\w:.-]*)[ \t\n\f\r]*=[ \t\n\f\r]*(["'])[^"']*$/.exec(tag);
-    return match ? match[1].toLowerCase() : null;
-}
-
 function renderInterpolation(source, value) {
-    const name = attributeContext(source);
-    if (name) {
+    const context = interpolationContext(source);
+    if (context.kind === 'attribute') {
+        const name = context.name;
         if (name.startsWith('on') || FORBIDDEN_ATTRIBUTES.has(name)) {
             throw new TypeError(`Dynamic ${name} attributes are not allowed.`);
         }
@@ -82,7 +64,7 @@ function renderInterpolation(source, value) {
         }
         return escapeHtml(value.value);
     }
-    assertTextContext(source);
+    if (context.kind !== 'text') throw new TypeError('html interpolations are only allowed in element text.');
     if (value?.[HTML_ATTRIBUTE] || value?.[HTML_URL]) {
         throw new TypeError('attribute() and url() values may only be used in matching quoted attributes.');
     }
@@ -123,4 +105,4 @@ function codeBlock(code, options = {}) {
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;
 }
 
-module.exports = { assertTextContext, attribute, codeBlock, each, escapeHtml, html, isHtml, renderValue, safeUrl };
+module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, renderValue, safeUrl };

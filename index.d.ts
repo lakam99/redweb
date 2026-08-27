@@ -421,10 +421,21 @@ declare module 'redweb' {
         readonly [htmlUrlBrand]: true;
     }
 
+    export interface LivePageRequest {
+        readonly path: string;
+        readonly url: string;
+        readonly method: string;
+        readonly headers: import('http').IncomingHttpHeaders;
+        readonly params: Readonly<Record<string, string>>;
+        readonly query: Readonly<Record<string, unknown>>;
+        readonly body: unknown;
+        get(name: string): string | undefined;
+    }
+
     export interface LivePageRequestContext {
-        request: import('express').Request;
-        params: Record<string, string>;
-        query: Record<string, unknown>;
+        request: LivePageRequest;
+        params: Readonly<Record<string, string>>;
+        query: Readonly<Record<string, unknown>>;
         body: unknown;
         principal?: string | number | bigint | boolean;
         signal: AbortSignal;

@@ -52,6 +52,10 @@ describe('decorator-first Live HTML units', () => {
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
         expect(html`<article id="${attribute('api<one')}" data-index='${attribute(1)}'>safe</article>`.toString())
             .toBe('<article id="api&lt;one" data-index=\'1\'>safe</article>');
+        expect(html`<article title="1 > 0" id="${attribute('angles')}">safe</article>`.toString())
+            .toContain('id="angles"');
+        expect(html`<article title="1 < 2" id="${attribute('less')}">safe</article>`.toString())
+            .toContain('id="less"');
         expect(html`<a href="${url('#api')}" cite='${url('https://example.test/docs')}'>docs</a>`.toString())
             .toContain('href="#api" cite=\'https://example.test/docs\'');
         expect(html`<a href="${url('mailto:docs@example.test')}">mail</a>`.toString()).toContain('mailto:');
@@ -91,8 +95,16 @@ describe('decorator-first Live HTML units', () => {
         expect(() => codeBlock('x', { label: null })).toThrow('label');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
         expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('requires url');
-        expect(() => html`<script>${'</script><b>unsafe</b>'}</script>`).toThrow('script or style');
-        expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('script or style');
+        expect(() => html`<a title="> ${html`<b>unsafe</b>`}">link</a>`).toThrow('requires attribute');
+        expect(() => html`<script>${'</script><b>unsafe</b>'}</script>`).toThrow('element text');
+        expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('element text');
+        expect(() => html`<textarea>${'unsafe'}</textarea>`).toThrow('element text');
+        expect(() => html`<title>${'unsafe'}</title>`).toThrow('element text');
+        expect(() => html`<noscript>${'unsafe'}</noscript>`).toThrow('element text');
+        expect(() => html`<!-- unfinished ${'unsafe'}`).toThrow('element text');
+        expect(html`<!-- finished -->${'safe'}`.toString()).toBe('<!-- finished -->safe');
+        expect(() => html`<plaintext>${'unsafe'}`).toThrow('element text');
+        expect(html`<p>1 < 2 ${'safe'}</p>`.toString()).toBe('<p>1 < 2 safe</p>');
     });
 
     test('validates and records page, state, and action decorator metadata', async () => {
@@ -554,6 +566,15 @@ describe('decorator-first Live HTML units', () => {
         page('/live-export')(LiveExport);
         await expect(exportStatic(LiveExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
             .rejects.toThrow('live: false');
+        const failedOutput = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-failed-export-'));
+        class ValidBeforeLive { render() { return '<p>valid</p>'; } }
+        page('/valid-before-live', { live: false })(ValidBeforeLive);
+        await expect(exportStatic([ValidBeforeLive, LiveExport], { outDir: failedOutput })).rejects.toThrow('live: false');
+        expect(fs.existsSync(path.join(failedOutput, 'valid-before-live', 'index.html'))).toBe(false);
+        class FailedRender { render() { throw new Error('static render failed'); } }
+        page('/failed-render', { live: false })(FailedRender);
+        await expect(exportStatic([ValidBeforeLive, FailedRender], { outDir: failedOutput })).rejects.toThrow('static render failed');
+        expect(fs.existsSync(path.join(failedOutput, 'valid-before-live', 'index.html'))).toBe(false);
 
         class InvalidExport { render() { return '<p>invalid</p>'; } }
         page('/:id', { live: false })(InvalidExport);
@@ -570,6 +591,7 @@ describe('decorator-first Live HTML units', () => {
         page('/same/', { live: false })(DuplicateB);
         await expect(exportStatic([DuplicateA, DuplicateB], { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
             .rejects.toThrow('same output file');
+        fs.rmSync(failedOutput, { recursive: true, force: true });
 
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-static-source-'));
         const output = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-static-output-'));
@@ -596,10 +618,15 @@ describe('decorator-first Live HTML units', () => {
             expect(fs.readFileSync(result.assets[0], 'utf8')).toBe('body { color: red; }');
             expect(document).toContain('/__redweb/css/');
 
-            class RootStatic { render() { return '<p>Root</p>'; } }
+            class RootStatic {
+                render({ request }) {
+                    return `<p>${request.method}:${request.path}:${request.get('missing') ?? 'none'}</p>`;
+                }
+            }
             page('/', { live: false })(RootStatic);
             const rootResult = await exportStatic(RootStatic, { outDir: output });
             expect(rootResult.pages).toEqual([path.join(output, 'index.html')]);
+            expect(fs.readFileSync(rootResult.pages[0], 'utf8')).toContain('<p>GET:/:none</p>');
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
             fs.rmSync(output, { recursive: true, force: true });

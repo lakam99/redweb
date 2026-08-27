@@ -26,6 +26,13 @@ class MutableStaticPage {
 }
 page('/mutable-reference', { live: false, cache: { maxAge: 60 } })(MutableStaticPage);
 const createStaticReferenceServer = options => startPages([StaticReferencePage, DefaultStaticPage, MutableStaticPage], options);
+class AuthenticatedStaticPage {
+    name = '';
+    loading({ principal }) { this.name = String(principal); }
+    render() { return '<p>{{ name }}</p>'; }
+}
+page('/private-reference', { live: false, cache: { maxAge: 3600 } })(AuthenticatedStaticPage);
+const createAuthenticatedStaticServer = options => startPages(AuthenticatedStaticPage, options);
 const {
     closeWebSocket,
     nextMessage,
@@ -259,11 +266,35 @@ describe('Live HTML integration without mocks', () => {
         const cached = await request({ port, path: '/reference', headers: { 'If-None-Match': first.headers.etag } });
         expect(cached.status).toBe(304);
         expect(cached.body).toBe('');
+        expect((await request({ port, path: '/reference', headers: { 'If-None-Match': `W/${first.headers.etag}` } })).status)
+            .toBe(304);
+        expect((await request({ port, path: '/reference', headers: { 'If-None-Match': '*' } })).status).toBe(304);
+        expect((await request({
+            port,
+            path: '/reference',
+            method: 'HEAD',
+            headers: { 'If-None-Match': `"other", W/${first.headers.etag}` },
+        })).status).toBe(304);
         const defaultCache = await request({ port, path: '/default-reference' });
         expect(defaultCache.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
         const mutableCache = await request({ port, path: '/mutable-reference' });
         expect(mutableCache.headers['cache-control']).toBe('public, max-age=60');
         expect((await request({ port, path: '/__redweb/runtime.js' })).status).toBe(404);
+    });
+
+    test('never publicly caches authenticated non-live output for different principals', async () => {
+        const server = await start(createAuthenticatedStaticServer, {
+            authenticate: request => request.headers['x-user'],
+        });
+        const port = server.server.address().port;
+        const first = await request({ port, path: '/private-reference', headers: { 'X-User': 'Ada' } });
+        const second = await request({ port, path: '/private-reference', headers: { 'X-User': 'Grace' } });
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(first.body).toContain('<p>Ada</p>');
+        expect(second.body).toContain('<p>Grace</p>');
+        expect(first.headers['cache-control']).toBe('private, no-store');
+        expect(second.headers['cache-control']).toBe('private, no-store');
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {

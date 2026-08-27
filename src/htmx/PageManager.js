@@ -50,6 +50,14 @@ function cacheControl(cache = {}) {
     return directives.join(', ');
 }
 
+function matchesIfNoneMatch(header, etag) {
+    if (typeof header !== 'string') return false;
+    return header.split(',').some(value => {
+        const candidate = value.trim();
+        return candidate === '*' || candidate.replace(/^W\//i, '') === etag;
+    });
+}
+
 class PageManager {
     constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
@@ -156,9 +164,13 @@ class PageManager {
                     response.set('Cache-Control', 'private, no-store').type('html').send(markup);
                     return;
                 }
+                if (this.authenticateRequest) {
+                    response.set('Cache-Control', 'private, no-store').type('html').send(markup);
+                    return;
+                }
                 const etag = `"${createHash('sha256').update(markup).digest('base64url')}"`;
                 response.set('Cache-Control', cacheControl(record.metadata.cache)).set('ETag', etag);
-                if (request.headers['if-none-match']?.split(',').map(value => value.trim()).includes(etag)) {
+                if (matchesIfNoneMatch(request.headers['if-none-match'], etag)) {
                     response.status(304).end();
                     return;
                 }
