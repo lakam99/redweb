@@ -195,6 +195,13 @@ TemplateRenderer.component = (source, id) => {
             position = next;
             continue;
         }
+        if (isNonStartMarkup(source, start)) {
+            const end = tagEnd(source, start + 1);
+            if (end < 0) return output + source.slice(start);
+            output += source.slice(start, end + 1);
+            position = end + 1;
+            continue;
+        }
         const opening = /^<([A-Za-z][\w:-]*)/.exec(source.slice(start));
         if (!opening) {
             output += '<';

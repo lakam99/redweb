@@ -433,6 +433,20 @@ describe('decorator-first Live HTML units', () => {
         frozenOwner._activateState();
         expect(frozenComponent.toString()).toBe('user-defined toString');
         expect(renderValue(frozenComponent)).toContain('data-rw-component="child"');
+
+        class DirectChild { render() { return html`<strong>Nested direct child</strong>`; } }
+        component()(DirectChild);
+        class DirectParent {
+            child = new DirectChild();
+            render() { return this.child; }
+        }
+        component()(DirectParent);
+        const directOwner = new LivePage();
+        directOwner.parent = new DirectParent();
+        directOwner._activateState();
+        expect(renderValue(directOwner.parent)).toContain('<strong>Nested direct child</strong>');
+        expect(renderValue(directOwner.parent)).not.toContain('[object Object]');
+
         expect(TemplateRenderer.component('<!-- note --><button rw-click="save">Save</button>tail', 'a&b'))
             .toContain('<button rw-click="save" data-rw-component="a&amp;b">Save</button>tail');
         expect(TemplateRenderer.component('<!-- unfinished', 'ignored')).toBe('<!-- unfinished');
@@ -446,6 +460,15 @@ describe('decorator-first Live HTML units', () => {
             .toContain('<script>"rw-click=save"</script><button rw-click="save" data-rw-component="child">');
         expect(TemplateRenderer.component('<style>button{color:red}', 'child')).toBe('<style>button{color:red}');
         expect(TemplateRenderer.component('<plaintext>rw-click="save"', 'child')).toBe('<plaintext>rw-click="save"');
+        expect(TemplateRenderer.component('<!DOCTYPE html PUBLIC "<button rw-click=save>"><button rw-click="save">Save</button>', 'child'))
+            .toBe('<!DOCTYPE html PUBLIC "<button rw-click=save>"><button rw-click="save" data-rw-component="child">Save</button>');
+        expect(TemplateRenderer.component('<?redweb value="<button rw-click=save>"><button rw-click="save">Save</button>', 'child'))
+            .toBe('<?redweb value="<button rw-click=save>"><button rw-click="save" data-rw-component="child">Save</button>');
+        expect(TemplateRenderer.component('</section data-note="<button rw-click=save>"><button rw-click="save">Save</button>', 'child'))
+            .toBe('</section data-note="<button rw-click=save>"><button rw-click="save" data-rw-component="child">Save</button>');
+        expect(TemplateRenderer.component('<!DOCTYPE html PUBLIC "unfinished', 'child'))
+            .toBe('<!DOCTYPE html PUBLIC "unfinished');
+        expect(TemplateRenderer.component('one < two', 'child')).toBe('one < two');
 
         const nonCooperativeEvents = [];
         class HangingLifecycleComponent {

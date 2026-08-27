@@ -1,7 +1,7 @@
 const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
 const TemplateRenderer = require('./TemplateRenderer');
-const { isHtml, markHtml } = require('./Html');
+const { isHtml, markHtml, renderValue } = require('./Html');
 const { forEachState, getActionImplementation, getStateConfig, isComponentClass } = require('./metadata');
 
 const RUNTIME = new WeakMap();
@@ -135,7 +135,7 @@ class LivePage {
         const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
         if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
         if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
-        const markup = isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), this);
+        const markup = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), this);
         return TemplateRenderer.component(markup, internal.componentId);
     }
 

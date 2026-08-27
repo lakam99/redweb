@@ -320,6 +320,67 @@ describe('Live HTML integration without mocks', () => {
         expect(second.body).not.toContain('<p>a</p>');
     });
 
+    test('renders an owned component returned directly by a page', async () => {
+        class DirectComponent {
+            render() { return html`<main>Direct component</main>`; }
+        }
+        component()(DirectComponent);
+        class DirectComponentPage {
+            content = new DirectComponent();
+            render() { return this.content; }
+        }
+        page('/direct-component')(DirectComponentPage);
+        const server = await start(options => startPages(DirectComponentPage, options));
+        const response = await request({ port: server.server.address().port, path: '/direct-component' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('<main>Direct component</main>');
+        expect(response.body).not.toContain('[object Object]');
+    });
+
+    test('rejects a real reconnect until delayed disconnect lifecycle work finishes', async () => {
+        let beginDisconnect;
+        let finishDisconnect;
+        const disconnectStarted = new Promise(resolve => { beginDisconnect = resolve; });
+        const disconnectReleased = new Promise(resolve => { finishDisconnect = resolve; });
+        const lifecycle = [];
+        class DelayedReconnectPage {
+            connected() { lifecycle.push('connected'); }
+            async disconnected() {
+                lifecycle.push('disconnect:start');
+                beginDisconnect();
+                await disconnectReleased;
+                lifecycle.push('disconnect:end');
+            }
+            render() { return html`<main>Reconnect lifecycle</main>`; }
+        }
+        page('/delayed-reconnect')(DelayedReconnectPage);
+        const server = await start(options => startPages(DelayedReconnectPage, options));
+        const port = server.server.address().port;
+        const response = await request({ port, path: '/delayed-reconnect' });
+        const config = pageConfig(response.body);
+        const first = liveClient(port, config);
+        clients.add(first);
+        await first.connect();
+        await closeLiveClient(first);
+        clients.delete(first);
+        await disconnectStarted;
+
+        const session = server.manager.active.get(config.pageId);
+        expect(session.detaching).toBeInstanceOf(Promise);
+        const url = `ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`;
+        expect(await websocketUpgradeStatus(url, {
+            headers: { Origin: `http://127.0.0.1:${port}` },
+        })).toBe(401);
+        expect(lifecycle).toEqual(['connected', 'disconnect:start']);
+
+        finishDisconnect();
+        await waitForCondition(() => session.detaching === null, 'disconnect lifecycle completion');
+        const second = liveClient(port, config);
+        clients.add(second);
+        await second.connect();
+        expect(lifecycle).toEqual(['connected', 'disconnect:start', 'disconnect:end', 'connected']);
+    });
+
     test('serves non-live documentation with metadata, ETags, and no browser runtime', async () => {
         const server = await start(createStaticReferenceServer);
         const port = server.server.address().port;
