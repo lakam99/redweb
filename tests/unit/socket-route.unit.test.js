@@ -35,6 +35,8 @@ describe('SocketRoute units', () => {
         [{ path: '/x', handlers: [NoopHandler], websocketOptions: { port: 1 } }, 'controls websocketOptions.port'],
         [{ path: '/x', handlers: [{}] }, 'Handler entries'],
         [{ path: '/x', handlers: [NoopHandler], services: [{}] }, 'Service entries'],
+        [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: -1 }, '`shutdownTimeoutMs`'],
+        [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: 1.5 }, '`shutdownTimeoutMs`'],
     ])('validates route configuration %#', (options, message) => {
         expect(() => new SocketRoute(options)).toThrow(message);
     });
@@ -61,6 +63,56 @@ describe('SocketRoute units', () => {
         expect(() => route.addHandler(InvalidHandler)).toThrow('non-empty name');
         expect(logger.log).toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalled();
+    });
+
+    test('rolls back initialized services when later construction fails', async () => {
+        let stopped = 0;
+        class StartedService {
+            onInit() { this.timer = setInterval(() => {}, 1000); }
+            onShutdown() { clearInterval(this.timer); stopped += 1; }
+        }
+        class ThrowingService {
+            onInit() { throw new Error('initialization failed'); }
+        }
+        expect(() => new SocketRoute({
+            path: '/rollback',
+            handlers: [NoopHandler],
+            services: [StartedService, ThrowingService],
+            logger: null,
+        })).toThrow('initialization failed');
+        await new Promise(setImmediate);
+        expect(stopped).toBe(1);
+
+        class AsyncService {
+            onInit() { return Promise.reject(new Error('async initialization failed')); }
+            onShutdown() { stopped += 1; }
+        }
+        expect(() => new SocketRoute({
+            path: '/async-init',
+            handlers: [NoopHandler],
+            services: [AsyncService],
+            logger: null,
+        })).toThrow('must be synchronous');
+        await new Promise(setImmediate);
+        expect(stopped).toBe(2);
+    });
+
+    test('logs constructor rollback failures without masking the original error', async () => {
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        class BadCleanupService {
+            onShutdown() { throw new Error('rollback cleanup failed'); }
+        }
+        class ThrowingService {
+            constructor() { throw new Error('constructor failed'); }
+        }
+        expect(() => new SocketRoute({
+            path: '/bad-rollback',
+            handlers: [NoopHandler],
+            services: [BadCleanupService, ThrowingService],
+            logger,
+        })).toThrow('constructor failed');
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('Error shutting down service:', expect.any(Error));
     });
 
     test('resolves direct, proxied, custom, and unknown client identities', () => {
@@ -176,6 +228,25 @@ describe('SocketRoute units', () => {
         route.clients.set('client-without-close', {});
         await route.shutdown();
         expect(socket.closed[0]).toEqual([1001, 'Server shutting down']);
+        expect(route.clients.size).toBe(0);
+    });
+
+    test('finishes every shutdown step and reports client and server close failures', async () => {
+        const route = new SocketRoute({ path: '/failed-shutdown', handlers: [NoopHandler], logger: null });
+        route.clients.set('broken-client', {
+            close() { throw new Error('client close failed'); },
+        });
+        route.server.close = callback => callback(new Error('server close failed'));
+
+        const shutdown = route.shutdown();
+        expect(route.shutdown()).toBe(shutdown);
+        await expect(shutdown).rejects.toMatchObject({
+            message: 'One or more WebSocket route cleanup operations failed.',
+            errors: [
+                expect.objectContaining({ message: 'client close failed' }),
+                expect.objectContaining({ message: 'server close failed' }),
+            ],
+        });
         expect(route.clients.size).toBe(0);
     });
 });

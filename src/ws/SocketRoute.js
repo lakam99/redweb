@@ -1,6 +1,8 @@
 const { WebSocketServer } = require("ws");
 const { sendJson, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
+const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
+const { closeWebSocketServer } = require('./shutdown');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -35,6 +37,7 @@ class SocketRoute {
         getClientKey,
         exposeErrors = false,
         logger = console,
+        shutdownTimeoutMs = 1000,
     } = {}) {
         if (typeof path !== 'string' || !path.startsWith('/')) {
             throw new Error('A `path` beginning with "/" must be specified for the SocketRoute.');
@@ -52,6 +55,9 @@ class SocketRoute {
         const reservedOption = ['noServer', 'path', 'server', 'port']
             .find(option => Object.prototype.hasOwnProperty.call(websocketOptions, option));
         if (reservedOption) throw new TypeError(`Redweb controls websocketOptions.${reservedOption}.`);
+        if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) {
+            throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
+        }
         /**
          * The path of the WebSocket route.
          * This determines the endpoint that clients must connect to (e.g., `ws://localhost:3000/chat`).
@@ -63,6 +69,7 @@ class SocketRoute {
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
         this.exposeErrors = exposeErrors;
+        this.shutdownTimeoutMs = shutdownTimeoutMs;
         /**
          * The array of handler instances associated with this route.
          * Each handler is responsible for managing WebSocket connections and message handling logic.
@@ -82,10 +89,30 @@ class SocketRoute {
         this.allowDuplicateConnections = Boolean(allowDuplicateConnections);
 
         /* ─── ROUTE‑SCOPED SERVICES ─────────────────────────── */
-        this.services = services.map(SvcClass => {
-            const svc = instantiate(SvcClass, 'Service');
-            if (typeof svc.onInit === 'function') svc.onInit(this);
-            return svc;
+        this.services = [];
+        try {
+            services.forEach(SvcClass => {
+                const svc = instantiate(SvcClass, 'Service');
+                this.services.push(svc);
+                if (typeof svc.onInit !== 'function') return;
+                const result = svc.onInit(this);
+                if (result && typeof result.then === 'function') {
+                    result.catch(() => {});
+                    throw new TypeError('SocketService.onInit must be synchronous.');
+                }
+            });
+        } catch (error) {
+            this.disposeServices();
+            this.server.close();
+            throw error;
+        }
+    }
+
+    disposeServices() {
+        this.services.forEach(service => {
+            Promise.resolve()
+                .then(() => service.onShutdown?.())
+                .catch(error => this.logger.error?.('Error shutting down service:', error));
         });
     }
     /**
@@ -142,7 +169,13 @@ class SocketRoute {
 
         this.connectionOpenCallback(socket, req);
         this.handlers.forEach((handler) => {
-            Promise.resolve(handler.onInitialContact?.(socket, req)).catch((error) => this.handleError(socket, error));
+            Promise.resolve()
+                .then(() => handler.onInitialContact?.(socket, req))
+                .catch((error) => {
+                    this.handleError(socket, error);
+                    sendJson(socket, { error: 'Connection initialization failed' });
+                    socket.close?.(1011, 'Connection initialization failed');
+                });
         });
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
@@ -227,11 +260,28 @@ class SocketRoute {
         if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
     }
 
-    async shutdown() {
-        await Promise.all(this.services.map(svc => Promise.resolve(svc.onShutdown?.())));
-        for (const socket of this.clients.values()) socket.close?.(1001, 'Server shutting down');
+    shutdown() {
+        if (!this._shutdownPromise) this._shutdownPromise = this.performShutdown();
+        return this._shutdownPromise;
+    }
+
+    async performShutdown() {
+        const errors = await settleTasks(this.services.map(service => () => service.onShutdown?.()));
+        const clients = [...this.clients.values()];
+        clients.forEach(socket => {
+            try {
+                socket.close?.(1001, 'Server shutting down');
+            } catch (error) {
+                errors.push(error);
+            }
+        });
         this.clients.clear();
-        await new Promise((resolve) => this.server.close(resolve));
+        try {
+            await closeWebSocketServer(this.server, clients, this.shutdownTimeoutMs);
+        } catch (error) {
+            errors.push(error);
+        }
+        throwCleanupErrors(errors, 'One or more WebSocket route cleanup operations failed.');
     }
 
     /**

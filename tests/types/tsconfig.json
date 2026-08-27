@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "skipLibCheck": false,
+    "baseUrl": "../..",
+    "paths": {
+      "redweb": ["."]
+    }
+  },
+  "files": ["public-api.ts"]
+}

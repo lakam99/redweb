@@ -220,6 +220,7 @@ Other route options:
 - `getClientKey(req)`: provide application-specific connection identity logic instead of IP-based identity.
 - `exposeErrors`: return handler exception messages to clients; defaults to `false`.
 - `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
+- `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
 
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 
@@ -290,6 +291,7 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - Upgrade paths are matched strictly by default. Set `fallbackToRoot: true` for legacy behavior that sends unmatched paths to `/`.
 - If you do not supply `routes`, `SocketServer` registers a default route at `/` with `DefaultHandler` (it expects messages with `type: 'DefaultHandler'`).
 - `shutdown()` closes routes and services. It closes an owned listener, but leaves a supplied listener running unless `closeServerOnShutdown: true` is set.
+- Shutdown is best-effort: all hooks, clients, routes, and owned listeners are processed before collected cleanup errors are reported.
 - `HttpServer` and `HttpsServer` expose an idempotent async `shutdown()` helper.
 
 ## 0.8 migration notes

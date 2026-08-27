@@ -8,6 +8,8 @@ const SocketRegistry = require('../../src/ws/SocketRegistry');
 const SocketService = require('../../src/ws/SocketService');
 const { BaseHandler } = require('../../src/ws/BaseHandler');
 const { broadcast, canSend, sendJson } = require('../../src/ws/util');
+const { closeWebSocketServer } = require('../../src/ws/shutdown');
+const { settleTasks, throwCleanupErrors } = require('../../src/serverLifecycle');
 
 describe('small reusable units', () => {
     test('loads TLS files and rejects incomplete configuration', () => {
@@ -118,5 +120,36 @@ describe('small reusable units', () => {
             fs.rmSync(root, { recursive: true, force: true });
             fs.rmSync(outside, { recursive: true, force: true });
         }
+    });
+
+    test('collects cleanup failures and reports them after all tasks run', async () => {
+        const calls = [];
+        const errors = await settleTasks([
+            () => calls.push('first'),
+            () => { throw new Error('sync cleanup failure'); },
+            async () => { throw new Error('async cleanup failure'); },
+            () => calls.push('last'),
+        ]);
+        expect(calls).toEqual(['first', 'last']);
+        expect(errors.map(error => error.message)).toEqual(['sync cleanup failure', 'async cleanup failure']);
+        expect(() => throwCleanupErrors(errors, 'cleanup failed')).toThrow('cleanup failed');
+    });
+
+    test('handles WebSocket-server close errors, throws, and termination failures', async () => {
+        await expect(closeWebSocketServer({ close: callback => callback(new Error('close callback failed')) }, [], 50))
+            .rejects.toThrow('close callback failed');
+        await expect(closeWebSocketServer({ close: () => { throw new Error('close threw'); } }, [], 50))
+            .rejects.toThrow('close threw');
+
+        let lateCallback;
+        const waitingServer = { close: callback => { lateCallback = callback; } };
+        const terminated = [];
+        await expect(closeWebSocketServer(waitingServer, [
+            { terminate: () => terminated.push('terminated') },
+            { terminate: () => { throw new Error('terminate failed'); } },
+            {},
+        ], 0)).rejects.toThrow('terminate failed');
+        lateCallback();
+        expect(terminated).toEqual(['terminated']);
     });
 });

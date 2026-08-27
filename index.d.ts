@@ -20,11 +20,20 @@ declare module 'redweb' {
         encoding?: RedWebEncoding;
         ssl?: { key: string; cert: string };
         server?: Application;
-        corsOptions?: CorsOptions;
+        corsOptions?: CorsOptions | false;
         enableHtmxRendering?: boolean;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
     }
+
+    export type RedWebSocket = WebSocket & {
+        clientKey: string;
+        __redwebClientKey: string;
+        remoteAddress: string;
+        isAssigned: boolean;
+        sendJson(data: unknown): boolean;
+        broadcast(data: unknown): number;
+    };
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
@@ -59,13 +68,15 @@ declare module 'redweb' {
         getClientKey?: (request: import('http').IncomingMessage) => string;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
+        shutdownTimeoutMs?: number;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
     export abstract class SocketService {
         name: string;
-        tickRateMs?: number;
-        protected _tickHandle?: NodeJS.Timeout;
+        tickRateMs: number | null;
+        route: SocketRoute;
+        protected _tickHandle: NodeJS.Timeout | null;
 
         constructor(name: string, tickRateMs?: number);
 
@@ -85,25 +96,23 @@ declare module 'redweb' {
         constructor(name: string);
 
         handleMessage(
-            socket: WebSocket & {
-                sendJson: (message: object) => void;
-                broadcast: (message: object) => void;
-            },
+            socket: RedWebSocket,
             message: any
         ): Promise<unknown>;
 
-        validateMessage(message: any, socket: WebSocket): boolean | Promise<boolean>;
-        onMessage(socket: WebSocket, message: any): unknown;
-        acceptsBinary?(socket: WebSocket, buffer: Buffer): boolean;
-        handleBinaryMessage(socket: WebSocket, buffer: Buffer): Promise<unknown>;
-        onBinaryMessage(socket: WebSocket, buffer: Buffer): unknown;
-        onInitialContact(socket: WebSocket, request?: import('http').IncomingMessage): unknown;
+        validateMessage(message: any, socket: RedWebSocket): boolean | Promise<boolean>;
+        onMessage(socket: RedWebSocket, message: any): unknown;
+        acceptsBinary?(socket: RedWebSocket, buffer: Buffer): boolean;
+        handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<unknown>;
+        onBinaryMessage(socket: RedWebSocket, buffer: Buffer): unknown;
+        onInitialContact(socket: RedWebSocket, request?: import('http').IncomingMessage): unknown;
     }
 
     export class SocketRoute {
         path: string;
         handlers: BaseHandler[];
-        clients: Map<string, WebSocket>;
+        services: SocketService[];
+        clients: Map<string, RedWebSocket>;
         allowDuplicateConnections?: boolean;
         websocketOptions?: SocketRouteConfig['websocketOptions'];
 
@@ -111,8 +120,8 @@ declare module 'redweb' {
 
         addHandler(handler: new () => BaseHandler): boolean;
         resolveRemoteAddress(request: import('http').IncomingMessage): string;
-        handleMessage(sock: WebSocket, data: any): Promise<boolean>;
-        handleBinaryMessage(socket: WebSocket, buffer: Buffer): Promise<boolean>;
+        handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
+        handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
         shutdown(): Promise<void>;
     }
 
@@ -134,7 +143,7 @@ declare module 'redweb' {
     export function sendJson(socket: WebSocket, data: unknown): boolean;
 
     export interface SocketWrapper {
-        socket: WebSocket;
+        socket: RedWebSocket;
         id: string;
         send: (type: string, payload: Record<string, any>) => void;
         getSanitized?(): Record<string, any>;

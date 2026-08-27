@@ -70,6 +70,26 @@ describe('BaseSocketServer units', () => {
         expect(logger.error).toHaveBeenCalledTimes(2);
     });
 
+    test('rolls back earlier routes when a later route constructor fails', async () => {
+        let stopped = 0;
+        class TrackingService {
+            onInit() { this.timer = setInterval(() => {}, 1000); }
+            onShutdown() { clearInterval(this.timer); stopped += 1; }
+        }
+        class TrackingRoute extends SocketRoute {
+            constructor() { super({ path: '/tracking', handlers: [NoopHandler], services: [TrackingService], logger: null }); }
+        }
+        class ThrowingRoute {
+            constructor() { throw new Error('route construction failed'); }
+        }
+        expect(() => new BaseSocketServer(fakeServer(), {
+            routes: [TrackingRoute, ThrowingRoute],
+            logger: null,
+        })).toThrow('route construction failed');
+        await new Promise(setImmediate);
+        expect(stopped).toBe(1);
+    });
+
     test('normalizes query strings and rejects malformed or unmatched upgrades', () => {
         const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
         const matched = server.routes[0];
@@ -105,6 +125,20 @@ describe('BaseSocketServer units', () => {
         expect(server.address()).toEqual({ port: 4321, address: '127.0.0.1' });
         await socketServer.shutdown();
         expect(server.listening).toBe(false);
+    });
+
+    test('reports listener close errors only after route cleanup finishes', async () => {
+        const server = fakeServer();
+        server.listening = true;
+        server.close = callback => callback(new Error('listener close failed'));
+        const socketServer = new BaseSocketServer(server, {
+            routes: [FirstRoute],
+            closeServerOnShutdown: true,
+            logger: null,
+        });
+        await expect(socketServer.shutdown()).rejects.toMatchObject({
+            message: 'One or more WebSocket server cleanup operations failed.',
+        });
     });
 
     test('owned servers can be created without listening and shutdown repeatedly', async () => {

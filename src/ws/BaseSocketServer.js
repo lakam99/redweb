@@ -7,7 +7,13 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
-const { listenServer, closeServer, validateListenerOptions } = require('../serverLifecycle');
+const {
+  listenServer,
+  closeServer,
+  settleTasks,
+  throwCleanupErrors,
+  validateListenerOptions,
+} = require('../serverLifecycle');
 
 const SOCKET_OPTIONS = {
   port: 3000,
@@ -41,13 +47,18 @@ class BaseSocketServer {
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
     this.routes = [];
-    for (const RouteClass of RouteClasses) {
-      const route = new RouteClass(server, { logger: this.logger });
-      if (this.routes.some(existing => existing.path === route.path)) {
-        this.disposeRoutes([...this.routes, route]);
-        throw new Error('WebSocket route paths must be unique.');
+    try {
+      for (const RouteClass of RouteClasses) {
+        const route = new RouteClass(server, { logger: this.logger });
+        if (this.routes.some(existing => existing.path === route.path)) {
+          this.disposeRoutes([route]);
+          throw new Error('WebSocket route paths must be unique.');
+        }
+        this.routes.push(route);
       }
-      this.routes.push(route);
+    } catch (error) {
+      this.disposeRoutes(this.routes);
+      throw error;
     }
 
     this._upgradeHandler = this.handleUpgrade.bind(this);
@@ -111,11 +122,22 @@ class BaseSocketServer {
   /**
    * Gracefully tear down all routes (and their services)
    */
-  async shutdown() {
+  shutdown() {
+    if (!this._shutdownPromise) this._shutdownPromise = this.performShutdown();
+    return this._shutdownPromise;
+  }
+
+  async performShutdown() {
     this.server.off?.('upgrade', this._upgradeHandler);
-    await Promise.all(this.routes.map(route => Promise.resolve(route.shutdown?.())));
-    if (!this.closeServerOnShutdown || !this.server.listening) return;
-    await closeServer(this.server);
+    const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
+    if (this.closeServerOnShutdown && this.server.listening) {
+      try {
+        await closeServer(this.server);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwCleanupErrors(errors, 'One or more WebSocket server cleanup operations failed.');
   }
 }
 

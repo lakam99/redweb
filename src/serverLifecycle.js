@@ -18,6 +18,18 @@ function validateListenerOptions(options) {
     }
 }
 
+async function settleTasks(tasks) {
+    const results = await Promise.allSettled(tasks.map(task => Promise.resolve().then(task)));
+    return results.filter(result => result.status === 'rejected').map(result => result.reason);
+}
+
+function throwCleanupErrors(errors, message) {
+    if (!errors.length) return;
+    const aggregate = new Error(message);
+    aggregate.errors = errors;
+    throw aggregate;
+}
+
 function closeServer(server) {
     return new Promise((resolve, reject) => {
         if (!server?.listening) return resolve();
@@ -25,4 +37,10 @@ function closeServer(server) {
     });
 }
 
-module.exports = { listenServer, closeServer, validateListenerOptions };
+module.exports = {
+    listenServer,
+    closeServer,
+    settleTasks,
+    throwCleanupErrors,
+    validateListenerOptions,
+};

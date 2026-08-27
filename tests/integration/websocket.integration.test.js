@@ -1,4 +1,6 @@
 const http = require('http');
+const crypto = require('crypto');
+const net = require('net');
 const path = require('path');
 const WebSocket = require('ws');
 const {
@@ -46,6 +48,33 @@ async function expectConnectionFailure(url, options) {
         });
         socket.once('error', () => resolve('error'));
     }), 'WebSocket connection failure');
+}
+
+function openRawWebSocket(port, route) {
+    return withTimeout(new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1');
+        let response = '';
+        socket.once('connect', () => {
+            const key = crypto.randomBytes(16).toString('base64');
+            socket.write([
+                `GET ${route} HTTP/1.1`,
+                `Host: 127.0.0.1:${port}`,
+                'Upgrade: websocket',
+                'Connection: Upgrade',
+                `Sec-WebSocket-Key: ${key}`,
+                'Sec-WebSocket-Version: 13',
+                '',
+                '',
+            ].join('\r\n'));
+        });
+        socket.on('data', chunk => {
+            response += chunk.toString('latin1');
+            if (!response.includes('\r\n\r\n')) return;
+            if (!response.startsWith('HTTP/1.1 101')) return reject(new Error(`Unexpected upgrade response: ${response}`));
+            resolve(socket);
+        });
+        socket.once('error', reject);
+    }), 'raw WebSocket upgrade');
 }
 
 describe('WebSocket integration without mocks', () => {
@@ -166,6 +195,22 @@ describe('WebSocket integration without mocks', () => {
         clients.delete(failed);
     });
 
+    test('contains synchronous initial-contact failures and closes the client safely', async () => {
+        class InitialFailureHandler extends BaseHandler {
+            constructor() { super('initial-failure'); }
+            onMessage() {}
+            onInitialContact() { throw new Error('synchronous initial failure'); }
+        }
+        class InitialFailureRoute extends SocketRoute {
+            constructor() { super({ path: '/initial-failure', handlers: [InitialFailureHandler], logger: silentLogger }); }
+        }
+        const server = await start({ routes: [InitialFailureRoute] });
+        const client = await trackedConnect(address(server, '/initial-failure'));
+        expect(await nextJson(client)).toEqual({ error: 'Connection initialization failed' });
+        expect((await waitForClose(client)).code).toBe(1011);
+        clients.delete(client);
+    });
+
     test('enforces strict paths by default and supports an explicit root fallback', async () => {
         const strict = await start();
         expect(await expectConnectionFailure(address(strict, '/unknown'))).toBe('error');
@@ -231,6 +276,67 @@ describe('WebSocket integration without mocks', () => {
         await server.shutdown();
         socketServers.delete(server);
         expect(stopped).toBe(1);
+    });
+
+    test('finishes all cleanup and closes the owned listener when a service rejects shutdown', async () => {
+        class RejectingService extends SocketService {
+            constructor() { super('rejecting'); }
+            onShutdown() { return Promise.reject(new Error('service cleanup failed')); }
+        }
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class RejectingRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/rejecting-shutdown',
+                    handlers: [NoopHandler],
+                    services: [RejectingService],
+                    logger: silentLogger,
+                    shutdownTimeoutMs: 50,
+                });
+            }
+        }
+        const server = await start({ routes: [RejectingRoute] });
+        const client = await trackedConnect(address(server, '/rejecting-shutdown'));
+        const clientClosed = waitForClose(client);
+
+        await expect(server.shutdown()).rejects.toMatchObject({
+            message: 'One or more WebSocket server cleanup operations failed.',
+        });
+        await clientClosed;
+        clients.delete(client);
+        socketServers.delete(server);
+        expect(server.server.listening).toBe(false);
+        expect(server.routes[0].clients.size).toBe(0);
+    });
+
+    test('terminates a non-cooperating raw WebSocket peer after the shutdown grace period', async () => {
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class TimedRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/raw-peer',
+                    handlers: [NoopHandler],
+                    logger: silentLogger,
+                    shutdownTimeoutMs: 25,
+                });
+            }
+        }
+        const server = await start({ routes: [TimedRoute] });
+        const rawClient = await openRawWebSocket(server.server.address().port, '/raw-peer');
+        const rawClosed = withTimeout(new Promise(resolve => rawClient.once('close', resolve)), 'raw peer close');
+        const startedAt = Date.now();
+
+        await server.shutdown();
+        await rawClosed;
+        socketServers.delete(server);
+        expect(Date.now() - startedAt).toBeLessThan(1000);
+        expect(server.server.listening).toBe(false);
     });
 
     test('does not close a borrowed HTTP server and removes its upgrade listener', async () => {
