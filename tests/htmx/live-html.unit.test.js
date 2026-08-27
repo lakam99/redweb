@@ -297,8 +297,14 @@ describe('decorator-first Live HTML units', () => {
             .toThrow('Duplicate Live HTML directive');
         expect(() => HtmlRenderer.render('<section rw-each="cards" data-rw-html="yes"></section>', cards))
             .toThrow('boolean attribute');
+        expect(() => HtmlRenderer.render('<div data-rw-html="yes"></div>', cards)).toThrow('boolean attribute');
+        expect(() => HtmlRenderer.render('<div data-rw-html></div>', cards)).toThrow('requires data-rw-state');
         expect(HtmlRenderer.render('<p>Document rw-each= here. {{ secret }}</p>', cards))
             .toBe('<p>Document rw-each= here. <span data-rw-state="secret">LEAK</span></p>');
+        expect(HtmlRenderer.render('<p>1 < 2 and {{ secret }} > 0</p>', cards))
+            .toBe('<p>1 < 2 and <span data-rw-state="secret">LEAK</span> > 0</p>');
+        expect(HtmlRenderer.render('<p><<script>{{ body }}</script></p>', pageState))
+            .toBe('<p><<script>{{ body }}</script></p>');
         const raw = '<!-- rw-each="cards" {{ secret }} --><script>const fake = \'<i data-rw-state="secret"></i>\'; {{ secret }}</script>';
         expect(HtmlRenderer.render(raw, cards)).toBe(raw);
         expect(HtmlRenderer.render('<!-- unclosed rw-each="cards"')).toBe('<!-- unclosed rw-each="cards"');
@@ -380,6 +386,8 @@ describe('decorator-first Live HTML units', () => {
         expect(HtmlRenderer.document('plain text', config)).toContain('<main data-rw-root>plain text</main>');
         expect(HtmlRenderer.document('<!-- fake </body> --><body>safe</body>', config))
             .toContain('<body>safe<script type="application/json"');
+        expect(HtmlRenderer.document('<body><<span>safe</span></body>', config))
+            .toContain('<body><<span>safe</span><script type="application/json"');
         expect(HtmlRenderer.document('<!-- unclosed </body>', config)).toContain('<main data-rw-root><!-- unclosed </body></main>');
         expect(HtmlRenderer.document('<body title="unclosed', config)).toContain('<main data-rw-root><body title="unclosed</main>');
         expect(HtmlRenderer.document('<script>fake </body>', config)).toContain('<main data-rw-root><script>fake </body></main>');

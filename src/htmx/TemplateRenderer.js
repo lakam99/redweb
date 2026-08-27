@@ -28,6 +28,11 @@ function closingTag(source, target) {
             position = commentEnd < 0 ? source.length : commentEnd + 3;
             continue;
         }
+        const recognizedMarkup = /[!/?]/.test(source[start + 1]);
+        if (!recognizedMarkup && !/[A-Za-z]/.test(source[start + 1])) {
+            position = start + 1;
+            continue;
+        }
         const end = tagEnd(source, start + 1);
         if (end < 0) return -1;
         const tag = source.slice(start, end + 1);
@@ -111,7 +116,9 @@ class TemplateRenderer {
     markup() {
         const parsed = this.startTag();
         if (!parsed) {
-            const end = this.tagEnd(this.position + 1);
+            const marker = this.source[this.position + 1];
+            const recognizedMarkup = /[!/?]/.test(marker);
+            const end = recognizedMarkup ? this.tagEnd(this.position + 1) : -1;
             const next = end < 0 ? this.position + 1 : end + 1;
             this.output += this.source.slice(this.position, next);
             this.position = next;
@@ -134,6 +141,13 @@ class TemplateRenderer {
         const state = parsed.attributes.get('data-rw-state');
         const hasEach = parsed.attributes.has('rw-each');
         const hasState = parsed.attributes.has('data-rw-state');
+        const hasHtml = parsed.attributes.has('data-rw-html');
+        if (hasHtml && parsed.attributes.get('data-rw-html') !== null) {
+            throw new Error('data-rw-html must be a boolean attribute.');
+        }
+        if (hasHtml && !hasEach && !hasState) {
+            throw new Error('data-rw-html requires data-rw-state or rw-each.');
+        }
         if (!hasEach && !hasState) {
             this.output += parsed.source;
             return;
@@ -143,9 +157,6 @@ class TemplateRenderer {
         if (hasEach && hasState && each !== state) {
             throw new Error(`Page collection "${each}" conflicts with state binding "${state}".`);
         }
-        if (parsed.attributes.has('data-rw-html') && parsed.attributes.get('data-rw-html') !== null) {
-            throw new Error('data-rw-html must be a boolean attribute.');
-        }
         const name = each || state;
         if (!(name in this.page)) throw new Error(hasEach ? `Unknown page collection "${name}".` : `Unknown page binding "${name}".`);
         const closing = this.emptyClosing(parsed.name);
@@ -153,7 +164,7 @@ class TemplateRenderer {
         const html = hasEach || isHtml(this.page[name]);
         let opening = parsed.source;
         if (!hasState) opening = opening.replace(/\/?>(?=$)/, ` data-rw-state="${name}"$&`);
-        if (html && !parsed.attributes.has('data-rw-html')) opening = opening.replace(/\/?>(?=$)/, ' data-rw-html$&');
+        if (html && !hasHtml) opening = opening.replace(/\/?>(?=$)/, ' data-rw-html$&');
         this.output += opening + value + closing.source;
         this.position = closing.end;
     }
