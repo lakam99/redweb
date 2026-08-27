@@ -6,8 +6,9 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { createCounterServer } = require('../examples/live-html/counter');
-const { createChatroomServer } = require('../examples/live-html/chatroom');
+const { start } = require('..');
+const { CounterPage } = require('../examples/live-html/counter');
+const { ChatroomPage } = require('../examples/live-html/chatroom');
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -129,8 +130,8 @@ async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chrome, Edge, or Chromium is required for the Live HTML browser gate.');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-browser-'));
-    const counter = createCounterServer({ port: 0, bind: '127.0.0.1', logger });
-    const chat = createChatroomServer({ port: 0, bind: '127.0.0.1', logger });
+    const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
+    const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     try {

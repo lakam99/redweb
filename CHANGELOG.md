@@ -7,6 +7,7 @@
 - Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.
 - Added runnable server-counter and shared-chatroom examples with real HTTP/WebSocket, browser DOM, load, memory, and packed-artifact verification gates.
 - Converted the canonical Live HTML examples to compiled TypeScript so they use `@page()`, `@state()`, and `@action()` directly.
+- Added `start(PageClass)`, optional `LivePage` inheritance, inferred colocated templates, and `shared: true` to remove framework setup boilerplate from decorated pages.
 
 ## 0.9.0
 

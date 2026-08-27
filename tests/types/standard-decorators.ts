@@ -1,7 +1,7 @@
-import { LiveHtmlServer, LivePage, action, html, page, state } from 'redweb';
+import { action, html, page, start, state } from 'redweb';
 
 @page('/standard')
-class StandardPage extends LivePage {
+class StandardPage {
     @state({ writable: true })
     name = 'Redweb';
 
@@ -15,4 +15,4 @@ class StandardPage extends LivePage {
     }
 }
 
-new LiveHtmlServer({ pages: [StandardPage], listen: false });
+void start(StandardPage, { listen: false }).shutdown();

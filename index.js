@@ -16,7 +16,7 @@ const {
 const { BaseHandler } = require('./src/ws/BaseHandler');
 const HttpServer = require('./src/http/HttpServer');
 const HttpsServer = require('./src/http/HttpsServer');
-const { action, html, HtmxRenderer, LiveHtmlServer, LivePage, page, state } = require('./src/htmx');
+const { action, html, HtmxRenderer, LiveHtmlServer, LivePage, page, start, state } = require('./src/htmx');
 module.exports = {
     HttpServer,
     HttpsServer,
@@ -42,5 +42,6 @@ module.exports = {
     LiveHtmlServer,
     LivePage,
     page,
+    start,
     state
 };

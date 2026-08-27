@@ -3,7 +3,8 @@
 const http = require('http');
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
-const { createChatroomServer } = require('../examples/live-html/chatroom');
+const { start } = require('..');
+const { ChatroomPage } = require('../examples/live-html/chatroom');
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -52,7 +53,7 @@ function closeClient(client) {
 }
 
 async function main() {
-    const server = createChatroomServer({
+    const server = start(ChatroomPage, {
         port: 0,
         bind: '127.0.0.1',
         logger,

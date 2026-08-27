@@ -436,6 +436,7 @@ declare module 'redweb' {
     export interface PageOptions {
         template?: string;
         scope?: 'connection' | 'shared';
+        shared?: boolean;
     }
 
     export interface StateOptions {
@@ -461,8 +462,10 @@ declare module 'redweb' {
     export function action(): LiveActionDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
 
+    export type LivePageClass = new () => object;
+
     export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
-        pages: Array<new () => LivePage>;
+        pages: LivePageClass[];
         templateRoot?: string;
         livePaths?: {
             socket?: string;
@@ -486,6 +489,11 @@ declare module 'redweb' {
         constructor(options: LiveHtmlServerOptions);
         shutdown(): Promise<void>;
     }
+
+    export function start(
+        pageOrPages: LivePageClass | LivePageClass[],
+        options?: Omit<LiveHtmlServerOptions, 'pages'>
+    ): LiveHtmlServer;
 
     export class HtmxRenderer {
         static template(filePath: string, rootDir: string): string;

@@ -6,11 +6,11 @@ This layer deliberately owns page concerns only: `@page`, `@state`, and `@action
 
 ## Page model
 
-Every page extends `LivePage` and is registered with `@page(path, options)`:
+Every page is a plain class registered with `@page(path, options)`. Extending `LivePage` remains compatible but is not required:
 
 ```ts
 @page('/profile', { template: 'profile.htmx' })
-class ProfilePage extends LivePage {
+class ProfilePage {
   @state()
   displayName = 'Guest';
 }
@@ -18,9 +18,9 @@ class ProfilePage extends LivePage {
 
 The decorators support both TypeScript's current standard decorator emit and the legacy `experimentalDecorators` ABI.
 
-Pages use connection scope by default: each rendered browser page receives its own instance. `scope: 'shared'` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history.
+Pages use connection scope by default: each rendered browser page receives its own instance. `shared: true` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history. `scope: 'shared'` remains available as the explicit equivalent.
 
-`LiveHtmlServer` reads and caches template files during startup. Template paths are resolved inside `templateRoot`; traversal outside that root is rejected.
+`start(PageClass)` creates the Live HTML server and infers `templateRoot` from the module exporting the page. Pass `templateRoot` explicitly only when pages and templates live in different directories. Template traversal outside that root is rejected.
 
 ## Declarative `.htmx` templates
 
@@ -96,9 +96,9 @@ The injected module uses the published `redweb-client` package served by the sam
 
 ## Options
 
-`LiveHtmlServer` accepts normal HTTP options plus:
+`start(PageClass, options)` accepts normal HTTP options plus the following Live HTML controls. `new LiveHtmlServer({ pages, ...options })` remains available for explicit composition:
 
-- `pages`: non-empty array of decorated `LivePage` constructors.
+- `pages`: non-empty array of decorated class constructors when using `LiveHtmlServer` directly.
 - `templateRoot`: root directory for `.htmx` templates; defaults to the current directory.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.

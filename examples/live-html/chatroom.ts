@@ -1,6 +1,4 @@
-import type { HtmlFragment, LiveHtmlServerOptions } from 'redweb';
-
-const { LiveHtmlServer, LivePage, action, html, page, state }: typeof import('redweb') = require('../..');
+import { action, html, page, start, state } from 'redweb';
 
 interface ChatMessage {
     name?: string;
@@ -12,12 +10,12 @@ interface StoredMessage {
     text: string;
 }
 
-@page('/', { template: 'chatroom.htmx', scope: 'shared' })
-export class ChatroomPage extends LivePage {
+@page('/', { template: 'chatroom.htmx', shared: true })
+export class ChatroomPage {
     private history: StoredMessage[] = [];
 
     @state()
-    messages: HtmlFragment = html``;
+    messages = html``;
 
     @action()
     send({ name, message }: ChatMessage) {
@@ -33,13 +31,4 @@ export class ChatroomPage extends LivePage {
     }
 }
 
-export function createChatroomServer(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
-    return new LiveHtmlServer({
-        port: 8080,
-        templateRoot: __dirname,
-        pages: [ChatroomPage],
-        ...options,
-    });
-}
-
-if (require.main === module) createChatroomServer();
+if (require.main === module) start(ChatroomPage, { port: 8080 });

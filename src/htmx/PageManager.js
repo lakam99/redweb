@@ -80,9 +80,7 @@ class PageManager {
     }
 
     register(PageClass) {
-        if (typeof PageClass !== 'function' || !(PageClass.prototype instanceof LivePage)) {
-            throw new TypeError('Every page must extend LivePage.');
-        }
+        if (typeof PageClass !== 'function') throw new TypeError('Every page must be a class.');
         const metadata = getPageMetadata(PageClass);
         if (!metadata) throw new TypeError(`${PageClass.name || 'Page'} is missing @page metadata.`);
         if (this.records.has(metadata.path) || Object.values(this.paths).includes(metadata.path)) {
@@ -103,9 +101,10 @@ class PageManager {
 
     instantiate(record) {
         const instance = new record.PageClass();
-        if (!(instance instanceof LivePage)) throw new TypeError('Page construction must return a LivePage.');
-        instance._activateState();
-        return instance;
+        if (!(instance instanceof record.PageClass)) throw new TypeError('Page construction returned an incompatible object.');
+        const page = LivePage.adopt(instance);
+        page._activateState();
+        return page;
     }
 
     mount(app) {

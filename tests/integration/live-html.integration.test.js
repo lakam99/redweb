@@ -1,9 +1,11 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, page } = require('../..');
-const { createCounterServer } = require('../../examples/live-html/counter');
-const { createChatroomServer } = require('../../examples/live-html/chatroom');
+const { LiveHtmlServer, LivePage, page, start: startPages } = require('../..');
+const { CounterPage } = require('../../examples/live-html/counter');
+const { ChatroomPage } = require('../../examples/live-html/chatroom');
+const createCounterServer = options => startPages(CounterPage, options);
+const createChatroomServer = options => startPages(ChatroomPage, options);
 const {
     closeWebSocket,
     nextMessage,

@@ -1,13 +1,47 @@
 const HtmxRenderer = require('./HtmxRenderer');
 const { forEachState, getActionImplementation, getStateConfig } = require('./metadata');
 
+const RUNTIME_METHODS = Object.freeze([
+    '_activateState',
+    '_attach',
+    '_detach',
+    '_stateChanged',
+    '_setFromClient',
+    '_invoke',
+    'dispose',
+]);
+
+function initializeRuntime(page) {
+    if (Object.prototype.hasOwnProperty.call(page, '_connections')) return;
+    Object.assign(page, {
+        _connections: new Set(),
+        _disposed: false,
+        _stateActive: false,
+        _stateValues: new Map(),
+        _disposePromise: null,
+    });
+}
+
 class LivePage {
     constructor() {
-        this._connections = new Set();
-        this._disposed = false;
-        this._stateActive = false;
-        this._stateValues = new Map();
-        this._disposePromise = null;
+        initializeRuntime(this);
+    }
+
+    static adopt(page) {
+        if (!page || typeof page !== 'object') throw new TypeError('Page construction must return an object.');
+        if (!(page instanceof LivePage)) {
+            RUNTIME_METHODS.forEach(name => {
+                if (name in page) throw new TypeError(`Plain page classes cannot define reserved member "${name}".`);
+                Object.defineProperty(page, name, {
+                    configurable: false,
+                    enumerable: false,
+                    writable: false,
+                    value: LivePage.prototype[name],
+                });
+            });
+        }
+        initializeRuntime(page);
+        return page;
     }
 
     _activateState() {

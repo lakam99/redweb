@@ -14,6 +14,7 @@ import {
     html,
     page,
     state,
+    start,
 } from 'redweb';
 
 @page('/counter', { template: 'counter.htmx' })
@@ -30,6 +31,7 @@ class CounterPage extends LivePage {
 
 const live = new LiveHtmlServer({ pages: [CounterPage], listen: false });
 void live.shutdown();
+void start(CounterPage, { listen: false }).shutdown();
 
 class EchoHandler extends BaseHandler {
     constructor() {

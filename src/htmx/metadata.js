@@ -82,9 +82,15 @@ function page(routePath, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('Page options must be an object.');
     }
-    const { template, scope = 'connection' } = options;
+    const { template, shared, scope = shared ? 'shared' : 'connection' } = options;
     if (template !== undefined && (typeof template !== 'string' || !template)) {
         throw new TypeError('Page template must be a non-empty path.');
+    }
+    if (shared !== undefined && typeof shared !== 'boolean') {
+        throw new TypeError('Page shared must be a boolean.');
+    }
+    if (shared !== undefined && options.scope !== undefined && (scope === 'shared') !== shared) {
+        throw new TypeError('Page scope and shared options conflict.');
     }
     if (!['connection', 'shared'].includes(scope)) {
         throw new TypeError('Page scope must be "connection" or "shared".');

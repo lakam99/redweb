@@ -10,6 +10,7 @@ const {
     action,
     html,
     page,
+    start,
     state,
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
@@ -41,6 +42,8 @@ describe('decorator-first Live HTML units', () => {
         expect(() => page('relative')).toThrow('beginning with');
         expect(() => page('/', null)).toThrow('options');
         expect(() => page('/', { template: '' })).toThrow('template');
+        expect(() => page('/', { shared: 'yes' })).toThrow('boolean');
+        expect(() => page('/', { scope: 'shared', shared: false })).toThrow('conflict');
         expect(() => page('/', { scope: 'request' })).toThrow('scope');
         expect(() => page('/')({})).toThrow('class');
         expect(() => state(null)).toThrow('options');
@@ -235,7 +238,7 @@ describe('decorator-first Live HTML units', () => {
         await server.shutdown();
     });
 
-    test('validates page manager configuration and page registration', () => {
+    test('validates page manager configuration and page registration', async () => {
         class PlainPage extends LivePage { render() { return 'ok'; } }
         page('/plain')(PlainPage);
         expect(() => new PageManager({ pages: [] })).toThrow('non-empty');
@@ -251,8 +254,21 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '/safe//unsafe.js' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/same', client: '/same' } })).toThrow('unique');
-        expect(() => new PageManager({ pages: [class {}] })).toThrow('extend LivePage');
+        expect(() => new PageManager({ pages: [class {}] })).toThrow('missing @page');
+        expect(() => new PageManager({ pages: [null] })).toThrow('must be a class');
         expect(() => new PageManager({ pages: [class extends LivePage {}] })).toThrow('missing @page');
+
+        expect(() => LivePage.adopt(null)).toThrow('return an object');
+        class ReservedPlainPage { dispose() {} }
+        page('/reserved-plain', { shared: true })(ReservedPlainPage);
+        expect(() => new PageManager({ pages: [ReservedPlainPage] })).toThrow('reserved member');
+
+        expect(() => start([])).toThrow('page class');
+        expect(() => start([PlainPage, null])).toThrow('page class');
+        expect(() => start(PlainPage, null)).toThrow('options');
+        const started = start([PlainPage], { listen: false });
+        expect(started.manager.templateRoot).toBe(process.cwd());
+        await started.shutdown();
 
         class DuplicatePage extends LivePage {}
         page('/plain')(DuplicatePage);

@@ -32,21 +32,21 @@ const {
   SOCKET_OPTIONS,      // Defaults for socket servers
   METHODS,             // Express method helpers
   LiveHtmlServer,      // SSR plus lifecycle-safe realtime HTML
-  LivePage,            // Per-page state and lifecycle base
+  LivePage,            // Optional base for advanced page internals
   page, state, action, // Live HTML decorators
-  html                 // Escaping HTML template tag
+  html, start          // Safe HTML plus one-call page startup
 } = require('redweb');
 ```
 
 ## Live HTML
 
-`LiveHtmlServer` combines server-rendered `.htmx` templates and Redweb WebSockets on one listener. Decorated page classes hold the behavior; templates remain declarative HTML. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+`start(PageClass)` combines server-rendered `.htmx` templates and Redweb WebSockets on one listener. Decorated plain classes hold the behavior; templates remain declarative HTML. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
 
 ```ts
-import { LiveHtmlServer, LivePage, page, state } from 'redweb';
+import { page, start, state } from 'redweb';
 
 @page('/', { template: 'counter.htmx' })
-class CounterPage extends LivePage {
+class CounterPage {
   @state()
   count = 0;
 
@@ -61,11 +61,7 @@ class CounterPage extends LivePage {
   }
 }
 
-new LiveHtmlServer({
-  port: 8080,
-  templateRoot: __dirname,
-  pages: [CounterPage]
-});
+start(CounterPage, { port: 8080 });
 ```
 
 `counter.htmx` contains no executable server code:
@@ -80,8 +76,8 @@ Changing a `@state()` property sends only that binding's new value. State update
 Browser events can call only explicitly exposed actions:
 
 ```ts
-@page('/chat', { template: 'chatroom.htmx', scope: 'shared' })
-class ChatroomPage extends LivePage {
+@page('/chat', { template: 'chatroom.htmx', shared: true })
+class ChatroomPage {
   @state()
   messages = html``;
 
@@ -101,7 +97,7 @@ class ChatroomPage extends LivePage {
 </form>
 ```
 
-Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `scope: 'shared'` deliberately shares one instance across its connected visitors.
+Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
 
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
@@ -507,7 +503,7 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 
 ## Live HTML migration
 
-The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have been replaced. `.htmx` files are now declarative templates registered through decorated `LivePage` classes. Move template calculations and imports into the page class, mark reactive fields with `@state()`, and expose browser-callable methods with `@action()`.
+The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have been replaced. `.htmx` files are now declarative templates registered through decorated plain classes. Move template calculations and imports into the page class, mark reactive fields with `@state()`, expose browser-callable methods with `@action()`, and launch the page with `start(PageClass)`.
 
 ## Developing
 

@@ -1,9 +1,7 @@
-import type { LiveHtmlServerOptions } from 'redweb';
-
-const { LiveHtmlServer, LivePage, page, state }: typeof import('redweb') = require('../..');
+import { page, start, state } from 'redweb';
 
 @page('/', { template: 'counter.htmx' })
-export class CounterPage extends LivePage {
+export class CounterPage {
     @state()
     count = 0;
 
@@ -18,18 +16,6 @@ export class CounterPage extends LivePage {
         this.ticker = null;
     }
 
-    disposed() {
-        if (this.ticker) clearInterval(this.ticker);
-    }
 }
 
-export function createCounterServer(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
-    return new LiveHtmlServer({
-        port: 8080,
-        templateRoot: __dirname,
-        pages: [CounterPage],
-        ...options,
-    });
-}
-
-if (require.main === module) createCounterServer();
+if (require.main === module) start(CounterPage, { port: 8080 });

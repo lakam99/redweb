@@ -5,7 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "build:live-html-examples": "tsc -p examples/live-html/tsconfig.json",
+    "build:live-html-examples": "tsc -p examples/live-html/tsconfig.json && node scripts/prepare-live-html-examples.js",
     "pretest": "npm run build:live-html-examples --silent && node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.standard.json",
     "prepack": "npm run build:live-html-examples --silent",
     "example:counter": "npm run build:live-html-examples --silent && node examples/live-html/counter.js",
