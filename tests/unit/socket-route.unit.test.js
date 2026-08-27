@@ -144,7 +144,7 @@ describe('SocketRoute units', () => {
         expect(logger.error).toHaveBeenCalledTimes(2);
     });
 
-    test('runs the close callback and no-op logger through duplicate and unknown identities', () => {
+    test('runs the close callback and no-op logger through duplicate and unknown identities', async () => {
         const route = new SocketRoute({ path: '/callbacks', handlers: [NoopHandler], logger: null });
         const first = createSocket();
         const second = createSocket();
@@ -155,6 +155,7 @@ describe('SocketRoute units', () => {
         route.handleClose(second);
         route.handleClose({ __redwebClientKey: 'missing' });
         route.handleError({}, new Error('ignored by no-op logger'));
+        await new Promise(setImmediate);
         expect(closed).toEqual([second, expect.any(Object)]);
 
         const emptyKeyRoute = new SocketRoute({

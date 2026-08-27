@@ -120,6 +120,8 @@ declare module 'redweb' {
 
         addHandler(handler: new () => BaseHandler): boolean;
         resolveRemoteAddress(request: import('http').IncomingMessage): string;
+        connectionOpenCallback(socket: RedWebSocket, request?: import('http').IncomingMessage): unknown;
+        connectionCloseCallback?(socket: RedWebSocket): unknown;
         handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
         handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
         shutdown(): Promise<void>;

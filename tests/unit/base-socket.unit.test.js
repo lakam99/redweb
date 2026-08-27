@@ -90,6 +90,34 @@ describe('BaseSocketServer units', () => {
         expect(stopped).toBe(1);
     });
 
+    test('preserves constructor failures while every earlier route rollback is attempted', async () => {
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        let secondStopped = 0;
+        class ThrowingCleanupRoute extends FirstRoute {
+            shutdown() { throw new Error('cleanup failed'); }
+        }
+        class TrackingRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.path = '/tracking-cleanup';
+            }
+            shutdown() { secondStopped += 1; }
+        }
+        class ThrowingConstructor {
+            constructor() { throw new Error('original construction failure'); }
+        }
+
+        expect(() => new BaseSocketServer(fakeServer(), {
+            routes: [ThrowingCleanupRoute, TrackingRoute, ThrowingConstructor],
+            logger,
+        })).toThrow('original construction failure');
+        await new Promise(setImmediate);
+        expect(secondStopped).toBe(1);
+        expect(logger.error).toHaveBeenCalledWith('Error shutting down route:', expect.objectContaining({
+            message: 'cleanup failed',
+        }));
+    });
+
     test('normalizes query strings and rejects malformed or unmatched upgrades', () => {
         const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
         const matched = server.routes[0];

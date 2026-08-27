@@ -78,7 +78,9 @@ class BaseSocketServer {
 
   disposeRoutes(routes) {
     routes.forEach(route => {
-      Promise.resolve(route.shutdown?.()).catch(error => this.logger?.error?.('Error shutting down route:', error));
+      Promise.resolve()
+        .then(() => route.shutdown?.())
+        .catch(error => this.logger?.error?.('Error shutting down route:', error));
     });
   }
 

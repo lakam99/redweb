@@ -11,7 +11,7 @@ class EchoHandler extends BaseHandler {
         super('echo');
     }
 
-    onMessage(socket: RedWebSocket, message: { value: string }) {
+    override onMessage(socket: RedWebSocket, message: { value: string }) {
         socket.sendJson({ value: message.value });
         return socket.broadcast({ value: message.value });
     }
@@ -22,10 +22,20 @@ class HeartbeatService extends SocketService {
         super('heartbeat', 1000);
     }
 
-    onTick() {
+    override onTick() {
         for (const socket of this.route.clients.values()) {
             socket.sendJson({ type: 'heartbeat' });
         }
+    }
+}
+
+class CallbackRoute extends SocketRoute {
+    override connectionOpenCallback(socket: RedWebSocket) {
+        socket.sendJson({ connected: true });
+    }
+
+    override connectionCloseCallback(socket: RedWebSocket) {
+        return socket.clientKey;
     }
 }
 
@@ -38,6 +48,7 @@ const route = new SocketRoute({
 });
 
 route.clients.forEach(socket => socket.sendJson({ ready: true }));
+void CallbackRoute;
 new HttpServer({ listen: false, corsOptions: false });
 
 new SocketRoute({

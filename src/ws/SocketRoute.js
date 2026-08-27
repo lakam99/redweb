@@ -167,16 +167,6 @@ class SocketRoute {
         socket.sendJson = (data) => sendJson(socket, data);
         socket.broadcast = (data) => broadcast([...this.clients.values()].filter(sock => sock !== socket), data);
 
-        this.connectionOpenCallback(socket, req);
-        this.handlers.forEach((handler) => {
-            Promise.resolve()
-                .then(() => handler.onInitialContact?.(socket, req))
-                .catch((error) => {
-                    this.handleError(socket, error);
-                    sendJson(socket, { error: 'Connection initialization failed' });
-                    socket.close?.(1011, 'Connection initialization failed');
-                });
-        });
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
         socket.on('message', (message, isBinary) => {
@@ -195,6 +185,22 @@ class SocketRoute {
                 return;
             }
         });
+
+        this.invokeLifecycleHook(socket, () => this.connectionOpenCallback(socket, req), true);
+        this.handlers.forEach((handler) => {
+            this.invokeLifecycleHook(socket, () => handler.onInitialContact?.(socket, req), true);
+        });
+    }
+
+    invokeLifecycleHook(socket, hook, closeOnError) {
+        Promise.resolve()
+            .then(hook)
+            .catch(error => {
+                this.handleError(socket, error);
+                if (!closeOnError) return;
+                sendJson(socket, { error: 'Connection initialization failed' });
+                socket.close?.(1011, 'Connection initialization failed');
+            });
     }
 
     connectionOpenCallback(socket) {
@@ -257,7 +263,7 @@ class SocketRoute {
         const ip = socket.remoteAddress || 'unknown';
         this.logger.log?.(`Client disconnected: ${ip}`);
         if (key !== undefined && key !== null && this.clients.get(key) === socket) this.clients.delete(key);
-        if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
+        this.invokeLifecycleHook(socket, () => this.connectionCloseCallback?.(socket), false);
     }
 
     shutdown() {

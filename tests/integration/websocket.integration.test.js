@@ -211,6 +211,52 @@ describe('WebSocket integration without mocks', () => {
         clients.delete(client);
     });
 
+    test('contains throwing route open and close callbacks on real connections', async () => {
+        let closeFailures = 0;
+        let observeCloseCallback;
+        const closeCallbackRan = withTimeout(new Promise(resolve => {
+            observeCloseCallback = resolve;
+        }), 'route close callback');
+        const callbackLogger = {
+            ...silentLogger,
+            error(_message, error) {
+                if (error?.message === 'close callback failed') closeFailures += 1;
+            },
+        };
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class OpenFailureRoute extends SocketRoute {
+            constructor() { super({ path: '/open-callback', handlers: [NoopHandler], logger: silentLogger }); }
+            connectionOpenCallback() { throw new Error('open callback failed'); }
+        }
+        class CloseFailureRoute extends SocketRoute {
+            constructor() { super({ path: '/close-callback', handlers: [NoopHandler], logger: callbackLogger }); }
+            connectionCloseCallback() {
+                observeCloseCallback();
+                throw new Error('close callback failed');
+            }
+        }
+
+        const openServer = await start({ routes: [OpenFailureRoute] });
+        const failedOpen = await trackedConnect(address(openServer, '/open-callback'));
+        expect(await nextJson(failedOpen)).toEqual({ error: 'Connection initialization failed' });
+        expect((await waitForClose(failedOpen)).code).toBe(1011);
+        clients.delete(failedOpen);
+
+        const closeServer = await start({ routes: [CloseFailureRoute] });
+        const closingClient = await trackedConnect(address(closeServer, '/close-callback'));
+        await closeWebSocket(closingClient);
+        clients.delete(closingClient);
+        await closeCallbackRan;
+        await new Promise(setImmediate);
+        expect(closeFailures).toBe(1);
+
+        const healthyClient = await trackedConnect(address(closeServer, '/close-callback'));
+        expect(healthyClient.readyState).toBe(WebSocket.OPEN);
+    });
+
     test('enforces strict paths by default and supports an explicit root fallback', async () => {
         const strict = await start();
         expect(await expectConnectionFailure(address(strict, '/unknown'))).toBe('error');
