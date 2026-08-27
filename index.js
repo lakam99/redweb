@@ -1,4 +1,5 @@
 const { BaseHttpServer, METHODS } = require('./src/http');
+const { ENCODINGS, HTTP_OPTIONS } = require('./src/http/BaseHttpServer');
 const { sendJson } = require('./src/ws/util');
 const { SocketServer, SecureSocketServer, SOCKET_OPTIONS, SocketRoute, SocketService, SocketRegistry } = require('./src/ws');
 const { BaseHandler } = require('./src/ws/BaseHandler');
@@ -16,5 +17,7 @@ module.exports = {
     SocketRegistry,
     sendJson,
     SOCKET_OPTIONS,
+    HTTP_OPTIONS,
+    ENCODINGS,
     METHODS
 };

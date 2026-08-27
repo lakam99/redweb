@@ -1,9 +1,9 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
 const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer module
+const { validateListenerOptions } = require('../serverLifecycle');
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -40,7 +40,45 @@ const HTTP_OPTIONS = {
     server: undefined,
     corsOptions: undefined,
     enableHtmxRendering: false, // New option for HTMX rendering
+    exposeErrors: false,
+    logger: console,
 };
+
+function assertOptions(options) {
+    validateListenerOptions(options);
+    if (!Object.values(ENCODINGS).includes(options.encoding)) {
+        throw new TypeError('`encoding` must be either "json" or "urlencoded".');
+    }
+    if (!Array.isArray(options.publicPaths)) {
+        throw new TypeError('`publicPaths` must be an array.');
+    }
+    if (options.publicPaths.some(publicPath => typeof publicPath !== 'string' || !publicPath)) {
+        throw new TypeError('Every public path must be a non-empty string.');
+    }
+    if (!Array.isArray(options.services)) {
+        throw new TypeError('`services` must be an array.');
+    }
+
+    options.services.forEach((service) => {
+        if (!service || typeof service.serviceName !== 'string' || !service.serviceName) {
+            throw new TypeError('Every service must have a non-empty `serviceName`.');
+        }
+        if (!['get', 'post', 'put', 'delete', 'patch', 'options', 'head', 'all'].includes(service.method)) {
+            throw new TypeError(`Unsupported HTTP service method: ${service.method}`);
+        }
+        if (typeof service.function !== 'function') {
+            throw new TypeError(`Service ${service.serviceName} must provide a function.`);
+        }
+    });
+    if (options.services.filter(service => service.serviceName === '*').length > 1) {
+        throw new TypeError('Only one catch-all service may be registered.');
+    }
+}
+
+function isWithin(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
 
 /**
  * Base HTTP Server
@@ -48,36 +86,54 @@ const HTTP_OPTIONS = {
  * @return {Object} Express application instance.
  */
 function BaseHttpServer(options = {}) {
-    this.options = { ...HTTP_OPTIONS, ...options };
-    this.app = this.options.server || express();
+    if (!options || typeof options !== 'object' || Array.isArray(options)) {
+        throw new TypeError('HTTP server options must be an object.');
+    }
+    const mergedOptions = { ...HTTP_OPTIONS, ...options };
+    assertOptions(mergedOptions);
+    this.options = {
+        ...mergedOptions,
+        publicPaths: [...mergedOptions.publicPaths],
+        services: [...mergedOptions.services],
+    };
+    this.app = this.options.server === undefined ? express() : this.options.server;
+    if (typeof this.app.use !== 'function') {
+        throw new TypeError('`server` must be an Express-compatible application.');
+    }
     Object.assign(this, this.options);
 
     // Middleware to parse request bodies based on the specified encoding
     if (this.encoding === ENCODINGS.json) {
-        this.app.use(bodyParser.json());
-    } else if (this.encoding === ENCODINGS.urlencoded) {
-        this.app.use(bodyParser.urlencoded({ extended: true }));
+        this.app.use(express.json());
+    } else {
+        this.app.use(express.urlencoded({ extended: true }));
     }
 
-    this.app.use(cors(this.options.corsOptions));
+    if (this.options.corsOptions !== false) {
+        this.app.use(cors(this.options.corsOptions));
+    }
 
     // Enable HTMX rendering if the flag is set
     if (this.enableHtmxRendering) {
         this.app.get('*.htmx', (req, res) => {
-            // Find the file in one of the publicPaths
-            const filePath = this.publicPaths
-                .map(publicPath => path.join(process.cwd(), publicPath, req.path))
-                .find(fullPath => fs.existsSync(fullPath)); // Check if the file exists
+            const match = this.publicPaths
+                .map(publicPath => {
+                    const root = path.resolve(process.cwd(), publicPath);
+                    const filePath = path.resolve(root, `.${req.path}`);
+                    return { root, filePath };
+                })
+                .find(({ root, filePath }) => isWithin(root, filePath) && fs.existsSync(filePath));
     
-            if (!filePath) {
-                return res.status(404).send(`Error rendering HTMX file: Template file not found: ${req.path}`);
+            if (!match) {
+                return res.status(404).send('HTMX template not found');
             }
     
             try {
-                const renderedContent = HtmxRenderer.render(filePath);
+                const renderedContent = HtmxRenderer.render(match.filePath, { rootDir: match.root });
                 res.type('html').send(renderedContent);
             } catch (error) {
-                res.status(500).send(`Error rendering HTMX file: ${error.message}`);
+                const message = this.exposeErrors ? `Error rendering HTMX file: ${error.message}` : 'Unable to render HTMX template';
+                res.status(500).send(message);
             }
         });
     }
@@ -85,12 +141,11 @@ function BaseHttpServer(options = {}) {
 
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) =>
-        this.app.use(express.static(path.join(process.cwd(), publicPath)))
+        this.app.use(express.static(path.resolve(process.cwd(), publicPath)))
     );
 
     const catchAll = this.services.find((service) => service.serviceName === '*');
-    if (catchAll) this.services.splice(this.services.indexOf(catchAll), 1);
-    this.services.forEach((service) =>
+    this.services.filter((service) => service !== catchAll).forEach((service) =>
         this.app[service.method](service.serviceName, service.function)
     );
     if (catchAll) this.app[catchAll.method](catchAll.serviceName, catchAll.function);
@@ -103,5 +158,5 @@ module.exports = {
     BaseHttpServer,
     ENCODINGS,
     HTTP_OPTIONS,
-    METHODS: { GET: 'get', POST: 'post', PUT: 'put', DELETE: 'delete' },
+    METHODS: { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'patch', DELETE: 'delete', OPTIONS: 'options', HEAD: 'head', ALL: 'all' },
 };

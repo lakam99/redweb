@@ -4,6 +4,7 @@ declare module 'redweb' {
     import { Server as NodeHttpServer } from 'http';
     import { WebSocket, ServerOptions } from 'ws';
     import { Buffer } from 'buffer';
+    import { EventEmitter } from 'events';
 
     /** ─────────────────── HTTP / CORE ─────────────────── */
 
@@ -19,18 +20,40 @@ declare module 'redweb' {
         encoding?: RedWebEncoding;
         ssl?: { key: string; cert: string };
         server?: Application;
-        corsOptions?: CorsOptions;
+        corsOptions?: CorsOptions | false;
         enableHtmxRendering?: boolean;
+        exposeErrors?: boolean;
+        logger?: RedWebLogger | null;
     }
+
+    export type RedWebSocket = WebSocket & {
+        clientKey: string;
+        __redwebClientKey: string;
+        remoteAddress: string;
+        isAssigned: boolean;
+        sendJson(data: unknown): boolean;
+        broadcast(data: unknown): number;
+    };
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
     export interface SocketServerOptions {
         server?: NodeHttpServer;
         port?: number;
+        bind?: string;
         listen?: boolean;
         routes?: Array<new () => SocketRoute>;
         ssl?: { key: string; cert: string };
+        fallbackToRoot?: boolean;
+        closeServerOnShutdown?: boolean;
+        listenCallback?: () => void;
+        logger?: RedWebLogger | null;
+    }
+
+    export interface RedWebLogger {
+        log?(message?: any, ...optionalParams: any[]): void;
+        warn?(message?: any, ...optionalParams: any[]): void;
+        error?(message?: any, ...optionalParams: any[]): void;
     }
 
     /** ─────────────────── ROUTES & HANDLERS ─────────────────── */
@@ -40,14 +63,20 @@ declare module 'redweb' {
         handlers: Array<new () => BaseHandler>;
         services?: Array<new () => SocketService>;
         allowDuplicateConnections?: boolean;
-        websocketOptions?: ServerOptions;
+        websocketOptions?: Omit<ServerOptions, 'noServer' | 'path' | 'server' | 'port'>;
+        trustProxy?: boolean;
+        getClientKey?: (request: import('http').IncomingMessage) => string;
+        exposeErrors?: boolean;
+        logger?: RedWebLogger | null;
+        shutdownTimeoutMs?: number;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
     export abstract class SocketService {
         name: string;
-        tickRateMs?: number;
-        protected _tickHandle?: NodeJS.Timeout;
+        tickRateMs: number | null;
+        route: SocketRoute;
+        protected _tickHandle: NodeJS.Timeout | null;
 
         constructor(name: string, tickRateMs?: number);
 
@@ -67,50 +96,56 @@ declare module 'redweb' {
         constructor(name: string);
 
         handleMessage(
-            socket: WebSocket & {
-                sendJson: (message: object) => void;
-                broadcast: (message: object) => void;
-            },
+            socket: RedWebSocket,
             message: any
-        ): void;
+        ): Promise<unknown>;
 
-        onMessage(socket: WebSocket, message: any): void;
-        acceptsBinary?(socket: WebSocket, buffer: Buffer): boolean;
-        handleBinaryMessage(socket: WebSocket, buffer: Buffer): void;
-        onBinaryMessage(socket: WebSocket, buffer: Buffer): void;
-        onInitialContact(socket: WebSocket): void;
+        validateMessage(message: any, socket: RedWebSocket): boolean | Promise<boolean>;
+        onMessage(socket: RedWebSocket, message: any): unknown;
+        acceptsBinary?(socket: RedWebSocket, buffer: Buffer): boolean;
+        handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<unknown>;
+        onBinaryMessage(socket: RedWebSocket, buffer: Buffer): unknown;
+        onInitialContact(socket: RedWebSocket, request?: import('http').IncomingMessage): unknown;
     }
 
     export class SocketRoute {
         path: string;
         handlers: BaseHandler[];
-        clients: Map<string, WebSocket>;
+        services: SocketService[];
+        clients: Map<string, RedWebSocket>;
         allowDuplicateConnections?: boolean;
-        websocketOptions?: ServerOptions;
+        websocketOptions?: SocketRouteConfig['websocketOptions'];
 
         constructor(config: SocketRouteConfig);
 
-        addHandler(handler: new () => BaseHandler): void;
-        handleMessage(sock: WebSocket, data: any): void;
-        handleBinaryMessage(socket: WebSocket, buffer: Buffer): void;
+        addHandler(handler: new () => BaseHandler): boolean;
+        resolveRemoteAddress(request: import('http').IncomingMessage): string;
+        connectionOpenCallback(socket: RedWebSocket, request?: import('http').IncomingMessage): unknown;
+        connectionCloseCallback?(socket: RedWebSocket): unknown;
+        handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
+        handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
+        shutdown(): Promise<void>;
     }
 
     /** ─────────────────── SERVER BASE ─────────────────── */
 
     export class BaseSocketServer {
-        clients: Map<string, WebSocket>;
         server: NodeHttpServer;
         routes: SocketRoute[];
+        ownsServer: boolean;
 
         constructor(server: NodeHttpServer, options?: SocketServerOptions);
 
-        addRoute(route: new () => SocketRoute): void;
+        addRoute(route: new () => SocketRoute): SocketRoute;
+        shutdown(): Promise<void>;
     }
 
     /** ─────────────────── REGISTRY & UTIL TYPES ─────────────────── */
 
+    export function sendJson(socket: WebSocket, data: unknown): boolean;
+
     export interface SocketWrapper {
-        socket: WebSocket;
+        socket: RedWebSocket;
         id: string;
         send: (type: string, payload: Record<string, any>) => void;
         getSanitized?(): Record<string, any>;
@@ -159,14 +194,17 @@ declare module 'redweb' {
         app: Application;
         server?: NodeHttpServer;
         constructor(options?: RedWebOptions);
+        shutdown?(): Promise<void>;
     }
 
     export class HttpServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
+        shutdown(): Promise<void>;
     }
 
     export class HttpsServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
+        shutdown(): Promise<void>;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */
@@ -175,7 +213,11 @@ declare module 'redweb' {
         GET: 'get';
         POST: 'post';
         PUT: 'put';
+        PATCH: 'patch';
         DELETE: 'delete';
+        OPTIONS: 'options';
+        HEAD: 'head';
+        ALL: 'all';
     };
 
     export const ENCODINGS: {

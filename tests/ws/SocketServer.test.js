@@ -18,12 +18,13 @@ class NoopRoute extends SocketRoute {
     }
 }
 
-const closeSocketServer = (socketServer) =>
-    new Promise((resolve) => {
-        if (!socketServer?.server?.listening) return resolve();
-        socketServer.server.once('close', resolve);
-        socketServer.shutdown();
-    });
+const closeSocketServer = (socketServer) => socketServer?.shutdown();
+
+const waitForListening = (socketServer) => new Promise((resolve, reject) => {
+    if (socketServer.server.listening) return resolve();
+    socketServer.server.once('listening', resolve);
+    socketServer.server.once('error', reject);
+});
 
 describe('SocketServer', () => {
     afterEach(() => {
@@ -64,6 +65,7 @@ describe('SocketServer', () => {
         });
 
         try {
+            await waitForListening(socketServer);
             expect(socketServer.server.listening).toBe(true);
         } finally {
             await closeSocketServer(socketServer);

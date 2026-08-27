@@ -8,14 +8,11 @@ const { BaseSocketServer } = require('./BaseSocketServer');
  * @return {Object} WebSocket server instance.
  */
 class SecureSocketServer extends BaseSocketServer {
-    constructor(options = {}) {
+    constructor(options) {
         const ownsServer = !options?.server;
-        const sslOptions = ownsServer ? loadSslConfig(options.ssl) : null;
+        const sslOptions = ownsServer ? loadSslConfig(options?.ssl) : null;
         const server = options?.server || https.createServer(sslOptions);
-        super(server, options);
-        if ((ownsServer && this.listen !== false) || (!ownsServer && options.listen === true)) {
-            server.listen(this.port, () => console.log(`RedWeb SecureSocketServer listening on port ${this.port}`));
-        }
+        super(server, options, ownsServer, 'SecureSocketServer');
         return this;
     }
 }

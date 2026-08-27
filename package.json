@@ -1,9 +1,11 @@
 {
   "name": "redweb",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
+    "pretest": "tsc -p tests/types/tsconfig.json",
     "test": "npx jest"
   },
   "files": [
@@ -14,14 +16,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "2.8.19",
+    "@types/node": "20.19.24",
+    "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "ws": "^8.17.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
     "jest": "^29.7.0",
-    "supertest": "^7.0.0"
+    "supertest": "^7.0.0",
+    "typescript": "^5.9.3"
   }
 }

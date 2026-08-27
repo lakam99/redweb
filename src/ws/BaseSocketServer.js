@@ -7,12 +7,24 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
+const {
+  listenServer,
+  closeServer,
+  settleTasks,
+  throwCleanupErrors,
+  validateListenerOptions,
+} = require('../serverLifecycle');
 
 const SOCKET_OPTIONS = {
   port: 3000,
+  bind: '0.0.0.0',
   ssl:  null,
   listen: true,
-  routes: []
+  routes: [],
+  fallbackToRoot: false,
+  closeServerOnShutdown: undefined,
+  logger: console,
+  listenCallback: undefined,
 };
 
 /**
@@ -23,16 +35,53 @@ class BaseSocketServer {
    * @param {import('http').Server} server
    * @param {SocketServerOptions}  [options]
    */
-  constructor(server, options = {}) {
-    this.clients = new Map();
+  constructor(server, options = {}, ownsServer = false, name = 'SocketServer') {
+    if (!server || typeof server.on !== 'function') throw new TypeError('A Node HTTP(S) server is required.');
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
+    validateListenerOptions(this);
+    if (!Array.isArray(this.routes)) throw new TypeError('`routes` must be an array.');
     this.server = server;
+    this.ownsServer = ownsServer;
+    this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
-    if (!options.routes?.length) options.routes = [DefaultRoute];
-    this.routes = options.routes.map(RouteClass => new RouteClass(server));
+    const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
+    this.routes = [];
+    try {
+      for (const RouteClass of RouteClasses) {
+        const route = new RouteClass(server, { logger: this.logger });
+        if (this.routes.some(existing => existing.path === route.path)) {
+          this.disposeRoutes([route]);
+          throw new Error('WebSocket route paths must be unique.');
+        }
+        this.routes.push(route);
+      }
+    } catch (error) {
+      this.disposeRoutes(this.routes);
+      throw error;
+    }
 
-    this.server.on('upgrade', this.handleUpgrade.bind(this));
+    this._upgradeHandler = this.handleUpgrade.bind(this);
+    this.server.on('upgrade', this._upgradeHandler);
+
+    const shouldListen = (ownsServer && this.listen !== false) || (!ownsServer && options.listen === true);
+    if (shouldListen) {
+      listenServer(this.server, {
+        port: this.port,
+        bind: this.bind,
+        callback: this.listenCallback,
+        logger: this.logger,
+        name,
+      });
+    }
+  }
+
+  disposeRoutes(routes) {
+    routes.forEach(route => {
+      Promise.resolve()
+        .then(() => route.shutdown?.())
+        .catch(error => this.logger?.error?.('Error shutting down route:', error));
+    });
   }
 
   handleUpgrade(req, sock, head) {
@@ -49,7 +98,7 @@ class BaseSocketServer {
 
     const route =
       this.routes.find(r => r.path === path) ||
-      this.routes.find(r => r.path === '/');
+      (this.fallbackToRoot ? this.routes.find(r => r.path === '/') : undefined);
 
     if (!route) return sock.destroy();
 
@@ -63,15 +112,34 @@ class BaseSocketServer {
    * @param {new () => import('./SocketRoute').SocketRoute} RouteClass
    */
   addRoute(RouteClass) {
-    this.routes.push(new RouteClass(this.server));
+    const route = new RouteClass(this.server, { logger: this.logger });
+    if (this.routes.some(existing => existing.path === route.path)) {
+      this.disposeRoutes([route]);
+      throw new Error(`A WebSocket route already exists at ${route.path}.`);
+    }
+    this.routes.push(route);
+    return route;
   }
 
   /**
    * Gracefully tear down all routes (and their services)
    */
   shutdown() {
-    this.routes.forEach(route => route.shutdown?.());
-    this.server.close();
+    if (!this._shutdownPromise) this._shutdownPromise = this.performShutdown();
+    return this._shutdownPromise;
+  }
+
+  async performShutdown() {
+    this.server.off?.('upgrade', this._upgradeHandler);
+    const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
+    if (this.closeServerOnShutdown && this.server.listening) {
+      try {
+        await closeServer(this.server);
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwCleanupErrors(errors, 'One or more WebSocket server cleanup operations failed.');
   }
 }
 
