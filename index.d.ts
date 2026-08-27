@@ -2,6 +2,7 @@ declare module 'redweb' {
     import { Application } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
+    import { Server as NodeHttpsServer } from 'https';
     import { WebSocket, ServerOptions } from 'ws';
     import { Buffer } from 'buffer';
     import { EventEmitter } from 'events';
@@ -462,8 +463,8 @@ declare module 'redweb' {
 
     export class LiveHtmlServer {
         app: Application;
-        server: NodeHttpServer;
-        http: HttpServer;
+        server: NodeHttpServer | NodeHttpsServer;
+        http: HttpServer | HttpsServer;
         sockets: SocketServer;
         constructor(options: LiveHtmlServerOptions);
         shutdown(): Promise<void>;
