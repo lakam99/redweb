@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, codeBlock, html, page, start: startPages } = require('../..');
+const { LiveHtmlServer, LivePage, codeBlock, component, html, page, start: startPages } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { ChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
@@ -263,10 +263,10 @@ describe('Live HTML integration without mocks', () => {
     test('reusable components isolate server state and route actions to the owning instance', async () => {
         const server = await start(createComponentsServer);
         const page = await getPage(server);
-        expect(page.response.body.match(/<rw-component data-rw-component=/g)).toHaveLength(2);
-        expect(page.response.body).toContain('data-rw-component="primary"');
-        expect(page.response.body).toContain('data-rw-component="secondary"');
-        expect(page.response.body.match(/data-rw-state="count">0<\/output>/g)).toHaveLength(2);
+        expect(page.response.body.match(/data-rw-component="primary"/g)).toHaveLength(2);
+        expect(page.response.body.match(/data-rw-component="secondary"/g)).toHaveLength(2);
+        expect(page.response.body).toContain('data-rw-state="count" data-rw-component="primary">0</output>');
+        expect(page.response.body).toContain('data-rw-state="count" data-rw-component="secondary">0</output>');
 
         const updates = [];
         const client = liveClient(page.port, page.config);
@@ -285,6 +285,39 @@ describe('Live HTML integration without mocks', () => {
         const session = server.manager.active.get(page.config.pageId);
         expect(session.page.primary.count).toBe(1);
         expect(session.page.secondary.count).toBe(0);
+    });
+
+    test('keeps shared component render contexts isolated across concurrent requests', async () => {
+        let firstStarted;
+        let releaseFirst;
+        const started = new Promise(resolve => { firstStarted = resolve; });
+        const release = new Promise(resolve => { releaseFirst = resolve; });
+        class RequestComponent {
+            async loading({ query }) {
+                if (query.id === 'a') {
+                    firstStarted();
+                    await release;
+                }
+            }
+            render({ query }) { return html`<p>${String(query.id)}</p>`; }
+        }
+        component()(RequestComponent);
+        class SharedComponentPage {
+            request = new RequestComponent();
+            render() { return html`${this.request}`; }
+        }
+        page('/shared-component-context', { shared: true })(SharedComponentPage);
+        const server = await start(options => startPages(SharedComponentPage, options));
+        const port = server.server.address().port;
+        const first = request({ port, path: '/shared-component-context?id=a' });
+        await started;
+        const second = await request({ port, path: '/shared-component-context?id=b' });
+        releaseFirst();
+        const firstResult = await first;
+        expect(firstResult.body).toContain('<p>a</p>');
+        expect(firstResult.body).not.toContain('<p>b</p>');
+        expect(second.body).toContain('<p>b</p>');
+        expect(second.body).not.toContain('<p>a</p>');
     });
 
     test('serves non-live documentation with metadata, ETags, and no browser runtime', async () => {

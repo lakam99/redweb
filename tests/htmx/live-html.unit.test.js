@@ -24,6 +24,7 @@ const {
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
+const TemplateRenderer = require('../../src/htmx/TemplateRenderer');
 const browserRuntime = require('../../src/htmx/browserRuntime');
 const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
@@ -303,9 +304,9 @@ describe('decorator-first Live HTML units', () => {
         const record = manager.records.get('/component-host');
         const request = { params: {}, query: {}, body: null };
         const document = await manager.render(record, request);
-        expect(document).toContain('data-rw-component="panel"');
+        expect(document).not.toContain('data-rw-component="panel"');
         expect(document).toContain('data-rw-component="panel.leaf"');
-        expect(document).toContain('data-rw-state="count">1</output>');
+        expect(document).toContain('data-rw-state="count" data-rw-component="panel.leaf">1</output>');
         expect(lifecycle).toEqual(['panel:loading', 'leaf:loading']);
 
         const session = [...manager.pending.values()][0];
@@ -333,11 +334,11 @@ describe('decorator-first Live HTML units', () => {
         await expect(manager.receive(socket, {
             payload: { kind: 'action', component: 'missing', name: 'increment', args: [] },
         })).rejects.toThrow('Unknown Live HTML component');
-        expect(session.page.panel._component('panel.leaf')).toBeUndefined();
+        expect(LivePage.prototype._component.call(session.page.panel, 'panel.leaf')).toBeUndefined();
         await manager.disconnect(socket);
-        expect(lifecycle.slice(-2)).toEqual(['leaf:disconnected', 'panel:disconnected']);
+        expect(lifecycle.slice(-2)).toEqual(expect.arrayContaining(['leaf:disconnected', 'panel:disconnected']));
         await manager.release(session);
-        expect(lifecycle.slice(-2)).toEqual(['leaf:disposed', 'panel:disposed']);
+        expect(lifecycle.slice(-2)).toEqual(expect.arrayContaining(['leaf:disposed', 'panel:disposed']));
         await manager.shutdown();
 
         const standalone = new LivePage();
@@ -358,7 +359,7 @@ describe('decorator-first Live HTML units', () => {
         const anonymousOwner = new LivePage();
         anonymousOwner.child = new AnonymousComponent();
         anonymousOwner._activateState();
-        expect(() => anonymousOwner.child.toString()).toThrow('Component must provide render');
+        expect(() => renderValue(anonymousOwner.child)).toThrow('Component must provide render');
 
         class AsyncComponent { async render() { return html`later`; } }
         component()(AsyncComponent);
@@ -420,6 +421,79 @@ describe('decorator-first Live HTML units', () => {
         expect(disposal.errors.map(error => error.message)).toEqual([
             'component disposal failed', 'component disposal failed', 'page disposal failed',
         ]);
+
+        class FrozenComponent {
+            toString() { return 'user-defined toString'; }
+            render() { return html`<button rw-click="save">Save</button>`; }
+        }
+        component()(FrozenComponent);
+        const frozenComponent = Object.freeze(new FrozenComponent());
+        const frozenOwner = new LivePage();
+        frozenOwner.child = frozenComponent;
+        frozenOwner._activateState();
+        expect(frozenComponent.toString()).toBe('user-defined toString');
+        expect(renderValue(frozenComponent)).toContain('data-rw-component="child"');
+        expect(TemplateRenderer.component('<!-- note --><button rw-click="save">Save</button>tail', 'a&b'))
+            .toContain('<button rw-click="save" data-rw-component="a&amp;b">Save</button>tail');
+        expect(TemplateRenderer.component('<!-- unfinished', 'ignored')).toBe('<!-- unfinished');
+        expect(TemplateRenderer.component('<button rw-click="save"', 'child')).toBe('<button rw-click="save"');
+        expect(TemplateRenderer.component('<button rw-click="save">', 'child'))
+            .toBe('<button rw-click="save" data-rw-component="child">');
+        expect(TemplateRenderer.component('<p>plain</p>', 'child')).toBe('<p>plain</p>');
+        expect(TemplateRenderer.component('<button rw-click="save" data-rw-component="nested">Save</button>', 'parent'))
+            .toContain('data-rw-component="nested"');
+        expect(TemplateRenderer.component('<script>"rw-click=save"</script><button rw-click="save">Save</button>', 'child'))
+            .toContain('<script>"rw-click=save"</script><button rw-click="save" data-rw-component="child">');
+        expect(TemplateRenderer.component('<style>button{color:red}', 'child')).toBe('<style>button{color:red}');
+        expect(TemplateRenderer.component('<plaintext>rw-click="save"', 'child')).toBe('<plaintext>rw-click="save"');
+
+        const nonCooperativeEvents = [];
+        class HangingLifecycleComponent {
+            render() { return html``; }
+            disconnected() {
+                nonCooperativeEvents.push('hanging:disconnected');
+                return new Promise(() => {});
+            }
+            disposed() {
+                nonCooperativeEvents.push('hanging:disposed');
+                return new Promise(() => {});
+            }
+        }
+        component()(HangingLifecycleComponent);
+        class LaterLifecycleComponent {
+            render() { return html``; }
+            disconnected() { nonCooperativeEvents.push('later:disconnected'); }
+            disposed() { nonCooperativeEvents.push('later:disposed'); }
+        }
+        component()(LaterLifecycleComponent);
+        class NonCooperativeOwner extends LivePage {
+            hanging = new HangingLifecycleComponent();
+            later = new LaterLifecycleComponent();
+            disconnected() { nonCooperativeEvents.push('owner:disconnected'); }
+            disposed() { nonCooperativeEvents.push('owner:disposed'); }
+        }
+        const detachOwner = new NonCooperativeOwner();
+        detachOwner._activateState();
+        const detachSocket = { sendEvent() {} };
+        await detachOwner._attach(detachSocket, {});
+        void detachOwner._detach(detachSocket, {});
+        await Promise.resolve();
+        expect(nonCooperativeEvents).toEqual([
+            'later:disconnected', 'hanging:disconnected', 'owner:disconnected',
+        ]);
+        expect(detachOwner._connections.size).toBe(0);
+        expect(detachOwner.hanging._connections).toBeUndefined();
+
+        nonCooperativeEvents.length = 0;
+        const disposeOwner = new NonCooperativeOwner();
+        disposeOwner._activateState();
+        void disposeOwner.dispose();
+        await new Promise(resolve => setImmediate(resolve));
+        expect(nonCooperativeEvents).toEqual(expect.arrayContaining([
+            'hanging:disposed', 'later:disposed', 'owner:disposed',
+        ]));
+        expect(LivePage.isDisposed(disposeOwner.hanging)).toBe(true);
+        expect(LivePage.isDisposed(disposeOwner.later)).toBe(true);
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {

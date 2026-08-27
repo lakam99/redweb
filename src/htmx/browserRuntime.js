@@ -12,7 +12,7 @@ const client = new RedwebClient(config.socketPath + '?pageId=' + encodeURICompon
 
 const emit = (type, detail) => document.dispatchEvent(new CustomEvent(type, { detail }));
 let stateTargets = new Map();
-const componentOf = node => node.closest('rw-component[data-rw-component]')?.getAttribute('data-rw-component') || null;
+const componentOf = node => node.closest('[data-rw-component]')?.getAttribute('data-rw-component') || null;
 const stateKey = (component, name) => (component || '') + '\\0' + name;
 const indexState = () => {
     stateTargets = new Map();

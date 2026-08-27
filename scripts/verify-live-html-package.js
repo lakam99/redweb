@@ -49,7 +49,8 @@ async function main() {
         }
         const packedComponents = examples[3].manager.records.get('/');
         const renderedComponents = await examples[3].manager.render(packedComponents, { params: {}, query: {}, body: undefined });
-        if ((renderedComponents.match(/<rw-component /g) || []).length !== 2 || !renderedComponents.includes('data-rw-component="primary"')) {
+        if ((renderedComponents.match(/data-rw-component="primary"/g) || []).length !== 2 ||
+            !renderedComponents.includes('data-rw-component="secondary"')) {
             throw new Error('Packed reusable components did not render isolated instances.');
         }
         await Promise.all(examples.map(server => server.shutdown()));

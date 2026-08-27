@@ -1,4 +1,4 @@
-const { isHtml, renderValue } = require('./Html');
+const { escapeHtml, isHtml, renderValue } = require('./Html');
 const {
     RAW_TEXT,
     closingTag,
@@ -13,8 +13,9 @@ const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const ATTRIBUTE_BINDING = /{{\s*[A-Za-z_$][\w$]*\s*}}/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
 const DIRECTIVES = new Set(['data-rw-state', 'data-rw-html', 'rw-each']);
+const COMPONENT_DIRECTIVES = new Set(['data-rw-component', 'data-rw-state', 'rw-bind', 'rw-click', 'rw-submit']);
 
-function attributes(tag, nameEnd) {
+function attributes(tag, nameEnd, tracked = DIRECTIVES) {
     const found = new Map();
     let position = nameEnd;
     while (position < tag.length - 1) {
@@ -43,7 +44,7 @@ function attributes(tag, nameEnd) {
         if (value && ATTRIBUTE_BINDING.test(value)) {
             throw new TypeError('Template bindings are only allowed in element text.');
         }
-        if (DIRECTIVES.has(name)) {
+        if (tracked.has(name)) {
             if (found.has(name)) throw new Error(`Duplicate Live HTML directive "${name}".`);
             found.set(name, value);
         }
@@ -180,5 +181,44 @@ class TemplateRenderer {
 
 TemplateRenderer.closingTag = closingTag;
 TemplateRenderer.openingTag = openingTag;
+TemplateRenderer.component = (source, id) => {
+    let output = '';
+    let position = 0;
+    while (position < source.length) {
+        const start = source.indexOf('<', position);
+        if (start < 0) return output + source.slice(position);
+        output += source.slice(position, start);
+        if (source.startsWith('<!--', start)) {
+            const commentEnd = source.indexOf('-->', start + 4);
+            const next = commentEnd < 0 ? source.length : commentEnd + 3;
+            output += source.slice(start, next);
+            position = next;
+            continue;
+        }
+        const opening = /^<([A-Za-z][\w:-]*)/.exec(source.slice(start));
+        if (!opening) {
+            output += '<';
+            position = start + 1;
+            continue;
+        }
+        const end = tagEnd(source, start + opening[0].length);
+        if (end < 0) return output + source.slice(start);
+        const tag = source.slice(start, end + 1);
+        const found = attributes(tag, opening[0].length, COMPONENT_DIRECTIVES);
+        const scoped = [...COMPONENT_DIRECTIVES].some(name => name !== 'data-rw-component' && found.has(name));
+        output += scoped && !found.has('data-rw-component')
+            ? tag.replace(/\/?>(?=$)/, ` data-rw-component="${escapeHtml(id)}"$&`)
+            : tag;
+        position = end + 1;
+        const name = opening[1].toLowerCase();
+        if (RAW_TEXT.has(name)) {
+            const close = name === 'plaintext' ? null : rawClosingTag(source, name, position);
+            const next = close ? close.end : source.length;
+            output += source.slice(position, next);
+            position = next;
+        }
+    }
+    return output;
+};
 
 module.exports = TemplateRenderer;

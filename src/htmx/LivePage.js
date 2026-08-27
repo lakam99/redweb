@@ -1,8 +1,11 @@
+const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
-const { escapeHtml, isHtml, markHtml } = require('./Html');
+const TemplateRenderer = require('./TemplateRenderer');
+const { isHtml, markHtml } = require('./Html');
 const { forEachState, getActionImplementation, getStateConfig, isComponentClass } = require('./metadata');
 
 const RUNTIME = new WeakMap();
+const COMPONENT_RENDER_CONTEXT = new AsyncLocalStorage();
 const RUNTIME_METHODS = Object.freeze([
     '_activateState',
     '_component',
@@ -25,7 +28,6 @@ function initializeRuntime(page) {
         children: new Map(),
         componentId: null,
         components: new Map(),
-        renderContext: undefined,
         root: page,
     });
 }
@@ -61,13 +63,26 @@ class LivePage {
         return runtime(page).disposed;
     }
 
+    static activate(page) { return LivePage.prototype._activateState.call(page); }
+    static attach(page, socket, context) { return LivePage.prototype._attach.call(page, socket, context); }
+    static detach(page, socket, context) { return LivePage.prototype._detach.call(page, socket, context); }
+    static dispose(page) { return LivePage.prototype.dispose.call(page); }
+    static invoke(page, name, args, context) { return LivePage.prototype._invoke.call(page, name, args, context); }
+    static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
+    static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
+
+    static withRenderContext(context, render) {
+        return COMPONENT_RENDER_CONTEXT.run(context, render);
+    }
+
     static adoptComponent(owner, name, value) {
         if (!value || typeof value !== 'object' || !isComponentClass(value.constructor)) return null;
         if (!/^[A-Za-z_$][\w$-]{0,127}$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name)) {
             throw new TypeError(`Component field "${name}" must be a safe identifier of at most 128 characters.`);
         }
         const parent = runtime(owner);
-        const component = LivePage.adopt(value);
+        const component = value;
+        if (!RUNTIME.has(component)) initializeRuntime(component);
         const internal = runtime(component);
         const id = parent.componentId ? `${parent.componentId}.${name}` : name;
         if (id.length > 128) throw new TypeError('Nested component identifiers must be at most 128 characters.');
@@ -79,7 +94,7 @@ class LivePage {
         parent.children.set(name, component);
         runtime(parent.root).components.set(id, component);
         if (!isHtml(component)) markHtml(component, LivePage.prototype._renderComponent);
-        component._activateState();
+        LivePage.activate(component);
         return component;
     }
 
@@ -99,7 +114,7 @@ class LivePage {
                 set: value => {
                     const previous = internal.stateValues.get(name);
                     internal.stateValues.set(name, value);
-                    if (previous !== value) this._stateChanged(name, value);
+                    if (previous !== value) LivePage.prototype._stateChanged.call(this, name, value);
                 },
             });
         });
@@ -117,11 +132,11 @@ class LivePage {
     _renderComponent() {
         const internal = runtime(this);
         if (!internal.componentId) throw new Error('Components must be owned by a page field before rendering.');
-        const source = this.render?.(internal.renderContext);
+        const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
         if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
         if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
         const markup = isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), this);
-        return `<rw-component data-rw-component="${escapeHtml(internal.componentId)}" style="display:contents">${markup}</rw-component>`;
+        return TemplateRenderer.component(markup, internal.componentId);
     }
 
     _component(id) {
@@ -130,9 +145,8 @@ class LivePage {
 
     async _loadComponents(context) {
         for (const component of runtime(this).children.values()) {
-            runtime(component).renderContext = context;
             await component.loading?.(context);
-            await component._loadComponents(context);
+            await LivePage.loadComponents(component, context);
         }
     }
 
@@ -148,7 +162,7 @@ class LivePage {
         const connected = this.connected?.(context);
         return Promise.resolve(connected).then(async result => {
             for (const component of internal.children.values()) {
-                await component._attach(socket, context);
+                await LivePage.attach(component, socket, context);
             }
             return result;
         });
@@ -156,12 +170,13 @@ class LivePage {
 
     async _detach(socket, context) {
         const internal = runtime(this);
-        for (const component of [...internal.children.values()].reverse()) {
-            await component._detach(socket, context);
-        }
         const removed = internal.connections.delete(socket);
-        if (removed) await this.disconnected?.(context);
-        return removed;
+        if (!removed) return false;
+        const tasks = [...internal.children.values()].reverse().map(component => LivePage.detach(component, socket, context));
+        tasks.push(Promise.resolve().then(() => this.disconnected?.(context)));
+        const results = await Promise.allSettled(tasks);
+        LivePage._throwLifecycleFailures(results, 'Live HTML component disconnect failed.');
+        return true;
     }
 
     _stateChanged(name, value) {
@@ -191,18 +206,19 @@ class LivePage {
         internal.disposed = true;
         internal.connections.clear();
         internal.disposePromise = Promise.resolve().then(async () => {
-            const failures = [];
-            for (const component of internal.children.values()) {
-                try { await component.dispose(); }
-                catch (error) { failures.push(error); }
-            }
-            try { await this.disposed?.(); }
-            catch (error) { failures.push(error); }
-            if (failures.length === 1) throw failures[0];
-            if (failures.length > 1) throw new AggregateError(failures, 'Live HTML component cleanup failed.');
+            const tasks = [...internal.children.values()].map(component => LivePage.dispose(component));
+            tasks.push(Promise.resolve().then(() => this.disposed?.()));
+            const results = await Promise.allSettled(tasks);
+            LivePage._throwLifecycleFailures(results, 'Live HTML component cleanup failed.');
             return true;
         });
         return internal.disposePromise;
+    }
+
+    static _throwLifecycleFailures(results, message) {
+        const failures = results.filter(result => result.status === 'rejected').map(result => result.reason);
+        if (failures.length === 1) throw failures[0];
+        if (failures.length > 1) throw new AggregateError(failures, message);
     }
 }
 

@@ -1,6 +1,7 @@
 const HTML_FRAGMENT = Symbol('redweb.htmlFragment');
 const HTML_ATTRIBUTE = Symbol('redweb.htmlAttribute');
 const HTML_URL = Symbol('redweb.htmlUrl');
+const HTML_RENDERERS = new WeakMap();
 const URL_ATTRIBUTES = new Set(['action', 'background', 'cite', 'data', 'formaction', 'href', 'manifest', 'ping', 'poster', 'src', 'xlink:href']);
 const FORBIDDEN_ATTRIBUTES = new Set(['srcdoc', 'srcset', 'style']);
 const { interpolationContext } = require('./HtmlSyntax');
@@ -16,14 +17,11 @@ function escapeHtml(value) {
 
 function isHtml(value) {
     if (Array.isArray(value)) return value.every(isHtml);
-    return Boolean(value?.[HTML_FRAGMENT]);
+    return Boolean(value?.[HTML_FRAGMENT]) || Boolean(value && typeof value === 'object' && HTML_RENDERERS.has(value));
 }
 
 function markHtml(value, toString) {
-    Object.defineProperties(value, {
-        [HTML_FRAGMENT]: { configurable: false, enumerable: false, value: true },
-        toString: { configurable: false, enumerable: false, value: toString, writable: false },
-    });
+    HTML_RENDERERS.set(value, toString);
     return value;
 }
 
@@ -55,6 +53,7 @@ function renderValue(value) {
         if (!isHtml(value)) throw new TypeError('Only arrays of HtmlFragment values can be rendered as HTML.');
         return value.map(renderValue).join('');
     }
+    if (HTML_RENDERERS.has(value)) return HTML_RENDERERS.get(value).call(value);
     return isHtml(value) ? value.toString() : escapeHtml(value);
 }
 

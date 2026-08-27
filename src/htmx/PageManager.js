@@ -217,10 +217,12 @@ class PageManager {
             await page.loading?.(context);
             await page._loadComponents(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
-            const source = record.template ?? await page.render?.(context);
-            if (this.closing) throw new Error('Live HTML server is shutting down.');
-            if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-            const markup = isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), page, { live });
+            const markup = await LivePage.withRenderContext(context, async () => {
+                const source = record.template ?? await page.render?.(context);
+                if (this.closing) throw new Error('Live HTML server is shutting down.');
+                if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
+                return isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), page, { live });
+            });
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
                 if (ownsPage) await page.dispose();
@@ -303,12 +305,10 @@ class PageManager {
     async disconnect(socket) {
         const session = socket.__redwebPageSession;
         if (!session || session.socket !== socket) return false;
-        try {
-            await session.page._detach(socket, Object.freeze({ socket }));
-        } finally {
-            session.socket = null;
-            this.expire(session);
-        }
+        const detaching = session.page._detach(socket, Object.freeze({ socket }));
+        session.socket = null;
+        this.expire(session);
+        await detaching;
         return true;
     }
 
@@ -331,7 +331,7 @@ class PageManager {
             : session.page._component(boundedName(payload.component, 'Live HTML component name'));
         if (!target) throw new Error('Unknown Live HTML component.');
         if (payload.kind === 'action') {
-            const result = await target._invoke(name, payload.args, Object.freeze({
+            const result = await LivePage.invoke(target, name, payload.args, Object.freeze({
                 socket,
                 signal: socket.context?.signal,
                 principal: session.principal,
@@ -342,7 +342,7 @@ class PageManager {
             return;
         }
         if (payload.kind === 'state') {
-            target._setFromClient(name, payload.value);
+            LivePage.setFromClient(target, name, payload.value);
             return;
         }
         throw new TypeError('Live HTML message kind must be "action" or "state".');

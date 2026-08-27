@@ -113,9 +113,11 @@ class Dashboard {
 start(Dashboard);
 ```
 
-The field path is the private wire identity, so both counters can expose `count` and `increment` without collisions. Browser events are scoped to the nearest component and the server resolves them through its component registry; client-supplied object paths are never evaluated. Components may contain other decorated components, and state updates retain the complete nested identity.
+The field path is the component's public protocol namespace, so both counters can expose `count` and `increment` without collisions. Browser events carry that visible namespace and the server resolves it through its component registry; client-supplied object paths are never evaluated. It is routing metadata, not an authorization boundary—component actions must enforce the same application authorization as page actions. Components may contain other decorated components, and state updates retain the complete nested namespace.
 
-Component instances are owned by exactly one construction-time page or component field. Their synchronous `render()` method may return a safe `HtmlFragment` or a declarative template string. Components receive the same `loading`, `connected`, `disconnected`, and `disposed` hooks as their page, including the authenticated principal and cancellation signal where applicable. Disposal cascades through the component tree and preserves every cleanup failure.
+Component instances are owned by exactly one construction-time page or component field. Their synchronous `render(context)` method may return a safe `HtmlFragment` or a declarative template string; request context is propagated per render, including on concurrent shared pages. Components receive the same `loading`, `connected`, `disconnected`, and `disposed` hooks as their page, including the authenticated principal and cancellation signal where applicable. Disposal starts every child and owner cleanup together and preserves every settled failure, so one broken sibling cannot starve later hooks.
+
+Redweb scopes only elements that carry a state, binding, or action directive; it does not add layout wrappers or inline styles. Components therefore remain valid in restricted contexts such as tables and selects and work with strict `style-src` policies.
 
 ### Safe attributes and links
 
