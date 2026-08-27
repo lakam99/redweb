@@ -6,6 +6,12 @@ const NAME = /^[A-Za-z_$][\w$]*$/;
 const RAW_TEXT = new Set(['iframe', 'noembed', 'noframes', 'plaintext', 'script', 'style', 'textarea', 'title', 'xmp']);
 const DIRECTIVES = new Set(['data-rw-state', 'data-rw-html', 'rw-each']);
 
+function isNonStartMarkup(source, start) {
+    const marker = source[start + 1];
+    if (marker === '!' || marker === '?') return true;
+    return marker === '/' && /[A-Za-z]/.test(source[start + 2]);
+}
+
 function tagEnd(source, position) {
     let quote = null;
     for (; position < source.length; position += 1) {
@@ -28,7 +34,7 @@ function closingTag(source, target) {
             position = commentEnd < 0 ? source.length : commentEnd + 3;
             continue;
         }
-        const recognizedMarkup = /[!/?]/.test(source[start + 1]);
+        const recognizedMarkup = isNonStartMarkup(source, start);
         if (!recognizedMarkup && !/[A-Za-z]/.test(source[start + 1])) {
             position = start + 1;
             continue;
@@ -116,8 +122,7 @@ class TemplateRenderer {
     markup() {
         const parsed = this.startTag();
         if (!parsed) {
-            const marker = this.source[this.position + 1];
-            const recognizedMarkup = /[!/?]/.test(marker);
+            const recognizedMarkup = isNonStartMarkup(this.source, this.position);
             const end = recognizedMarkup ? this.tagEnd(this.position + 1) : -1;
             const next = end < 0 ? this.position + 1 : end + 1;
             this.output += this.source.slice(this.position, next);

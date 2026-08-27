@@ -305,6 +305,10 @@ describe('decorator-first Live HTML units', () => {
             .toBe('<p>1 < 2 and <span data-rw-state="secret">LEAK</span> > 0</p>');
         expect(HtmlRenderer.render('<p><<script>{{ body }}</script></p>', pageState))
             .toBe('<p><<script>{{ body }}</script></p>');
+        expect(HtmlRenderer.render('<p></<script>{{ body }}</script></p>', pageState))
+            .toBe('<p></<script>{{ body }}</script></p>');
+        expect(HtmlRenderer.render('<p></?<script>{{ body }}</script></p>', pageState))
+            .toBe('<p></?<script>{{ body }}</script></p>');
         const raw = '<!-- rw-each="cards" {{ secret }} --><script>const fake = \'<i data-rw-state="secret"></i>\'; {{ secret }}</script>';
         expect(HtmlRenderer.render(raw, cards)).toBe(raw);
         expect(HtmlRenderer.render('<!-- unclosed rw-each="cards"')).toBe('<!-- unclosed rw-each="cards"');
@@ -388,6 +392,9 @@ describe('decorator-first Live HTML units', () => {
             .toContain('<body>safe<script type="application/json"');
         expect(HtmlRenderer.document('<body><<span>safe</span></body>', config))
             .toContain('<body><<span>safe</span><script type="application/json"');
+        const malformedEnd = '<body></<script>const fake = "</body>";</script>safe</body>';
+        expect(HtmlRenderer.document(malformedEnd, config))
+            .toContain('</script>safe<script type="application/json"');
         expect(HtmlRenderer.document('<!-- unclosed </body>', config)).toContain('<main data-rw-root><!-- unclosed </body></main>');
         expect(HtmlRenderer.document('<body title="unclosed', config)).toContain('<main data-rw-root><body title="unclosed</main>');
         expect(HtmlRenderer.document('<script>fake </body>', config)).toContain('<main data-rw-root><script>fake </body></main>');
