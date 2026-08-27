@@ -91,6 +91,7 @@ function closingTag(source, target) {
         if (closing === target) return start;
         const opening = /^<([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
         if (opening && RAW_TEXT.has(opening)) {
+            if (opening === 'plaintext') return -1;
             const close = rawClosingTag(source, opening, end + 1);
             position = close ? close.end : source.length;
         } else {
@@ -184,7 +185,7 @@ class TemplateRenderer {
             if ([...parsed.attributes.keys()].some(name => DIRECTIVES.has(name))) {
                 throw new Error('Live HTML directives are not allowed on raw-text elements.');
             }
-            const close = rawClosingTag(this.source, parsed.name, this.position);
+            const close = parsed.name === 'plaintext' ? null : rawClosingTag(this.source, parsed.name, this.position);
             const next = close ? close.end : this.source.length;
             this.output += this.source.slice(parsed.start, next);
             this.position = next;

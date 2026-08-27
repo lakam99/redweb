@@ -198,7 +198,23 @@ async function main() {
                 Boolean(after.compareDocumentPosition(bootstrap) & Node.DOCUMENT_POSITION_FOLLOWING);
         })()`);
         if (!noscriptSafety) throw new Error('Scripting-enabled noscript parsing diverged from server rendering.');
-        console.log('Live HTML browser gate passed: CSS, collections, counter updates, chat, and noscript parsing.');
+
+        const plaintextMarkup = HtmlRenderer.render(
+            '<plaintext>raw</plaintext><p id="plaintext-after">{{ value }}</p>',
+            { value: 'must remain inert' }
+        );
+        const plaintextDocument = HtmlRenderer.document(plaintextMarkup, {
+            pageId: 'plaintext-probe', socketPath: '/live', runtimePath: '/runtime.js', version: '1',
+        });
+        const plaintextPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(plaintextDocument)}`);
+        pages.push(plaintextPage);
+        const plaintextSafety = await plaintextPage.evaluate(`
+            document.querySelector('#plaintext-after') === null &&
+            document.querySelector('#__redweb_page') === null &&
+            document.body.textContent.includes('{{ value }}')
+        `);
+        if (!plaintextSafety) throw new Error('Plaintext content became active browser DOM.');
+        console.log('Live HTML browser gate passed: CSS, collections, counter, chat, noscript, and plaintext parsing.');
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {

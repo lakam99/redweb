@@ -328,6 +328,8 @@ describe('decorator-first Live HTML units', () => {
             .toBe('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>');
         expect(HtmlRenderer.render('<noscript>{{ body }}</noscript>', pageState))
             .toBe('<noscript>{{ body }}</noscript>');
+        const plaintext = '<plaintext>safe</plaintext><p>{{ secret }}</p>';
+        expect(HtmlRenderer.render(plaintext, cards)).toBe(plaintext);
         expect(HtmlRenderer.render('<script>İ</script><p>{{ secret }}</p>', cards))
             .toBe('<script>İ</script><p><span data-rw-state="secret">LEAK</span></p>');
         expect(HtmlRenderer.render('<SCRIPT>safe</SCRIPT>', cards)).toBe('<SCRIPT>safe</SCRIPT>');
@@ -421,6 +423,8 @@ describe('decorator-first Live HTML units', () => {
         expect(HtmlRenderer.document('<script>fake </body>', config)).toContain('<main data-rw-root><script>fake </body></main>');
         expect(HtmlRenderer.document('<body><noscript>fake </body></noscript>safe</body>', config))
             .toContain('</noscript>safe<script type="application/json"');
+        expect(HtmlRenderer.document('<body><plaintext>fake </body></plaintext>safe</body>', config))
+            .toContain('<main data-rw-root><body><plaintext>fake </body></plaintext>safe</body></main>');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {
