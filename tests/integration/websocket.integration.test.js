@@ -19,6 +19,8 @@ const {
     waitForCondition,
     waitForListening,
     waitForOpen,
+    websocketUpgradeResponse,
+    websocketUpgradeStatus,
     withTimeout,
 } = require('../helpers/network');
 
@@ -42,14 +44,7 @@ async function nextJson(socket) {
 }
 
 async function expectConnectionFailure(url, options) {
-    const socket = new WebSocket(url, options);
-    return withTimeout(new Promise((resolve) => {
-        socket.once('unexpected-response', (_request, response) => {
-            response.resume();
-            resolve(response.statusCode);
-        });
-        socket.once('error', () => resolve('error'));
-    }), 'WebSocket connection failure');
+    return websocketUpgradeStatus(url, options);
 }
 
 describe('WebSocket integration without mocks', () => {
@@ -885,17 +880,12 @@ describe('WebSocket integration without mocks', () => {
         }
         const source = await start({ routes: [SourceRoute] });
 
-        const response = await withTimeout(new Promise((resolve) => {
-            const socket = new WebSocket(address(source, '/placed'));
-            socket.once('unexpected-response', (_request, upgradeResponse) => {
-                upgradeResponse.resume();
-                resolve({ status: upgradeResponse.statusCode, location: upgradeResponse.headers.location });
-            });
-            socket.once('error', () => {});
-        }), 'placement response');
-        expect(response).toEqual({ status: 307, location });
-
-        const client = await trackedConnect(address(source, '/placed'), { followRedirects: true });
+        const client = new WebSocket(address(source, '/placed'), { followRedirects: true });
+        clients.add(client);
+        const redirects = [];
+        client.on('redirect', redirectedUrl => redirects.push(redirectedUrl));
+        await waitForOpen(client);
+        expect(redirects).toEqual([location]);
         client.send(JSON.stringify({ type: 'noop' }));
         expect(await nextJson(client)).toEqual({ node: 'target' });
         expect(source.routes[0].clients.size).toBe(0);
@@ -1093,16 +1083,9 @@ describe('WebSocket integration without mocks', () => {
         }
         const server = await start({ routes: [ProtocolRoute] });
 
-        const rejected = await withTimeout(new Promise(resolve => {
-            const socket = new WebSocket(address(server, '/protocol'));
-            socket.once('unexpected-response', (_request, response) => {
-                const result = { status: response.statusCode, versions: response.headers['redweb-versions'] };
-                response.resume();
-                resolve(result);
-            });
-            socket.once('error', () => {});
-        }), 'protocol rejection');
-        expect(rejected).toEqual({ status: 426, versions: '2, 1' });
+        const rejected = await websocketUpgradeResponse(address(server, '/protocol'));
+        expect({ status: rejected.status, versions: rejected.headers['redweb-versions'] })
+            .toEqual({ status: 426, versions: '2, 1' });
         expect(await expectConnectionFailure(address(server, '/protocol?redwebVersion=3'))).toBe(426);
 
         const client = await trackedConnect(address(server, '/protocol?redwebVersion=1'));

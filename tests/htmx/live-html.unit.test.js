@@ -414,6 +414,15 @@ describe('decorator-first Live HTML units', () => {
         expiringSession.page._disposePromise.catch(() => {});
         await failingExpiry.shutdown();
 
+        class ZeroDeadlineCleanup extends LivePage {
+            disposed() { return new Promise(() => {}); }
+        }
+        page('/zero-deadline')(ZeroDeadlineCleanup);
+        const zeroDeadline = new PageManager({ pages: [ZeroDeadlineCleanup], shutdownTimeoutMs: 0 });
+        const zeroPage = zeroDeadline.instantiate(zeroDeadline.records.get('/zero-deadline'));
+        zeroDeadline.createSession(zeroPage, true);
+        await expect(zeroDeadline.shutdown()).rejects.toMatchObject({ code: 'LIVE_HTML_SHUTDOWN_TIMEOUT' });
+
         const disposedManager = new PageManager({ pages: [ManagedPage] });
         const disposedPage = disposedManager.instantiate(disposedManager.records.get('/managed'));
         const disposedSession = disposedManager.createSession(disposedPage, true);

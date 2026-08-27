@@ -12,6 +12,7 @@ const {
     waitForCondition,
     waitForListening,
     waitForOpen,
+    websocketUpgradeStatus,
 } = require('../helpers/network');
 
 function pageConfig(html) {
@@ -186,16 +187,8 @@ describe('Live HTML integration without mocks', () => {
         const { port, config } = await getPage(server);
         const url = `ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`;
 
-        const foreign = new WebSocket(url, { headers: { Origin: 'https://foreign.example' } });
-        rawSockets.add(foreign);
-        foreign.on('error', () => {});
-        const status = await new Promise(resolve => {
-            foreign.once('unexpected-response', (upgradeRequest, response) => {
-                upgradeRequest.on('error', () => {});
-                response.on('error', () => {});
-                response.resume();
-                resolve(response.statusCode);
-            });
+        const status = await websocketUpgradeStatus(url, {
+            headers: { Origin: 'https://foreign.example' },
         });
         expect(status).toBe(401);
 
@@ -242,18 +235,13 @@ describe('Live HTML integration without mocks', () => {
 
         const secondResponse = await request({ protocol: 'https:', port, path: '/' });
         const secondConfig = pageConfig(secondResponse.body);
-        const insecureOrigin = new WebSocket(
+        const rejectedStatus = await websocketUpgradeStatus(
             `wss://127.0.0.1:${port}${secondConfig.socketPath}?pageId=${secondConfig.pageId}&redwebVersion=${secondConfig.version}`,
-            { rejectUnauthorized: false, headers: { Origin: `http://127.0.0.1:${port}` } }
+            {
+                rejectUnauthorized: false,
+                headers: { Origin: `http://127.0.0.1:${port}` },
+            }
         );
-        rawSockets.add(insecureOrigin);
-        insecureOrigin.on('error', () => {});
-        const rejectedStatus = await new Promise(resolve => insecureOrigin.once('unexpected-response', (upgradeRequest, rejectedResponse) => {
-            upgradeRequest.on('error', () => {});
-            rejectedResponse.on('error', () => {});
-            rejectedResponse.resume();
-            resolve(rejectedResponse.statusCode);
-        }));
         expect(rejectedStatus).toBe(401);
     });
 
@@ -267,17 +255,9 @@ describe('Live HTML integration without mocks', () => {
         const config = pageConfig(response.body);
         const url = `ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`;
 
-        const stolen = new WebSocket(url, {
+        const denied = await websocketUpgradeStatus(url, {
             headers: { Origin: `http://127.0.0.1:${port}`, authorization: 'user-2' },
         });
-        rawSockets.add(stolen);
-        stolen.on('error', () => {});
-        const denied = await new Promise(resolve => stolen.once('unexpected-response', (upgradeRequest, deniedResponse) => {
-            upgradeRequest.on('error', () => {});
-            deniedResponse.on('error', () => {});
-            deniedResponse.resume();
-            resolve(deniedResponse.statusCode);
-        }));
         expect(denied).toBe(401);
 
         const owner = new WebSocket(url, {
