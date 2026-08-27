@@ -8,6 +8,7 @@ const { BaseHandler } = require('../../src/ws/BaseHandler');
 const { broadcast, canSend, sendJson } = require('../../src/ws/util');
 const { closeWebSocketServer } = require('../../src/ws/shutdown');
 const { settleTasks, throwCleanupErrors } = require('../../src/serverLifecycle');
+const { combineFailures } = require('../../scripts/verify-live-html-browser');
 
 describe('small reusable units', () => {
     test('loads TLS files and rejects incomplete configuration', () => {
@@ -100,6 +101,17 @@ describe('small reusable units', () => {
         expect(calls).toEqual(['first', 'last']);
         expect(errors.map(error => error.message)).toEqual(['sync cleanup failure', 'async cleanup failure']);
         expect(() => throwCleanupErrors(errors, 'cleanup failed')).toThrow('cleanup failed');
+    });
+
+    test('preserves browser gate failures when profile cleanup also fails', () => {
+        const browserFailure = new Error('browser assertion failed');
+        const cleanupFailure = new Error('profile cleanup failed');
+        expect(combineFailures(undefined, cleanupFailure)).toBe(cleanupFailure);
+        const combined = combineFailures(browserFailure, cleanupFailure);
+        expect(combined).toBeInstanceOf(AggregateError);
+        expect(combined.message).toBe('browser assertion failed');
+        expect(combined.cause).toBe(browserFailure);
+        expect(combined.errors).toEqual([browserFailure, cleanupFailure]);
     });
 
     test('handles WebSocket-server close errors, throws, and termination failures', async () => {

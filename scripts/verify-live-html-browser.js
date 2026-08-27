@@ -141,6 +141,11 @@ async function removeTemporaryDirectory(directory) {
     }
 }
 
+function combineFailures(primary, cleanup) {
+    if (!primary) return cleanup;
+    return new AggregateError([primary, cleanup], primary.message, { cause: primary });
+}
+
 async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chrome, Edge, or Chromium is required for the Live HTML browser gate.');
@@ -150,6 +155,7 @@ async function main() {
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
+    let failure;
     try {
         await Promise.all([waitForListening(counter.server), waitForListening(chat.server), waitForListening(cards.server)]);
         browser = launchBrowser(executable, profile);
@@ -244,6 +250,8 @@ async function main() {
         `);
         if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
         console.log('Live HTML browser gate passed: CSS, collections, counter, chat, raw-text safety, and documentation composition.');
+    } catch (error) {
+        failure = error;
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {
@@ -252,11 +260,20 @@ async function main() {
             await exited;
         }
         await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown()]);
-        await removeTemporaryDirectory(profile);
+        try {
+            await removeTemporaryDirectory(profile);
+        } catch (error) {
+            failure = combineFailures(failure, error);
+        }
     }
+    if (failure) throw failure;
 }
 
-main().catch(error => {
-    console.error(error);
-    process.exitCode = 1;
-});
+if (require.main === module) {
+    main().catch(error => {
+        console.error(error);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = { combineFailures };
