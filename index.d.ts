@@ -105,7 +105,7 @@ declare module 'redweb' {
         handlers: BaseHandler[];
         clients: Map<string, WebSocket>;
         allowDuplicateConnections?: boolean;
-        websocketOptions?: ServerOptions;
+        websocketOptions?: SocketRouteConfig['websocketOptions'];
 
         constructor(config: SocketRouteConfig);
 
@@ -130,6 +130,8 @@ declare module 'redweb' {
     }
 
     /** ─────────────────── REGISTRY & UTIL TYPES ─────────────────── */
+
+    export function sendJson(socket: WebSocket, data: unknown): boolean;
 
     export interface SocketWrapper {
         socket: WebSocket;
@@ -186,10 +188,12 @@ declare module 'redweb' {
 
     export class HttpServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
+        shutdown(): Promise<void>;
     }
 
     export class HttpsServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
+        shutdown(): Promise<void>;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */

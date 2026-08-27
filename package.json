@@ -3,6 +3,7 @@
   "version": "0.8.0",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "test": "npx jest"
   },
