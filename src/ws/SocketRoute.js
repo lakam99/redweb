@@ -489,6 +489,8 @@ class SocketRoute {
      * @param {string} ip - The client's IP address.
      */
     handleClose(socket) {
+        if (socket.__redwebCloseHandled) return false;
+        socket.__redwebCloseHandled = true;
         const key = socket.clientKey || socket.__redwebClientKey;
         const ip = socket.remoteAddress || 'unknown';
         this.logger.log?.(`Client disconnected: ${ip}`);
@@ -498,6 +500,7 @@ class SocketRoute {
         this.metrics?.increment('redweb.connections.closed');
         this.metrics?.gauge('redweb.connections.active', this.clients.size);
         this.invokeLifecycleHook(socket, () => this.connectionCloseCallback?.(socket), false);
+        return true;
     }
 
     shutdown() {
@@ -540,6 +543,7 @@ class SocketRoute {
         } catch (error) {
             errors.push(error);
         }
+        clients.forEach(socket => this.handleClose(socket));
         this.runtime.stopAcceptingWork();
         try {
             await withinDeadline(

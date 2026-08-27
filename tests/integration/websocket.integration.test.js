@@ -833,6 +833,30 @@ describe('WebSocket integration without mocks', () => {
         expect(closeFinished).toBe(true);
     });
 
+    test('invokes a forced late-close callback exactly once before shutdown returns', async () => {
+        let closeCallbacks = 0;
+        class LateCloseRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/late-close', handlers: [class extends BaseHandler {
+                        constructor() { super('noop'); }
+                        onMessage() {}
+                    }], logger: silentLogger, drainHandlers: true, shutdownTimeoutMs: 20,
+                });
+            }
+            connectionCloseCallback() { closeCallbacks += 1; }
+        }
+        const server = await start({ routes: [LateCloseRoute] });
+        const client = await trackedConnect(address(server, '/late-close'));
+        client._socket.pause();
+        await server.shutdown();
+        socketServers.delete(server);
+        expect(closeCallbacks).toBe(1);
+        client._socket.resume();
+        await new Promise(resolve => setTimeout(resolve, 30));
+        expect(closeCallbacks).toBe(1);
+    });
+
     test('redirects placement before upgrade and follows the redirect to the selected node', async () => {
         class NoopHandler extends BaseHandler {
             constructor() { super('noop'); }

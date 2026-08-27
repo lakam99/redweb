@@ -271,10 +271,14 @@ describe('SocketRoute units', () => {
         route.handleConnection(socket, {});
         await new Promise(setImmediate);
         route.server.close = () => {};
-        await route.shutdown();
+        await expect(route.shutdown()).rejects.toMatchObject({
+            message: 'One or more WebSocket route cleanup operations failed.',
+        });
+        expect(await route.runMessageTask(() => { throw new Error('must not run'); })).toBe(false);
+        expect(closeCallbacks).toBe(1);
         socket.emit('close');
         await new Promise(setImmediate);
-        expect(closeCallbacks).toBe(0);
+        expect(closeCallbacks).toBe(1);
         expect(route.inFlight.size).toBe(0);
     });
 
