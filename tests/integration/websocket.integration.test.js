@@ -85,6 +85,14 @@ describe('WebSocket integration without mocks', () => {
         return socket;
     }
 
+    async function trackedConnectWithFirstJson(url, options) {
+        const socket = new WebSocket(url, options);
+        clients.add(socket);
+        const firstMessage = nextJson(socket);
+        await waitForOpen(socket);
+        return { socket, firstMessage };
+    }
+
     test('the default route handles a real message', async () => {
         const server = await start();
         const client = await trackedConnect(address(server));
@@ -117,14 +125,18 @@ describe('WebSocket integration without mocks', () => {
         }
 
         const server = await start({ routes: [RealtimeRoute] });
-        const first = await trackedConnect(address(server, '/realtime'));
-        expect(await nextJson(first)).toEqual({ type: 'ready' });
-        const second = await trackedConnect(address(server, '/realtime'));
-        expect(await nextJson(second)).toEqual({ type: 'ready' });
+        const firstConnection = await trackedConnectWithFirstJson(address(server, '/realtime'));
+        const first = firstConnection.socket;
+        expect(await firstConnection.firstMessage).toEqual({ type: 'ready' });
+        const secondConnection = await trackedConnectWithFirstJson(address(server, '/realtime'));
+        const second = secondConnection.socket;
+        expect(await secondConnection.firstMessage).toEqual({ type: 'ready' });
 
+        const acknowledged = nextJson(first);
+        const broadcasted = nextJson(second);
         first.send(JSON.stringify({ type: 'realtime', value: 9 }));
-        expect(await nextJson(first)).toEqual({ type: 'ack', value: 9 });
-        expect(await nextJson(second)).toEqual({ type: 'peer', value: 9 });
+        expect(await acknowledged).toEqual({ type: 'ack', value: 9 });
+        expect(await broadcasted).toEqual({ type: 'peer', value: 9 });
 
         first.send(Buffer.from([1, 2, 3]));
         expect(await nextJson(first)).toEqual({ type: 'binary', bytes: 3 });
@@ -817,6 +829,80 @@ describe('WebSocket integration without mocks', () => {
         socketServers.delete(server);
         clients.delete(client);
         expect(server.routes[0].inFlight.size).toBe(0);
+    });
+
+    test('negotiates an opt-in protocol and exchanges stable text and binary envelopes', async () => {
+        class ProtocolHandler extends BaseHandler {
+            constructor() { super('move'); }
+            async onMessage(socket, message) {
+                if (message.payload.binary) {
+                    await socket.sendBinaryEvent({
+                        v: socket.context.protocol.version,
+                        type: 'state',
+                        payload: { x: message.payload.x },
+                        requestId: message.requestId,
+                    });
+                    return;
+                }
+                socket.sendEvent('state', { x: message.payload.x }, {
+                    requestId: message.requestId,
+                    sequence: message.sequence,
+                });
+            }
+        }
+        const binary = {
+            maxBytes: 1024,
+            encode: value => Buffer.from(JSON.stringify(value)),
+            decode: buffer => JSON.parse(buffer.toString()),
+        };
+        class ProtocolRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/protocol',
+                    handlers: [ProtocolHandler],
+                    allowDuplicateConnections: true,
+                    logger: silentLogger,
+                    protocol: { versions: ['2', '1'], binary },
+                });
+            }
+        }
+        const server = await start({ routes: [ProtocolRoute] });
+
+        const rejected = await withTimeout(new Promise(resolve => {
+            const socket = new WebSocket(address(server, '/protocol'));
+            socket.once('unexpected-response', (_request, response) => {
+                const result = { status: response.statusCode, versions: response.headers['redweb-versions'] };
+                response.resume();
+                resolve(result);
+            });
+            socket.once('error', () => {});
+        }), 'protocol rejection');
+        expect(rejected).toEqual({ status: 426, versions: '2, 1' });
+        expect(await expectConnectionFailure(address(server, '/protocol?redwebVersion=3'))).toBe(426);
+
+        const client = await trackedConnect(address(server, '/protocol?redwebVersion=1'));
+        client.send(JSON.stringify({ v: '1', type: 'move', payload: { x: 7 }, requestId: 'r1', sequence: 4 }));
+        expect(await nextJson(client)).toEqual({
+            v: '1', type: 'state', payload: { x: 7 }, requestId: 'r1', sequence: 4,
+        });
+
+        client.send(JSON.stringify({ v: '1', type: 'missing', payload: {}, requestId: 'r2' }));
+        expect(await nextJson(client)).toEqual({
+            v: '1', type: 'error', error: { code: 'UNKNOWN_HANDLER', message: 'No such handler missing' }, requestId: 'r2',
+        });
+        await waitForClose(client);
+        clients.delete(client);
+
+        const binaryClient = await trackedConnect(address(server, '/protocol?redwebVersion=2'));
+        const binaryReply = nextMessage(binaryClient);
+        binaryClient.send(Buffer.from(JSON.stringify({
+            v: '2', type: 'move', payload: { x: 9, binary: true }, requestId: 'binary-1',
+        })));
+        const reply = await binaryReply;
+        expect(reply.isBinary).toBe(true);
+        expect(JSON.parse(reply.data.toString())).toEqual({
+            v: '2', type: 'state', payload: { x: 9 }, requestId: 'binary-1',
+        });
     });
 
     test('supports TLS WebSockets with real certificates', async () => {

@@ -371,4 +371,84 @@ describe('SocketRoute units', () => {
         await new Promise(setImmediate);
         expect(stopped).toBe(1);
     });
+
+    test('contains invalid protocol envelopes and binary codec failures', async () => {
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const route = new SocketRoute({
+            path: '/protocol-unit',
+            handlers: [NoopHandler],
+            logger,
+            protocol: {
+                versions: ['1'],
+                binary: {
+                    maxBytes: 2,
+                    decode: () => null,
+                    encode: () => { throw new Error('codec failed'); },
+                },
+            },
+        });
+        const request = { url: '/protocol-unit?redwebVersion=1', headers: {} };
+        expect(await route.authorizeUpgrade(request, {})).toBe(true);
+        const socket = createSocket();
+        route.handleConnection(socket, request);
+
+        expect(await route.handleMessage(socket, { v: '2', type: 'noop' })).toBe(false);
+        expect(JSON.parse(socket.sent.pop())).toMatchObject({
+            type: 'error', error: { code: 'INVALID_MESSAGE' },
+        });
+        expect(await route.handleBinaryMessage(socket, Buffer.from([1, 2, 3]))).toBe(false);
+        expect(JSON.parse(socket.sent.pop())).toMatchObject({
+            type: 'error', error: { code: 'INVALID_MESSAGE' },
+        });
+        expect(await socket.sendBinaryEvent({ state: true })).toBe(false);
+        expect(logger.error).toHaveBeenCalledWith('Socket error from unknown:', expect.any(Error));
+        await route.shutdown();
+    });
+
+    test('exposes protocol helpers and applies transport policy to encoded binary output', async () => {
+        const metrics = { increment: jest.fn() };
+        const route = new SocketRoute({
+            path: '/protocol-output',
+            handlers: [NoopHandler],
+            logger: null,
+            metrics,
+            protocol: {
+                versions: ['1'],
+                binary: {
+                    maxBytes: 2,
+                    decode: () => ({}),
+                    encode: value => value,
+                },
+            },
+        });
+        const request = { url: '/protocol-output?redwebVersion=1', headers: {} };
+        await route.authorizeUpgrade(request, {});
+        const open = createSocket(1);
+        route.handleConnection(open, request);
+        expect(open.sendEvent('state', {}, { sequence: 1 })).toBe(true);
+        expect(open.sendProtocolError('TEST', 'test')).toBe(true);
+        expect(await open.sendBinaryEvent(Buffer.alloc(3))).toBe(false);
+        expect(await open.sendBinaryEvent(Buffer.from([1]))).toBe(true);
+        expect(metrics.increment).toHaveBeenCalledWith('redweb.messages.outbound', 1, { route: '/protocol-output' });
+
+        const closed = createSocket(0);
+        route.handleConnection(closed, request);
+        expect(await closed.sendBinaryEvent(Buffer.from([1]))).toBe(false);
+        await route.shutdown();
+
+        const textOnly = new SocketRoute({
+            path: '/protocol-text', handlers: [NoopHandler], logger: null,
+            protocol: { versions: ['1'], binary: false },
+        });
+        const textRequest = { url: '/protocol-text?redwebVersion=1', headers: {} };
+        await textOnly.authorizeUpgrade(textRequest, {});
+        const textSocket = createSocket();
+        textOnly.handleConnection(textSocket, textRequest);
+        expect(textSocket.sendBinaryEvent).toBeUndefined();
+        expect(await textOnly.handleBinaryMessage(textSocket, Buffer.from([1]))).toBe(false);
+        expect(JSON.parse(textSocket.sent.pop())).toMatchObject({
+            type: 'error', error: { code: 'BINARY_UNSUPPORTED' },
+        });
+        await textOnly.shutdown();
+    });
 });

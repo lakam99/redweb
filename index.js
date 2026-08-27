@@ -11,6 +11,7 @@ const {
     SocketRegistry,
     RoomRegistry,
     SessionRegistry,
+    ERROR_CODES,
 } = require('./src/ws');
 const { BaseHandler } = require('./src/ws/BaseHandler');
 const HttpServer = require('./src/http/HttpServer');
@@ -28,6 +29,7 @@ module.exports = {
     SocketRegistry,
     RoomRegistry,
     SessionRegistry,
+    ERROR_CODES,
     sendJson,
     SOCKET_OPTIONS,
     HTTP_OPTIONS,

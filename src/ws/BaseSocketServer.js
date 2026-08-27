@@ -8,6 +8,7 @@
 
 const DefaultRoute = require('./DefaultRoute');
 const { PLACEMENT_REDIRECT } = require('./AdmissionPolicy');
+const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
 const {
   listenServer,
   closeServer,
@@ -105,15 +106,17 @@ class BaseSocketServer {
     if (!route) return sock.destroy();
     if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
 
-    if (route.admissionPolicy) {
+    if (route.admissionPolicy || route.protocolPolicy) {
       void Promise.resolve()
         .then(() => route.authorizeUpgrade(req, sock))
         .then(accepted => {
           if (sock.destroyed) return;
           if (!accepted) {
             const redirect = req[PLACEMENT_REDIRECT];
-            return redirect
-              ? this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect })
+            if (redirect) return this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect });
+            const rejection = req[PROTOCOL_REJECTION];
+            return rejection
+              ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
               : this.rejectUpgrade(sock, 401, 'Unauthorized');
           }
           if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');

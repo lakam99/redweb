@@ -48,3 +48,12 @@ The independent senior-review gate rejects releases that weaken any invariant, h
 - Distribution adapters have no framework backlog. Publish failure returns `false`; startup, subscription, unsubscription, and close are bounded and contained.
 - Event IDs are deduplicated only inside a finite TTL/size window. Source-node events are ignored to prevent reflection loops.
 - Broker partitions and process failure can lose events. Redweb makes no exactly-once or durable-delivery claim; applications own authoritative persistence, reconciliation, tick/sequence semantics, and partition policy.
+
+## Protocol contract
+
+- Negotiation is opt-in and happens before upgrade. Unsupported clients receive `426` plus the finite supported-version list.
+- JSON events use `{ v, type, payload, requestId?, sequence? }`. Error events use `{ v, type: "error", error: { code, message }, requestId? }`.
+- `requestId` correlates a request and response; `sequence` expresses application ordering. Neither implies acknowledgement, durability, or exactly-once delivery.
+- Stable framework codes are generated from `src/ws/protocol-schema.json`; the client declarations and runtime constants share that source.
+- Binary replication is a codec hook, not a codec dependency. Size is checked before decode and after encode, and outbound data uses the normal backpressure ceiling.
+- Protocol-disabled routes retain their 0.8 wire shapes and allocate no protocol context.

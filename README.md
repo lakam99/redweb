@@ -306,6 +306,31 @@ super({
 
 `server.beginDrain()` flips readiness before rejecting new upgrades with `503`; `server.isReady()` exposes the state. Set `drainHandlers: true` to give connection contexts an `AbortSignal` and make shutdown wait for active handlers. Handlers must cooperate with that signal—JavaScript cannot forcibly cancel arbitrary application promises. This option is off by default, adding no per-message tracking to existing routes.
 
+### Versioned game protocol
+
+Set `protocol: { versions: ['1'] }` to require version negotiation before upgrade. Browser clients use `?redwebVersion=1`; non-browser clients may send `x-redweb-version: 1`. Missing or unsupported versions receive `426 Upgrade Required` with a `Redweb-Versions` response header. The selected value is available as `socket.context.protocol.version`.
+
+Protocol messages use `{ v, type, payload, requestId?, sequence? }`. Protocol routes add `socket.sendEvent(...)` and `socket.sendProtocolError(...)`; framework failures use stable codes exported as `ERROR_CODES`. This affects only opted-in routes. Existing routes retain their existing message and error shapes.
+
+```js
+super({
+  path: '/match',
+  handlers: [MoveHandler],
+  protocol: {
+    versions: ['2', '1'],
+    binary: {
+      maxBytes: 64 * 1024,
+      encode: state => myCodec.encode(state),
+      decode: bytes => myCodec.decode(bytes)
+    }
+  }
+})
+```
+
+The optional binary hooks add no codec dependency. Decoded values pass through the same version/envelope validation and handler dispatch as JSON; `socket.sendBinaryEvent(value)` applies the same slow-consumer policy as other outbound traffic. Without binary hooks, binary frames on a protocol route receive `BINARY_UNSUPPORTED`.
+
+For clients, `require('redweb/client')` exports the dependency-free `ProtocolClient` and the same error codes. Its TypeScript declarations are generated from Redweb's checked-in protocol schema and checked for drift before every test run.
+
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 
 ### Sharing an HTTP/HTTPS server

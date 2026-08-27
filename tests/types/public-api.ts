@@ -7,6 +7,7 @@ import {
     SessionRegistry,
     SocketRoute,
     SocketService,
+    ERROR_CODES,
 } from 'redweb';
 
 class EchoHandler extends BaseHandler {
@@ -78,6 +79,14 @@ const route = new SocketRoute({
         increment(_name, _value, attributes) { void attributes.route; },
         gauge() {},
     },
+    protocol: {
+        versions: ['1'],
+        binary: {
+            maxBytes: 1024,
+            encode: value => Buffer.from(JSON.stringify(value)),
+            decode: buffer => JSON.parse(buffer.toString()),
+        },
+    },
 });
 
 route.clients.forEach(socket => {
@@ -87,6 +96,10 @@ route.clients.forEach(socket => {
     socket.roomBroadcast?.('lobby', { ready: true }, { except: socket });
     socket.createSession?.('opaque-session', { player });
     void player;
+    void socket.context?.protocol?.version;
+    socket.sendEvent?.('ready', {}, { requestId: 'request', sequence: 1 });
+    socket.sendProtocolError?.(ERROR_CODES.INVALID_MESSAGE, 'invalid');
+    void socket.sendBinaryEvent?.({ ready: true });
 });
 const standaloneRooms = new RoomRegistry({ maxRooms: 2 });
 const standaloneSessions = new SessionRegistry<{ score: number }>({ maxSessions: 2 });

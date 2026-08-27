@@ -40,6 +40,9 @@ declare module 'redweb' {
         createSession?(sessionId: string, data: unknown): boolean;
         resumeSession?(sessionId: string): unknown | null;
         publishEvent?(type: string, payload: unknown): Promise<boolean>;
+        sendEvent?(type: string, payload: unknown, metadata?: ProtocolMetadata): boolean;
+        sendProtocolError?(code: string, message: string, metadata?: ProtocolMetadata): boolean;
+        sendBinaryEvent?(value: unknown): Promise<boolean>;
     };
 
     export interface RedWebConnectionContext {
@@ -48,6 +51,7 @@ declare module 'redweb' {
         session: unknown | null;
         metadata: Record<string, unknown>;
         signal?: AbortSignal;
+        protocol?: Readonly<{ version: string }>;
     }
 
     export interface AdmissionContext {
@@ -141,6 +145,25 @@ declare module 'redweb' {
         onEvent(event: DistributionEvent, route: SocketRoute): void | Promise<void>;
     }
 
+    export interface ProtocolMetadata {
+        requestId?: string;
+        sequence?: number;
+    }
+
+    export interface ProtocolBinaryCodec {
+        maxBytes?: number;
+        encode(value: unknown, context: RedWebConnectionContext): Buffer | Uint8Array | ArrayBuffer | Promise<Buffer | Uint8Array | ArrayBuffer>;
+        decode(buffer: Buffer, context: RedWebConnectionContext): unknown | Promise<unknown>;
+    }
+
+    export interface ProtocolOptions {
+        versions: string[];
+        required?: boolean;
+        queryParameter?: string;
+        header?: string;
+        binary?: false | ProtocolBinaryCodec;
+    }
+
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
     export interface SocketServerOptions {
@@ -184,6 +207,7 @@ declare module 'redweb' {
         metrics?: MetricsSink;
         distribution?: false | DistributionOptions;
         drainHandlers?: boolean;
+        protocol?: false | ProtocolOptions;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -242,6 +266,7 @@ declare module 'redweb' {
         rooms: RoomRegistry | null;
         sessions: SessionRegistry | null;
         distribution: unknown | null;
+        protocolPolicy: unknown | null;
         draining: boolean;
         allowDuplicateConnections?: boolean;
         websocketOptions?: SocketRouteConfig['websocketOptions'];
@@ -385,4 +410,15 @@ declare module 'redweb' {
 
     export const HTTP_OPTIONS: RedWebOptions;
     export const SOCKET_OPTIONS: SocketServerOptions;
+
+    export const ERROR_CODES: Readonly<{
+        INVALID_MESSAGE: 'INVALID_MESSAGE';
+        UNKNOWN_HANDLER: 'UNKNOWN_HANDLER';
+        HANDLER_FAILED: 'HANDLER_FAILED';
+        BINARY_UNSUPPORTED: 'BINARY_UNSUPPORTED';
+        RATE_LIMITED: 'RATE_LIMITED';
+        QUEUE_FULL: 'QUEUE_FULL';
+        CAPACITY_REACHED: 'CAPACITY_REACHED';
+        INITIALIZATION_FAILED: 'INITIALIZATION_FAILED';
+    }>;
 }

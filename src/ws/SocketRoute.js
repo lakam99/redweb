@@ -1,5 +1,5 @@
 const { WebSocketServer } = require("ws");
-const { sendJson, broadcast } = require("./util");
+const { sendJson, sendPayload, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
 const { closeWebSocketServer } = require('./shutdown');
@@ -10,6 +10,7 @@ const RoomRegistry = require('./RoomRegistry');
 const SessionRegistry = require('./SessionRegistry');
 const Metrics = require('./Metrics');
 const DistributionBridge = require('./DistributionBridge');
+const { ProtocolPolicy, PROTOCOL_CONTEXT, ERROR_CODES } = require('./ProtocolPolicy');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -54,6 +55,7 @@ class SocketRoute {
         metrics,
         distribution,
         drainHandlers = false,
+        protocol,
     } = {}) {
         if (typeof path !== 'string' || !path.startsWith('/')) {
             throw new Error('A `path` beginning with "/" must be specified for the SocketRoute.');
@@ -97,6 +99,7 @@ class SocketRoute {
             ? null
             : new TransportPolicy(limits, orderedMessages);
         this.metrics = metrics === undefined ? null : new Metrics(metrics, path, this.logger);
+        this.protocolPolicy = protocol === undefined || protocol === false ? null : new ProtocolPolicy(protocol);
         this.draining = false;
         this.inFlight = drainHandlers ? new Set() : null;
         this.abortController = drainHandlers ? new AbortController() : null;
@@ -205,9 +208,13 @@ class SocketRoute {
     }
 
     authorizeUpgrade(request, rawSocket) {
-        return this.admissionPolicy
-            ? this.admissionPolicy.authorize(request, rawSocket, this)
-            : true;
+        if (!this.admissionPolicy && !this.protocolPolicy) return true;
+        return this.authorizePolicies(request, rawSocket);
+    }
+
+    async authorizePolicies(request, rawSocket) {
+        if (this.admissionPolicy && !await this.admissionPolicy.authorize(request, rawSocket, this)) return false;
+        return this.protocolPolicy ? this.protocolPolicy.negotiate(request) : true;
     }
     /**
      * Handles a new WebSocket connection.
@@ -218,20 +225,35 @@ class SocketRoute {
         const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
 
+        if (req?.[ADMISSION_CONTEXT] || req?.[PROTOCOL_CONTEXT] || this.sessions || this.abortController) {
+            socket.context = {
+                connectionId: randomUUID(),
+                principal: req?.[ADMISSION_CONTEXT]?.principal,
+                session: null,
+                metadata: Object.create(null),
+                signal: this.abortController?.signal,
+                protocol: req?.[PROTOCOL_CONTEXT],
+            };
+        }
+
         this.logger.log?.(`New client connected: ${ip}`);
 
         if (!this.allowDuplicateConnections) {
             const existing = this.clients.get(clientKey);
             if (existing) {
                 this.logger.warn?.(`Client ${ip} already connected, disconnecting existing connection.`);
-                this.send(existing, { msg: 'You are being disconnected because a new client is connected with your IP address.' });
+                if (existing.sendEvent) {
+                    existing.sendEvent('system.disconnect', { reason: 'replaced' });
+                } else {
+                    this.send(existing, { msg: 'You are being disconnected because a new client is connected with your IP address.' });
+                }
                 existing.close?.(1000, 'Replaced by a new connection');
             }
         }
 
         const replacesExisting = !this.allowDuplicateConnections && this.clients.has(clientKey);
         if (!replacesExisting && this.clients.size >= (this.transportPolicy?.maxConnections ?? Infinity)) {
-            this.send(socket, { error: 'Server capacity reached' });
+            this.sendFailure(socket, ERROR_CODES.CAPACITY_REACHED, 'Server capacity reached');
             socket.close?.(1013, 'Server capacity reached');
             this.metrics?.increment('redweb.connections.rejected');
             return;
@@ -252,15 +274,6 @@ class SocketRoute {
             if (sent) this.metrics?.increment('redweb.messages.outbound', sent);
             return sent;
         };
-        if (req?.[ADMISSION_CONTEXT] || this.sessions || this.abortController) {
-            socket.context = {
-                connectionId: randomUUID(),
-                principal: req?.[ADMISSION_CONTEXT]?.principal,
-                session: null,
-                metadata: Object.create(null),
-                signal: this.abortController?.signal,
-            };
-        }
         if (this.rooms) {
             socket.joinRoom = roomId => this.rooms.join(roomId, socket);
             socket.leaveRoom = roomId => this.rooms.leave(roomId, socket);
@@ -271,6 +284,18 @@ class SocketRoute {
             socket.resumeSession = sessionId => this.sessions.resume(sessionId, socket);
         }
         if (this.distribution) socket.publishEvent = (type, payload) => this.publish(type, payload);
+        if (this.protocolPolicy) {
+            const version = socket.context.protocol.version;
+            socket.sendEvent = (type, payload, metadata) => this.send(
+                socket,
+                this.protocolPolicy.envelope(version, type, payload, metadata)
+            );
+            socket.sendProtocolError = (code, message, metadata) => this.send(
+                socket,
+                this.protocolPolicy.error(version, code, message, metadata)
+            );
+            if (this.protocolPolicy.binary) socket.sendBinaryEvent = value => this.sendBinary(socket, value);
+        }
         socket.__redwebRuntime = this.transportPolicy?.createRuntime(error => {
             this.handleError(socket, error);
             socket.close?.(1011, 'Message processing failed');
@@ -295,7 +320,7 @@ class SocketRoute {
             .catch(error => {
                 this.handleError(socket, error);
                 if (!closeOnError) return;
-                this.send(socket, { error: 'Connection initialization failed' });
+                this.sendFailure(socket, ERROR_CODES.INITIALIZATION_FAILED, 'Connection initialization failed');
                 socket.close?.(1011, 'Connection initialization failed');
             });
     }
@@ -306,6 +331,27 @@ class SocketRoute {
         return sent;
     }
 
+    sendFailure(socket, code, message, metadata) {
+        if (!this.protocolPolicy || !socket.context?.protocol) return this.send(socket, { error: message });
+        return this.send(
+            socket,
+            this.protocolPolicy.error(socket.context.protocol.version, code, message, metadata)
+        );
+    }
+
+    async sendBinary(socket, value) {
+        try {
+            const encoded = await this.protocolPolicy.encodeBinary(value, socket.context);
+            if (!encoded) return false;
+            const sent = sendPayload(socket, encoded, this.transportPolicy);
+            if (sent) this.metrics?.increment('redweb.messages.outbound');
+            return sent;
+        } catch (error) {
+            this.handleError(socket, error);
+            return false;
+        }
+    }
+
     receiveMessage(socket, message, isBinary) {
         if (this.draining) return false;
         this.metrics?.increment('redweb.messages.inbound');
@@ -313,7 +359,7 @@ class SocketRoute {
         if (this.transportPolicy && !this.transportPolicy.acceptsMessage(runtime)) {
             this.metrics?.increment('redweb.messages.rate_limited');
             if (this.transportPolicy.messageRate.action === 'disconnect') {
-                this.send(socket, { error: 'Message rate exceeded' });
+                this.sendFailure(socket, ERROR_CODES.RATE_LIMITED, 'Message rate exceeded');
                 socket.close?.(1008, 'Message rate exceeded');
             }
             return false;
@@ -324,7 +370,7 @@ class SocketRoute {
             return true;
         }
         if (runtime.queue.enqueue(task)) return true;
-        this.send(socket, { error: 'Message queue full' });
+        this.sendFailure(socket, ERROR_CODES.QUEUE_FULL, 'Message queue full');
         socket.close?.(1013, 'Message queue full');
         this.metrics?.increment('redweb.messages.queue_full');
         return false;
@@ -359,7 +405,7 @@ class SocketRoute {
         } catch (error) {
             this.logger.error?.(`Error parsing message from ${socket.remoteAddress}:`, error);
             this.metrics?.increment('redweb.messages.malformed');
-            this.send(socket, { error: 'Invalid JSON format' });
+            this.sendFailure(socket, ERROR_CODES.INVALID_MESSAGE, 'Invalid JSON format');
             socket.close?.(1003, 'Invalid JSON');
             return false;
         }
@@ -370,14 +416,19 @@ class SocketRoute {
     }
 
     async handleMessage(sock, data) {
+        if (this.protocolPolicy && !this.protocolPolicy.validateEnvelope(data, sock.context?.protocol?.version)) {
+            this.sendFailure(sock, ERROR_CODES.INVALID_MESSAGE, 'Invalid protocol envelope');
+            sock.close?.(1008, 'Invalid message');
+            return false;
+        }
         if (!data || typeof data !== 'object' || typeof data.type !== 'string' || !data.type) {
-            this.send(sock, { error: 'Message must be an object with a non-empty string `type`' });
+            this.sendFailure(sock, ERROR_CODES.INVALID_MESSAGE, 'Message must be an object with a non-empty string `type`');
             sock.close?.(1008, 'Invalid message');
             return false;
         }
         const handler = this.handlers.find((handler) => handler.name == data.type);
         if (!handler) {
-            this.send(sock, { error: `No such handler ${data.type}` });
+            this.sendFailure(sock, ERROR_CODES.UNKNOWN_HANDLER, `No such handler ${data.type}`, { requestId: data.requestId });
             sock.close?.(1008, 'Unknown handler');
             return false;
         } else {
@@ -387,7 +438,7 @@ class SocketRoute {
             } catch (error) {
                 this.logger.error?.(`Error handling message in handler ${handler.name}:`, error);
                 this.metrics?.increment('redweb.handlers.failed');
-                this.send(sock, { error: this.exposeErrors ? errorMessage(error) : 'Handler failed' });
+                this.sendFailure(sock, ERROR_CODES.HANDLER_FAILED, this.exposeErrors ? errorMessage(error) : 'Handler failed', { requestId: data.requestId });
                 sock.close?.(1011, 'Handler failed');
                 return false;
             }
@@ -396,13 +447,25 @@ class SocketRoute {
 
     async handleBinaryMessage(socket, buffer) {
         try {
+            if (this.protocolPolicy) {
+                if (!this.protocolPolicy.binary) {
+                    this.sendFailure(socket, ERROR_CODES.BINARY_UNSUPPORTED, 'Binary messages are not supported on this protocol route');
+                    return false;
+                }
+                const decoded = await this.protocolPolicy.decodeBinary(buffer, socket.context);
+                if (!decoded) {
+                    this.sendFailure(socket, ERROR_CODES.INVALID_MESSAGE, 'Invalid binary protocol message');
+                    return false;
+                }
+                return this.handleMessage(socket, decoded);
+            }
             const handlersWithPredicate = this.handlers.filter(handler => typeof handler.acceptsBinary === 'function');
             const handler = handlersWithPredicate.length
                 ? handlersWithPredicate.find(handler => handler.acceptsBinary(socket, buffer))
                 : this.handlers.find(handler => handler.onBinaryMessage !== undefined);
 
             if (!handler) {
-                this.send(socket, { error: 'Binary messages are not supported on this route' });
+                this.sendFailure(socket, ERROR_CODES.BINARY_UNSUPPORTED, 'Binary messages are not supported on this route');
                 return false;
             }
 
@@ -411,7 +474,7 @@ class SocketRoute {
         } catch (error) {
             this.logger.error?.('Error handling binary message:', error);
             this.metrics?.increment('redweb.handlers.failed');
-            this.send(socket, { error: this.exposeErrors ? errorMessage(error) : 'Binary handler failed' });
+            this.sendFailure(socket, ERROR_CODES.HANDLER_FAILED, this.exposeErrors ? errorMessage(error) : 'Binary handler failed');
             socket.close?.(1011, 'Binary handler failed');
             return false;
         }

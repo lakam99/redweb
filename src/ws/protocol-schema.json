@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "errorCodes": [
+    "INVALID_MESSAGE",
+    "UNKNOWN_HANDLER",
+    "HANDLER_FAILED",
+    "BINARY_UNSUPPORTED",
+    "RATE_LIMITED",
+    "QUEUE_FULL",
+    "CAPACITY_REACHED",
+    "INITIALIZATION_FAILED"
+  ]
+}

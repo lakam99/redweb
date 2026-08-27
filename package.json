@@ -5,11 +5,14 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "pretest": "tsc -p tests/types/tsconfig.json",
+    "pretest": "node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json",
+    "generate:protocol-types": "node scripts/generate-protocol-types.js",
     "test": "npx jest"
   },
   "files": [
     "src/*",
+    "client.js",
+    "client.d.ts",
     "index.d.ts",
     "docs"
   ],

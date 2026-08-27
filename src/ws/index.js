@@ -1,4 +1,5 @@
 const { SOCKET_OPTIONS } = require('./BaseSocketServer');
+const { ERROR_CODES } = require('./ProtocolPolicy');
 module.exports = { 
     SecureSocketServer: require('./SecureSocketServer'),
     SocketServer: require('./SocketServer'),
@@ -8,5 +9,6 @@ module.exports = {
     SocketRegistry: require('./SocketRegistry'),
     RoomRegistry: require('./RoomRegistry'),
     SessionRegistry: require('./SessionRegistry'),
-    SOCKET_OPTIONS
+    SOCKET_OPTIONS,
+    ERROR_CODES
 }
