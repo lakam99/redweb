@@ -61,7 +61,7 @@ class PageManager {
         if (new Set(Object.values(this.paths)).size !== Object.values(this.paths).length) {
             throw new Error('Live HTML internal paths must be unique.');
         }
-        if (this.paths.css === '/' || this.paths.css.endsWith('/')) {
+        if (this.paths.css.endsWith('/')) {
             throw new TypeError('Live HTML css path must be a URL prefix without a trailing slash.');
         }
         if (Object.entries(this.paths).some(([name, value]) => name !== 'css' && value.startsWith(`${this.paths.css}/`))) {
