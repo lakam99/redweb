@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const path = require('path');
 const { RedwebClient } = require('redweb-client');
 const { createCounterServer } = require('../../examples/live-html/counter');
 const { createChatroomServer } = require('../../examples/live-html/chatroom');
@@ -91,7 +92,7 @@ describe('Live HTML integration without mocks', () => {
         const server = await start(createCounterServer);
         const firstPage = await getPage(server);
         expect(firstPage.response.body).toContain('Server-side counter');
-        expect(firstPage.response.body).toContain('data-rw-state="count">0</span>');
+        expect(firstPage.response.body).toContain('data-rw-state="count">0</output>');
 
         const runtime = await request({ port: firstPage.port, path: firstPage.config.runtimePath });
         const browserClient = await request({ port: firstPage.port, path: '/__redweb/client.js' });
@@ -105,8 +106,9 @@ describe('Live HTML integration without mocks', () => {
         first.on('redweb:state', message => firstUpdates.push(message.payload));
         clients.add(first);
         await first.connect();
-        await waitForCondition(() => firstUpdates.length >= 2, 'two server counter updates', 3500);
-        expect(firstUpdates.slice(0, 2)).toEqual([
+        await waitForCondition(() => firstUpdates.length >= 3, 'initial state and two server counter updates', 3500);
+        expect(firstUpdates.slice(0, 3)).toEqual([
+            { name: 'count', value: '0', html: false },
             { name: 'count', value: '1', html: false },
             { name: 'count', value: '2', html: false },
         ]);
@@ -118,7 +120,7 @@ describe('Live HTML integration without mocks', () => {
         clients.add(second);
         await second.connect();
         await waitForCondition(() => secondUpdates.length >= 1, 'isolated second counter update', 2500);
-        expect(secondUpdates[0].value).toBe('1');
+        expect(secondUpdates[0].value).toBe('0');
         expect(server.manager.active.size).toBe(2);
 
         const firstSession = server.manager.active.get(firstPage.config.pageId);
@@ -137,10 +139,16 @@ describe('Live HTML integration without mocks', () => {
 
         const firstUpdates = [];
         const secondUpdates = [];
-        const first = await connectClient(firstPage.port, firstPage.config);
-        const second = await connectClient(secondPage.port, secondPage.config);
+        const first = liveClient(firstPage.port, firstPage.config);
+        const second = liveClient(secondPage.port, secondPage.config);
         first.on('redweb:state', message => firstUpdates.push(message.payload));
         second.on('redweb:state', message => secondUpdates.push(message.payload));
+        clients.add(first);
+        clients.add(second);
+        await Promise.all([first.connect(), second.connect()]);
+        await waitForCondition(() => firstUpdates.length === 1 && secondUpdates.length === 1, 'initial chat snapshots');
+        firstUpdates.length = 0;
+        secondUpdates.length = 0;
 
         first.send('redweb:html', {
             kind: 'action',
@@ -160,13 +168,16 @@ describe('Live HTML integration without mocks', () => {
             () => server.manager.active.get(secondPage.config.pageId)?.socket === null,
             'chat disconnect before reconnect'
         );
-        const reconnected = await connectClient(secondPage.port, secondPage.config);
+        first.send('redweb:html', { kind: 'action', name: 'send', args: [{ name: 'Ada', message: 'Missed' }] });
+        await waitForCondition(() => firstUpdates.at(-1)?.value.includes('Missed'), 'message while peer disconnected');
+        const reconnected = liveClient(secondPage.port, secondPage.config);
         const reconnectUpdates = [];
         reconnected.on('redweb:state', message => reconnectUpdates.push(message.payload));
-        first.send('redweb:html', { kind: 'action', name: 'send', args: [{ name: 'Ada', message: 'Second' }] });
-        await waitForCondition(() => reconnectUpdates.length === 1, 'reconnected chat update');
-        expect(reconnectUpdates[0].value).toContain('Second');
-        expect(reconnectUpdates[0].value.indexOf('alert(1)')).toBeLessThan(reconnectUpdates[0].value.indexOf('Second'));
+        clients.add(reconnected);
+        await reconnected.connect();
+        await waitForCondition(() => reconnectUpdates.length === 1, 'authoritative reconnect snapshot');
+        expect(reconnectUpdates[0].value).toContain('Missed');
+        expect(reconnectUpdates[0].value.indexOf('alert(1)')).toBeLessThan(reconnectUpdates[0].value.indexOf('Missed'));
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {
@@ -194,9 +205,65 @@ describe('Live HTML integration without mocks', () => {
             payload: { kind: 'action', name: 'dispose', args: [] },
             requestId: 'forbidden-action',
         }));
-        const rejected = await nextJson(socket);
+        let rejected = await nextJson(socket);
+        if (rejected.type === 'redweb:state') rejected = await nextJson(socket);
         expect(rejected.type).toBe('error');
         expect(rejected.error.code).toBe('HANDLER_FAILED');
         expect(rejected.requestId).toBe('forbidden-action');
+    });
+
+    test('serves the complete Live HTML flow over real HTTPS and WSS', async () => {
+        const server = await start(createCounterServer, {
+            ssl: {
+                key: path.join(__dirname, '..', 'fixtures', 'localhost.key'),
+                cert: path.join(__dirname, '..', 'fixtures', 'localhost.crt'),
+            },
+        });
+        const port = server.server.address().port;
+        const response = await request({ protocol: 'https:', port, path: '/' });
+        const config = pageConfig(response.body);
+        expect(response.status).toBe(200);
+        const updates = [];
+        const client = new RedwebClient(`wss://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}`, {
+            version: config.version,
+            webSocketFactory: url => new WebSocket(url, {
+                rejectUnauthorized: false,
+                headers: { Origin: `https://127.0.0.1:${port}` },
+            }),
+        });
+        clients.add(client);
+        client.on('redweb:state', message => updates.push(message.payload));
+        await client.connect();
+        await waitForCondition(() => updates.some(update => update.value === '1'), 'secure counter update', 2500);
+        expect(server.server.constructor.name).toBe('Server');
+    });
+
+    test('binds a page token to the same authenticated HTTP and WebSocket principal', async () => {
+        const server = await start(createCounterServer, {
+            authenticate: requestValue => requestValue.headers.authorization || false,
+        });
+        const port = server.server.address().port;
+        expect((await request({ port, path: '/' })).status).toBe(401);
+        const response = await request({ port, path: '/', headers: { authorization: 'user-1' } });
+        const config = pageConfig(response.body);
+        const url = `ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`;
+
+        const stolen = new WebSocket(url, {
+            headers: { Origin: `http://127.0.0.1:${port}`, authorization: 'user-2' },
+        });
+        rawSockets.add(stolen);
+        stolen.on('error', () => {});
+        const denied = await new Promise(resolve => stolen.once('unexpected-response', (_request, deniedResponse) => {
+            deniedResponse.resume();
+            resolve(deniedResponse.statusCode);
+        }));
+        expect(denied).toBe(401);
+
+        const owner = new WebSocket(url, {
+            headers: { Origin: `http://127.0.0.1:${port}`, authorization: 'user-1' },
+        });
+        rawSockets.add(owner);
+        await waitForOpen(owner);
+        expect((await nextJson(owner)).type).toBe('redweb:state');
     });
 });

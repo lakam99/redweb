@@ -4,7 +4,7 @@
 <body>
     <main>
         <h1>Chatroom</h1>
-        <ul aria-live="polite">{{ messages }}</ul>
+        <ul aria-live="polite" data-rw-state="messages"></ul>
         <form rw-submit="send" method="post">
             <label>Name <input name="name" maxlength="40"></label>
             <label>Message <input name="message" maxlength="500" required></label>

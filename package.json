@@ -13,6 +13,9 @@
     "verify:load": "node scripts/verify-load.js",
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
     "verify:live-html": "npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
+    "verify:live-html:browser": "node scripts/verify-live-html-browser.js",
+    "verify:live-html:load": "node --expose-gc scripts/verify-live-html-load.js",
+    "verify:live-html:package": "node scripts/verify-live-html-package.js",
     "test": "npx jest"
   },
   "files": [

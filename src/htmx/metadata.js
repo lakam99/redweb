@@ -43,17 +43,6 @@ function state(options = {}) {
         properties.set(property, Object.freeze({ writable }));
         STATE_METADATA.set(PageClass, properties);
 
-        const values = new WeakMap();
-        Object.defineProperty(target, property, {
-            configurable: true,
-            enumerable: true,
-            get() { return values.get(this); },
-            set(value) {
-                const previous = values.get(this);
-                values.set(this, value);
-                if (previous !== value) this._stateChanged?.(property, value);
-            },
-        });
     };
 }
 
@@ -82,4 +71,26 @@ function getActionMetadata(PageClass) {
     return new Set(ACTION_METADATA.get(PageClass) || []);
 }
 
-module.exports = { action, getActionMetadata, getPageMetadata, getStateMetadata, page, state };
+function getStateConfig(PageClass, property) {
+    return STATE_METADATA.get(PageClass)?.get(property);
+}
+
+function forEachState(PageClass, callback) {
+    STATE_METADATA.get(PageClass)?.forEach(callback);
+}
+
+function hasAction(PageClass, method) {
+    return Boolean(ACTION_METADATA.get(PageClass)?.has(method));
+}
+
+module.exports = {
+    action,
+    forEachState,
+    getActionMetadata,
+    getPageMetadata,
+    getStateConfig,
+    getStateMetadata,
+    hasAction,
+    page,
+    state,
+};

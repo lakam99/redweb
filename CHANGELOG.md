@@ -3,9 +3,9 @@
 ## Unreleased
 
 - Replaced the executable `.htmx` sandbox with decorator-first, declarative Live HTML pages.
-- Added safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, and deterministic cleanup.
+- Added context-restricted safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, optional identity binding, HTTPS/WSS, reconnect snapshots, and awaited deterministic cleanup.
 - Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.
-- Added runnable server-counter and shared-chatroom examples with real HTTP/WebSocket integration coverage.
+- Added runnable server-counter and shared-chatroom examples with real HTTP/WebSocket, browser DOM, load, memory, and packed-artifact verification gates.
 
 ## 0.9.0
 

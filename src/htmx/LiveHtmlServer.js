@@ -1,5 +1,6 @@
 const express = require('express');
 const HttpServer = require('../http/HttpServer');
+const HttpsServer = require('../http/HttpsServer');
 const SocketServer = require('../ws/SocketServer');
 const { PageManager } = require('./PageManager');
 
@@ -14,6 +15,7 @@ class LiveHtmlServer {
             livePaths,
             sessionTtlMs,
             maxSessions,
+            authenticate,
             server: suppliedApp,
             ...httpOptions
         } = options;
@@ -27,11 +29,13 @@ class LiveHtmlServer {
             paths: livePaths,
             sessionTtlMs,
             maxSessions,
+            authenticate,
             logger: httpOptions.logger,
         });
         this.manager.mount(app);
         const listen = httpOptions.listen ?? true;
-        this.http = new HttpServer({ ...httpOptions, server: app, listen: false });
+        const ServerClass = httpOptions.ssl ? HttpsServer : HttpServer;
+        this.http = new ServerClass({ ...httpOptions, server: app, listen: false });
         const Route = this.manager.route();
         this.sockets = new SocketServer({
             server: this.http.server,

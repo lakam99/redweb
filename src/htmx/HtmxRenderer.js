@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { isHtml, renderValue } = require('./Html');
+const { assertTextContext, isHtml, renderValue } = require('./Html');
 
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
+const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
 
 function serializeJson(value) {
     return JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -22,7 +23,14 @@ class HtmxRenderer {
 
     static render(source, page) {
         if (typeof source !== 'string') throw new TypeError('Page markup must be a string.');
-        return source.replace(BINDING, (_match, property) => {
+        const targets = source.replace(TARGET, (match, opening, _tag, property, _content, closing) => {
+            if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
+            const value = page[property];
+            const htmlMarker = isHtml(value) && !/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? ' data-rw-html' : '';
+            return opening.replace(/>$/, `${htmlMarker}>`) + renderValue(value) + closing;
+        });
+        return targets.replace(BINDING, (_match, property, offset, whole) => {
+            assertTextContext(whole.slice(0, offset));
             if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
             const value = page[property];
             return `<span data-rw-state="${property}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`;

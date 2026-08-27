@@ -32,6 +32,9 @@ describe('decorator-first Live HTML units', () => {
         expect(renderValue('<b>unsafe</b>')).toBe('&lt;b&gt;unsafe&lt;/b&gt;');
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
+        expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('element text');
+        expect(() => html`<script>${'</script><b>unsafe</b>'}</script>`).toThrow('script or style');
+        expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('script or style');
     });
 
     test('validates and records page, state, and action decorator metadata', () => {
@@ -77,10 +80,17 @@ describe('decorator-first Live HTML units', () => {
         const sent = [];
         const socket = { id: 'socket', sendEvent: (type, payload) => sent.push([type, payload]) };
         const instance = new TestPage();
+        expect(instance._activateState()).toBe(true);
+        expect(instance._activateState()).toBe(false);
         expect(instance._stateChanged('other', 1)).toBe(false);
         instance.count = 1;
         expect(sent).toEqual([]);
         await instance._attach(socket, { signal: 'signal' });
+        expect(sent).toEqual([
+            ['redweb:state', { name: 'count', value: '1', html: false }],
+            ['redweb:state', { name: 'name', value: '', html: false }],
+        ]);
+        sent.length = 0;
         instance.count = 2;
         instance.count = 2;
         expect(sent).toEqual([['redweb:state', { name: 'count', value: '2', html: false }]]);
@@ -90,10 +100,10 @@ describe('decorator-first Live HTML units', () => {
         await expect(instance._invoke('greet', ['hello'], { socket })).resolves.toBe('hello:socket');
         await expect(instance._invoke('missing', [], { socket })).rejects.toThrow('Unknown page action');
         await expect(instance._invoke('greet', null, { socket })).rejects.toThrow('array');
-        expect(instance._detach(socket, {})).toBe(true);
-        expect(instance._detach(socket, {})).toBe(false);
-        expect(instance.dispose()).toBe(true);
-        expect(instance.dispose()).toBe(false);
+        await expect(instance._detach(socket, {})).resolves.toBe(true);
+        await expect(instance._detach(socket, {})).resolves.toBe(false);
+        await expect(instance.dispose()).resolves.toBe(true);
+        await expect(instance.dispose()).resolves.toBe(true);
         expect(() => instance._attach(socket, {})).toThrow('disposed');
         expect(lifecycle).toEqual([['connected', 'signal'], ['disconnected'], ['disposed']]);
     });
@@ -114,8 +124,15 @@ describe('decorator-first Live HTML units', () => {
             '<span data-rw-state="title">&lt;unsafe&gt;</span> ' +
             '<span data-rw-state="body" data-rw-html><b>safe</b></span>'
         );
+        expect(HtmxRenderer.render('<ul data-rw-state="body"></ul>', pageState)).toBe(
+            '<ul data-rw-state="body" data-rw-html><b>safe</b></ul>'
+        );
+        expect(HtmxRenderer.render('<ul data-rw-state="body" data-rw-html></ul>', pageState)).toContain('<b>safe</b>');
+        expect(() => HtmxRenderer.render('<p data-rw-state="missing"></p>', pageState)).toThrow('Unknown page binding');
         expect(() => HtmxRenderer.render(null, pageState)).toThrow('string');
         expect(() => HtmxRenderer.render('{{missing}}', pageState)).toThrow('Unknown page binding');
+        expect(() => HtmxRenderer.render('<a href="{{ title }}">link</a>', pageState)).toThrow('element text');
+        expect(() => HtmxRenderer.render('<script>{{ title }}</script>', pageState)).toThrow('script or style');
         expect(HtmxRenderer.statePayload('empty', null)).toEqual({ name: 'empty', value: '', html: false });
         expect(HtmxRenderer.statePayload('body', pageState.body)).toEqual({ name: 'body', value: '<b>safe</b>', html: true });
 
@@ -143,7 +160,8 @@ describe('decorator-first Live HTML units', () => {
             compilerOptions: {
                 experimentalDecorators: true,
                 module: ts.ModuleKind.CommonJS,
-                target: ts.ScriptTarget.ES2020,
+                target: ts.ScriptTarget.ES2022,
+                useDefineForClassFields: true,
             },
         }).outputText;
         const compiled = new Module(fixture, module);
@@ -151,6 +169,7 @@ describe('decorator-first Live HTML units', () => {
         compiled.paths = Module._nodeModulePaths(path.dirname(fixture));
         compiled._compile(output, compiled.filename);
         const instance = new compiled.exports.CompiledPage();
+        instance._activateState();
         expect(instance.greet().toString()).toBe('<h1>Hello Redweb</h1>');
         instance._setFromClient('name', 'Ada');
         expect(await instance._invoke('greet', [], { socket: {} }).then(value => value.toString())).toBe('<h1>Hello Ada</h1>');
@@ -167,7 +186,9 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], sessionTtlMs: -1 })).toThrow('sessionTtlMs');
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
-        expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('begin');
+        expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
+        expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('absolute');
+        expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/live?unsafe="' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/same', client: '/same' } })).toThrow('unique');
         expect(() => new PageManager({ pages: [class {}] })).toThrow('extend LivePage');
         expect(() => new PageManager({ pages: [class extends LivePage {}] })).toThrow('missing @page');
@@ -204,10 +225,10 @@ describe('decorator-first Live HTML units', () => {
         await expect(manager.render(record, request)).rejects.toMatchObject({ status: 503 });
 
         const pending = [...manager.pending.values()][0];
-        expect(manager.authenticate({ url: '[', headers: { host: '[' } })).toBe(false);
-        expect(manager.authenticate({ url: '/', headers: {} })).toBe(false);
-        expect(manager.authenticate({ url: `/?pageId=${'x'.repeat(129)}`, headers: {} })).toBe(false);
-        expect(manager.authenticate({ url: `/?pageId=${pending.id}`, headers: {} })).toBe(pending);
+        await expect(manager.authenticate({ url: '[', headers: { host: '[' } })).resolves.toBe(false);
+        await expect(manager.authenticate({ url: '/', headers: {} })).resolves.toBe(false);
+        await expect(manager.authenticate({ url: `/?pageId=${'x'.repeat(129)}`, headers: {} })).resolves.toBe(false);
+        await expect(manager.authenticate({ url: `/?pageId=${pending.id}`, headers: {} })).resolves.toBe(pending);
         expect(manager.acceptsOrigin(undefined, { headers: {} })).toBe(false);
         expect(manager.acceptsOrigin('not a url', { headers: {} })).toBe(false);
         expect(manager.acceptsOrigin('ftp://example.com', { headers: { host: 'example.com' } })).toBe(false);
@@ -222,7 +243,7 @@ describe('decorator-first Live HTML units', () => {
         };
         await manager.connect(pending, socket);
         expect(() => manager.connect(pending, {})).toThrow('unavailable');
-        expect(manager.authenticate({ url: `/?pageId=${pending.id}`, headers: {} })).toBe(false);
+        await expect(manager.authenticate({ url: `/?pageId=${pending.id}`, headers: {} })).resolves.toBe(false);
         await expect(manager.receive({}, { payload: {} })).rejects.toThrow('not connected');
         await expect(manager.receive(socket, { payload: null })).rejects.toThrow('payload');
         for (const name of ['', 'x'.repeat(129), '__proto__']) {
@@ -244,12 +265,12 @@ describe('decorator-first Live HTML units', () => {
         await manager.receive(socket, { payload: { kind: 'action', name: 'echo', args: ['unobserved'] } });
         expect(sent).toHaveLength(sentCount);
         await expect(manager.receive(socket, { payload: { kind: 'other', name: 'name' } })).rejects.toThrow('message kind');
-        expect(manager.disconnect({})).toBe(false);
-        expect(manager.disconnect(socket)).toBe(true);
+        await expect(manager.disconnect({})).resolves.toBe(false);
+        await expect(manager.disconnect(socket)).resolves.toBe(true);
         await new Promise(resolve => setTimeout(resolve, 20));
         expect(manager.active.size).toBe(0);
         expect(pending.page._disposed).toBe(true);
-        manager.shutdown();
+        await manager.shutdown();
 
         let missingInstance;
         class MissingRender extends LivePage { constructor() { super(); missingInstance = this; } }
@@ -257,7 +278,7 @@ describe('decorator-first Live HTML units', () => {
         const missing = new PageManager({ pages: [MissingRender] });
         await expect(missing.render(missing.records.get('/missing-render'), request)).rejects.toThrow('template or render');
         expect(missingInstance._disposed).toBe(true);
-        missing.shutdown();
+        await missing.shutdown();
 
         class SharedFailure extends LivePage { render() { throw new Error('shared render failed'); } }
         page('/shared-failure', { scope: 'shared' })(SharedFailure);
@@ -265,7 +286,7 @@ describe('decorator-first Live HTML units', () => {
         const sharedInstance = sharedFailure.records.get('/shared-failure').shared;
         await expect(sharedFailure.render(sharedFailure.records.get('/shared-failure'), request)).rejects.toThrow('shared render failed');
         expect(sharedInstance._disposed).toBe(false);
-        sharedFailure.shutdown();
+        await sharedFailure.shutdown();
         expect(sharedInstance._disposed).toBe(true);
 
         class BadDisconnect extends LivePage { disconnected() { throw new Error('disconnect failed'); } }
@@ -273,16 +294,69 @@ describe('decorator-first Live HTML units', () => {
         const disconnectManager = new PageManager({ pages: [BadDisconnect] });
         const disconnectSession = disconnectManager.createSession(new BadDisconnect(), true);
         const disconnectSocket = { context: {} };
-        disconnectManager.connect(disconnectSession, disconnectSocket);
-        expect(() => disconnectManager.disconnect(disconnectSocket)).toThrow('disconnect failed');
+        disconnectSession.page._activateState();
+        await disconnectManager.connect(disconnectSession, disconnectSocket);
+        await expect(disconnectManager.disconnect(disconnectSocket)).rejects.toThrow('disconnect failed');
         expect(disconnectSession.socket).toBeNull();
-        disconnectManager.shutdown();
+        await disconnectManager.shutdown();
 
         class BadConstruction extends LivePage { constructor() { return {}; } }
         page('/bad-construction')(BadConstruction);
         const bad = new PageManager({ pages: [BadConstruction] });
         await expect(bad.render(bad.records.get('/bad-construction'), request)).rejects.toThrow('construction');
-        bad.shutdown();
+        await bad.shutdown();
+
+        const authenticated = new PageManager({
+            pages: [ManagedPage],
+            authenticate: requestValue => requestValue.headers?.authorization,
+        });
+        const authenticatedRecord = authenticated.records.get('/managed');
+        await expect(authenticated.render(authenticatedRecord, { ...request, headers: {} })).rejects.toMatchObject({ status: 401 });
+        await expect(authenticated.render(authenticatedRecord, {
+            ...request,
+            headers: { authorization: {} },
+        })).rejects.toMatchObject({ status: 401 });
+        const authenticatedMarkup = await authenticated.render(authenticatedRecord, {
+            ...request,
+            headers: { authorization: 'user-1' },
+        });
+        const authenticatedId = JSON.parse(authenticatedMarkup.match(/id="__redweb_page">([^<]+)/)[1]).pageId;
+        await expect(authenticated.authenticate({
+            url: `/?pageId=${authenticatedId}`,
+            headers: { authorization: 'user-2' },
+        })).resolves.toBe(false);
+        await expect(authenticated.authenticate({
+            url: `/?pageId=${authenticatedId}`,
+            headers: { authorization: 'user-1' },
+        })).resolves.toMatchObject({ principal: 'user-1' });
+        await authenticated.shutdown();
+
+        const cleanupErrors = [];
+        class FailingExpiry extends LivePage {
+            disposed() { throw new Error('expected cleanup failure'); }
+        }
+        page('/failing-expiry')(FailingExpiry);
+        const failingExpiry = new PageManager({
+            pages: [FailingExpiry],
+            sessionTtlMs: 1,
+            logger: { error: (...args) => cleanupErrors.push(args) },
+        });
+        const expiringPage = failingExpiry.instantiate(failingExpiry.records.get('/failing-expiry'));
+        const expiringSession = failingExpiry.createSession(expiringPage, true);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        expect(cleanupErrors[0][0]).toBe('Live HTML session cleanup failed.');
+        expiringSession.page._disposePromise.catch(() => {});
+        await failingExpiry.shutdown();
+
+        const disposedManager = new PageManager({ pages: [ManagedPage] });
+        const disposedPage = disposedManager.instantiate(disposedManager.records.get('/managed'));
+        const disposedSession = disposedManager.createSession(disposedPage, true);
+        await disposedPage.dispose();
+        await expect(disposedManager.authenticate({
+            url: `/?pageId=${disposedSession.id}`,
+            headers: {},
+        })).resolves.toBe(false);
+        await disposedManager.shutdown();
     });
 
     test('validates and composes LiveHtmlServer with an existing app and idempotent shutdown', async () => {

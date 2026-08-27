@@ -412,11 +412,13 @@ declare module 'redweb' {
         params: Record<string, string>;
         query: Record<string, unknown>;
         body: unknown;
+        principal?: string | number | bigint | boolean;
     }
 
     export interface LivePageConnectionContext {
         socket: RedWebSocket;
         signal?: AbortSignal;
+        principal?: string | number | bigint | boolean;
     }
 
     export abstract class LivePage {
@@ -424,9 +426,9 @@ declare module 'redweb' {
         loading?(context: LivePageRequestContext): void | Promise<void>;
         render?(context: LivePageRequestContext): string | HtmlFragment | Promise<string | HtmlFragment>;
         connected?(context: LivePageConnectionContext): void | Promise<void>;
-        disconnected?(context: { socket: RedWebSocket }): void;
-        disposed?(): void;
-        dispose(): boolean;
+        disconnected?(context: { socket: RedWebSocket }): void | Promise<void>;
+        disposed?(): void | Promise<void>;
+        dispose(): Promise<boolean>;
     }
 
     export interface PageOptions {
@@ -453,6 +455,9 @@ declare module 'redweb' {
         };
         sessionTtlMs?: number;
         maxSessions?: number;
+        authenticate?(request: import('http').IncomingMessage | import('express').Request):
+            string | number | bigint | boolean | false | null | undefined |
+            Promise<string | number | bigint | boolean | false | null | undefined>;
     }
 
     export class LiveHtmlServer {

@@ -72,7 +72,7 @@ new LiveHtmlServer({
 
 ```html
 <h1>Server-side counter</h1>
-<output aria-live="polite">{{ count }}</output>
+<output aria-live="polite" data-rw-state="count"></output>
 ```
 
 Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
@@ -93,7 +93,7 @@ class ChatroomPage extends LivePage {
 ```
 
 ```html
-<section aria-live="polite">{{ messages }}</section>
+<section aria-live="polite" data-rw-state="messages"></section>
 <form rw-submit="send">
   <input name="name">
   <input name="message" required>
@@ -101,9 +101,11 @@ class ChatroomPage extends LivePage {
 </form>
 ```
 
-Interpolations created with `html` are escaped by default. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `scope: 'shared'` deliberately shares one instance across its connected visitors.
+Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `scope: 'shared'` deliberately shares one instance across its connected visitors.
 
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable [server counter](examples/live-html/counter.js), and [chatroom](examples/live-html/chatroom.js). Both examples are exercised unchanged by mock-free HTTP/WebSocket integration tests.
+The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
+
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable [server counter](examples/live-html/counter.js), and [chatroom](examples/live-html/chatroom.js). Both examples are exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 ## Multiplayer in 0.9
 
