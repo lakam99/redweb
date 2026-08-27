@@ -1,14 +1,18 @@
 const { performance } = require('perf_hooks');
+const fs = require('fs');
+const path = require('path');
 const redweb = require('..');
 const { silentLogger, waitFor, openClient, closeClient } = require('./realtime-harness');
 
 const durationSeconds = Number(process.env.REDWEB_SOAK_SECONDS || 3600);
 const clientCount = Number(process.env.REDWEB_SOAK_CLIENTS || 64);
 const sampleSeconds = Number(process.env.REDWEB_SOAK_SAMPLE_SECONDS || 5);
+const outputPath = process.argv[2];
 
 if (!Number.isFinite(durationSeconds) || durationSeconds < 10) throw new Error('REDWEB_SOAK_SECONDS must be at least 10.');
 if (!Number.isInteger(clientCount) || clientCount < 2) throw new Error('REDWEB_SOAK_CLIENTS must be at least 2.');
 if (!Number.isFinite(sampleSeconds) || sampleSeconds < 1) throw new Error('REDWEB_SOAK_SAMPLE_SECONDS must be at least 1.');
+if (outputPath && !path.isAbsolute(outputPath)) throw new Error('The soak output path must be absolute.');
 
 class CycleHandler extends redweb.BaseHandler {
     constructor() { super('cycle'); }
@@ -146,7 +150,9 @@ async function main() {
         handlesBefore,
         handlesAfter: process._getActiveHandles().length,
     };
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    const output = `${JSON.stringify(result, null, 2)}\n`;
+    process.stdout.write(output);
+    if (outputPath) fs.writeFileSync(outputPath, output, { flag: 'wx' });
     const registriesClean = Object.values(result.finalRegistries).every(value => value === 0);
     if (!registriesClean || result.finalHeapPercentOfWarm > 110 || result.handlesAfter > handlesBefore + 1) process.exitCode = 1;
 }
