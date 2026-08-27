@@ -1,72 +1,43 @@
 const fs = require('fs');
-const vm = require('vm');
 const path = require('path');
+const { isHtml, renderValue } = require('./Html');
+
+const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
+
+function serializeJson(value) {
+    return JSON.stringify(value).replaceAll('<', '\\u003c');
+}
 
 class HtmxRenderer {
-    /**
-     * Render an .htmx file as JavaScript with embedded print statements.
-     * @param {string} filePath - Path to the .htmx file.
-     * @returns {string} Rendered HTML string with normalized whitespace.
-     */
-    static render(filePath, { rootDir = path.dirname(path.resolve(filePath)), timeoutMs = 1000 } = {}) {
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`Template file not found: ${filePath}`);
+    static template(filePath, rootDir) {
+        const root = path.resolve(rootDir);
+        const resolved = path.resolve(root, filePath);
+        const relative = path.relative(root, resolved);
+        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+            throw new Error('Page template is outside the configured template root.');
         }
+        if (!fs.existsSync(resolved)) throw new Error(`Page template not found: ${resolved}`);
+        return fs.readFileSync(resolved, 'utf8');
+    }
 
-        let output = '';
-        const templateContent = fs.readFileSync(filePath, 'utf-8');
+    static render(source, page) {
+        if (typeof source !== 'string') throw new TypeError('Page markup must be a string.');
+        return source.replace(BINDING, (_match, property) => {
+            if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
+            const value = page[property];
+            return `<span data-rw-state="${property}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`;
+        });
+    }
 
-        // Transform <@ ... @/> blocks into print() calls
-        const transformedTemplate = templateContent.replace(
-            /<@>([\s\S]*?)<@\/>/g,
-            (_, content) => `print(\`${content.replace(/{{\s*(.*?)\s*}}/g, '${$1}')}\`);`
-        );
+    static statePayload(name, value) {
+        return { name, value: isHtml(value) ? value.toString() : String(value ?? ''), html: isHtml(value) };
+    }
 
-        // Wrap the script in an IIFE
-        const wrappedScript = `
-        (() => {
-            const print = (html) => output += html;
-            ${transformedTemplate}
-            return output;
-        })();
-        `;
-
-        // Create a custom require function that resolves paths relative to the template
-        const resolvedRoot = path.resolve(rootDir);
-        const customRequire = (modulePath) => {
-            if (typeof modulePath !== 'string' || !modulePath.startsWith('.')) {
-                throw new Error('Templates may only require relative modules');
-            }
-            const absolutePath = path.resolve(path.dirname(filePath), modulePath);
-            const relative = path.relative(resolvedRoot, absolutePath);
-            if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-                throw new Error('Template module is outside the allowed root');
-            }
-            return require(absolutePath);
-        };
-
-        // Execute the script in a sandbox
-        const script = new vm.Script(wrappedScript);
-        const sandbox = {
-            output: '',
-            require: customRequire, // Add custom require
-            __dirname: path.dirname(filePath),
-            __filename: filePath,
-        };
-        vm.createContext(sandbox);
-
-        // Get the rendered output
-        let result = script.runInContext(sandbox, { timeout: timeoutMs });
-
-        // Normalize spaces but preserve those in content
-        result = result
-            .replace(/>\s+</g, '><')       // Remove spaces between tags
-            .replace(/\s+/g, ' ')         // Collapse multiple spaces to one
-            .replace(/>\s+/g, '>')        // Remove spaces after tags
-            .replace(/\s+</g, '<')        // Remove spaces before tags
-            .trim();                      // Trim leading and trailing spaces
-
-        return result;
+    static document(markup, config) {
+        const bootstrap = `<script type="application/json" id="__redweb_page">${serializeJson(config)}</script>` +
+            `<script type="module" src="${config.runtimePath}"></script>`;
+        if (/<\/body\s*>/i.test(markup)) return markup.replace(/<\/body\s*>/i, `${bootstrap}</body>`);
+        return `<!doctype html><html><body><main data-rw-root>${markup}</main>${bootstrap}</body></html>`;
     }
 }
 

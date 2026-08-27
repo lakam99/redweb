@@ -21,7 +21,6 @@ declare module 'redweb' {
         ssl?: { key: string; cert: string };
         server?: Application;
         corsOptions?: CorsOptions | false;
-        enableHtmxRendering?: boolean;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
     }
@@ -400,6 +399,76 @@ declare module 'redweb' {
     export class HttpsServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
         shutdown(): Promise<void>;
+    }
+
+    /** ─────────────────── LIVE HTML ─────────────────── */
+
+    export interface HtmlFragment {
+        toString(): string;
+    }
+
+    export interface LivePageRequestContext {
+        request: import('express').Request;
+        params: Record<string, string>;
+        query: Record<string, unknown>;
+        body: unknown;
+    }
+
+    export interface LivePageConnectionContext {
+        socket: RedWebSocket;
+        signal?: AbortSignal;
+    }
+
+    export abstract class LivePage {
+        protected readonly _connections: Set<RedWebSocket>;
+        loading?(context: LivePageRequestContext): void | Promise<void>;
+        render?(context: LivePageRequestContext): string | HtmlFragment | Promise<string | HtmlFragment>;
+        connected?(context: LivePageConnectionContext): void | Promise<void>;
+        disconnected?(context: { socket: RedWebSocket }): void;
+        disposed?(): void;
+        dispose(): boolean;
+    }
+
+    export interface PageOptions {
+        template?: string;
+        scope?: 'connection' | 'shared';
+    }
+
+    export interface StateOptions {
+        writable?: boolean;
+    }
+
+    export function page(path: string, options?: PageOptions): ClassDecorator;
+    export function state(options?: StateOptions): PropertyDecorator;
+    export function action(): MethodDecorator;
+    export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
+
+    export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+        pages: Array<new () => LivePage>;
+        templateRoot?: string;
+        livePaths?: {
+            socket?: string;
+            client?: string;
+            runtime?: string;
+        };
+        sessionTtlMs?: number;
+        maxSessions?: number;
+    }
+
+    export class LiveHtmlServer {
+        app: Application;
+        server: NodeHttpServer;
+        http: HttpServer;
+        sockets: SocketServer;
+        constructor(options: LiveHtmlServerOptions);
+        shutdown(): Promise<void>;
+    }
+
+    export class HtmxRenderer {
+        static template(filePath: string, rootDir: string): string;
+        static render(source: string, page: object): string;
+        static statePayload(name: string, value: unknown): { name: string; value: string; html: boolean };
+        static document(markup: string, config: Record<string, unknown> & { runtimePath: string }): string;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */

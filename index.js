@@ -16,6 +16,7 @@ const {
 const { BaseHandler } = require('./src/ws/BaseHandler');
 const HttpServer = require('./src/http/HttpServer');
 const HttpsServer = require('./src/http/HttpsServer');
+const { action, html, HtmxRenderer, LiveHtmlServer, LivePage, page, state } = require('./src/htmx');
 module.exports = {
     HttpServer,
     HttpsServer,
@@ -34,5 +35,12 @@ module.exports = {
     SOCKET_OPTIONS,
     HTTP_OPTIONS,
     ENCODINGS,
-    METHODS
+    METHODS,
+    action,
+    html,
+    HtmxRenderer,
+    LiveHtmlServer,
+    LivePage,
+    page,
+    state
 };

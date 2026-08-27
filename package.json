@@ -20,7 +20,8 @@
     "client.d.ts",
     "CHANGELOG.md",
     "index.d.ts",
-    "docs"
+    "docs",
+    "examples/live-html"
   ],
   "keywords": [],
   "author": "",
@@ -35,6 +36,7 @@
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
     "express": "^4.22.2",
+    "redweb-client": "^0.1.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {
