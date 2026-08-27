@@ -8,6 +8,7 @@ const VIEW_METADATA = new WeakMap();
 const RESOLVED_VIEW = new WeakMap();
 const STANDARD_VIEWS = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
+const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
 let metadataVersion = 0;
 
@@ -192,6 +193,18 @@ function page(routePath, options = {}) {
     };
 }
 
+function component() {
+    return ComponentClass => {
+        if (typeof ComponentClass !== 'function') throw new TypeError('component() must decorate a class.');
+        COMPONENT_CLASSES.add(ComponentClass);
+        return ComponentClass;
+    };
+}
+
+function isComponentClass(ComponentClass) {
+    return hierarchy(ComponentClass).some(CurrentClass => COMPONENT_CLASSES.has(CurrentClass));
+}
+
 function state(options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('State options must be an object.');
@@ -294,6 +307,7 @@ function getViewMetadata(PageClass, stateName) {
 
 module.exports = {
     action,
+    component,
     forEachState,
     getActionImplementation,
     getActionMetadata,
@@ -303,6 +317,7 @@ module.exports = {
     getStateMetadata,
     getViewImplementation,
     getViewMetadata,
+    isComponentClass,
     page,
     state,
     view,

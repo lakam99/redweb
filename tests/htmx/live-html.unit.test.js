@@ -11,6 +11,7 @@ const {
     action,
     attribute,
     codeBlock,
+    component,
     each,
     exportStatic,
     html,
@@ -24,7 +25,7 @@ const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const browserRuntime = require('../../src/htmx/browserRuntime');
-const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation } = require('../../src/htmx/metadata');
+const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
 
 function decorateAction(PageClass, name) {
@@ -262,6 +263,163 @@ describe('decorator-first Live HTML units', () => {
         class DecoratedViewPage extends StandardViewPage { item() { return html`decorated`; } }
         decorateView(DecoratedViewPage, 'items', 'item');
         expect(getViewImplementation(DecoratedViewPage, 'items')).toBe(DecoratedViewPage.prototype.item);
+    });
+
+    test('adopts nested reusable components with isolated actions, state, and lifecycle', async () => {
+        expect(() => component()(null)).toThrow('decorate a class');
+
+        const lifecycle = [];
+        class LeafComponent {
+            count = 1;
+            loading() { lifecycle.push('leaf:loading'); }
+            connected() { lifecycle.push('leaf:connected'); }
+            disconnected() { lifecycle.push('leaf:disconnected'); }
+            disposed() { lifecycle.push('leaf:disposed'); }
+            increment() { this.count = Number(this.count) + 1; return this.count; }
+            render() { return '<button rw-click="increment"><output data-rw-state="count"></output></button>'; }
+        }
+        component()(LeafComponent);
+        state({ writable: true })(LeafComponent.prototype, 'count');
+        decorateAction(LeafComponent, 'increment');
+
+        class DerivedLeaf extends LeafComponent {}
+        expect(isComponentClass(DerivedLeaf)).toBe(true);
+        class PanelComponent {
+            leaf = new DerivedLeaf();
+            loading() { lifecycle.push('panel:loading'); }
+            connected() { lifecycle.push('panel:connected'); }
+            disconnected() { lifecycle.push('panel:disconnected'); }
+            disposed() { lifecycle.push('panel:disposed'); }
+            render() { return html`<section>${this.leaf}</section>`; }
+        }
+        component()(PanelComponent);
+        class ComponentHost extends LivePage {
+            panel = new PanelComponent();
+            render() { return html`<main>${this.panel}</main>`; }
+        }
+        page('/component-host')(ComponentHost);
+
+        const manager = new PageManager({ pages: [ComponentHost], logger: null });
+        const record = manager.records.get('/component-host');
+        const request = { params: {}, query: {}, body: null };
+        const document = await manager.render(record, request);
+        expect(document).toContain('data-rw-component="panel"');
+        expect(document).toContain('data-rw-component="panel.leaf"');
+        expect(document).toContain('data-rw-state="count">1</output>');
+        expect(lifecycle).toEqual(['panel:loading', 'leaf:loading']);
+
+        const session = [...manager.pending.values()][0];
+        const events = [];
+        const socket = { context: {}, sendEvent: (type, payload, options) => events.push({ type, payload, options }) };
+        await manager.connect(session, socket);
+        expect(lifecycle).toEqual(['panel:loading', 'leaf:loading', 'panel:connected', 'leaf:connected']);
+        expect(events).toEqual([{
+            type: 'redweb:state',
+            payload: { component: 'panel.leaf', name: 'count', value: '1', html: false },
+            options: undefined,
+        }]);
+        await manager.receive(socket, {
+            requestId: 'component-action',
+            payload: { kind: 'action', component: 'panel.leaf', name: 'increment', args: [] },
+        });
+        expect(events.at(-2).payload).toEqual({ component: 'panel.leaf', name: 'count', value: '2', html: false });
+        expect(events.at(-1)).toEqual({
+            type: 'redweb:result', payload: 2, options: { requestId: 'component-action' },
+        });
+        await manager.receive(socket, {
+            payload: { kind: 'state', component: 'panel.leaf', name: 'count', value: '7' },
+        });
+        expect(session.page.panel.leaf.count).toBe('7');
+        await expect(manager.receive(socket, {
+            payload: { kind: 'action', component: 'missing', name: 'increment', args: [] },
+        })).rejects.toThrow('Unknown Live HTML component');
+        expect(session.page.panel._component('panel.leaf')).toBeUndefined();
+        await manager.disconnect(socket);
+        expect(lifecycle.slice(-2)).toEqual(['leaf:disconnected', 'panel:disconnected']);
+        await manager.release(session);
+        expect(lifecycle.slice(-2)).toEqual(['leaf:disposed', 'panel:disposed']);
+        await manager.shutdown();
+
+        const standalone = new LivePage();
+        expect(() => standalone._renderComponent()).toThrow('owned by a page field');
+        const prototypeOnly = Object.create(LivePage.prototype);
+        expect(LivePage.adopt(prototypeOnly)).toBe(prototypeOnly);
+        class MissingRender {}
+        component()(MissingRender);
+        class MissingRenderHost extends LivePage { child = new MissingRender(); render() { return html`${this.child}`; } }
+        page('/missing-component-render')(MissingRenderHost);
+        const missingManager = new PageManager({ pages: [MissingRenderHost] });
+        await expect(missingManager.render(missingManager.records.get('/missing-component-render'), request))
+            .rejects.toThrow('must provide render');
+        await missingManager.shutdown();
+
+        const AnonymousComponent = Function('return class {}')();
+        component()(AnonymousComponent);
+        const anonymousOwner = new LivePage();
+        anonymousOwner.child = new AnonymousComponent();
+        anonymousOwner._activateState();
+        expect(() => anonymousOwner.child.toString()).toThrow('Component must provide render');
+
+        class AsyncComponent { async render() { return html`later`; } }
+        component()(AsyncComponent);
+        class AsyncHost extends LivePage { child = new AsyncComponent(); render() { return html`${this.child}`; } }
+        page('/async-component')(AsyncHost);
+        const asyncManager = new PageManager({ pages: [AsyncHost] });
+        await expect(asyncManager.render(asyncManager.records.get('/async-component'), request))
+            .rejects.toThrow('must be synchronous');
+        await asyncManager.shutdown();
+
+        class EmptyComponent { render() { return html``; } }
+        component()(EmptyComponent);
+        const invalidNames = new LivePage();
+        invalidNames['bad.name'] = new EmptyComponent();
+        expect(() => invalidNames._activateState()).toThrow('safe identifier');
+        expect(() => LivePage.adoptComponent(new LivePage(), 'constructor', new EmptyComponent()))
+            .toThrow('safe identifier');
+
+        const shared = new EmptyComponent();
+        const duplicateOwner = new LivePage();
+        duplicateOwner.first = shared;
+        duplicateOwner.second = shared;
+        expect(() => duplicateOwner._activateState()).toThrow('only one component field');
+
+        const repeatOwner = new LivePage();
+        repeatOwner.child = new EmptyComponent();
+        repeatOwner._activateState();
+        expect(LivePage.adoptComponent(repeatOwner, 'child', repeatOwner.child)).toBe(repeatOwner.child);
+
+        class StatefulOwner extends LivePage { child = new EmptyComponent(); }
+        state()(StatefulOwner.prototype, 'child');
+        expect(() => new StatefulOwner()._activateState()).toThrow('cannot also be decorated');
+
+        const parentName = `parent${'x'.repeat(60)}`;
+        const childName = `child${'x'.repeat(60)}`;
+        class DeepComponent {
+            constructor() { this[childName] = new EmptyComponent(); }
+            render() { return html``; }
+        }
+        component()(DeepComponent);
+        const deepOwner = new LivePage();
+        deepOwner[parentName] = new DeepComponent();
+        expect(() => deepOwner._activateState()).toThrow('Nested component identifiers');
+
+        class FailingComponent {
+            render() { return html``; }
+            disposed() { throw new Error('component disposal failed'); }
+        }
+        component()(FailingComponent);
+        class FailingOwner extends LivePage {
+            first = new FailingComponent();
+            second = new FailingComponent();
+            disposed() { throw new Error('page disposal failed'); }
+        }
+        const failingOwner = new FailingOwner();
+        failingOwner._activateState();
+        const disposal = await failingOwner.dispose().then(() => null, error => error);
+        expect(disposal).toBeInstanceOf(AggregateError);
+        expect(disposal.errors.map(error => error.message)).toEqual([
+            'component disposal failed', 'component disposal failed', 'page disposal failed',
+        ]);
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {

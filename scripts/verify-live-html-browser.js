@@ -11,6 +11,7 @@ const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
 const { ChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
+const { ComponentsPage } = require('../examples/live-html/components');
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -153,11 +154,17 @@ async function main() {
     const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
     const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
+    const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     let failure;
     try {
-        await Promise.all([waitForListening(counter.server), waitForListening(chat.server), waitForListening(cards.server)]);
+        await Promise.all([
+            waitForListening(counter.server),
+            waitForListening(chat.server),
+            waitForListening(cards.server),
+            waitForListening(components.server),
+        ]);
         browser = launchBrowser(executable, profile);
         const endpoint = new URL(await browser.endpoint);
         const debugPort = Number(endpoint.port);
@@ -199,6 +206,22 @@ async function main() {
         await cardsPage.evaluate(eventual(`document.querySelectorAll('.card').length === 3`, 'realtime card collection update'));
         const cardBackground = await cardsPage.evaluate("getComputedStyle(document.querySelector('.card')).backgroundColor");
         if (cardBackground !== 'rgb(31, 41, 55)') throw new Error(`Card CSS was not applied: ${cardBackground}`);
+
+        const componentsPage = await openPage(debugPort, `http://127.0.0.1:${components.server.address().port}/`);
+        pages.push(componentsPage);
+        await componentsPage.evaluate(eventual(
+            `document.querySelectorAll('rw-component[data-rw-component]').length === 2`,
+            'component DOM readiness'
+        ));
+        await componentsPage.evaluate(`document.querySelector('[data-rw-component="primary"] button').click()`);
+        await componentsPage.evaluate(eventual(
+            `document.querySelector('[data-rw-component="primary"] output').textContent === '1'`,
+            'the primary component server action'
+        ));
+        const componentIsolation = await componentsPage.evaluate(
+            `document.querySelector('[data-rw-component="secondary"] output').textContent === '0'`
+        );
+        if (!componentIsolation) throw new Error('A component action updated a sibling component instance.');
 
         const noscriptMarkup = HtmlRenderer.render(
             '<body><noscript><span id="hidden">{{ value }}</span></noscript><p id="after">{{ value }}</p></body>',
@@ -249,7 +272,7 @@ async function main() {
             document.querySelector('#http code').textContent.includes("section = 'HTTP'")
         `);
         if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
-        console.log('Live HTML browser gate passed: CSS, collections, counter, chat, raw-text safety, and documentation composition.');
+        console.log('Live HTML browser gate passed: CSS, collections, components, counter, chat, raw-text safety, and documentation composition.');
     } catch (error) {
         failure = error;
     } finally {
@@ -259,7 +282,7 @@ async function main() {
             browser.child.kill();
             await exited;
         }
-        await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown()]);
+        await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown()]);
         try {
             await removeTemporaryDirectory(profile);
         } catch (error) {

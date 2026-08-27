@@ -215,6 +215,7 @@ class PageManager {
                 signal: this.renderAbortController.signal,
             });
             await page.loading?.(context);
+            await page._loadComponents(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
             const source = record.template ?? await page.render?.(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
@@ -325,8 +326,12 @@ class PageManager {
         const payload = message.payload;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Live HTML payload must be an object.');
         const name = boundedName(payload.name, 'Live HTML member name');
+        const target = payload.component === undefined || payload.component === null
+            ? session.page
+            : session.page._component(boundedName(payload.component, 'Live HTML component name'));
+        if (!target) throw new Error('Unknown Live HTML component.');
         if (payload.kind === 'action') {
-            const result = await session.page._invoke(name, payload.args, Object.freeze({
+            const result = await target._invoke(name, payload.args, Object.freeze({
                 socket,
                 signal: socket.context?.signal,
                 principal: session.principal,
@@ -337,7 +342,7 @@ class PageManager {
             return;
         }
         if (payload.kind === 'state') {
-            session.page._setFromClient(name, payload.value);
+            target._setFromClient(name, payload.value);
             return;
         }
         throw new TypeError('Live HTML message kind must be "action" or "state".');

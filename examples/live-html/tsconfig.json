@@ -12,5 +12,5 @@
       "redweb": ["."]
     }
   },
-  "files": ["counter.ts", "chatroom.ts", "cards.ts"]
+  "files": ["counter.ts", "chatroom.ts", "cards.ts", "components.ts"]
 }

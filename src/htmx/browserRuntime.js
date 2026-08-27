@@ -12,30 +12,35 @@ const client = new RedwebClient(config.socketPath + '?pageId=' + encodeURICompon
 
 const emit = (type, detail) => document.dispatchEvent(new CustomEvent(type, { detail }));
 let stateTargets = new Map();
+const componentOf = node => node.closest('rw-component[data-rw-component]')?.getAttribute('data-rw-component') || null;
+const stateKey = (component, name) => (component || '') + '\\0' + name;
 const indexState = () => {
     stateTargets = new Map();
     document.querySelectorAll('[data-rw-state]').forEach(node => {
         const name = node.getAttribute('data-rw-state');
-        const targets = stateTargets.get(name) || [];
+        const key = stateKey(componentOf(node), name);
+        const targets = stateTargets.get(key) || [];
         targets.push(node);
-        stateTargets.set(name, targets);
+        stateTargets.set(key, targets);
     });
 };
-const named = (attribute, name) => attribute === 'data-rw-state'
-    ? (stateTargets.get(name) || [])
-    : [...document.querySelectorAll('[' + attribute + ']')].filter(node => node.getAttribute(attribute) === name);
+const named = (attribute, name, component) => attribute === 'data-rw-state'
+    ? (stateTargets.get(stateKey(component, name)) || [])
+    : [...document.querySelectorAll('[' + attribute + ']')].filter(node =>
+        node.getAttribute(attribute) === name && componentOf(node) === component);
 indexState();
 
 client.on('redweb:state', message => {
     const update = message.payload;
-    named('data-rw-state', update.name).forEach(node => {
+    const component = update.component || null;
+    named('data-rw-state', update.name, component).forEach(node => {
         if (update.html) {
             node.innerHTML = update.value;
             indexState();
         }
         else node.textContent = update.value;
     });
-    named('rw-bind', update.name).forEach(node => {
+    named('rw-bind', update.name, component).forEach(node => {
         if (node.type === 'checkbox') node.checked = update.value === true || update.value === 'true';
         else if (node.value !== update.value) node.value = update.value;
     });
@@ -59,7 +64,9 @@ document.addEventListener('click', event => {
     const target = event.target.closest('[rw-click]');
     if (!target) return;
     event.preventDefault();
-    client.request('redweb:html', { kind: 'action', name: target.getAttribute('rw-click'), args: [] }).catch(report);
+    client.request('redweb:html', {
+        kind: 'action', name: target.getAttribute('rw-click'), component: componentOf(target), args: []
+    }).catch(report);
 });
 
 document.addEventListener('submit', event => {
@@ -67,7 +74,7 @@ document.addEventListener('submit', event => {
     if (!form) return;
     event.preventDefault();
     client.request('redweb:html', {
-        kind: 'action', name: form.getAttribute('rw-submit'), args: [formValues(form)]
+        kind: 'action', name: form.getAttribute('rw-submit'), component: componentOf(form), args: [formValues(form)]
     }).then(() => form.reset()).catch(report);
 });
 
@@ -76,6 +83,7 @@ document.addEventListener('input', event => {
     if (target) send({
         kind: 'state',
         name: target.getAttribute('rw-bind'),
+        component: componentOf(target),
         value: target.type === 'checkbox' ? target.checked : target.value
     });
 });

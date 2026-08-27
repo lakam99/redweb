@@ -19,6 +19,14 @@ function isHtml(value) {
     return Boolean(value?.[HTML_FRAGMENT]);
 }
 
+function markHtml(value, toString) {
+    Object.defineProperties(value, {
+        [HTML_FRAGMENT]: { configurable: false, enumerable: false, value: true },
+        toString: { configurable: false, enumerable: false, value: toString, writable: false },
+    });
+    return value;
+}
+
 function trustedValue(brand, value) {
     return Object.freeze({ [brand]: true, value: String(value) });
 }
@@ -105,4 +113,4 @@ function codeBlock(code, options = {}) {
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;
 }
 
-module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, renderValue, safeUrl };
+module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderValue, safeUrl };

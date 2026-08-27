@@ -147,6 +147,8 @@ The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an opti
 
 See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
+Reusable snippets can own server behavior without page-level forwarding methods. Decorate a class with `@component()`, put instances in page fields, and interpolate them directly: `` html`<main>${this.primary}${this.secondary}</main>` ``. Each instance gets isolated `@state()`, scoped `@action()` methods, nested-component support, and page-owned lifecycle cleanup. See the runnable [component counters](examples/live-html/components.ts) or run `npm run example:components`.
+
 ## Multiplayer in 0.9
 
 Redweb keeps each production feature independent and opt-in:

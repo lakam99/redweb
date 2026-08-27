@@ -5,9 +5,11 @@ const { LiveHtmlServer, LivePage, codeBlock, html, page, start: startPages } = r
 const { CounterPage } = require('../../examples/live-html/counter');
 const { ChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
+const { ComponentsPage } = require('../../examples/live-html/components');
 const createCounterServer = options => startPages(CounterPage, options);
 const createChatroomServer = options => startPages(ChatroomPage, options);
 const createCardsServer = options => startPages(CardsPage, options);
+const createComponentsServer = options => startPages(ComponentsPage, options);
 class StaticReferencePage {
     render() { return '<html><body><h1>Static reference</h1></body></html>'; }
 }
@@ -256,6 +258,33 @@ describe('Live HTML integration without mocks', () => {
         await waitForCondition(() => refreshedUpdates.length === 1, 'persisted card collection snapshot');
         expect(refreshedUpdates[0].value.match(/<article class="card">/g)).toHaveLength(3);
         expect(refreshedUpdates[0].value).toContain('Card 3');
+    });
+
+    test('reusable components isolate server state and route actions to the owning instance', async () => {
+        const server = await start(createComponentsServer);
+        const page = await getPage(server);
+        expect(page.response.body.match(/<rw-component data-rw-component=/g)).toHaveLength(2);
+        expect(page.response.body).toContain('data-rw-component="primary"');
+        expect(page.response.body).toContain('data-rw-component="secondary"');
+        expect(page.response.body.match(/data-rw-state="count">0<\/output>/g)).toHaveLength(2);
+
+        const updates = [];
+        const client = liveClient(page.port, page.config);
+        client.on('redweb:state', message => updates.push(message.payload));
+        clients.add(client);
+        await client.connect();
+        await waitForCondition(() => updates.length === 2, 'component state snapshots');
+        expect(updates).toEqual([
+            { component: 'primary', name: 'count', value: '0', html: false },
+            { component: 'secondary', name: 'count', value: '0', html: false },
+        ]);
+
+        await client.request('redweb:html', { kind: 'action', component: 'primary', name: 'increment', args: [] });
+        await waitForCondition(() => updates.length === 3, 'component action state update');
+        expect(updates[2]).toEqual({ component: 'primary', name: 'count', value: '1', html: false });
+        const session = server.manager.active.get(page.config.pageId);
+        expect(session.page.primary.count).toBe(1);
+        expect(session.page.secondary.count).toBe(0);
     });
 
     test('serves non-live documentation with metadata, ETags, and no browser runtime', async () => {

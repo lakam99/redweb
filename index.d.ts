@@ -508,6 +508,7 @@ declare module 'redweb' {
     }
 
     export function page(path: string, options?: PageOptions): ClassDecorator;
+    export function component(): ClassDecorator;
     export function state(options?: StateOptions): LiveStateDecorator;
     export function action(): LiveActionDecorator;
     export function view(stateName: string): LiveViewDecorator;
