@@ -37,7 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatroomPage = void 0;
 const redweb_1 = require('../..');
 let ChatroomPage = (() => {
-    let _classDecorators = [(0, redweb_1.page)('/', { template: 'chatroom.htmx', shared: true })];
+    let _classDecorators = [(0, redweb_1.page)('/', { template: 'chatroom.htmx', css: 'chatroom.css', shared: true })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;

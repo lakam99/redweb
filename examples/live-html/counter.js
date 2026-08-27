@@ -37,7 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CounterPage = void 0;
 const redweb_1 = require('../..');
 let CounterPage = (() => {
-    let _classDecorators = [(0, redweb_1.page)('/', { template: 'counter.htmx' })];
+    let _classDecorators = [(0, redweb_1.page)('/', { template: 'counter.htmx', css: 'counter.css' })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;

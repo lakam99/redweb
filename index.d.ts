@@ -435,6 +435,7 @@ declare module 'redweb' {
 
     export interface PageOptions {
         template?: string;
+        css?: string | string[];
         scope?: 'connection' | 'shared';
         shared?: boolean;
     }
@@ -471,6 +472,7 @@ declare module 'redweb' {
             socket?: string;
             client?: string;
             runtime?: string;
+            css?: string;
         };
         sessionTtlMs?: number;
         maxSessions?: number;
@@ -497,9 +499,10 @@ declare module 'redweb' {
 
     export class HtmxRenderer {
         static template(filePath: string, rootDir: string): string;
+        static stylesheet(filePath: string, rootDir: string): string;
         static render(source: string, page: object): string;
         static statePayload(name: string, value: unknown): { name: string; value: string; html: boolean };
-        static document(markup: string, config: Record<string, unknown> & { runtimePath: string }): string;
+        static document(markup: string, config: Record<string, unknown> & { runtimePath: string }, stylesheets?: string[]): string;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */

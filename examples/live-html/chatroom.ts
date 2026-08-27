@@ -10,7 +10,7 @@ interface StoredMessage {
     text: string;
 }
 
-@page('/', { template: 'chatroom.htmx', shared: true })
+@page('/', { template: 'chatroom.htmx', css: 'chatroom.css', shared: true })
 export class ChatroomPage {
     private history: StoredMessage[] = [];
 

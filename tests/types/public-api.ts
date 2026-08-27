@@ -17,7 +17,7 @@ import {
     start,
 } from 'redweb';
 
-@page('/counter', { template: 'counter.htmx' })
+@page('/counter', { template: 'counter.htmx', css: ['base.css', 'counter.css'] })
 class CounterPage extends LivePage {
     @state()
     count = 0;

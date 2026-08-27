@@ -9,7 +9,7 @@ This layer deliberately owns page concerns only: `@page`, `@state`, and `@action
 Every page is a plain class registered with `@page(path, options)`. Extending `LivePage` remains compatible but is not required:
 
 ```ts
-@page('/profile', { template: 'profile.htmx' })
+@page('/profile', { template: 'profile.htmx', css: 'profile.css' })
 class ProfilePage {
   @state()
   displayName = 'Guest';
@@ -20,7 +20,18 @@ The decorators support both TypeScript's current standard decorator emit and the
 
 Pages use connection scope by default: each rendered browser page receives its own instance. `shared: true` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history. `scope: 'shared'` remains available as the explicit equivalent.
 
-`start(PageClass)` creates the Live HTML server. `@page()` captures its source directory when the module is evaluated, so colocated templates work for unexported classes, CommonJS, ESM, and barrel exports without module scanning. Pass `templateRoot` explicitly only when pages and templates live in different directories. Template traversal outside that root is rejected.
+`start(PageClass)` creates the Live HTML server. `@page()` captures its source directory when the module is evaluated, so colocated templates and styles work for unexported classes, CommonJS, ESM, and barrel exports without module scanning. Pass `templateRoot` explicitly only when page assets live in a different directory. Template and stylesheet traversal outside that root is rejected.
+
+## Colocated CSS
+
+Declare a stylesheet on the same decorator—no Express static middleware or manual `<link>` is required:
+
+```ts
+@page('/profile', { template: 'profile.htmx', css: 'profile.css' })
+class ProfilePage {}
+```
+
+For composed styles, use `css: ['base.css', 'profile.css']`. Paths resolve from the same captured source directory as the template and cannot traverse outside it. Redweb reads each file once at startup, injects stylesheet links into the server-rendered document, and serves the CSS from a content-addressed URL with the correct content type and immutable caching. Remote URLs and static asset hosting remain under the application's control.
 
 ## Declarative `.htmx` templates
 
@@ -99,7 +110,8 @@ The injected module uses the published `redweb-client` package served by the sam
 `start(PageClass, options)` accepts normal HTTP options plus the following Live HTML controls. `new LiveHtmlServer({ pages, ...options })` remains available for explicit composition:
 
 - `pages`: non-empty array of decorated class constructors when using `LiveHtmlServer` directly.
-- `templateRoot`: optional root for all `.htmx` templates; when omitted, each page uses the source directory captured by its `@page()` decorator.
+- `templateRoot`: optional root for all `.htmx` templates and CSS files; when omitted, each page uses the source directory captured by its `@page()` decorator.
+- `livePaths.css`: optional internal URL prefix for generated stylesheet routes; defaults to `/__redweb/css`.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
@@ -111,7 +123,7 @@ The internal paths and application page paths must be unique.
 
 ## Verification examples
 
-- `examples/live-html/counter.ts` uses `@page()` and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
-- `examples/live-html/chatroom.ts` uses `@page()`, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
+- `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
+- `examples/live-html/chatroom.ts` uses `@page()`, colocated CSS, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
 
 Run the examples immediately with `npm run example:counter` and `npm run example:chatroom`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.

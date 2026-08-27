@@ -45,7 +45,7 @@ const {
 ```ts
 import { page, start, state } from 'redweb';
 
-@page('/', { template: 'counter.htmx' })
+@page('/', { template: 'counter.htmx', css: 'counter.css' })
 class CounterPage {
   @state()
   count = 0;
@@ -73,10 +73,12 @@ start(CounterPage, { port: 8080 });
 
 Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
 
+CSS is colocated with the page and needs no static-server setup. Pass one file with `css: 'counter.css'` or compose several with `css: ['base.css', 'counter.css']`. Redweb resolves the files beside the decorated class, injects `<link>` elements during SSR, and serves content-addressed stylesheets with immutable browser caching.
+
 Browser events can call only explicitly exposed actions:
 
 ```ts
-@page('/chat', { template: 'chatroom.htmx', shared: true })
+@page('/chat', { template: 'chatroom.htmx', css: 'chatroom.css', shared: true })
 class ChatroomPage {
   @state()
   messages = html``;

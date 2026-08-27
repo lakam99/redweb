@@ -10,15 +10,23 @@ function serializeJson(value) {
 }
 
 class HtmxRenderer {
-    static template(filePath, rootDir) {
+    static file(filePath, rootDir, kind) {
         const root = path.resolve(rootDir);
         const resolved = path.resolve(root, filePath);
         const relative = path.relative(root, resolved);
         if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
-            throw new Error('Page template is outside the configured template root.');
+            throw new Error(`Page ${kind} is outside the configured template root.`);
         }
-        if (!fs.existsSync(resolved)) throw new Error(`Page template not found: ${resolved}`);
+        if (!fs.existsSync(resolved)) throw new Error(`Page ${kind} not found: ${resolved}`);
         return fs.readFileSync(resolved, 'utf8');
+    }
+
+    static template(filePath, rootDir) {
+        return HtmxRenderer.file(filePath, rootDir, 'template');
+    }
+
+    static stylesheet(filePath, rootDir) {
+        return HtmxRenderer.file(filePath, rootDir, 'stylesheet');
     }
 
     static render(source, page) {
@@ -41,11 +49,17 @@ class HtmxRenderer {
         return { name, value: isHtml(value) ? value.toString() : String(value ?? ''), html: isHtml(value) };
     }
 
-    static document(markup, config) {
+    static document(markup, config, stylesheets = []) {
         const bootstrap = `<script type="application/json" id="__redweb_page">${serializeJson(config)}</script>` +
             `<script type="module" src="${config.runtimePath}"></script>`;
-        if (/<\/body\s*>/i.test(markup)) return markup.replace(/<\/body\s*>/i, `${bootstrap}</body>`);
-        return `<!doctype html><html><body><main data-rw-root>${markup}</main>${bootstrap}</body></html>`;
+        const links = stylesheets.map(href => `<link rel="stylesheet" href="${href}">`).join('');
+        if (/<\/body\s*>/i.test(markup)) {
+            const styled = links && /<\/head\s*>/i.test(markup)
+                ? markup.replace(/<\/head\s*>/i, `${links}</head>`)
+                : markup.replace(/<body([^>]*)>/i, `<body$1>${links}`);
+            return styled.replace(/<\/body\s*>/i, `${bootstrap}</body>`);
+        }
+        return `<!doctype html><html><head>${links}</head><body><main data-rw-root>${markup}</main>${bootstrap}</body></html>`;
     }
 }
 

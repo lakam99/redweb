@@ -146,6 +146,8 @@ async function main() {
             `Number(document.querySelector('[data-rw-state="count"]')?.textContent) >= 2`,
             'the real browser counter DOM update'
         ));
+        const counterColor = await counterPage.evaluate("getComputedStyle(document.querySelector('output')).color");
+        if (counterColor !== 'rgb(103, 232, 249)') throw new Error(`Counter CSS was not applied: ${counterColor}`);
 
         const chatUrl = `http://127.0.0.1:${chat.server.address().port}/`;
         const first = await openPage(debugPort, chatUrl);
@@ -165,7 +167,9 @@ async function main() {
         await Promise.all([first, second].map(page => page.evaluate(eventual(received, 'the real browser chat broadcast'))));
         const safety = await Promise.all([first, second].map(page => page.evaluate('window.__redwebInjected !== true')));
         if (!safety.every(Boolean)) throw new Error('Escaped chat content executed in the browser.');
-        console.log('Live HTML browser gate passed: counter DOM updates and two-client chat interaction.');
+        const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('button')).backgroundColor");
+        if (chatButtonColor !== 'rgb(34, 211, 238)') throw new Error(`Chatroom CSS was not applied: ${chatButtonColor}`);
+        console.log('Live HTML browser gate passed: CSS, counter DOM updates, and two-client chat interaction.');
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {

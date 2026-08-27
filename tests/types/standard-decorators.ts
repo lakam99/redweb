@@ -1,6 +1,6 @@
 import { action, html, page, start, state } from 'redweb';
 
-@page('/standard')
+@page('/standard', { css: 'standard.css' })
 class StandardPage {
     @state({ writable: true })
     name = 'Redweb';

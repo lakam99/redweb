@@ -97,6 +97,13 @@ describe('Live HTML integration without mocks', () => {
         const firstPage = await getPage(server);
         expect(firstPage.response.body).toContain('Server-side counter');
         expect(firstPage.response.body).toContain('data-rw-state="count">0</output>');
+        const stylesheetPath = firstPage.response.body.match(/<link rel="stylesheet" href="([^"]+)">/)?.[1];
+        expect(stylesheetPath).toMatch(/^\/__redweb\/css\/[a-f0-9]{64}\.css$/);
+        const stylesheet = await request({ port: firstPage.port, path: stylesheetPath });
+        expect(stylesheet.status).toBe(200);
+        expect(stylesheet.headers['content-type']).toContain('text/css');
+        expect(stylesheet.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+        expect(stylesheet.body).toContain('color: #67e8f9');
 
         const runtime = await request({ port: firstPage.port, path: firstPage.config.runtimePath });
         const browserClient = await request({ port: firstPage.port, path: '/__redweb/client.js' });

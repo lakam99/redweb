@@ -85,9 +85,13 @@ function page(routePath, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('Page options must be an object.');
     }
-    const { template, shared, scope = shared ? 'shared' : 'connection' } = options;
+    const { template, css, shared, scope = shared ? 'shared' : 'connection' } = options;
     if (template !== undefined && (typeof template !== 'string' || !template)) {
         throw new TypeError('Page template must be a non-empty path.');
+    }
+    const stylesheets = css === undefined ? undefined : [...new Set(Array.isArray(css) ? css : [css])];
+    if (stylesheets && (stylesheets.length === 0 || stylesheets.some(file => typeof file !== 'string' || !file))) {
+        throw new TypeError('Page css must be a non-empty path or array of non-empty paths.');
     }
     if (shared !== undefined && typeof shared !== 'boolean') {
         throw new TypeError('Page shared must be a boolean.');
@@ -100,7 +104,12 @@ function page(routePath, options = {}) {
     }
     return PageClass => {
         if (typeof PageClass !== 'function') throw new TypeError('page() must decorate a class.');
-        PAGE_METADATA.set(PageClass, Object.freeze({ path: routePath, template, scope }));
+        PAGE_METADATA.set(PageClass, Object.freeze({
+            path: routePath,
+            template,
+            scope,
+            ...(stylesheets && { css: Object.freeze(stylesheets) }),
+        }));
         PAGE_ROOTS.set(PageClass, templateRoot);
         return PageClass;
     };

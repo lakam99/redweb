@@ -1,4 +1,4 @@
-const { randomUUID } = require('crypto');
+const { createHash, randomUUID } = require('crypto');
 const path = require('path');
 const { BaseHandler } = require('../ws/BaseHandler');
 const { SocketRoute } = require('../ws');
@@ -12,6 +12,7 @@ const DEFAULT_PATHS = Object.freeze({
     socket: '/__redweb/live',
     client: '/__redweb/client.js',
     runtime: '/__redweb/runtime.js',
+    css: '/__redweb/css',
 });
 
 function boundedName(value, label) {
@@ -60,6 +61,9 @@ class PageManager {
         if (new Set(Object.values(this.paths)).size !== Object.values(this.paths).length) {
             throw new Error('Live HTML internal paths must be unique.');
         }
+        if (Object.entries(this.paths).some(([name, value]) => name !== 'css' && value.startsWith(`${this.paths.css}/`))) {
+            throw new Error('Live HTML css path must not contain another internal path.');
+        }
         this.templateRoot = path.resolve(templateRoot || process.cwd());
         this.hasExplicitTemplateRoot = templateRoot !== undefined;
         this.sessionTtlMs = sessionTtlMs;
@@ -71,6 +75,7 @@ class PageManager {
         this.pending = new Map();
         this.active = new Map();
         this.records = new Map();
+        this.stylesheets = new Map();
         this.sharedPages = new Set();
         this.rendering = 0;
         this.renderWaiters = [];
@@ -84,16 +89,18 @@ class PageManager {
         if (typeof PageClass !== 'function') throw new TypeError('Every page must be a class.');
         const metadata = getPageMetadata(PageClass);
         if (!metadata) throw new TypeError(`${PageClass.name || 'Page'} is missing @page metadata.`);
-        if (this.records.has(metadata.path) || Object.values(this.paths).includes(metadata.path)) {
+        if (this.records.has(metadata.path) || Object.values(this.paths).includes(metadata.path) || metadata.path.startsWith(`${this.paths.css}/`)) {
             throw new Error(`Duplicate or reserved Live HTML path: ${metadata.path}`);
         }
+        const root = this.hasExplicitTemplateRoot ? this.templateRoot : getPageTemplateRoot(PageClass);
         const record = {
             PageClass,
             metadata,
             template: metadata.template ? HtmxRenderer.template(
                 metadata.template,
-                this.hasExplicitTemplateRoot ? this.templateRoot : getPageTemplateRoot(PageClass)
+                root
             ) : null,
+            stylesheets: [...new Set((metadata.css || []).map(file => this.registerStylesheet(file, root)))],
             shared: null,
         };
         if (metadata.scope === 'shared') {
@@ -101,6 +108,14 @@ class PageManager {
             this.sharedPages.add(record.shared);
         }
         this.records.set(metadata.path, record);
+    }
+
+    registerStylesheet(file, root) {
+        const content = HtmxRenderer.stylesheet(file, root);
+        const digest = createHash('sha256').update(content).digest('hex');
+        const url = `${this.paths.css}/${digest}.css`;
+        this.stylesheets.set(url, content);
+        return url;
     }
 
     instantiate(record) {
@@ -115,6 +130,9 @@ class PageManager {
         const clientFile = path.join(path.dirname(require.resolve('redweb-client')), 'index.js');
         app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
         app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
+        this.stylesheets.forEach((content, url) => app.get(url, (_request, response) => {
+            response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
+        }));
         this.records.forEach(record => app.get(record.metadata.path, (request, response, next) => {
             Promise.resolve(this.render(record, request)).then(markup => response.type('html').send(markup), next);
         }));
@@ -158,7 +176,7 @@ class PageManager {
                 socketPath: this.paths.socket,
                 runtimePath: this.paths.runtime,
                 version: PROTOCOL_VERSION,
-            });
+            }, record.stylesheets);
         } catch (error) {
             if (ownsPage && page) await page.dispose();
             throw error;

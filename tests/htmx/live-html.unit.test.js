@@ -44,6 +44,9 @@ describe('decorator-first Live HTML units', () => {
         expect(() => page('relative')).toThrow('beginning with');
         expect(() => page('/', null)).toThrow('options');
         expect(() => page('/', { template: '' })).toThrow('template');
+        expect(() => page('/', { css: '' })).toThrow('css');
+        expect(() => page('/', { css: [] })).toThrow('css');
+        expect(() => page('/', { css: ['valid.css', null] })).toThrow('css');
         expect(() => page('/', { shared: 'yes' })).toThrow('boolean');
         expect(() => page('/', { scope: 'shared', shared: false })).toThrow('conflict');
         expect(() => page('/', { scope: 'request' })).toThrow('scope');
@@ -64,9 +67,12 @@ describe('decorator-first Live HTML units', () => {
         decorateAction(MetadataPage, 'run');
         state({ writable: true })(MetadataPage.prototype, 'name');
         decorateAction(MetadataPage, 'run');
-        page('/metadata', { template: 'page.htmx', scope: 'shared' })(MetadataPage);
+        page('/metadata', { template: 'page.htmx', css: ['page.css', 'page.css'], scope: 'shared' })(MetadataPage);
 
-        expect(getPageMetadata(MetadataPage)).toEqual({ path: '/metadata', template: 'page.htmx', scope: 'shared' });
+        expect(getPageMetadata(MetadataPage)).toEqual({
+            path: '/metadata', template: 'page.htmx', css: ['page.css'], scope: 'shared',
+        });
+        expect(Object.isFrozen(getPageMetadata(MetadataPage).css)).toBe(true);
         expect(getStateMetadata(MetadataPage).get('name')).toEqual({ writable: true });
         expect(getActionMetadata(MetadataPage)).toEqual(new Set(['run']));
         getStateMetadata(MetadataPage).clear();
@@ -169,9 +175,13 @@ describe('decorator-first Live HTML units', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-unit-'));
         try {
             fs.writeFileSync(path.join(root, 'page.htmx'), '<h1>{{ title }}</h1>');
+            fs.writeFileSync(path.join(root, 'page.css'), 'h1 { color: cyan; }');
             expect(HtmxRenderer.template('page.htmx', root)).toBe('<h1>{{ title }}</h1>');
+            expect(HtmxRenderer.stylesheet('page.css', root)).toBe('h1 { color: cyan; }');
             expect(() => HtmxRenderer.template('../outside.htmx', root)).toThrow('outside');
             expect(() => HtmxRenderer.template('missing.htmx', root)).toThrow('not found');
+            expect(() => HtmxRenderer.stylesheet('../outside.css', root)).toThrow('outside');
+            expect(() => HtmxRenderer.stylesheet('missing.css', root)).toThrow('not found');
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
         }
@@ -200,6 +210,14 @@ describe('decorator-first Live HTML units', () => {
         const document = HtmxRenderer.document('<html><body>hello</body></html>', config);
         expect(document).toContain('hello<script type="application/json"');
         expect(document.match(/<body>/g)).toHaveLength(1);
+        const styledDocument = HtmxRenderer.document(
+            '<html><head><title>Styled</title></head><body>hello</body></html>', config, ['/one.css', '/two.css']
+        );
+        expect(styledDocument).toContain('<link rel="stylesheet" href="/one.css"><link rel="stylesheet" href="/two.css"></head>');
+        expect(HtmxRenderer.document('<html><body>hello</body></html>', config, ['/page.css']))
+            .toContain('<body><link rel="stylesheet" href="/page.css">hello');
+        expect(HtmxRenderer.document('<p>hello</p>', config, ['/fragment.css']))
+            .toContain('<head><link rel="stylesheet" href="/fragment.css"></head>');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {
@@ -269,6 +287,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '/safe//unsafe.js' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/same', client: '/same' } })).toThrow('unique');
+        expect(() => new PageManager({ pages: [PlainPage], paths: { css: '/assets', runtime: '/assets/runtime.js' } })).toThrow('css path');
         expect(() => new PageManager({ pages: [class {}] })).toThrow('missing @page');
         expect(() => new PageManager({ pages: [null] })).toThrow('must be a class');
         expect(() => new PageManager({ pages: [class extends LivePage {}] })).toThrow('missing @page');
@@ -311,6 +330,9 @@ describe('decorator-first Live HTML units', () => {
         class ReservedPage extends LivePage {}
         page('/__redweb/live')(ReservedPage);
         expect(() => new PageManager({ pages: [ReservedPage] })).toThrow('reserved');
+        class ReservedCssPage extends LivePage {}
+        page('/__redweb/css/application.css')(ReservedCssPage);
+        expect(() => new PageManager({ pages: [ReservedCssPage] })).toThrow('reserved');
         expect(getStateMetadata(class {})).toEqual(new Map());
         expect(getActionMetadata(class {})).toEqual(new Set());
     });
