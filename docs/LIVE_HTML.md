@@ -68,7 +68,49 @@ card(item: { title: string }) {
 
 Place the collection in the template with `<section rw-each="cards"></section>`. Redweb server-renders every item, escapes interpolated values, and replaces the collection contents when the array is reassigned. View methods are synchronous and must return an `HtmlFragment`. Arrays of fragments also compose naturally inside `html`, such as ``html`<div>${items.map(renderItem)}</div>` ``.
 
-For a small, auditable safety model, `html` interpolations are allowed only in element text. Dynamic attributes, URLs, `<script>`, and `<style>` content are rejected; construct those values outside HTML or expose them through a purpose-built static template instead.
+For a small, auditable safety model, ordinary `html` interpolations are allowed only in element text. Dynamic attributes and URLs require the explicit wrappers below. Interpolation in event handlers, inline styles, `srcdoc`, `srcset`, `<script>`, and `<style>` remains prohibited.
+
+### Safe attributes and links
+
+Dynamic document navigation remains explicit:
+
+```ts
+import { attribute, html, url } from 'redweb';
+
+const section = { id: 'socket-server', name: 'SocketServer' };
+const markup = html`
+  <article id="${attribute(section.id)}">
+    <a href="${url(`#${section.id}`)}">${section.name}</a>
+  </article>
+`;
+```
+
+`attribute()` accepts primitive values and is valid only inside a quoted non-URL attribute. `url()` is required for URL-bearing attributes such as `href`, `src`, and `action`; it permits relative URLs plus HTTP, HTTPS, mail, and telephone URLs, while rejecting control characters, protocol-relative URLs, and executable schemes. Both wrappers are escaped when rendered and are rejected in element text.
+
+### Nested components and code
+
+Plain functions returning `html` fragments are reusable server components. `each()` validates and joins arrays of those fragments, including nested lists:
+
+```ts
+import { codeBlock, each, html } from 'redweb';
+
+const method = (entry: Method) => html`
+  <section>
+    <h3>${entry.name}</h3>
+    <p>${entry.description}</p>
+    ${codeBlock(entry.usage, { language: 'ts', label: 'TypeScript' })}
+  </section>
+`;
+
+const reference = each(apiSections, section => html`
+  <article>
+    <h2>${section.name}</h2>
+    ${each(section.methods, method)}
+  </article>
+`);
+```
+
+`codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
 
 State observation is deliberately shallow. Assigning a new value publishes an update; mutating a nested object or array in place does not. Reassign after nested changes:
 
@@ -144,3 +186,32 @@ The internal paths and application page paths must be unique.
 - `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
 
 Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+
+## Static pages and documentation export
+
+Set `live: false` when a page needs server rendering but no realtime session:
+
+```ts
+import { exportStatic, page } from 'redweb';
+
+@page('/docs', {
+  template: 'docs.html',
+  css: ['base.css', 'docs.css'],
+  live: false,
+  head: {
+    title: 'Redweb API reference',
+    description: 'HTTP, WebSocket, multiplayer, and Live HTML APIs.',
+    canonical: 'https://example.com/docs',
+    image: 'https://example.com/og.png',
+    robots: 'index,follow',
+  },
+  cache: { maxAge: 300, staleWhileRevalidate: 3600 },
+})
+class DocsPage {}
+
+await exportStatic(DocsPage, { outDir: 'dist' });
+```
+
+Non-live pages contain no page token or browser runtime. When served by `start()`, Redweb skips its WebSocket route, emits an ETag, honors `If-None-Match`, and applies the declared public cache policy. Interactive pages are always sent with `private, no-store`.
+
+`exportStatic()` accepts one decorated class or an array. It requires `live: false`, maps `/` to `index.html` and `/docs` to `docs/index.html`, emits content-addressed CSS beside the pages, and returns frozen lists of written files. It never deletes or cleans the output directory.

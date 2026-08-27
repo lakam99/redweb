@@ -9,10 +9,15 @@ const {
     HtmlRenderer,
     LivePage,
     action,
+    attribute,
+    codeBlock,
+    each,
+    exportStatic,
     html,
     page,
     start,
     state,
+    url,
     view,
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
@@ -45,8 +50,47 @@ describe('decorator-first Live HTML units', () => {
         expect(() => renderValue([html`<i>safe</i>`, '<b>unsafe</b>'])).toThrow('arrays of HtmlFragment');
         expect(html`${[html`<i>one</i>`, html`<i>two</i>`]}`.toString()).toBe('<i>one</i><i>two</i>');
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
+        expect(html`<article id="${attribute('api<one')}" data-index='${attribute(1)}'>safe</article>`.toString())
+            .toBe('<article id="api&lt;one" data-index=\'1\'>safe</article>');
+        expect(html`<a href="${url('#api')}" cite='${url('https://example.test/docs')}'>docs</a>`.toString())
+            .toContain('href="#api" cite=\'https://example.test/docs\'');
+        expect(html`<a href="${url('mailto:docs@example.test')}">mail</a>`.toString()).toContain('mailto:');
+        expect(html`<a href="${url('tel:+15551234')}">call</a>`.toString()).toContain('tel:');
+        expect(html`<a href="${url('/docs?tab=api')}">relative</a>`.toString()).toContain('/docs?tab=api');
+        expect(() => attribute({})).toThrow('string, number');
+        expect(() => url('')).toThrow('non-empty URL');
+        expect(() => url(' /docs')).toThrow('surrounding whitespace');
+        expect(() => url('/docs\n')).toThrow('surrounding whitespace');
+        expect(() => url('//foreign.example/docs')).toThrow('protocol-relative');
+        expect(() => url('\\foreign.example\\docs')).toThrow('backslash');
+        expect(() => url('javascript:alert(1)')).toThrow('javascript:');
+        expect(() => html`<a href="${attribute('unsafe')}">link</a>`).toThrow('requires url');
+        expect(() => html`<p id="${url('#wrong')}">wrong</p>`).toThrow('requires attribute');
+        expect(() => html`<button onclick="${attribute('run()')}">wrong</button>`).toThrow('not allowed');
+        expect(() => html`<p style="${attribute('color:red')}">wrong</p>`).toThrow('not allowed');
+        expect(() => html`<iframe srcdoc="${attribute('<p>wrong</p>')}"></iframe>`).toThrow('not allowed');
+        expect(() => html`<img srcset="${attribute('one.png 1x')}">`).toThrow('not allowed');
+        expect(() => html`<object data="${attribute('/file')}"></object>`).toThrow('requires url');
+        expect(() => html`<p>${attribute('wrong')}</p>`).toThrow('matching quoted attributes');
+        expect(() => html`<div ${'unfinished'}`).toThrow('element text');
+        expect(() => html`</${'closing'}>`).toThrow('element text');
+        expect(each(['one', 'two'], (item, index) => html`<i>${index}:${item}</i>`).toString())
+            .toBe('<i>0:one</i><i>1:two</i>');
+        expect(each([], item => html`${item}`).toString()).toBe('');
+        expect(() => each(null, () => html``)).toThrow('array');
+        expect(() => each([], null)).toThrow('render function');
+        expect(() => each(['unsafe'], item => item)).toThrow('html fragments');
+        expect(codeBlock('<script>', { language: 'ts', label: 'TypeScript' }).toString())
+            .toContain('<figcaption>TypeScript</figcaption><pre><code class="language-ts">&lt;script&gt;</code>');
+        expect(codeBlock(html`<span class="token">const</span>`, { language: 'js' }).toString())
+            .toContain('<code class="language-js"><span class="token">const</span></code>');
+        expect(codeBlock(null, { label: '' }).toString()).not.toContain('figcaption');
+        expect(codeBlock('plain').toString()).toContain('language-text');
+        expect(() => codeBlock('x', null)).toThrow('options');
+        expect(() => codeBlock('x', { language: 'not valid' })).toThrow('safe name');
+        expect(() => codeBlock('x', { label: null })).toThrow('label');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
-        expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('element text');
+        expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('requires url');
         expect(() => html`<script>${'</script><b>unsafe</b>'}</script>`).toThrow('script or style');
         expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('script or style');
     });
@@ -61,6 +105,22 @@ describe('decorator-first Live HTML units', () => {
         expect(() => page('/', { shared: 'yes' })).toThrow('boolean');
         expect(() => page('/', { scope: 'shared', shared: false })).toThrow('conflict');
         expect(() => page('/', { scope: 'request' })).toThrow('scope');
+        expect(() => page('/', { live: 'no' })).toThrow('live');
+        expect(() => page('/', { head: null })).toThrow('head');
+        expect(() => page('/', { head: { unknown: true } })).toThrow('Unknown page head');
+        expect(() => page('/', { head: { title: '' } })).toThrow('head title');
+        expect(() => page('/', { head: { description: 1 } })).toThrow('head description');
+        expect(() => page('/', { head: { robots: '' } })).toThrow('head robots');
+        expect(() => page('/', { head: { canonical: '/docs' } })).toThrow('absolute HTTP');
+        expect(() => page('/', { head: { canonical: 1 } })).toThrow('absolute HTTP');
+        expect(() => page('/', { head: { image: 'ftp://example.test/image.png' } })).toThrow('absolute HTTP');
+        expect(() => page('/', { head: { image: 'not a url' } })).toThrow('absolute HTTP');
+        expect(() => page('/', { cache: {} })).toThrow('only when live is false');
+        expect(() => page('/', { live: false, cache: null })).toThrow('cache');
+        expect(() => page('/', { live: false, cache: { unknown: true } })).toThrow('Unknown page cache');
+        expect(() => page('/', { live: false, cache: { maxAge: -1 } })).toThrow('maxAge');
+        expect(() => page('/', { live: false, cache: { staleWhileRevalidate: 1.5 } })).toThrow('staleWhileRevalidate');
+        expect(() => page('/', { live: false, cache: { immutable: 'yes' } })).toThrow('immutable');
         expect(() => page('/')({})).toThrow('class');
         expect(() => state(null)).toThrow('options');
         expect(() => state({ writable: 'yes' })).toThrow('writable');
@@ -88,6 +148,30 @@ describe('decorator-first Live HTML units', () => {
             path: '/metadata', template: 'page.html', css: ['page.css'], scope: 'shared',
         });
         expect(Object.isFrozen(getPageMetadata(MetadataPage).css)).toBe(true);
+        class StaticMetadataPage {}
+        page('/static', {
+            live: false,
+            head: {
+                title: 'Docs',
+                description: 'Reference',
+                canonical: 'https://example.test/docs',
+                image: 'https://example.test/image.png',
+                robots: 'index,follow',
+            },
+            cache: { maxAge: 60, staleWhileRevalidate: 30, immutable: true },
+        })(StaticMetadataPage);
+        expect(getPageMetadata(StaticMetadataPage)).toMatchObject({
+            live: false,
+            head: {
+                title: 'Docs',
+                description: 'Reference',
+                canonical: 'https://example.test/docs',
+                image: 'https://example.test/image.png',
+                robots: 'index,follow',
+            },
+            cache: { maxAge: 60, staleWhileRevalidate: 30, immutable: true },
+        });
+        expect(Object.isFrozen(getPageMetadata(StaticMetadataPage).head)).toBe(true);
         expect(getStateMetadata(MetadataPage).get('name')).toEqual({ writable: true });
         expect(getActionMetadata(MetadataPage)).toEqual(new Set(['run']));
         getStateMetadata(MetadataPage).clear();
@@ -352,6 +436,9 @@ describe('decorator-first Live HTML units', () => {
             .toBe('<div data-rw-state="secret">LEAK \n </div>');
         expect(HtmlRenderer.render('<div data-rw-state="body" data-rw-html></div>', pageState))
             .toContain('<b>safe {{ secret }}</b>');
+        expect(HtmlRenderer.render('<h1>{{ title }}</h1>', pageState, { live: false })).toBe('<h1>&lt;unsafe&gt;</h1>');
+        expect(() => HtmlRenderer.render('text', pageState, null)).toThrow('Render options');
+        expect(() => HtmlRenderer.render('text', pageState, { live: 'no' })).toThrow('Render live');
         expect(() => HtmlRenderer.render('<div data-rw-state="secret">', cards)).toThrow('empty container');
         expect(HtmlRenderer.render('<section title="unclosed', cards)).toBe('<section title="unclosed');
         expect(HtmlRenderer.render('<section title="{{ secret }}', cards)).toBe('<section title="{{ secret }}');
@@ -396,9 +483,9 @@ describe('decorator-first Live HTML units', () => {
         );
         expect(styledDocument).toContain('<link rel="stylesheet" href="/one.css"><link rel="stylesheet" href="/two.css"></head>');
         expect(HtmlRenderer.document('<html><body>hello</body></html>', config, ['/page.css']))
-            .toContain('hello<link rel="stylesheet" href="/page.css"><script');
+            .toContain('<head><link rel="stylesheet" href="/page.css"></head><body>hello<script');
         expect(HtmlRenderer.document('<html><body data-label="a > b">hello</body></html>', config, ['/quoted.css']))
-            .toContain('<body data-label="a > b">hello<link rel="stylesheet" href="/quoted.css"><script');
+            .toContain('<head><link rel="stylesheet" href="/quoted.css"></head><body data-label="a > b">hello<script');
         expect(HtmlRenderer.document('<p>hello</p>', config, ['/fragment.css']))
             .toContain('<head><link rel="stylesheet" href="/fragment.css"></head>');
         const hostilePath = '/asset"><script>window.injected=true</script>';
@@ -425,6 +512,26 @@ describe('decorator-first Live HTML units', () => {
             .toContain('</noscript>safe<script type="application/json"');
         expect(HtmlRenderer.document('<body><plaintext>fake </body></plaintext>safe</body>', config))
             .toContain('<main data-rw-root><body><plaintext>fake </body></plaintext>safe</body></main>');
+        const staticDocument = HtmlRenderer.document('<html><body>Docs</body></html>', null, ['/docs.css'], {
+            title: '<Redweb>',
+            description: 'API "reference"',
+            canonical: 'https://example.test/docs?x=1&y=2',
+            image: 'https://example.test/image.png',
+            robots: 'index,follow',
+        });
+        expect(staticDocument).toContain('<head><title>&lt;Redweb&gt;</title>');
+        expect(staticDocument).toContain('<meta name="description" content="API &quot;reference&quot;">');
+        expect(staticDocument).toContain('<link rel="canonical" href="https://example.test/docs?x=1&amp;y=2">');
+        expect(staticDocument).toContain('<meta property="og:image" content="https://example.test/image.png">');
+        expect(staticDocument).toContain('<meta name="twitter:card" content="summary_large_image">');
+        expect(staticDocument).toContain('<meta name="robots" content="index,follow">');
+        expect(staticDocument).not.toContain('__redweb_page');
+        expect(HtmlRenderer.document('<p>Static</p>', null, [], { title: 'Static' }))
+            .toContain('<meta name="twitter:card" content="summary">');
+        expect(HtmlRenderer.head()).toBe('');
+        expect(HtmlRenderer.document('<html><head></head><body>Empty head</body></html>'))
+            .toBe('<html><head></head><body>Empty head</body></html>');
+        expect(HtmlRenderer.document('</body>', null, [], { title: 'Orphan' })).toContain('<head><title>Orphan</title>');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {
@@ -434,6 +541,69 @@ describe('decorator-first Live HTML units', () => {
         expect(source).toContain("document.addEventListener('click'");
         expect(source).toContain("document.addEventListener('submit'");
         expect(source).toContain("document.addEventListener('input'");
+    });
+
+    test('exports non-live decorated pages and content-addressed CSS as static files', async () => {
+        await expect(exportStatic(null, { outDir: 'dist' })).rejects.toThrow('page class');
+        class Undecorated {}
+        await expect(exportStatic(Undecorated, null)).rejects.toThrow('options');
+        await expect(exportStatic(Undecorated)).rejects.toThrow('outDir');
+        await expect(exportStatic(Undecorated, {})).rejects.toThrow('outDir');
+
+        class LiveExport { render() { return '<p>live</p>'; } }
+        page('/live-export')(LiveExport);
+        await expect(exportStatic(LiveExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('live: false');
+
+        class InvalidExport { render() { return '<p>invalid</p>'; } }
+        page('/:id', { live: false })(InvalidExport);
+        await expect(exportStatic(InvalidExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('cannot be exported');
+        class TraversalExport { render() { return '<p>invalid</p>'; } }
+        page('/../', { live: false })(TraversalExport);
+        await expect(exportStatic(TraversalExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('cannot be exported');
+
+        class DuplicateA { render() { return '<p>a</p>'; } }
+        class DuplicateB { render() { return '<p>b</p>'; } }
+        page('/same', { live: false })(DuplicateA);
+        page('/same/', { live: false })(DuplicateB);
+        await expect(exportStatic([DuplicateA, DuplicateB], { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('same output file');
+
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-static-source-'));
+        const output = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-static-output-'));
+        try {
+            fs.writeFileSync(path.join(root, 'docs.html'), '<html><body><h1>{{ title }}</h1></body></html>');
+            fs.writeFileSync(path.join(root, 'docs.css'), 'body { color: red; }');
+            class StaticDocs { title = 'Redweb API'; }
+            page('/docs', {
+                template: 'docs.html',
+                css: 'docs.css',
+                live: false,
+                head: { title: 'Redweb Docs', description: 'API reference', canonical: 'https://example.test/docs' },
+            })(StaticDocs);
+
+            const result = await exportStatic(StaticDocs, { outDir: output, templateRoot: root, logger: null });
+            expect(Object.isFrozen(result)).toBe(true);
+            expect(Object.isFrozen(result.pages)).toBe(true);
+            expect(result.pages).toEqual([path.join(output, 'docs', 'index.html')]);
+            const document = fs.readFileSync(result.pages[0], 'utf8');
+            expect(document).toContain('<h1>Redweb API</h1>');
+            expect(document).toContain('<title>Redweb Docs</title>');
+            expect(document).not.toContain('__redweb_page');
+            expect(result.assets).toHaveLength(1);
+            expect(fs.readFileSync(result.assets[0], 'utf8')).toBe('body { color: red; }');
+            expect(document).toContain('/__redweb/css/');
+
+            class RootStatic { render() { return '<p>Root</p>'; } }
+            page('/', { live: false })(RootStatic);
+            const rootResult = await exportStatic(RootStatic, { outDir: output });
+            expect(rootResult.pages).toEqual([path.join(output, 'index.html')]);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+            fs.rmSync(output, { recursive: true, force: true });
+        }
     });
 
     test('resolves decorator source roots for filesystem and ESM call sites', () => {

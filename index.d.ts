@@ -405,10 +405,20 @@ declare module 'redweb' {
     /** ─────────────────── LIVE HTML ─────────────────── */
 
     const htmlFragmentBrand: unique symbol;
+    const htmlAttributeBrand: unique symbol;
+    const htmlUrlBrand: unique symbol;
 
     export interface HtmlFragment {
         readonly [htmlFragmentBrand]: true;
         toString(): string;
+    }
+
+    export interface HtmlAttribute {
+        readonly [htmlAttributeBrand]: true;
+    }
+
+    export interface HtmlUrl {
+        readonly [htmlUrlBrand]: true;
     }
 
     export interface LivePageRequestContext {
@@ -441,6 +451,23 @@ declare module 'redweb' {
         css?: string | string[];
         scope?: 'connection' | 'shared';
         shared?: boolean;
+        live?: boolean;
+        head?: PageHead;
+        cache?: PageCache;
+    }
+
+    export interface PageHead {
+        title?: string;
+        description?: string;
+        canonical?: string;
+        image?: string;
+        robots?: string;
+    }
+
+    export interface PageCache {
+        maxAge?: number;
+        staleWhileRevalidate?: number;
+        immutable?: boolean;
     }
 
     export interface StateOptions {
@@ -474,6 +501,10 @@ declare module 'redweb' {
     export function action(): LiveActionDecorator;
     export function view(stateName: string): LiveViewDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
+    export function attribute(value: string | number | bigint | boolean): HtmlAttribute;
+    export function url(value: string): HtmlUrl;
+    export function each<Item>(items: Item[], render: (item: Item, index: number) => HtmlFragment): HtmlFragment;
+    export function codeBlock(code: unknown, options?: { language?: string; label?: string }): HtmlFragment;
 
     export type LivePageClass = new () => object;
 
@@ -499,7 +530,7 @@ declare module 'redweb' {
         app: Application;
         server: NodeHttpServer | NodeHttpsServer;
         http: HttpServer | HttpsServer;
-        sockets: SocketServer;
+        sockets: SocketServer | null;
         constructor(options: LiveHtmlServerOptions);
         shutdown(): Promise<void>;
     }
@@ -509,13 +540,35 @@ declare module 'redweb' {
         options?: Omit<LiveHtmlServerOptions, 'pages'>
     ): LiveHtmlServer;
 
+    export interface StaticExportOptions {
+        outDir: string;
+        templateRoot?: string;
+        logger?: RedWebLogger | null;
+    }
+
+    export interface StaticExportResult {
+        readonly pages: readonly string[];
+        readonly assets: readonly string[];
+    }
+
+    export function exportStatic(
+        pageOrPages: LivePageClass | LivePageClass[],
+        options: StaticExportOptions
+    ): Promise<StaticExportResult>;
+
     export class HtmlRenderer {
         static template(filePath: string, rootDir: string): string;
         static stylesheet(filePath: string, rootDir: string): string;
-        static render(source: string, page: object): string;
+        static render(source: string, page: object, options?: { live?: boolean }): string;
         static collection(page: object, name: string, value: unknown): string;
         static statePayload(name: string, value: unknown, page?: object): { name: string; value: string; html: boolean };
-        static document(markup: string, config: Record<string, unknown> & { runtimePath: string }, stylesheets?: string[]): string;
+        static head(metadata?: PageHead): string;
+        static document(
+            markup: string,
+            config?: (Record<string, unknown> & { runtimePath: string }) | null,
+            stylesheets?: string[],
+            metadata?: PageHead
+        ): string;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */

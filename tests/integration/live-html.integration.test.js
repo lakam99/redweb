@@ -8,6 +8,24 @@ const { CardsPage } = require('../../examples/live-html/cards');
 const createCounterServer = options => startPages(CounterPage, options);
 const createChatroomServer = options => startPages(ChatroomPage, options);
 const createCardsServer = options => startPages(CardsPage, options);
+class StaticReferencePage {
+    render() { return '<html><body><h1>Static reference</h1></body></html>'; }
+}
+page('/reference', {
+    live: false,
+    shared: true,
+    head: { title: 'Redweb Reference', description: 'Static API documentation' },
+    cache: { maxAge: 60, staleWhileRevalidate: 30, immutable: true },
+})(StaticReferencePage);
+class DefaultStaticPage {
+    render() { return '<p>Default cache</p>'; }
+}
+page('/default-reference', { live: false })(DefaultStaticPage);
+class MutableStaticPage {
+    render() { return '<p>Mutable cache</p>'; }
+}
+page('/mutable-reference', { live: false, cache: { maxAge: 60 } })(MutableStaticPage);
+const createStaticReferenceServer = options => startPages([StaticReferencePage, DefaultStaticPage, MutableStaticPage], options);
 const {
     closeWebSocket,
     nextMessage,
@@ -225,6 +243,27 @@ describe('Live HTML integration without mocks', () => {
         await waitForCondition(() => refreshedUpdates.length === 1, 'persisted card collection snapshot');
         expect(refreshedUpdates[0].value.match(/<article class="card">/g)).toHaveLength(3);
         expect(refreshedUpdates[0].value).toContain('Card 3');
+    });
+
+    test('serves non-live documentation with metadata, ETags, and no browser runtime', async () => {
+        const server = await start(createStaticReferenceServer);
+        const port = server.server.address().port;
+        const first = await request({ port, path: '/reference' });
+        expect(first.status).toBe(200);
+        expect(first.body).toContain('<title>Redweb Reference</title>');
+        expect(first.body).toContain('<meta name="description" content="Static API documentation">');
+        expect(first.body).not.toContain('__redweb_page');
+        expect(first.headers['cache-control']).toBe('public, max-age=60, stale-while-revalidate=30, immutable');
+        expect(first.headers.etag).toMatch(/^"[A-Za-z0-9_-]+"$/);
+
+        const cached = await request({ port, path: '/reference', headers: { 'If-None-Match': first.headers.etag } });
+        expect(cached.status).toBe(304);
+        expect(cached.body).toBe('');
+        const defaultCache = await request({ port, path: '/default-reference' });
+        expect(defaultCache.headers['cache-control']).toBe('public, max-age=0, must-revalidate');
+        const mutableCache = await request({ port, path: '/mutable-reference' });
+        expect(mutableCache.headers['cache-control']).toBe('public, max-age=60');
+        expect((await request({ port, path: '/__redweb/runtime.js' })).status).toBe(404);
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {

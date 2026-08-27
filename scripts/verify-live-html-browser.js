@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { start } = require('..');
+const { attribute, codeBlock, each, html, start, url } = require('..');
 const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
 const { ChatroomPage } = require('../examples/live-html/chatroom');
@@ -214,7 +214,23 @@ async function main() {
             document.body.textContent.includes('{{ value }}')
         `);
         if (!plaintextSafety) throw new Error('Plaintext content became active browser DOM.');
-        console.log('Live HTML browser gate passed: CSS, collections, counter, chat, noscript, and plaintext parsing.');
+
+        const sections = [{ id: 'http', name: 'HTTP' }, { id: 'sockets', name: 'Sockets' }];
+        const composedMarkup = html`<main>${each(sections, section => html`
+            <article id="${attribute(section.id)}">
+                <a href="${url(`#${section.id}`)}">${section.name}</a>
+                ${codeBlock(`const section = '${section.name}'`, { language: 'js' })}
+            </article>
+        `)}</main>`;
+        const composedPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(HtmlRenderer.document(composedMarkup.toString()))}`);
+        pages.push(composedPage);
+        const compositionReady = await composedPage.evaluate(`
+            document.querySelectorAll('article').length === 2 &&
+            document.querySelector('#sockets a').getAttribute('href') === '#sockets' &&
+            document.querySelector('#http code').textContent.includes("section = 'HTTP'")
+        `);
+        if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
+        console.log('Live HTML browser gate passed: CSS, collections, counter, chat, raw-text safety, and documentation composition.');
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {

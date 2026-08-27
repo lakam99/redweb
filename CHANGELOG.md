@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added explicit safe attribute and URL interpolation for Live HTML.
+- Added nested fragment composition and reusable safe code blocks.
+- Added page head metadata, non-live ETag/cache handling, and runtime-free static export with content-addressed CSS.
+
+## Unreleased
+
 - Replaced the executable `.htmx` sandbox with decorator-first, declarative Live HTML pages.
 - Added context-restricted safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, optional identity binding, HTTPS/WSS, reconnect snapshots, and awaited deterministic cleanup.
 - Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.

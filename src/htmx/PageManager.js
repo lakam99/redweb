@@ -42,6 +42,14 @@ function withinDeadline(promise, deadline) {
     });
 }
 
+function cacheControl(cache = {}) {
+    const directives = ['public', `max-age=${cache.maxAge ?? 0}`];
+    if ((cache.staleWhileRevalidate ?? 0) > 0) directives.push(`stale-while-revalidate=${cache.staleWhileRevalidate}`);
+    if (cache.immutable) directives.push('immutable');
+    else if ((cache.maxAge ?? 0) === 0) directives.push('must-revalidate');
+    return directives.join(', ');
+}
+
 class PageManager {
     constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
@@ -89,6 +97,7 @@ class PageManager {
         this.renderAbortController = new AbortController();
         this.closing = false;
         pages.forEach(PageClass => this.register(PageClass));
+        this.hasLivePages = [...this.records.values()].some(record => record.metadata.live !== false);
     }
 
     register(PageClass) {
@@ -133,14 +142,28 @@ class PageManager {
     }
 
     mount(app) {
-        const clientFile = path.join(path.dirname(require.resolve('redweb-client')), 'index.js');
-        app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
-        app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
+        if (this.hasLivePages) {
+            const clientFile = path.join(path.dirname(require.resolve('redweb-client')), 'index.js');
+            app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
+            app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
+        }
         this.stylesheets.forEach((content, url) => app.get(url, (_request, response) => {
             response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
         }));
         this.records.forEach(record => app.get(record.metadata.path, (request, response, next) => {
-            Promise.resolve(this.render(record, request)).then(markup => response.type('html').send(markup), next);
+            Promise.resolve(this.render(record, request)).then(markup => {
+                if (record.metadata.live !== false) {
+                    response.set('Cache-Control', 'private, no-store').type('html').send(markup);
+                    return;
+                }
+                const etag = `"${createHash('sha256').update(markup).digest('base64url')}"`;
+                response.set('Cache-Control', cacheControl(record.metadata.cache)).set('ETag', etag);
+                if (request.headers['if-none-match']?.split(',').map(value => value.trim()).includes(etag)) {
+                    response.status(304).end();
+                    return;
+                }
+                response.type('html').send(markup);
+            }, next);
         }));
     }
 
@@ -175,14 +198,19 @@ class PageManager {
             const source = record.template ?? await page.render?.(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
             if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-            const markup = HtmlRenderer.render(source.toString(), page);
+            const markup = HtmlRenderer.render(source.toString(), page, { live: record.metadata.live !== false });
+            if (record.metadata.live === false) {
+                const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
+                if (ownsPage) await page.dispose();
+                return document;
+            }
             const session = this.createSession(page, ownsPage, principal);
             return HtmlRenderer.document(markup, {
                 pageId: session.id,
                 socketPath: this.paths.socket,
                 runtimePath: this.paths.runtime,
                 version: PROTOCOL_VERSION,
-            }, record.stylesheets);
+            }, record.stylesheets, record.metadata.head);
         } catch (error) {
             if (ownsPage && page) await page.dispose();
             throw error;

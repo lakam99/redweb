@@ -39,18 +39,22 @@ class LiveHtmlServer {
         this.manager.mount(app);
         const listen = httpOptions.listen ?? true;
         const ServerClass = httpOptions.ssl ? HttpsServer : HttpServer;
-        this.http = new ServerClass({ ...httpOptions, server: app, listen: false });
-        const Route = this.manager.route();
-        this.sockets = new SocketServer({
-            server: this.http.server,
-            routes: [Route],
-            listen,
-            port: this.http.port,
-            bind: this.http.bind,
-            listenCallback: this.http.listenCallback,
-            logger: this.http.logger,
-            closeServerOnShutdown: false,
-        });
+        this.http = new ServerClass({ ...httpOptions, server: app, listen: this.manager.hasLivePages ? false : listen });
+        if (this.manager.hasLivePages) {
+            const Route = this.manager.route();
+            this.sockets = new SocketServer({
+                server: this.http.server,
+                routes: [Route],
+                listen,
+                port: this.http.port,
+                bind: this.http.bind,
+                listenCallback: this.http.listenCallback,
+                logger: this.http.logger,
+                closeServerOnShutdown: false,
+            });
+        } else {
+            this.sockets = null;
+        }
         this.app = this.http.app;
         this.server = this.http.server;
         this._shutdownPromise = null;
@@ -65,8 +69,10 @@ class LiveHtmlServer {
 
     async performShutdown() {
         const errors = [];
-        try { await this.sockets.shutdown(); }
-        catch (error) { errors.push(error); }
+        if (this.sockets) {
+            try { await this.sockets.shutdown(); }
+            catch (error) { errors.push(error); }
+        }
         try { await this.manager.shutdown(); }
         catch (error) {
             errors.push(error);

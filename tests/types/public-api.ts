@@ -12,10 +12,15 @@ import {
     LiveHtmlServer,
     LivePage,
     action,
+    attribute,
+    codeBlock,
+    each,
+    exportStatic,
     html,
     page,
     state,
     start,
+    url,
     view,
 } from 'redweb';
 
@@ -43,6 +48,28 @@ class CardView {
 void CardView;
 const renderedCards: string = HtmlRenderer.collection(new CardView(), 'cards', new CardView().cards);
 void renderedCards;
+const navigation = html`<a id="${attribute('api')}" href="${url('#api')}">${'API'}</a>`;
+const nested = each([{ name: 'one' }], item => html`<span>${item.name}</span>`);
+const sample = codeBlock('const ready = true', { language: 'ts', label: 'TypeScript' });
+void navigation;
+void nested;
+void sample;
+
+@page('/docs', {
+    live: false,
+    head: {
+        title: 'Redweb API',
+        description: 'Reference',
+        canonical: 'https://example.test/docs',
+        image: 'https://example.test/image.png',
+        robots: 'index,follow',
+    },
+    cache: { maxAge: 60, staleWhileRevalidate: 30 },
+})
+class DocsPage {
+    render() { return html`<h1>Docs</h1>`; }
+}
+void exportStatic(DocsPage, { outDir: 'dist' });
 
 const live = new LiveHtmlServer({ pages: [CounterPage], listen: false });
 void live.shutdown();

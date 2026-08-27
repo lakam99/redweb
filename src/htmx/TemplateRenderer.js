@@ -69,7 +69,7 @@ function rawClosingTag(source, name, position) {
     }
 }
 
-function closingTag(source, target) {
+function tagLocation(source, target, kind) {
     let position = 0;
     while (position < source.length) {
         const start = source.indexOf('<', position);
@@ -88,8 +88,9 @@ function closingTag(source, target) {
         if (end < 0) return -1;
         const tag = source.slice(start, end + 1);
         const closing = /^<\/([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
-        if (closing === target) return start;
+        if (kind === 'closing' && closing === target) return start;
         const opening = /^<([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
+        if (kind === 'opening' && opening === target) return start;
         if (opening && RAW_TEXT.has(opening)) {
             if (opening === 'plaintext') return -1;
             const close = rawClosingTag(source, opening, end + 1);
@@ -99,6 +100,14 @@ function closingTag(source, target) {
         }
     }
     return -1;
+}
+
+function closingTag(source, target) {
+    return tagLocation(source, target, 'closing');
+}
+
+function openingTag(source, target) {
+    return tagLocation(source, target, 'opening');
 }
 
 function attributes(tag, nameEnd) {
@@ -139,10 +148,11 @@ function attributes(tag, nameEnd) {
 }
 
 class TemplateRenderer {
-    constructor(source, page, collection) {
+    constructor(source, page, collection, reactive) {
         this.source = source;
         this.page = page;
         this.collection = collection;
+        this.reactive = reactive;
         this.position = 0;
         this.output = '';
     }
@@ -256,6 +266,7 @@ class TemplateRenderer {
         const text = this.source.slice(this.position, next).replace(BINDING, (_match, name) => {
             if (!(name in this.page)) throw new Error(`Unknown page binding "${name}".`);
             const value = this.page[name];
+            if (!this.reactive) return renderValue(value);
             return `<span data-rw-state="${name}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`;
         });
         this.output += text;
@@ -264,5 +275,6 @@ class TemplateRenderer {
 }
 
 TemplateRenderer.closingTag = closingTag;
+TemplateRenderer.openingTag = openingTag;
 
 module.exports = TemplateRenderer;

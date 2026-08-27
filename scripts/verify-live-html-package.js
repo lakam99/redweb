@@ -64,6 +64,23 @@ async function main() {
             throw new Error('Packed Live HTML server did not render decorated state.');
         }
         await server.shutdown();
+        const composed = installed.codeBlock(
+            installed.each(['API'], item => installed.html`<a id="${installed.attribute('api')}" href="${installed.url('#api')}">${item}</a>`),
+            { language: 'html' }
+        ).toString();
+        if (!composed.includes('id="api"') || !composed.includes('href="#api"')) {
+            throw new Error('Packed documentation composition helpers did not render.');
+        }
+        class StaticSmokePage {
+            render() { return '<html><body><h1>Static package</h1></body></html>'; }
+        }
+        installed.page('/docs', { live: false, head: { title: 'Packed docs' } })(StaticSmokePage);
+        const staticRoot = path.join(workspace, 'static-output');
+        const staticResult = await installed.exportStatic(StaticSmokePage, { outDir: staticRoot });
+        const staticDocument = fs.readFileSync(staticResult.pages[0], 'utf8');
+        if (!staticDocument.includes('<title>Packed docs</title>') || staticDocument.includes('__redweb_page')) {
+            throw new Error('Packed static exporter did not emit a standalone document.');
+        }
         console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation.`);
     } finally {
         fs.rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

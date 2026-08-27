@@ -107,6 +107,47 @@ function resolvedView(PageClass) {
     return value;
 }
 
+function pageHead(value) {
+    if (value === undefined) return undefined;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Page head must be an object.');
+    const allowed = new Set(['title', 'description', 'canonical', 'image', 'robots']);
+    const unknown = Object.keys(value).find(name => !allowed.has(name));
+    if (unknown) throw new TypeError(`Unknown page head option: ${unknown}.`);
+    const head = {};
+    for (const name of ['title', 'description', 'robots']) {
+        if (value[name] !== undefined && (typeof value[name] !== 'string' || !value[name])) {
+            throw new TypeError(`Page head ${name} must be a non-empty string.`);
+        }
+        if (value[name] !== undefined) head[name] = value[name];
+    }
+    for (const name of ['canonical', 'image']) {
+        if (value[name] === undefined) continue;
+        if (typeof value[name] !== 'string' || !value[name]) throw new TypeError(`Page head ${name} must be an absolute HTTP(S) URL.`);
+        let parsed;
+        try { parsed = new URL(value[name]); }
+        catch { throw new TypeError(`Page head ${name} must be an absolute HTTP(S) URL.`); }
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new TypeError(`Page head ${name} must be an absolute HTTP(S) URL.`);
+        head[name] = parsed.href;
+    }
+    return Object.freeze(head);
+}
+
+function pageCache(value, live) {
+    if (value === undefined) return undefined;
+    if (live) throw new TypeError('Page cache is available only when live is false.');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Page cache must be an object.');
+    const allowed = new Set(['maxAge', 'staleWhileRevalidate', 'immutable']);
+    const unknown = Object.keys(value).find(name => !allowed.has(name));
+    if (unknown) throw new TypeError(`Unknown page cache option: ${unknown}.`);
+    const { maxAge = 0, staleWhileRevalidate = 0, immutable = false } = value;
+    if (!Number.isInteger(maxAge) || maxAge < 0) throw new TypeError('Page cache maxAge must be a non-negative integer.');
+    if (!Number.isInteger(staleWhileRevalidate) || staleWhileRevalidate < 0) {
+        throw new TypeError('Page cache staleWhileRevalidate must be a non-negative integer.');
+    }
+    if (typeof immutable !== 'boolean') throw new TypeError('Page cache immutable must be a boolean.');
+    return Object.freeze({ maxAge, staleWhileRevalidate, immutable });
+}
+
 function page(routePath, options = {}) {
     const templateRoot = decoratorDirectory();
     if (typeof routePath !== 'string' || !routePath.startsWith('/')) {
@@ -115,7 +156,7 @@ function page(routePath, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('Page options must be an object.');
     }
-    const { template, css, shared, scope = shared ? 'shared' : 'connection' } = options;
+    const { template, css, shared, scope = shared ? 'shared' : 'connection', live = true } = options;
     if (template !== undefined && (typeof template !== 'string' || !template)) {
         throw new TypeError('Page template must be a non-empty path.');
     }
@@ -132,12 +173,18 @@ function page(routePath, options = {}) {
     if (!['connection', 'shared'].includes(scope)) {
         throw new TypeError('Page scope must be "connection" or "shared".');
     }
+    if (typeof live !== 'boolean') throw new TypeError('Page live must be a boolean.');
+    const head = pageHead(options.head);
+    const cache = pageCache(options.cache, live);
     return PageClass => {
         if (typeof PageClass !== 'function') throw new TypeError('page() must decorate a class.');
         PAGE_METADATA.set(PageClass, Object.freeze({
             path: routePath,
             template,
             scope,
+            ...(live === false && { live: false }),
+            ...(head && { head }),
+            ...(cache && { cache }),
             ...(stylesheets && { css: Object.freeze(stylesheets) }),
         }));
         PAGE_ROOTS.set(PageClass, templateRoot);

@@ -104,6 +104,43 @@ Interpolations created with `html` are escaped by default and are restricted to 
 
 Collections use the same model without manual concatenation. Keep the array in `@state()`, render one item with `@view('cards')`, and place it with `<section rw-each="cards"></section>`. Item views must return `html` fragments, so values remain escaped. The current protocol replaces the collection contents atomically; keyed incremental patches can be added later without changing the page API.
 
+Documentation and content-heavy pages can compose nested fragments without a client framework:
+
+```ts
+import { attribute, codeBlock, each, html, url } from 'redweb';
+
+const sections = each(apiSections, section => html`
+  <article id="${attribute(section.id)}">
+    <h2>${section.name}</h2>
+    <a href="${url(`#${section.id}`)}">Permalink</a>
+    ${each(section.methods, method => html`<section><h3>${method.name}</h3></section>`)}
+    ${codeBlock(section.usage, { language: 'ts', label: 'TypeScript' })}
+  </article>
+`);
+```
+
+Plain interpolations remain restricted to element text. Dynamic non-URL attributes require `attribute()`, and URL-bearing attributes require `url()`, which rejects unsafe and protocol-relative schemes. `codeBlock()` escapes ordinary code and also accepts an explicit `HtmlFragment` from a server-side syntax highlighter.
+
+For React-free documentation or marketing pages, set `live: false`. Redweb omits page tokens, browser JavaScript, and WebSockets; adds document metadata; and serves the result with an ETag:
+
+```ts
+@page('/docs', {
+  template: 'docs.html',
+  css: 'docs.css',
+  live: false,
+  head: {
+    title: 'Redweb API',
+    description: 'Complete Redweb API reference.',
+    canonical: 'https://example.com/docs',
+    image: 'https://example.com/og.png',
+  },
+  cache: { maxAge: 300, staleWhileRevalidate: 3600 },
+})
+class DocsPage {}
+```
+
+Export the same decorated page to CDN-ready files with `await exportStatic(DocsPage, { outDir: 'dist' })`. Route paths become `index.html` files, colocated stylesheets are emitted under their content-addressed URLs, and no Live HTML runtime is included. Static export requires `live: false`.
+
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
 See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
