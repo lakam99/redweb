@@ -1,6 +1,7 @@
 const { assertTextContext, escapeHtml, isHtml, renderValue } = require('./Html');
+const { randomUUID } = require('crypto');
 const PageAssetLoader = require('./PageAssetLoader');
-const { getViewImplementation } = require('./metadata');
+const { getStateConfig, getViewImplementation } = require('./metadata');
 
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
@@ -25,31 +26,42 @@ class HtmlRenderer {
 
     static render(source, page) {
         if (typeof source !== 'string') throw new TypeError('Page markup must be a string.');
+        const prefix = `\0redweb-${randomUUID()}-`;
+        const replacements = [];
+        const hold = value => `${prefix}${replacements.push(value) - 1}\0`;
         const collections = source.replace(COLLECTION, (_match, opening, _tag, property, _content, closing) => {
             if (!(property in page)) throw new Error(`Unknown page collection "${property}".`);
             const content = HtmlRenderer.collection(page, property, page[property]);
             const existingState = opening.match(/\sdata-rw-state="([A-Za-z_$][\w$]*)"/i)?.[1];
+            if (!existingState && /\sdata-rw-state(?:\s|=|>|\/)/i.test(opening)) {
+                throw new Error(`Page collection "${property}" has an invalid state binding.`);
+            }
             if (existingState && existingState !== property) {
                 throw new Error(`Page collection "${property}" conflicts with state binding "${existingState}".`);
             }
             const markers = `${existingState ? '' : ` data-rw-state="${property}"`}${/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? '' : ' data-rw-html'}`;
-            return opening.replace(/>$/, `${markers}>`) + content + closing;
+            return hold(opening.replace(/>$/, `${markers}>`) + content + closing);
         });
+        if (/\srw-each(?:\s|=|>|\/)/i.test(collections)) {
+            throw new Error('rw-each requires a valid state name on an empty container.');
+        }
         const targets = collections.replace(TARGET, (match, opening, _tag, property, _content, closing) => {
             if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
             const value = page[property];
             const htmlMarker = isHtml(value) && !/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? ' data-rw-html' : '';
-            return opening.replace(/>$/, `${htmlMarker}>`) + renderValue(value) + closing;
+            return hold(opening.replace(/>$/, `${htmlMarker}>`) + renderValue(value) + closing);
         });
-        return targets.replace(BINDING, (_match, property, offset, whole) => {
+        const rendered = targets.replace(BINDING, (_match, property, offset, whole) => {
             assertTextContext(whole.slice(0, offset));
             if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
             const value = page[property];
-            return `<span data-rw-state="${property}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`;
+            return hold(`<span data-rw-state="${property}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`);
         });
+        return replacements.reduce((result, value, index) => result.replaceAll(`${prefix}${index}\0`, value), rendered);
     }
 
     static collection(page, name, value) {
+        if (!getStateConfig(page.constructor, name)) throw new Error(`Page collection "${name}" is missing @state metadata.`);
         if (!Array.isArray(value)) throw new TypeError(`Page collection "${name}" must be an array.`);
         const renderItem = getViewImplementation(page.constructor, name);
         if (!renderItem) throw new Error(`Page collection "${name}" is missing @view metadata.`);
@@ -64,7 +76,7 @@ class HtmlRenderer {
         if (page && getViewImplementation(page.constructor, name)) {
             return { name, value: HtmlRenderer.collection(page, name, value), html: true };
         }
-        return { name, value: isHtml(value) ? value.toString() : String(value ?? ''), html: isHtml(value) };
+        return { name, value: isHtml(value) ? renderValue(value) : String(value ?? ''), html: isHtml(value) };
     }
 
     static document(markup, config, stylesheets = []) {

@@ -10,13 +10,14 @@ function escapeHtml(value) {
 }
 
 function isHtml(value) {
+    if (Array.isArray(value)) return value.every(isHtml);
     return Boolean(value?.[HTML_FRAGMENT]);
 }
 
 function renderValue(value) {
     if (Array.isArray(value)) {
-        if (!value.every(isHtml)) throw new TypeError('Only arrays of HtmlFragment values can be rendered as HTML.');
-        return value.map(fragment => fragment.toString()).join('');
+        if (!isHtml(value)) throw new TypeError('Only arrays of HtmlFragment values can be rendered as HTML.');
+        return value.map(renderValue).join('');
     }
     return isHtml(value) ? value.toString() : escapeHtml(value);
 }

@@ -40,6 +40,8 @@ describe('decorator-first Live HTML units', () => {
         expect(renderValue(strong)).toBe('<strong>&lt;Redweb&gt;</strong>');
         expect(renderValue('<b>unsafe</b>')).toBe('&lt;b&gt;unsafe&lt;/b&gt;');
         expect(renderValue([html`<i>${'one'}</i>`, html`<i>${'two'}</i>`])).toBe('<i>one</i><i>two</i>');
+        expect(isHtml([html`<i>one</i>`, [html`<i>two</i>`]])).toBe(true);
+        expect(isHtml([])).toBe(true);
         expect(() => renderValue([html`<i>safe</i>`, '<b>unsafe</b>'])).toThrow('arrays of HtmlFragment');
         expect(html`${[html`<i>one</i>`, html`<i>two</i>`]}`.toString()).toBe('<i>one</i><i>two</i>');
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
@@ -231,25 +233,35 @@ describe('decorator-first Live HTML units', () => {
             fs.rmSync(outsideRoot, { recursive: true, force: true });
         }
 
-        const pageState = { title: '<unsafe>', body: html`<b>${'safe'}</b>` };
+        const pageState = { title: '<unsafe>', body: html`<b>${'safe {{ secret }}'}</b>`, secret: 'LEAK' };
         expect(HtmlRenderer.render('{{title}} {{ body }}', pageState)).toBe(
             '<span data-rw-state="title">&lt;unsafe&gt;</span> ' +
-            '<span data-rw-state="body" data-rw-html><b>safe</b></span>'
+            '<span data-rw-state="body" data-rw-html><b>safe {{ secret }}</b></span>'
         );
         expect(HtmlRenderer.render('<ul data-rw-state="body"></ul>', pageState)).toBe(
-            '<ul data-rw-state="body" data-rw-html><b>safe</b></ul>'
+            '<ul data-rw-state="body" data-rw-html><b>safe {{ secret }}</b></ul>'
         );
-        expect(HtmlRenderer.render('<ul data-rw-state="body" data-rw-html></ul>', pageState)).toContain('<b>safe</b>');
+        expect(HtmlRenderer.render('<ul data-rw-state="body" data-rw-html></ul>', pageState))
+            .toContain('<b>safe {{ secret }}</b>');
         expect(() => HtmlRenderer.render('<p data-rw-state="missing"></p>', pageState)).toThrow('Unknown page binding');
         expect(() => HtmlRenderer.render(null, pageState)).toThrow('string');
         expect(() => HtmlRenderer.render('{{missing}}', pageState)).toThrow('Unknown page binding');
         expect(() => HtmlRenderer.render('<a href="{{ title }}">link</a>', pageState)).toThrow('element text');
         expect(() => HtmlRenderer.render('<script>{{ title }}</script>', pageState)).toThrow('script or style');
         expect(HtmlRenderer.statePayload('empty', null)).toEqual({ name: 'empty', value: '', html: false });
-        expect(HtmlRenderer.statePayload('body', pageState.body)).toEqual({ name: 'body', value: '<b>safe</b>', html: true });
+        expect(HtmlRenderer.statePayload('body', pageState.body)).toEqual({
+            name: 'body', value: '<b>safe {{ secret }}</b>', html: true,
+        });
+        const fragmentArray = [html`<i>one</i>`, html`<i>two</i>`];
+        expect(HtmlRenderer.render('<div data-rw-state="items"></div>', { items: fragmentArray }))
+            .toBe('<div data-rw-state="items" data-rw-html><i>one</i><i>two</i></div>');
+        expect(HtmlRenderer.statePayload('items', fragmentArray)).toEqual({
+            name: 'items', value: '<i>one</i><i>two</i>', html: true,
+        });
 
         class CardsPage {
-            cards = [{ title: '<Sword>' }, { title: 'Shield' }];
+            cards = [{ title: '{{ secret }}' }, { title: 'Shield' }];
+            secret = 'LEAK';
             card(card, index) { return html`<article>${index}: ${card.title}</article>`; }
         }
         state()(CardsPage.prototype, 'cards');
@@ -258,7 +270,7 @@ describe('decorator-first Live HTML units', () => {
         const cards = new CardsPage();
         expect(HtmlRenderer.render('<section rw-each="cards"></section>', cards)).toBe(
             '<section rw-each="cards" data-rw-state="cards" data-rw-html>' +
-            '<article>0: &lt;Sword&gt;</article><article>1: Shield</article></section>'
+            '<article>0: {{ secret }}</article><article>1: Shield</article></section>'
         );
         expect(HtmlRenderer.render('<section rw-each="cards" data-rw-state="cards"></section>', cards))
             .toContain('data-rw-state="cards" data-rw-html');
@@ -266,19 +278,31 @@ describe('decorator-first Live HTML units', () => {
             .match(/data-rw-html/g)).toHaveLength(1);
         expect(() => HtmlRenderer.render('<section rw-each="cards" data-rw-state="other"></section>', cards))
             .toThrow('conflicts with state binding');
+        expect(() => HtmlRenderer.render('<section rw-each="cards">Loading...</section>', cards))
+            .toThrow('empty container');
+        expect(() => HtmlRenderer.render("<section rw-each='cards'></section>", cards))
+            .toThrow('valid state name');
+        expect(() => HtmlRenderer.render('<section rw-each></section>', cards)).toThrow('valid state name');
+        expect(() => HtmlRenderer.render("<section rw-each=\"cards\" data-rw-state='cards'></section>", cards))
+            .toThrow('invalid state binding');
         expect(HtmlRenderer.statePayload('cards', cards.cards, cards)).toEqual({
             name: 'cards',
-            value: '<article>0: &lt;Sword&gt;</article><article>1: Shield</article>',
+            value: '<article>0: {{ secret }}</article><article>1: Shield</article>',
             html: true,
         });
         expect(() => HtmlRenderer.render('<section rw-each="missing"></section>', cards)).toThrow('Unknown page collection');
         cards.cards = null;
         expect(() => HtmlRenderer.collection(cards, 'cards', cards.cards)).toThrow('must be an array');
         class MissingView { items = []; }
+        state()(MissingView.prototype, 'items');
         expect(() => HtmlRenderer.collection(new MissingView(), 'items', [])).toThrow('missing @view');
         class UnsafeView { items = ['unsafe']; item() { return '<b>unsafe</b>'; } }
+        state()(UnsafeView.prototype, 'items');
         decorateView(UnsafeView, 'items', 'item');
         expect(() => HtmlRenderer.collection(new UnsafeView(), 'items', ['unsafe'])).toThrow('must return html');
+        class MissingState { items = []; item() { return html`<i>item</i>`; } }
+        decorateView(MissingState, 'items', 'item');
+        expect(() => HtmlRenderer.collection(new MissingState(), 'items', [])).toThrow('missing @state');
 
         const config = { pageId: '<id>', socketPath: '/live', runtimePath: '/runtime.js', version: '1' };
         const fragment = HtmlRenderer.document('<p>hello</p>', config);

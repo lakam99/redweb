@@ -39,6 +39,11 @@ async function main() {
             installed.start(ChatroomPage, { listen: false }),
             installed.start(CardsPage, { listen: false }),
         ];
+        const packedCards = examples[2].manager.records.get('/');
+        const renderedCards = await examples[2].manager.render(packedCards, { params: {}, query: {}, body: undefined });
+        if ((renderedCards.match(/<article class="card">/g) || []).length !== 2 || !renderedCards.includes('rw-each="cards"')) {
+            throw new Error('Packed card collection did not render standard @view metadata.');
+        }
         await Promise.all(examples.map(server => server.shutdown()));
         class SmokePage extends installed.LivePage {
             constructor() {

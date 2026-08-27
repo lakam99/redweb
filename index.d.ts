@@ -404,8 +404,10 @@ declare module 'redweb' {
 
     /** ─────────────────── LIVE HTML ─────────────────── */
 
+    const htmlFragmentBrand: unique symbol;
+
     export interface HtmlFragment {
-        readonly __redwebHtmlFragment: true;
+        readonly [htmlFragmentBrand]: true;
         toString(): string;
     }
 
