@@ -3,7 +3,7 @@ const { isHtml, renderValue } = require('./Html');
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const ATTRIBUTE_BINDING = /{{\s*[A-Za-z_$][\w$]*\s*}}/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
-const RAW_TEXT = new Set(['iframe', 'noembed', 'noframes', 'plaintext', 'script', 'style', 'textarea', 'title', 'xmp']);
+const RAW_TEXT = new Set(['iframe', 'noembed', 'noframes', 'noscript', 'plaintext', 'script', 'style', 'textarea', 'title', 'xmp']);
 const DIRECTIVES = new Set(['data-rw-state', 'data-rw-html', 'rw-each']);
 
 function isHtmlSpace(character) {
@@ -14,6 +14,16 @@ function isNonStartMarkup(source, start) {
     const marker = source[start + 1];
     if (marker === '!' || marker === '?') return true;
     return marker === '/' && /[A-Za-z]/.test(source[start + 2]);
+}
+
+function equalsAsciiCaseInsensitive(value, expected) {
+    if (value.length !== expected.length) return false;
+    for (let index = 0; index < value.length; index += 1) {
+        const code = value.charCodeAt(index);
+        const folded = code >= 65 && code <= 90 ? code + 32 : code;
+        if (folded !== expected.charCodeAt(index)) return false;
+    }
+    return true;
 }
 
 function tagEnd(source, position) {
@@ -46,14 +56,13 @@ function tagEnd(source, position) {
 }
 
 function rawClosingTag(source, name, position) {
-    const prefix = `</${name}`;
-    const lowerSource = source.toLowerCase();
     while (true) {
-        const start = lowerSource.indexOf(prefix, position);
+        const start = source.indexOf('</', position);
         if (start < 0) return null;
-        const boundary = source[start + prefix.length];
-        if (boundary === '>' || boundary === '/' || isHtmlSpace(boundary)) {
-            const end = tagEnd(source, start + prefix.length);
+        const candidate = source.slice(start + 2, start + 2 + name.length);
+        const boundary = source[start + 2 + name.length];
+        if (equalsAsciiCaseInsensitive(candidate, name) && (boundary === '>' || boundary === '/' || isHtmlSpace(boundary))) {
+            const end = tagEnd(source, start + 2 + name.length);
             if (end >= 0) return { start, end: end + 1 };
         }
         position = start + 2;

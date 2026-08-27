@@ -7,6 +7,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const { start } = require('..');
+const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
 const { ChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
@@ -179,7 +180,25 @@ async function main() {
         await cardsPage.evaluate(eventual(`document.querySelectorAll('.card').length === 3`, 'realtime card collection update'));
         const cardBackground = await cardsPage.evaluate("getComputedStyle(document.querySelector('.card')).backgroundColor");
         if (cardBackground !== 'rgb(31, 41, 55)') throw new Error(`Card CSS was not applied: ${cardBackground}`);
-        console.log('Live HTML browser gate passed: CSS, collections, counter updates, and two-client chat interaction.');
+
+        const noscriptMarkup = HtmlRenderer.render(
+            '<body><noscript><span id="hidden">{{ value }}</span></noscript><p id="after">{{ value }}</p></body>',
+            { value: 'ready' }
+        );
+        const noscriptDocument = HtmlRenderer.document(noscriptMarkup, {
+            pageId: 'browser-probe', socketPath: '/live', runtimePath: '/runtime.js', version: '1',
+        });
+        const noscriptPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(noscriptDocument)}`);
+        pages.push(noscriptPage);
+        const noscriptSafety = await noscriptPage.evaluate(`(() => {
+            const after = document.querySelector('#after');
+            const bootstrap = document.querySelector('#__redweb_page');
+            return document.querySelector('#hidden') === null &&
+                after?.textContent === 'ready' &&
+                Boolean(after.compareDocumentPosition(bootstrap) & Node.DOCUMENT_POSITION_FOLLOWING);
+        })()`);
+        if (!noscriptSafety) throw new Error('Scripting-enabled noscript parsing diverged from server rendering.');
+        console.log('Live HTML browser gate passed: CSS, collections, counter updates, chat, and noscript parsing.');
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {

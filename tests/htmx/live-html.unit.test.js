@@ -326,6 +326,13 @@ describe('decorator-first Live HTML units', () => {
             .toThrow('not allowed on raw-text');
         expect(HtmlRenderer.render('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>', cards))
             .toBe('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>');
+        expect(HtmlRenderer.render('<noscript>{{ body }}</noscript>', pageState))
+            .toBe('<noscript>{{ body }}</noscript>');
+        expect(HtmlRenderer.render('<script>İ</script><p>{{ secret }}</p>', cards))
+            .toBe('<script>İ</script><p><span data-rw-state="secret">LEAK</span></p>');
+        expect(HtmlRenderer.render('<SCRIPT>safe</SCRIPT>', cards)).toBe('<SCRIPT>safe</SCRIPT>');
+        const manyRawElements = '<script>safe</script>'.repeat(20_000);
+        expect(HtmlRenderer.render(manyRawElements, cards)).toBe(manyRawElements);
         expect(HtmlRenderer.render('<!doctype html><p>ok</p>', cards)).toBe('<!doctype html><p>ok</p>');
         expect(HtmlRenderer.render('<?instruction?><p title=value>ok</p>', cards))
             .toBe('<?instruction?><p title=value>ok</p>');
@@ -408,6 +415,8 @@ describe('decorator-first Live HTML units', () => {
         expect(HtmlRenderer.document('<!-- unclosed </body>', config)).toContain('<main data-rw-root><!-- unclosed </body></main>');
         expect(HtmlRenderer.document('<body title="unclosed', config)).toContain('<main data-rw-root><body title="unclosed</main>');
         expect(HtmlRenderer.document('<script>fake </body>', config)).toContain('<main data-rw-root><script>fake </body></main>');
+        expect(HtmlRenderer.document('<body><noscript>fake </body></noscript>safe</body>', config))
+            .toContain('</noscript>safe<script type="application/json"');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {
