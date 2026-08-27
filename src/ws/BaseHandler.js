@@ -18,8 +18,16 @@ class BaseHandler {
      * @param {WebSocket & {sendJson: (message: Object) => void, broadcast: (message: Object) => void}} socket - The WebSocket connection that sent the message.
      * @param {any} message - The incoming message in parsed JSON.
      */
-    handleMessage(socket, message) {
-        this.onMessage(socket, message);
+    async handleMessage(socket, message) {
+        const validationResult = await this.validateMessage(message, socket);
+        if (validationResult === false) {
+            throw new Error('Invalid message');
+        }
+        return this.onMessage(socket, message);
+    }
+
+    validateMessage() {
+        return true;
     }
 
     /**
@@ -27,8 +35,8 @@ class BaseHandler {
      * @param {WebSocket & {sendJson: (message: Object) => void}} socket - The WebSocket connection that sent the message.
      * @param {Buffer} buffer - The incoming binary message.
      */
-    handleBinaryMessage(socket, buffer) {
-        this.onBinaryMessage(socket, buffer);
+    async handleBinaryMessage(socket, buffer) {
+        return this.onBinaryMessage(socket, buffer);
     }
 
     /**
@@ -37,7 +45,7 @@ class BaseHandler {
      * @param {any} message - The incoming message in parsed JSON.
      */
     onMessage(socket, message) {
-        throw "Not yet implemented!";
+        throw new Error('onMessage must be implemented by the handler.');
     }
 
     /**

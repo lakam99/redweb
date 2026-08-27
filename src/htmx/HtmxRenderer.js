@@ -8,7 +8,7 @@ class HtmxRenderer {
      * @param {string} filePath - Path to the .htmx file.
      * @returns {string} Rendered HTML string with normalized whitespace.
      */
-    static render(filePath) {
+    static render(filePath, { rootDir = path.dirname(path.resolve(filePath)), timeoutMs = 1000 } = {}) {
         if (!fs.existsSync(filePath)) {
             throw new Error(`Template file not found: ${filePath}`);
         }
@@ -32,8 +32,16 @@ class HtmxRenderer {
         `;
 
         // Create a custom require function that resolves paths relative to the template
+        const resolvedRoot = path.resolve(rootDir);
         const customRequire = (modulePath) => {
+            if (typeof modulePath !== 'string' || !modulePath.startsWith('.')) {
+                throw new Error('Templates may only require relative modules');
+            }
             const absolutePath = path.resolve(path.dirname(filePath), modulePath);
+            const relative = path.relative(resolvedRoot, absolutePath);
+            if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+                throw new Error('Template module is outside the allowed root');
+            }
             return require(absolutePath);
         };
 
@@ -48,7 +56,7 @@ class HtmxRenderer {
         vm.createContext(sandbox);
 
         // Get the rendered output
-        let result = script.runInContext(sandbox);
+        let result = script.runInContext(sandbox, { timeout: timeoutMs });
 
         // Normalize spaces but preserve those in content
         result = result

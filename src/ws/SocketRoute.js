@@ -2,6 +2,10 @@ const { WebSocketServer } = require("ws");
 const { sendJson, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 
+function errorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Represents a WebSocket route configuration.
  * This class is used to define a specific WebSocket endpoint (`path`) and its associated handlers.
@@ -16,12 +20,29 @@ class SocketRoute {
      * @param {Array<new () => SocketService>} [options.services] 
      * @param {import('ws').ServerOptions} [options.websocketOptions] - Options passed to the underlying WebSocketServer.
     */
-    constructor({ path, handlers, services = [], allowDuplicateConnections, websocketOptions = {} } = {}) {
-        if (!path) {
-            throw new Error('A `path` must be specified for the SocketRoute.');
+    constructor({
+        path,
+        handlers,
+        services = [],
+        allowDuplicateConnections = false,
+        websocketOptions = {},
+        trustProxy = false,
+        getClientKey,
+        exposeErrors = false,
+        logger = console,
+    } = {}) {
+        if (typeof path !== 'string' || !path.startsWith('/')) {
+            throw new Error('A `path` beginning with "/" must be specified for the SocketRoute.');
         }
         if (!handlers || !Array.isArray(handlers) || handlers.length === 0) {
             throw new Error('At least one handler must be specified for the SocketRoute.');
+        }
+        if (!Array.isArray(services)) throw new TypeError('`services` must be an array.');
+        if (!websocketOptions || typeof websocketOptions !== 'object' || Array.isArray(websocketOptions)) {
+            throw new TypeError('`websocketOptions` must be an object.');
+        }
+        if (getClientKey !== undefined && typeof getClientKey !== 'function') {
+            throw new TypeError('`getClientKey` must be a function.');
         }
         /**
          * The path of the WebSocket route.
@@ -29,17 +50,28 @@ class SocketRoute {
          * @type {string}
          */
         this.path = path;
-        this.websocketOptions = websocketOptions;
+        this.websocketOptions = { ...websocketOptions };
+        this.logger = logger || { log() {}, warn() {}, error() {} };
+        this.trustProxy = trustProxy;
+        this.getClientKey = getClientKey;
+        this.exposeErrors = exposeErrors;
         /**
          * The array of handler instances associated with this route.
          * Each handler is responsible for managing WebSocket connections and message handling logic.
          * @type {import('./BaseHandler').BaseHandler[]}
          */
         this.handlers = handlers.map(HandlerClass => new HandlerClass());
+        const handlerNames = this.handlers.map(handler => handler.name);
+        if (handlerNames.some(name => typeof name !== 'string' || !name)) {
+            throw new TypeError('Every handler must have a non-empty name.');
+        }
+        if (new Set(handlerNames).size !== handlerNames.length) {
+            throw new Error('Handler names must be unique within a route.');
+        }
         this.clients = new Map();
-        this.server = new WebSocketServer({ noServer: true, path, ...websocketOptions });
+        this.server = new WebSocketServer({ ...websocketOptions, noServer: true });
         this.server.on('connection', this.handleConnection.bind(this));
-        this.allowDuplicateConnections = allowDuplicateConnections;
+        this.allowDuplicateConnections = Boolean(allowDuplicateConnections);
 
         /* ─── ROUTE‑SCOPED SERVICES ─────────────────────────── */
         this.services = services.map(SvcClass => {
@@ -55,11 +87,22 @@ class SocketRoute {
     addHandler(HandlerClass) {
         const newHandler = new HandlerClass();
         if (this.handlers.find(handler => handler.name === newHandler.name)) {
-            console.warn(`Handler with name '${newHandler.name}' already exists.`);
-            return;
+            this.logger.warn?.(`Handler with name '${newHandler.name}' already exists.`);
+            return false;
         }
+        if (typeof newHandler.name !== 'string' || !newHandler.name) throw new TypeError('A handler must have a non-empty name.');
         this.handlers.push(newHandler);
-        console.log(`Handler '${newHandler.name}' added successfully.`);
+        this.logger.log?.(`Handler '${newHandler.name}' added successfully.`);
+        return true;
+    }
+
+    resolveRemoteAddress(req) {
+        if (this.getClientKey) return String(this.getClientKey(req));
+        if (this.trustProxy) {
+            const forwarded = req?.headers?.['x-forwarded-for'];
+            if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
+        }
+        return req?.socket?.remoteAddress || 'unknown';
     }
     /**
      * Handles a new WebSocket connection.
@@ -67,19 +110,17 @@ class SocketRoute {
      * @param {import('http').IncomingMessage} req - The HTTP request object associated with the connection.
      */
     handleConnection(socket, req) {
-        const ip = req?.socket?.remoteAddress || 'unknown';
+        const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
 
-        console.log(`New client connected: ${ip}`);
+        this.logger.log?.(`New client connected: ${ip}`);
 
         if (!this.allowDuplicateConnections) {
             const existing = this.clients.get(clientKey);
             if (existing) {
-                console.warn(`Client ${ip} already connected, disconnecting existing connection.`);
-                existing.send(
-                    JSON.stringify({ msg: 'You are being disconnected because a new client is connected with your IP address.' })
-                );
-                existing.close();
+                this.logger.warn?.(`Client ${ip} already connected, disconnecting existing connection.`);
+                sendJson(existing, { msg: 'You are being disconnected because a new client is connected with your IP address.' });
+                existing.close?.(1000, 'Replaced by a new connection');
             }
         }
 
@@ -91,67 +132,78 @@ class SocketRoute {
         socket.sendJson = (data) => sendJson(socket, data);
         socket.broadcast = (data) => broadcast([...this.clients.values()].filter(sock => sock !== socket), data);
 
-        this.connectionOpenCallback(socket);
+        this.connectionOpenCallback(socket, req);
+        this.handlers.forEach((handler) => {
+            Promise.resolve(handler.onInitialContact?.(socket, req)).catch((error) => this.handleError(socket, error));
+        });
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
         socket.on('message', (message, isBinary) => {
             if (isBinary) {
-                this.handleBinaryMessage(socket, message);
+                void this.handleBinaryMessage(socket, message);
                 return;
             }
 
             try {
                 const parsed = JSON.parse(message);
-                this.handleMessage(socket, parsed);
+                void this.handleMessage(socket, parsed);
             } catch (error) {
-                console.error(`Error parsing message from ${ip}:`, error);
+                this.logger.error?.(`Error parsing message from ${ip}:`, error);
                 socket.sendJson({ error: 'Invalid JSON format' });
-                socket.close();
+                socket.close?.(1003, 'Invalid JSON');
                 return;
             }
         });
     }
 
     connectionOpenCallback(socket) {
-        console.log(`Opening new connection: ${socket.remoteAddress}`);
+        this.logger.log?.(`Opening new connection: ${socket.remoteAddress}`);
     }
 
-    handleMessage(sock, data) {
+    async handleMessage(sock, data) {
+        if (!data || typeof data !== 'object' || typeof data.type !== 'string' || !data.type) {
+            sendJson(sock, { error: 'Message must be an object with a non-empty string `type`' });
+            sock.close?.(1008, 'Invalid message');
+            return false;
+        }
         const handler = this.handlers.find((handler) => handler.name == data.type);
         if (!handler) {
             sendJson(sock, { error: `No such handler ${data.type}` });
-            sock.close();
+            sock.close?.(1008, 'Unknown handler');
+            return false;
         } else {
             try {
-                handler.handleMessage(sock, data);
+                await handler.handleMessage(sock, data);
+                return true;
             } catch (error) {
-                console.error(`Error handling message in handler ${handler.name}:`, error);
-                sendJson(sock, { error: `${error.message}` });
-                sock.close();
+                this.logger.error?.(`Error handling message in handler ${handler.name}:`, error);
+                sendJson(sock, { error: this.exposeErrors ? errorMessage(error) : 'Handler failed' });
+                sock.close?.(1011, 'Handler failed');
+                return false;
             }
         }
     }
 
-    handleBinaryMessage(socket, buffer) {
-        const hasBinaryPredicate = this.handlers.some(handler => typeof handler.acceptsBinary === 'function');
-        const handler = hasBinaryPredicate
-            ? this.handlers.find(handler => handler.acceptsBinary?.(socket, buffer))
-            : this.handlers.find(handler => typeof handler.handleBinaryMessage === 'function');
+    async handleBinaryMessage(socket, buffer) {
+        try {
+            const handlersWithPredicate = this.handlers.filter(handler => typeof handler.acceptsBinary === 'function');
+            const handler = handlersWithPredicate.length
+                ? handlersWithPredicate.find(handler => handler.acceptsBinary(socket, buffer))
+                : this.handlers.find(handler => handler.onBinaryMessage !== undefined);
 
-        if (handler) {
-            try {
-                handler.handleBinaryMessage(socket, buffer);
-            } catch (error) {
-                console.error(`Error handling binary message in handler ${handler.name}:`, error);
-                sendJson(socket, { error: `${error.message}` });
-                socket.close();
+            if (!handler) {
+                sendJson(socket, { error: 'Binary messages are not supported on this route' });
+                return false;
             }
-            return;
-        }
 
-        sendJson(socket, {
-            error: 'Binary messages are not supported on this route'
-        });
+            await handler.handleBinaryMessage(socket, buffer);
+            return true;
+        } catch (error) {
+            this.logger.error?.('Error handling binary message:', error);
+            sendJson(socket, { error: this.exposeErrors ? errorMessage(error) : 'Binary handler failed' });
+            socket.close?.(1011, 'Binary handler failed');
+            return false;
+        }
     }
 
     /**
@@ -162,14 +214,16 @@ class SocketRoute {
     handleClose(socket) {
         const key = socket.clientKey || socket.__redwebClientKey;
         const ip = socket.remoteAddress || 'unknown';
-        console.log(`Client disconnected: ${ip}`);
+        this.logger.log?.(`Client disconnected: ${ip}`);
         if (key && this.clients.get(key) === socket) this.clients.delete(key);
         if (this.connectionCloseCallback) this.connectionCloseCallback(socket);
     }
 
-    shutdown() {
-        this.services.forEach(svc => svc.onShutdown && svc.onShutdown());
-        this.server.close();
+    async shutdown() {
+        await Promise.all(this.services.map(svc => Promise.resolve(svc.onShutdown?.())));
+        for (const socket of this.clients.values()) socket.close?.(1001, 'Server shutting down');
+        this.clients.clear();
+        await new Promise((resolve) => this.server.close(resolve));
     }
 
     /**
@@ -180,7 +234,7 @@ class SocketRoute {
      */
     handleError(socket, error) {
         const ip = socket.remoteAddress || 'unknown';
-        console.error(`Socket error from ${ip}:`, error);
+        this.logger.error?.(`Socket error from ${ip}:`, error);
     }
 }
 

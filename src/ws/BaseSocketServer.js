@@ -7,12 +7,18 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
+const { listenServer, closeServer } = require('../serverLifecycle');
 
 const SOCKET_OPTIONS = {
   port: 3000,
+  bind: '0.0.0.0',
   ssl:  null,
   listen: true,
-  routes: []
+  routes: [],
+  fallbackToRoot: false,
+  closeServerOnShutdown: undefined,
+  logger: console,
+  listenCallback: undefined,
 };
 
 /**
@@ -23,16 +29,38 @@ class BaseSocketServer {
    * @param {import('http').Server} server
    * @param {SocketServerOptions}  [options]
    */
-  constructor(server, options = {}) {
-    this.clients = new Map();
+  constructor(server, options = {}, ownsServer = false, name = 'SocketServer') {
+    if (!server || typeof server.on !== 'function') throw new TypeError('A Node HTTP(S) server is required.');
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
+    if (!Number.isInteger(this.port) || this.port < 0 || this.port > 65535) throw new TypeError('`port` must be an integer between 0 and 65535.');
+    if (!Array.isArray(this.routes)) throw new TypeError('`routes` must be an array.');
     this.server = server;
+    this.ownsServer = ownsServer;
+    this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
-    if (!options.routes?.length) options.routes = [DefaultRoute];
-    this.routes = options.routes.map(RouteClass => new RouteClass(server));
+    const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
+    this.routes = RouteClasses.map(RouteClass => new RouteClass(server, { logger: this.logger }));
+    this.assertUniqueRoutes();
 
-    this.server.on('upgrade', this.handleUpgrade.bind(this));
+    this._upgradeHandler = this.handleUpgrade.bind(this);
+    this.server.on('upgrade', this._upgradeHandler);
+
+    const shouldListen = (ownsServer && this.listen !== false) || (!ownsServer && options.listen === true);
+    if (shouldListen) {
+      listenServer(this.server, {
+        port: this.port,
+        bind: this.bind,
+        callback: this.listenCallback,
+        logger: this.logger,
+        name,
+      });
+    }
+  }
+
+  assertUniqueRoutes() {
+    const paths = this.routes.map(route => route.path);
+    if (new Set(paths).size !== paths.length) throw new Error('WebSocket route paths must be unique.');
   }
 
   handleUpgrade(req, sock, head) {
@@ -49,7 +77,7 @@ class BaseSocketServer {
 
     const route =
       this.routes.find(r => r.path === path) ||
-      this.routes.find(r => r.path === '/');
+      (this.fallbackToRoot ? this.routes.find(r => r.path === '/') : undefined);
 
     if (!route) return sock.destroy();
 
@@ -63,15 +91,23 @@ class BaseSocketServer {
    * @param {new () => import('./SocketRoute').SocketRoute} RouteClass
    */
   addRoute(RouteClass) {
-    this.routes.push(new RouteClass(this.server));
+    const route = new RouteClass(this.server, { logger: this.logger });
+    if (this.routes.some(existing => existing.path === route.path)) {
+      route.shutdown?.();
+      throw new Error(`A WebSocket route already exists at ${route.path}.`);
+    }
+    this.routes.push(route);
+    return route;
   }
 
   /**
    * Gracefully tear down all routes (and their services)
    */
-  shutdown() {
-    this.routes.forEach(route => route.shutdown?.());
-    this.server.close();
+  async shutdown() {
+    this.server.off?.('upgrade', this._upgradeHandler);
+    await Promise.all(this.routes.map(route => Promise.resolve(route.shutdown?.())));
+    if (!this.closeServerOnShutdown || !this.server.listening) return;
+    await closeServer(this.server);
   }
 }
 
