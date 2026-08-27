@@ -37,7 +37,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('script or style');
     });
 
-    test('validates and records page, state, and action decorator metadata', () => {
+    test('validates and records page, state, and action decorator metadata', async () => {
         expect(() => page('relative')).toThrow('beginning with');
         expect(() => page('/', null)).toThrow('options');
         expect(() => page('/', { template: '' })).toThrow('template');
@@ -47,12 +47,16 @@ describe('decorator-first Live HTML units', () => {
         expect(() => state({ writable: 'yes' })).toThrow('writable');
         expect(() => state()(null, 'name')).toThrow('class member');
         expect(() => state()({}, '')).toThrow('non-empty');
+        expect(() => state()(undefined, { kind: 'field', static: true, name: 'value' })).toThrow('public instance field');
         expect(() => action()(null, 'run', { value() {} })).toThrow('class member');
         expect(() => action()({}, 'run', {})).toThrow('method');
+        expect(() => action()(() => {}, { kind: 'method', private: true, name: 'run' })).toThrow('public instance method');
 
         class MetadataPage extends LivePage {
             run() { return 'ok'; }
         }
+        state({ writable: true })(MetadataPage.prototype, 'name');
+        decorateAction(MetadataPage, 'run');
         state({ writable: true })(MetadataPage.prototype, 'name');
         decorateAction(MetadataPage, 'run');
         page('/metadata', { template: 'page.htmx', scope: 'shared' })(MetadataPage);
@@ -64,6 +68,42 @@ describe('decorator-first Live HTML units', () => {
         getActionMetadata(MetadataPage).clear();
         expect(getStateMetadata(MetadataPage).has('name')).toBe(true);
         expect(getActionMetadata(MetadataPage).has('run')).toBe(true);
+
+        class BaseMetadataPage extends LivePage { ping() { return 'base'; } }
+        state()(BaseMetadataPage.prototype, 'count');
+        decorateAction(BaseMetadataPage, 'ping');
+        class InheritedMetadataPage extends BaseMetadataPage {}
+        const inherited = new InheritedMetadataPage();
+        inherited.count = 0;
+        inherited._activateState();
+        const inheritedUpdates = [];
+        await inherited._attach({ sendEvent: (type, payload) => inheritedUpdates.push([type, payload]) }, {});
+        inheritedUpdates.length = 0;
+        inherited.count = 1;
+        expect(inheritedUpdates).toEqual([['redweb:state', { name: 'count', value: '1', html: false }]]);
+        await expect(inherited._invoke('ping', [], {})).resolves.toBe('base');
+        class HiddenActionPage extends BaseMetadataPage { ping() { return 'hidden'; } }
+        const hidden = new HiddenActionPage();
+        await expect(hidden._invoke('ping', [], {})).rejects.toThrow('Unknown page action');
+
+        let stateInitializer;
+        class StandardMetadataPage extends LivePage { run() { return 'standard'; } }
+        const stateIdentity = state({ writable: true })(undefined, {
+            kind: 'field', static: false, private: false, name: 'value',
+            addInitializer: initializer => { stateInitializer = initializer; },
+        });
+        const actionValue = action()(StandardMetadataPage.prototype.run, {
+            kind: 'method', static: false, private: false, name: 'run',
+            addInitializer: initializer => initializer.call(new StandardMetadataPage()),
+        });
+        action()(StandardMetadataPage.prototype.run, {
+            kind: 'method', static: false, private: false, name: 'run', addInitializer() {},
+        });
+        stateInitializer.call(new StandardMetadataPage());
+        expect(stateIdentity('initial')).toBe('initial');
+        expect(actionValue).toBe(StandardMetadataPage.prototype.run);
+        expect(getStateMetadata(StandardMetadataPage).get('value')).toEqual({ writable: true });
+        expect(getActionMetadata(StandardMetadataPage).has('run')).toBe(true);
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {
@@ -154,11 +194,14 @@ describe('decorator-first Live HTML units', () => {
         expect(source).toContain("document.addEventListener('input'");
     });
 
-    test('runs the legacy TypeScript decorator ABI used by the public examples', async () => {
+    test.each([
+        ['legacy', true],
+        ['standard', false],
+    ])('runs the %s TypeScript decorator ABI used by the public examples', async (_label, experimentalDecorators) => {
         const fixture = path.join(__dirname, '..', 'fixtures', 'live-html-decorators.ts');
         const output = ts.transpileModule(fs.readFileSync(fixture, 'utf8'), {
             compilerOptions: {
-                experimentalDecorators: true,
+                experimentalDecorators,
                 module: ts.ModuleKind.CommonJS,
                 target: ts.ScriptTarget.ES2022,
                 useDefineForClassFields: true,
@@ -187,8 +230,11 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
+        expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('absolute');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/live?unsafe="' } })).toThrow('safe');
+        expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');
+        expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '/safe//unsafe.js' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/same', client: '/same' } })).toThrow('unique');
         expect(() => new PageManager({ pages: [class {}] })).toThrow('extend LivePage');
         expect(() => new PageManager({ pages: [class extends LivePage {}] })).toThrow('missing @page');
@@ -233,7 +279,15 @@ describe('decorator-first Live HTML units', () => {
         expect(manager.acceptsOrigin('not a url', { headers: {} })).toBe(false);
         expect(manager.acceptsOrigin('ftp://example.com', { headers: { host: 'example.com' } })).toBe(false);
         expect(manager.acceptsOrigin('http://other.example', { headers: { host: 'example.com' } })).toBe(false);
-        expect(manager.acceptsOrigin('https://example.com', { headers: { host: 'example.com' } })).toBe(true);
+        expect(manager.acceptsOrigin('https://example.com', { headers: { host: 'example.com' } })).toBe(false);
+        expect(manager.acceptsOrigin('http://example.com', { headers: { host: 'example.com' } })).toBe(true);
+        expect(manager.acceptsOrigin('https://example.com', { headers: { host: 'example.com' }, socket: { encrypted: true } })).toBe(true);
+        const listedOrigins = new PageManager({ pages: [ManagedPage], origins: ['https://proxy.example'] });
+        expect(listedOrigins.acceptsOrigin('https://proxy.example', { headers: {} })).toBe(true);
+        await listedOrigins.shutdown();
+        const dynamicOrigins = new PageManager({ pages: [ManagedPage], origins: origin => origin === 'https://dynamic.example' });
+        expect(dynamicOrigins.acceptsOrigin('https://dynamic.example', { headers: {} })).toBe(true);
+        await dynamicOrigins.shutdown();
         expect(() => manager.connect(null, {})).toThrow('unavailable');
 
         const sent = [];
@@ -357,6 +411,43 @@ describe('decorator-first Live HTML units', () => {
             headers: {},
         })).resolves.toBe(false);
         await disposedManager.shutdown();
+
+        let releaseSlowRender;
+        class SlowRender extends LivePage {
+            loading() { return new Promise(resolve => { releaseSlowRender = resolve; }); }
+            render() { return '<p>slow</p>'; }
+        }
+        page('/slow-render')(SlowRender);
+        const slowManager = new PageManager({ pages: [SlowRender], maxSessions: 1 });
+        const slowRecord = slowManager.records.get('/slow-render');
+        const slowRender = slowManager.render(slowRecord, request);
+        await new Promise(resolve => setImmediate(resolve));
+        await expect(slowManager.render(slowRecord, request)).rejects.toMatchObject({ status: 503 });
+        const slowShutdown = slowManager.shutdown();
+        await expect(slowManager.render(slowRecord, request)).rejects.toMatchObject({ status: 503 });
+        releaseSlowRender();
+        await slowRender;
+        await slowShutdown;
+        expect(slowManager.rendering).toBe(0);
+        expect(slowManager.pending.size).toBe(0);
+
+        const parallelReleases = [];
+        class ParallelRender extends LivePage {
+            loading() { return new Promise(resolve => parallelReleases.push(resolve)); }
+            render() { return '<p>parallel</p>'; }
+        }
+        page('/parallel-render')(ParallelRender);
+        const parallelManager = new PageManager({ pages: [ParallelRender], maxSessions: 2 });
+        const parallelRecord = parallelManager.records.get('/parallel-render');
+        const parallelFirst = parallelManager.render(parallelRecord, request);
+        const parallelSecond = parallelManager.render(parallelRecord, request);
+        await new Promise(resolve => setImmediate(resolve));
+        parallelReleases[0]();
+        await parallelFirst;
+        expect(parallelManager.rendering).toBe(1);
+        parallelReleases[1]();
+        await parallelSecond;
+        await parallelManager.shutdown();
     });
 
     test('validates and composes LiveHtmlServer with an existing app and idempotent shutdown', async () => {

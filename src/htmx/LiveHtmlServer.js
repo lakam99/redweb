@@ -16,6 +16,7 @@ class LiveHtmlServer {
             sessionTtlMs,
             maxSessions,
             authenticate,
+            origins,
             server: suppliedApp,
             ...httpOptions
         } = options;
@@ -30,6 +31,7 @@ class LiveHtmlServer {
             sessionTtlMs,
             maxSessions,
             authenticate,
+            origins,
             logger: httpOptions.logger,
         });
         this.manager.mount(app);
@@ -54,11 +56,22 @@ class LiveHtmlServer {
 
     shutdown() {
         if (!this._shutdownPromise) {
-            this._shutdownPromise = this.sockets.shutdown()
-                .then(() => this.manager.shutdown())
-                .then(() => this.http.shutdown());
+            this._shutdownPromise = this.performShutdown();
         }
         return this._shutdownPromise;
+    }
+
+    async performShutdown() {
+        const errors = [];
+        for (const cleanup of [
+            () => this.sockets.shutdown(),
+            () => this.manager.shutdown(),
+            () => this.http.shutdown(),
+        ]) {
+            try { await cleanup(); }
+            catch (error) { errors.push(error); }
+        }
+        if (errors.length) throw new AggregateError(errors, 'Live HTML shutdown failed.');
     }
 }
 

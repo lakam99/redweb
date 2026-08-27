@@ -441,9 +441,23 @@ declare module 'redweb' {
         writable?: boolean;
     }
 
+    export interface LiveStateDecorator {
+        (target: object, propertyKey: string): void;
+        <This, Value>(value: undefined, context: ClassFieldDecoratorContext<This, Value>):
+            (this: This, initialValue: Value) => Value;
+    }
+
+    export interface LiveActionDecorator {
+        (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
+        <This, Value extends (this: This, ...args: any[]) => any>(
+            value: Value,
+            context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
     export function page(path: string, options?: PageOptions): ClassDecorator;
-    export function state(options?: StateOptions): PropertyDecorator;
-    export function action(): MethodDecorator;
+    export function state(options?: StateOptions): LiveStateDecorator;
+    export function action(): LiveActionDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
 
     export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
@@ -459,6 +473,7 @@ declare module 'redweb' {
         authenticate?(request: import('http').IncomingMessage | import('express').Request):
             string | number | bigint | boolean | false | null | undefined |
             Promise<string | number | bigint | boolean | false | null | undefined>;
+        origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
     }
 
     export class LiveHtmlServer {

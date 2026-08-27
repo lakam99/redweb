@@ -2,6 +2,8 @@
 
 Live HTML is Redweb's decorator-first server-rendering layer. It uses the existing `HttpServer`, `SocketRoute`, admission, protocol, ordering, backpressure, and shutdown implementations rather than maintaining a second network stack.
 
+This layer deliberately owns page concerns only: `@page`, `@state`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
+
 ## Page model
 
 Every page extends `LivePage` and is registered with `@page(path, options)`:
@@ -13,6 +15,8 @@ class ProfilePage extends LivePage {
   displayName = 'Guest';
 }
 ```
+
+The decorators support both TypeScript's current standard decorator emit and the legacy `experimentalDecorators` ABI.
 
 Pages use connection scope by default: each rendered browser page receives its own instance. `scope: 'shared'` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history.
 
@@ -97,6 +101,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
+- `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
 - `livePaths`: optional `{ socket, client, runtime }` internal path overrides.
 
 The internal paths and application page paths must be unique.

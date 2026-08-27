@@ -22,20 +22,24 @@ function boundedName(value, label) {
 }
 
 function internalPath(value, label) {
-    if (typeof value !== 'string' || !/^\/(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2}|\/)+$/.test(value)) {
+    if (typeof value !== 'string' || !/^\/(?!\/)(?!.*\/\/)(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2}|\/)+$/.test(value)) {
         throw new TypeError(`${label} path must be an absolute URL pathname using safe characters.`);
     }
     return value;
 }
 
 class PageManager {
-    constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, authenticate, logger = console }) {
+    constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (typeof templateRoot !== 'string' || !templateRoot) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
         if (!Number.isInteger(maxSessions) || maxSessions < 1) throw new TypeError('`maxSessions` must be a positive integer.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
         if (authenticate !== undefined && typeof authenticate !== 'function') throw new TypeError('`authenticate` must be a function.');
+        if (origins !== undefined && typeof origins !== 'function' &&
+            (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
+            throw new TypeError('`origins` must be a function or an array of non-empty origins.');
+        }
         this.paths = { ...DEFAULT_PATHS, ...paths };
         Object.entries(this.paths).forEach(([name, value]) => {
             internalPath(value, name);
@@ -48,10 +52,14 @@ class PageManager {
         this.maxSessions = maxSessions;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.authenticateRequest = authenticate;
+        this.origins = origins;
         this.pending = new Map();
         this.active = new Map();
         this.records = new Map();
         this.sharedPages = new Set();
+        this.rendering = 0;
+        this.renderWaiters = [];
+        this.closing = false;
         pages.forEach(PageClass => this.register(PageClass));
     }
 
@@ -94,14 +102,16 @@ class PageManager {
     }
 
     async render(record, request) {
-        if (this.pending.size + this.active.size >= this.maxSessions) {
+        if (this.closing || this.pending.size + this.active.size + this.rendering >= this.maxSessions) {
             const error = new Error('Live HTML session capacity reached.');
             error.status = 503;
             throw error;
         }
+        this.rendering += 1;
         const ownsPage = record.metadata.scope === 'connection';
-        const page = ownsPage ? this.instantiate(record) : record.shared;
+        let page;
         try {
+            page = ownsPage ? this.instantiate(record) : record.shared;
             const principal = this.authenticateRequest ? await this.authenticateRequest(request) : undefined;
             if (this.authenticateRequest && (principal === false || principal === null || principal === undefined || typeof principal === 'object')) {
                 const error = new Error('Live HTML authentication failed.');
@@ -121,8 +131,11 @@ class PageManager {
                 version: PROTOCOL_VERSION,
             });
         } catch (error) {
-            if (ownsPage) await page.dispose();
+            if (ownsPage && page) await page.dispose();
             throw error;
+        } finally {
+            this.rendering -= 1;
+            if (this.rendering === 0) this.renderWaiters.splice(0).forEach(resolve => resolve());
         }
     }
 
@@ -163,7 +176,10 @@ class PageManager {
         if (typeof origin !== 'string') return false;
         try {
             const parsed = new URL(origin);
-            return ['http:', 'https:'].includes(parsed.protocol) && parsed.host === request.headers.host;
+            if (typeof this.origins === 'function') return this.origins(origin, request);
+            if (this.origins) return this.origins.includes(parsed.origin);
+            const protocol = request.socket?.encrypted ? 'https:' : 'http:';
+            return parsed.protocol === protocol && parsed.host === request.headers.host;
         } catch {
             return false;
         }
@@ -253,9 +269,15 @@ class PageManager {
     }
 
     async shutdown() {
-        await Promise.all([...this.pending.values(), ...this.active.values()].map(session => this.release(session)));
-        await Promise.all([...this.sharedPages].map(page => page.dispose()));
+        this.closing = true;
+        if (this.rendering > 0) await new Promise(resolve => this.renderWaiters.push(resolve));
+        const results = await Promise.allSettled([
+            ...[...this.pending.values(), ...this.active.values()].map(session => this.release(session)),
+            ...[...this.sharedPages].map(page => page.dispose()),
+        ]);
         this.sharedPages.clear();
+        const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
+        if (errors.length) throw new AggregateError(errors, 'Live HTML page cleanup failed.');
     }
 }
 

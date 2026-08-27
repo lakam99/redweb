@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
+const { LiveHtmlServer, LivePage, page } = require('../..');
 const { createCounterServer } = require('../../examples/live-html/counter');
 const { createChatroomServer } = require('../../examples/live-html/chatroom');
 const {
@@ -236,6 +237,20 @@ describe('Live HTML integration without mocks', () => {
         await client.connect();
         await waitForCondition(() => updates.some(update => update.value === '1'), 'secure counter update', 2500);
         expect(server.server.constructor.name).toBe('Server');
+
+        const secondResponse = await request({ protocol: 'https:', port, path: '/' });
+        const secondConfig = pageConfig(secondResponse.body);
+        const insecureOrigin = new WebSocket(
+            `wss://127.0.0.1:${port}${secondConfig.socketPath}?pageId=${secondConfig.pageId}&redwebVersion=${secondConfig.version}`,
+            { rejectUnauthorized: false, headers: { Origin: `http://127.0.0.1:${port}` } }
+        );
+        rawSockets.add(insecureOrigin);
+        insecureOrigin.on('error', () => {});
+        const rejectedStatus = await new Promise(resolve => insecureOrigin.once('unexpected-response', (_request, rejectedResponse) => {
+            rejectedResponse.resume();
+            resolve(rejectedResponse.statusCode);
+        }));
+        expect(rejectedStatus).toBe(401);
     });
 
     test('binds a page token to the same authenticated HTTP and WebSocket principal', async () => {
@@ -265,5 +280,42 @@ describe('Live HTML integration without mocks', () => {
         rawSockets.add(owner);
         await waitForOpen(owner);
         expect((await nextJson(owner)).type).toBe('redweb:state');
+    });
+
+    test('closes the real listener even when an asynchronous page cleanup rejects', async () => {
+        class RejectingCleanupPage extends LivePage {
+            render() { return '<p>cleanup</p>'; }
+            async disposed() { throw new Error('cleanup rejected'); }
+        }
+        page('/')(RejectingCleanupPage);
+        const server = await start(options => new LiveHtmlServer({ pages: [RejectingCleanupPage], ...options }));
+        const port = server.server.address().port;
+        expect((await request({ port, path: '/' })).status).toBe(200);
+        servers.delete(server);
+        await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        expect(server.server.listening).toBe(false);
+    });
+
+    test('holds the hard session cap across concurrent slow HTTP renders', async () => {
+        let loadingStarted;
+        let releaseLoading;
+        const started = new Promise(resolve => { loadingStarted = resolve; });
+        class SlowHttpPage extends LivePage {
+            loading() {
+                loadingStarted();
+                return new Promise(resolve => { releaseLoading = resolve; });
+            }
+            render() { return '<p>ready</p>'; }
+        }
+        page('/')(SlowHttpPage);
+        const server = await start(options => new LiveHtmlServer({ pages: [SlowHttpPage], maxSessions: 1, ...options }));
+        const port = server.server.address().port;
+        const first = request({ port, path: '/' });
+        await started;
+        const rejected = await request({ port, path: '/' });
+        expect(rejected.status).toBe(503);
+        releaseLoading();
+        expect((await first).status).toBe(200);
+        expect(server.manager.pending.size).toBe(1);
     });
 });
