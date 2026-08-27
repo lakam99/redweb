@@ -95,6 +95,10 @@ class BaseSocketServer {
   }
 
   handleUpgrade(req, sock, head) {
+    // Upgrade sockets are detached from Node's HTTP request lifecycle. A peer
+    // may reset one while admission is pending or after a rejection response;
+    // consume that transport-level event so it cannot crash the process.
+    if (typeof sock.on === 'function') sock.on('error', Function.prototype);
     // Some websocket clients (e.g., certain UE plugins) are finicky about the
     // HTTP upgrade path they send. Normalise the path and fall back to a default
     // route so we can still complete the upgrade instead of tearing the socket down.

@@ -1,8 +1,6 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs');
-const HtmxRenderer = require('../htmx/HtmxRenderer'); // Import the HtmxRenderer module
 const { validateListenerOptions } = require('../serverLifecycle');
 
 /**
@@ -24,7 +22,6 @@ const { validateListenerOptions } = require('../serverLifecycle');
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
  * @property {import('express').Application} [server] - Existing Express application to configure.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
- * @property {boolean} [enableHtmxRendering=false] - Enable dynamic HTMX file rendering.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -39,7 +36,6 @@ const HTTP_OPTIONS = {
     ssl: null,
     server: undefined,
     corsOptions: undefined,
-    enableHtmxRendering: false, // New option for HTMX rendering
     exposeErrors: false,
     logger: console,
 };
@@ -75,11 +71,6 @@ function assertOptions(options) {
     }
 }
 
-function isWithin(root, candidate) {
-    const relative = path.relative(root, candidate);
-    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
-}
-
 /**
  * Base HTTP Server
  * @param {RedWebOptions} options - Configuration options for RedWeb.
@@ -112,32 +103,6 @@ function BaseHttpServer(options = {}) {
     if (this.options.corsOptions !== false) {
         this.app.use(cors(this.options.corsOptions));
     }
-
-    // Enable HTMX rendering if the flag is set
-    if (this.enableHtmxRendering) {
-        this.app.get('*.htmx', (req, res) => {
-            const match = this.publicPaths
-                .map(publicPath => {
-                    const root = path.resolve(process.cwd(), publicPath);
-                    const filePath = path.resolve(root, `.${req.path}`);
-                    return { root, filePath };
-                })
-                .find(({ root, filePath }) => isWithin(root, filePath) && fs.existsSync(filePath));
-    
-            if (!match) {
-                return res.status(404).send('HTMX template not found');
-            }
-    
-            try {
-                const renderedContent = HtmxRenderer.render(match.filePath, { rootDir: match.root });
-                res.type('html').send(renderedContent);
-            } catch (error) {
-                const message = this.exposeErrors ? `Error rendering HTMX file: ${error.message}` : 'Unable to render HTMX template';
-                res.status(500).send(message);
-            }
-        });
-    }
-    
 
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) =>

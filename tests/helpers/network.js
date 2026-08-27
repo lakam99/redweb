@@ -49,6 +49,41 @@ function request({ protocol = 'http:', host = '127.0.0.1', port, path = '/', met
     }), `${method} ${path}`);
 }
 
+function websocketUpgradeResponse(url, options = {}) {
+    const target = new URL(url);
+    const transport = target.protocol === 'wss:' ? https : http;
+    return withTimeout(new Promise((resolve) => {
+        const upgrade = transport.request({
+            host: target.hostname,
+            port: target.port,
+            path: `${target.pathname}${target.search}`,
+            rejectUnauthorized: options.rejectUnauthorized,
+            headers: {
+                Connection: 'Upgrade',
+                Upgrade: 'websocket',
+                'Sec-WebSocket-Key': crypto.randomBytes(16).toString('base64'),
+                'Sec-WebSocket-Version': '13',
+                ...options.headers,
+            },
+        });
+        upgrade.once('response', response => {
+            response.on('error', () => {});
+            response.resume();
+            resolve({ status: response.statusCode, headers: response.headers });
+        });
+        upgrade.once('upgrade', (_response, socket) => {
+            socket.destroy();
+            resolve({ status: 101, headers: _response.headers });
+        });
+        upgrade.on('error', () => resolve({ status: 'error', headers: {} }));
+        upgrade.end();
+    }), 'WebSocket upgrade response');
+}
+
+async function websocketUpgradeStatus(url, options) {
+    return (await websocketUpgradeResponse(url, options)).status;
+}
+
 function waitForOpen(socket) {
     if (socket.readyState === socket.OPEN) return Promise.resolve();
     return withTimeout(new Promise((resolve, reject) => {
@@ -130,5 +165,7 @@ module.exports = {
     waitForCondition,
     waitForListening,
     waitForOpen,
+    websocketUpgradeResponse,
+    websocketUpgradeStatus,
     withTimeout,
 };

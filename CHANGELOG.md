@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Added explicit safe attribute and URL interpolation for Live HTML.
+- Added nested fragment composition and reusable safe code blocks.
+- Added page head metadata, non-live ETag/cache handling, and runtime-free static export with content-addressed CSS.
+
+## Unreleased
+
+- Replaced the executable `.htmx` sandbox with decorator-first, declarative Live HTML pages.
+- Added context-restricted safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, optional identity binding, HTTPS/WSS, reconnect snapshots, and awaited deterministic cleanup.
+- Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.
+- Added runnable server-counter and shared-chatroom examples with real HTTP/WebSocket, browser DOM, load, memory, and packed-artifact verification gates.
+- Converted the canonical Live HTML examples to compiled TypeScript so they use `@page()`, `@state()`, and `@action()` directly.
+- Added `start(PageClass)`, optional `LivePage` inheritance, inferred colocated templates, and `shared: true` to remove framework setup boilerplate from decorated pages.
+
 ## 0.9.0
 
 - Added opt-in pre-upgrade admission, origin validation, secure placement, bounded pending upgrades, transport limits, ordered processing, and route-level heartbeat monitoring.

@@ -1,8 +1,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const HtmxRenderer = require('../../src/htmx/HtmxRenderer');
-const RedWebHtmxComponent = require('../../src/htmx/RedWebHtmxComponent');
 const loadSslConfig = require('../../src/sslConfig');
 const SocketRegistry = require('../../src/ws/SocketRegistry');
 const SocketService = require('../../src/ws/SocketService');
@@ -10,6 +8,7 @@ const { BaseHandler } = require('../../src/ws/BaseHandler');
 const { broadcast, canSend, sendJson } = require('../../src/ws/util');
 const { closeWebSocketServer } = require('../../src/ws/shutdown');
 const { settleTasks, throwCleanupErrors } = require('../../src/serverLifecycle');
+const { combineFailures } = require('../../scripts/verify-live-html-browser');
 
 describe('small reusable units', () => {
     test('loads TLS files and rejects incomplete configuration', () => {
@@ -91,37 +90,6 @@ describe('small reusable units', () => {
         service.onShutdown();
     });
 
-    test('supports HTMX components and restricts template execution', () => {
-        class Greeting extends RedWebHtmxComponent {
-            render() { return `<p>${this.props.name}</p>`; }
-        }
-        expect(new Greeting({ name: 'Redweb' }).render()).toBe('<p>Redweb</p>');
-        expect(new RedWebHtmxComponent().props).toEqual({});
-        expect(() => new RedWebHtmxComponent().render()).toThrow('Render method must be implemented');
-
-        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-renderer-'));
-        const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-outside-'));
-        try {
-            const builtin = path.join(root, 'builtin.htmx');
-            fs.writeFileSync(builtin, "require('fs')");
-            expect(() => HtmxRenderer.render(builtin)).toThrow('Templates may only require relative modules');
-
-            const outsideModule = path.join(outside, 'value.js');
-            fs.writeFileSync(outsideModule, 'module.exports = 1');
-            const traversal = path.join(root, 'traversal.htmx');
-            const relative = path.relative(root, outsideModule).replaceAll('\\', '/');
-            fs.writeFileSync(traversal, `require('./${relative}')`);
-            expect(() => HtmxRenderer.render(traversal)).toThrow('Template module is outside the allowed root');
-
-            const loop = path.join(root, 'loop.htmx');
-            fs.writeFileSync(loop, 'while (true) {}');
-            expect(() => HtmxRenderer.render(loop, { timeoutMs: 5 })).toThrow(/timed out/i);
-        } finally {
-            fs.rmSync(root, { recursive: true, force: true });
-            fs.rmSync(outside, { recursive: true, force: true });
-        }
-    });
-
     test('collects cleanup failures and reports them after all tasks run', async () => {
         const calls = [];
         const errors = await settleTasks([
@@ -133,6 +101,17 @@ describe('small reusable units', () => {
         expect(calls).toEqual(['first', 'last']);
         expect(errors.map(error => error.message)).toEqual(['sync cleanup failure', 'async cleanup failure']);
         expect(() => throwCleanupErrors(errors, 'cleanup failed')).toThrow('cleanup failed');
+    });
+
+    test('preserves browser gate failures when profile cleanup also fails', () => {
+        const browserFailure = new Error('browser assertion failed');
+        const cleanupFailure = new Error('profile cleanup failed');
+        expect(combineFailures(undefined, cleanupFailure)).toBe(cleanupFailure);
+        const combined = combineFailures(browserFailure, cleanupFailure);
+        expect(combined).toBeInstanceOf(AggregateError);
+        expect(combined.message).toBe('browser assertion failed');
+        expect(combined.cause).toBe(browserFailure);
+        expect(combined.errors).toEqual([browserFailure, cleanupFailure]);
     });
 
     test('handles WebSocket-server close errors, throws, and termination failures', async () => {

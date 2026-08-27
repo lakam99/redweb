@@ -1,17 +1,16 @@
 {
   "compilerOptions": {
-    "strict": true,
-    "noImplicitOverride": true,
-    "noEmit": true,
-    "target": "ES2020",
+    "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "experimentalDecorators": true,
+    "strict": true,
+    "experimentalDecorators": false,
+    "useDefineForClassFields": true,
     "skipLibCheck": false,
     "baseUrl": "../..",
     "paths": {
       "redweb": ["."]
     }
   },
-  "files": ["public-api.ts"]
+  "files": ["counter.ts", "chatroom.ts", "cards.ts"]
 }

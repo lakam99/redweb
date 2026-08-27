@@ -2,6 +2,7 @@ declare module 'redweb' {
     import { Application } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
+    import { Server as NodeHttpsServer } from 'https';
     import { WebSocket, ServerOptions } from 'ws';
     import { Buffer } from 'buffer';
     import { EventEmitter } from 'events';
@@ -21,7 +22,6 @@ declare module 'redweb' {
         ssl?: { key: string; cert: string };
         server?: Application;
         corsOptions?: CorsOptions | false;
-        enableHtmxRendering?: boolean;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
     }
@@ -400,6 +400,187 @@ declare module 'redweb' {
     export class HttpsServer extends BaseHttpServer {
         constructor(options?: RedWebOptions);
         shutdown(): Promise<void>;
+    }
+
+    /** ─────────────────── LIVE HTML ─────────────────── */
+
+    const htmlFragmentBrand: unique symbol;
+    const htmlAttributeBrand: unique symbol;
+    const htmlUrlBrand: unique symbol;
+
+    export interface HtmlFragment {
+        readonly [htmlFragmentBrand]: true;
+        toString(): string;
+    }
+
+    export interface HtmlAttribute {
+        readonly [htmlAttributeBrand]: true;
+    }
+
+    export interface HtmlUrl {
+        readonly [htmlUrlBrand]: true;
+    }
+
+    export interface LivePageRequest {
+        readonly path: string;
+        readonly url: string;
+        readonly method: string;
+        readonly headers: import('http').IncomingHttpHeaders;
+        readonly params: Readonly<Record<string, string>>;
+        readonly query: Readonly<Record<string, unknown>>;
+        readonly body: unknown;
+        get(name: string): string | undefined;
+    }
+
+    export interface LivePageRequestContext {
+        request: LivePageRequest;
+        params: Readonly<Record<string, string>>;
+        query: Readonly<Record<string, unknown>>;
+        body: unknown;
+        principal?: string | number | bigint | boolean;
+        signal: AbortSignal;
+    }
+
+    export interface LivePageConnectionContext {
+        socket: RedWebSocket;
+        signal?: AbortSignal;
+        principal?: string | number | bigint | boolean;
+    }
+
+    export abstract class LivePage {
+        protected readonly _connections: Set<RedWebSocket>;
+        loading?(context: LivePageRequestContext): void | Promise<void>;
+        render?(context: LivePageRequestContext): string | HtmlFragment | Promise<string | HtmlFragment>;
+        connected?(context: LivePageConnectionContext): void | Promise<void>;
+        disconnected?(context: { socket: RedWebSocket }): void | Promise<void>;
+        disposed?(): void | Promise<void>;
+        dispose(): Promise<boolean>;
+    }
+
+    export interface PageOptions {
+        template?: string;
+        css?: string | string[];
+        scope?: 'connection' | 'shared';
+        shared?: boolean;
+        live?: boolean;
+        head?: PageHead;
+        cache?: PageCache;
+    }
+
+    export interface PageHead {
+        title?: string;
+        description?: string;
+        canonical?: string;
+        image?: string;
+        robots?: string;
+    }
+
+    export interface PageCache {
+        maxAge?: number;
+        staleWhileRevalidate?: number;
+        immutable?: boolean;
+    }
+
+    export interface StateOptions {
+        writable?: boolean;
+    }
+
+    export interface LiveStateDecorator {
+        (target: object, propertyKey: string): void;
+        <This, Value>(value: undefined, context: ClassFieldDecoratorContext<This, Value>):
+            (this: This, initialValue: Value) => Value;
+    }
+
+    export interface LiveActionDecorator {
+        (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
+        <This, Value extends (this: This, ...args: any[]) => any>(
+            value: Value,
+            context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
+    export interface LiveViewDecorator {
+        (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
+        <This, Value extends (this: This, item: any, index: number) => HtmlFragment>(
+            value: Value,
+            context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
+    export function page(path: string, options?: PageOptions): ClassDecorator;
+    export function state(options?: StateOptions): LiveStateDecorator;
+    export function action(): LiveActionDecorator;
+    export function view(stateName: string): LiveViewDecorator;
+    export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
+    export function attribute(value: string | number | bigint | boolean): HtmlAttribute;
+    export function url(value: string): HtmlUrl;
+    export function each<Item>(items: Item[], render: (item: Item, index: number) => HtmlFragment): HtmlFragment;
+    export function codeBlock(code: unknown, options?: { language?: string; label?: string }): HtmlFragment;
+
+    export type LivePageClass = new () => object;
+
+    export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+        pages: LivePageClass[];
+        templateRoot?: string;
+        livePaths?: {
+            socket?: string;
+            client?: string;
+            runtime?: string;
+            css?: string;
+        };
+        sessionTtlMs?: number;
+        maxSessions?: number;
+        maxConcurrentRenders?: number;
+        shutdownTimeoutMs?: number;
+        authenticate?(request: import('http').IncomingMessage | import('express').Request):
+            string | number | bigint | boolean | false | null | undefined |
+            Promise<string | number | bigint | boolean | false | null | undefined>;
+        origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
+    }
+
+    export class LiveHtmlServer {
+        app: Application;
+        server: NodeHttpServer | NodeHttpsServer;
+        http: HttpServer | HttpsServer;
+        sockets: SocketServer | null;
+        constructor(options: LiveHtmlServerOptions);
+        shutdown(): Promise<void>;
+    }
+
+    export function start(
+        pageOrPages: LivePageClass | LivePageClass[],
+        options?: Omit<LiveHtmlServerOptions, 'pages'>
+    ): LiveHtmlServer;
+
+    export interface StaticExportOptions {
+        outDir: string;
+        templateRoot?: string;
+        logger?: RedWebLogger | null;
+    }
+
+    export interface StaticExportResult {
+        readonly pages: readonly string[];
+        readonly assets: readonly string[];
+    }
+
+    export function exportStatic(
+        pageOrPages: LivePageClass | LivePageClass[],
+        options: StaticExportOptions
+    ): Promise<StaticExportResult>;
+
+    export class HtmlRenderer {
+        static template(filePath: string, rootDir: string): string;
+        static stylesheet(filePath: string, rootDir: string): string;
+        static render(source: string, page: object, options?: { live?: boolean }): string;
+        static collection(page: object, name: string, value: unknown): string;
+        static statePayload(name: string, value: unknown, page?: object): { name: string; value: string; html: boolean };
+        static head(metadata?: PageHead): string;
+        static document(
+            markup: string,
+            config?: (Record<string, unknown> & { runtimePath: string }) | null,
+            stylesheets?: string[],
+            metadata?: PageHead
+        ): string;
     }
 
     /** ─────────────────── CONSTANTS ─────────────────── */

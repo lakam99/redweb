@@ -108,38 +108,6 @@ describe('HTTP and HTTPS integration', () => {
         expect(noCorsResponse.headers['access-control-allow-origin']).toBeUndefined();
     });
 
-    test('renders trusted HTMX templates and hides internal rendering errors by default', async () => {
-        const publicPath = tempPublicDirectory();
-        fs.writeFileSync(path.join(publicPath, 'page.htmx'), "const name = 'Redweb'; <@><h1>{{name}}</h1><@/>");
-        fs.writeFileSync(path.join(publicPath, 'broken.htmx'), "throw new Error('private detail')");
-
-        const server = await start(HttpServer, { publicPaths: [publicPath], enableHtmxRendering: true });
-        const port = server.server.address().port;
-        const rendered = await request({ port, path: '/page.htmx' });
-        const broken = await request({ port, path: '/broken.htmx' });
-        const missing = await request({ port, path: '/missing.htmx' });
-
-        expect(rendered).toMatchObject({ status: 200, body: '<h1>Redweb</h1>' });
-        expect(rendered.headers['content-type']).toContain('text/html');
-        expect(broken).toMatchObject({ status: 500, body: 'Unable to render HTMX template' });
-        expect(broken.body).not.toContain('private detail');
-        expect(missing).toMatchObject({ status: 404, body: 'HTMX template not found' });
-    });
-
-    test('can expose rendering errors explicitly for development', async () => {
-        const publicPath = tempPublicDirectory();
-        fs.writeFileSync(path.join(publicPath, 'broken.htmx'), "throw new Error('template detail')");
-        const server = await start(HttpServer, {
-            publicPaths: [publicPath],
-            enableHtmxRendering: true,
-            exposeErrors: true,
-        });
-
-        const response = await request({ port: server.server.address().port, path: '/broken.htmx' });
-        expect(response).toMatchObject({ status: 500 });
-        expect(response.body).toContain('template detail');
-    });
-
     test('serves real TLS traffic and invokes the listening callback', async () => {
         let callbackInvoked = false;
         const server = await start(HttpsServer, {

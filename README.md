@@ -30,9 +30,122 @@ const {
   HTTP_OPTIONS,        // Defaults for HTTP servers
   ENCODINGS,           // json/urlencoded encoding names
   SOCKET_OPTIONS,      // Defaults for socket servers
-  METHODS              // Express method helpers
+  METHODS,             // Express method helpers
+  LiveHtmlServer,      // SSR plus lifecycle-safe realtime HTML
+  HtmlRenderer,        // Safe HTML templates, collections, and state payloads
+  LivePage,            // Optional base for advanced page internals
+  page, state, action, view, // Live HTML decorators
+  html, start          // Safe HTML plus one-call page startup
 } = require('redweb');
 ```
+
+## Live HTML
+
+`start(PageClass)` combines server-rendered `.html` templates and Redweb WebSockets on one listener. Decorated plain classes hold the behavior; templates remain declarative HTML. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+
+```ts
+import { page, start, state } from 'redweb';
+
+@page('/', { template: 'counter.html', css: 'counter.css' })
+class CounterPage {
+  @state()
+  count = 0;
+
+  private ticker?: NodeJS.Timeout;
+
+  connected() {
+    this.ticker = setInterval(() => this.count++, 1000);
+  }
+
+  disconnected() {
+    clearInterval(this.ticker);
+  }
+}
+
+start(CounterPage, { port: 8080 });
+```
+
+`counter.html` contains no executable server code:
+
+```html
+<h1>Server-side counter</h1>
+<output aria-live="polite" data-rw-state="count"></output>
+```
+
+Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
+
+CSS is colocated with the page and needs no static-server setup. Pass one file with `css: 'counter.css'` or compose several with `css: ['base.css', 'counter.css']`. Redweb resolves the files beside the decorated class, injects `<link>` elements during SSR, and serves content-addressed stylesheets with immutable browser caching.
+
+Browser events can call only explicitly exposed actions:
+
+```ts
+@page('/chat', { template: 'chatroom.html', css: 'chatroom.css', shared: true })
+class ChatroomPage {
+  @state()
+  messages = html``;
+
+  @action()
+  send({ name, message }: { name: string; message: string }) {
+    this.messages = html`${this.messages}<p><b>${name}</b>: ${message}</p>`;
+  }
+}
+```
+
+```html
+<section aria-live="polite" data-rw-state="messages"></section>
+<form rw-submit="send">
+  <input name="name">
+  <input name="message" required>
+  <button>Send</button>
+</form>
+```
+
+Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
+
+Collections use the same model without manual concatenation. Keep the array in `@state()`, render one item with `@view('cards')`, and place it with `<section rw-each="cards"></section>`. Item views must return `html` fragments, so values remain escaped. The current protocol replaces the collection contents atomically; keyed incremental patches can be added later without changing the page API.
+
+Documentation and content-heavy pages can compose nested fragments without a client framework:
+
+```ts
+import { attribute, codeBlock, each, html, url } from 'redweb';
+
+const sections = each(apiSections, section => html`
+  <article id="${attribute(section.id)}">
+    <h2>${section.name}</h2>
+    <a href="${url(`#${section.id}`)}">Permalink</a>
+    ${each(section.methods, method => html`<section><h3>${method.name}</h3></section>`)}
+    ${codeBlock(section.usage, { language: 'ts', label: 'TypeScript' })}
+  </article>
+`);
+```
+
+Plain interpolations remain restricted to element text. Dynamic non-URL attributes require `attribute()`, and URL-bearing attributes require `url()`, which rejects unsafe and protocol-relative schemes. `codeBlock()` escapes ordinary code and also accepts an explicit `HtmlFragment` from a server-side syntax highlighter.
+
+For React-free documentation or marketing pages, set `live: false`. Redweb omits page tokens, browser JavaScript, and WebSockets; adds document metadata; and serves the result with an ETag:
+
+```ts
+@page('/docs', {
+  template: 'docs.html',
+  css: 'docs.css',
+  live: false,
+  head: {
+    title: 'Redweb API',
+    description: 'Complete Redweb API reference.',
+    canonical: 'https://example.com/docs',
+    image: 'https://example.com/og.png',
+  },
+  cache: { maxAge: 300, staleWhileRevalidate: 3600 },
+})
+class DocsPage {}
+```
+
+Export the same decorated page to CDN-ready files with `await exportStatic(DocsPage, { outDir: 'dist' })`. Route paths become `index.html` files, colocated stylesheets are emitted under their content-addressed URLs, and no Live HTML runtime is included. Static export requires `live: false`.
+
+An `html` fragment returned by `render()` is final safe markup, so documentation examples containing literal `{{ bindings }}` are never parsed a second time. Return a string or use a template file when Redweb should resolve template bindings and directives.
+
+The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
+
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 ## Multiplayer in 0.9
 
@@ -66,8 +179,7 @@ Options:
 - `encoding` (`'json' | 'urlencoded'`): body parser selection.
 - `corsOptions`: passed to `cors`.
 - `corsOptions: false`: disables the CORS middleware entirely.
-- `enableHtmxRendering` (boolean): render `.htmx` files with the built-in renderer.
-- `exposeErrors` (boolean): include HTMX rendering details in responses; defaults to `false`.
+- `exposeErrors` (boolean): include WebSocket handler details in responses; defaults to `false`.
 - `logger`: an object with optional `log`, `warn`, and `error` methods. Pass `null` to disable library logging.
 
 Example:
@@ -87,26 +199,6 @@ new HttpServer({
   ]
 });
 ```
-
-HTMX rendering example (`enableHtmxRendering: true`):
-
-```js
-new HttpServer({ publicPaths: ['./public'], enableHtmxRendering: true });
-```
-
-`public/example.htmx`:
-
-```js
-const name = 'RedWeb';
-
-<@>
-  <h1>Hello, {{name}}!</h1>
-<@/>
-```
-
-Requesting `/example.htmx` returns rendered HTML.
-
-Templates are trusted server-side code. They may load relative modules within their configured public directory, execute for at most one second by default, and interpolate raw HTML. Never render user-supplied template files.
 
 CORS remains permissive by default for backward compatibility. CORS is not authorization; configure `corsOptions`, add authentication middleware to `server.app`, or disable the middleware as appropriate.
 
@@ -452,6 +544,10 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - Production controls are route-local and opt-in; enable and size them from measured capacity rather than copying example limits.
 - `ProtocolClient` is available from `redweb/client` for negotiated protocol routes without adding runtime dependencies.
 - The minimum supported Node.js version is 18.
+
+## Live HTML migration
+
+The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have been replaced. Templates are now ordinary `.html` files registered through decorated plain classes. Move template calculations and imports into the page class, mark reactive fields with `@state()`, expose browser-callable methods with `@action()`, and launch the page with `start(PageClass)`.
 
 ## Developing
 
