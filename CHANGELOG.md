@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Replaced the executable `.htmx` sandbox with decorator-first, declarative Live HTML pages.
+- Added safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, and deterministic cleanup.
+- Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.
+- Added runnable server-counter and shared-chatroom examples with real HTTP/WebSocket integration coverage.
+
 ## 0.9.0
 
 - Added opt-in pre-upgrade admission, origin validation, secure placement, bounded pending upgrades, transport limits, ordered processing, and route-level heartbeat monitoring.

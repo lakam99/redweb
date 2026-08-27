@@ -30,9 +30,80 @@ const {
   HTTP_OPTIONS,        // Defaults for HTTP servers
   ENCODINGS,           // json/urlencoded encoding names
   SOCKET_OPTIONS,      // Defaults for socket servers
-  METHODS              // Express method helpers
+  METHODS,             // Express method helpers
+  LiveHtmlServer,      // SSR plus lifecycle-safe realtime HTML
+  LivePage,            // Per-page state and lifecycle base
+  page, state, action, // Live HTML decorators
+  html                 // Escaping HTML template tag
 } = require('redweb');
 ```
+
+## Live HTML
+
+`LiveHtmlServer` combines server-rendered `.htmx` templates and Redweb WebSockets on one listener. Decorated page classes hold the behavior; templates remain declarative HTML. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+
+```ts
+import { LiveHtmlServer, LivePage, page, state } from 'redweb';
+
+@page('/', { template: 'counter.htmx' })
+class CounterPage extends LivePage {
+  @state()
+  count = 0;
+
+  private ticker?: NodeJS.Timeout;
+
+  connected() {
+    this.ticker = setInterval(() => this.count++, 1000);
+  }
+
+  disconnected() {
+    clearInterval(this.ticker);
+  }
+}
+
+new LiveHtmlServer({
+  port: 8080,
+  templateRoot: __dirname,
+  pages: [CounterPage]
+});
+```
+
+`counter.htmx` contains no executable server code:
+
+```html
+<h1>Server-side counter</h1>
+<output aria-live="polite">{{ count }}</output>
+```
+
+Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
+
+Browser events can call only explicitly exposed actions:
+
+```ts
+@page('/chat', { template: 'chatroom.htmx', scope: 'shared' })
+class ChatroomPage extends LivePage {
+  @state()
+  messages = html``;
+
+  @action()
+  send({ name, message }: { name: string; message: string }) {
+    this.messages = html`${this.messages}<p><b>${name}</b>: ${message}</p>`;
+  }
+}
+```
+
+```html
+<section aria-live="polite">{{ messages }}</section>
+<form rw-submit="send">
+  <input name="name">
+  <input name="message" required>
+  <button>Send</button>
+</form>
+```
+
+Interpolations created with `html` are escaped by default. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `scope: 'shared'` deliberately shares one instance across its connected visitors.
+
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable [server counter](examples/live-html/counter.js), and [chatroom](examples/live-html/chatroom.js). Both examples are exercised unchanged by mock-free HTTP/WebSocket integration tests.
 
 ## Multiplayer in 0.9
 
@@ -66,8 +137,7 @@ Options:
 - `encoding` (`'json' | 'urlencoded'`): body parser selection.
 - `corsOptions`: passed to `cors`.
 - `corsOptions: false`: disables the CORS middleware entirely.
-- `enableHtmxRendering` (boolean): render `.htmx` files with the built-in renderer.
-- `exposeErrors` (boolean): include HTMX rendering details in responses; defaults to `false`.
+- `exposeErrors` (boolean): include WebSocket handler details in responses; defaults to `false`.
 - `logger`: an object with optional `log`, `warn`, and `error` methods. Pass `null` to disable library logging.
 
 Example:
@@ -87,26 +157,6 @@ new HttpServer({
   ]
 });
 ```
-
-HTMX rendering example (`enableHtmxRendering: true`):
-
-```js
-new HttpServer({ publicPaths: ['./public'], enableHtmxRendering: true });
-```
-
-`public/example.htmx`:
-
-```js
-const name = 'RedWeb';
-
-<@>
-  <h1>Hello, {{name}}!</h1>
-<@/>
-```
-
-Requesting `/example.htmx` returns rendered HTML.
-
-Templates are trusted server-side code. They may load relative modules within their configured public directory, execute for at most one second by default, and interpolate raw HTML. Never render user-supplied template files.
 
 CORS remains permissive by default for backward compatibility. CORS is not authorization; configure `corsOptions`, add authentication middleware to `server.app`, or disable the middleware as appropriate.
 
@@ -452,6 +502,10 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - Production controls are route-local and opt-in; enable and size them from measured capacity rather than copying example limits.
 - `ProtocolClient` is available from `redweb/client` for negotiated protocol routes without adding runtime dependencies.
 - The minimum supported Node.js version is 18.
+
+## Live HTML migration
+
+The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have been replaced. `.htmx` files are now declarative templates registered through decorated `LivePage` classes. Move template calculations and imports into the page class, mark reactive fields with `@state()`, and expose browser-callable methods with `@action()`.
 
 ## Developing
 

@@ -12,6 +12,7 @@
     "verify:memory": "node scripts/verify-memory-overhead.js",
     "verify:load": "node scripts/verify-load.js",
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
+    "verify:live-html": "npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
     "test": "npx jest"
   },
   "files": [

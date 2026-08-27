@@ -8,7 +8,28 @@ import {
     SocketRoute,
     SocketService,
     ERROR_CODES,
+    LiveHtmlServer,
+    LivePage,
+    action,
+    html,
+    page,
+    state,
 } from 'redweb';
+
+@page('/counter', { template: 'counter.htmx' })
+class CounterPage extends LivePage {
+    @state()
+    count = 0;
+
+    @action()
+    increment() {
+        this.count += 1;
+        return html`<strong>${this.count}</strong>`;
+    }
+}
+
+const live = new LiveHtmlServer({ pages: [CounterPage], listen: false });
+void live.shutdown();
 
 class EchoHandler extends BaseHandler {
     constructor() {

@@ -1,8 +1,6 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const HtmxRenderer = require('../../src/htmx/HtmxRenderer');
-const RedWebHtmxComponent = require('../../src/htmx/RedWebHtmxComponent');
 const loadSslConfig = require('../../src/sslConfig');
 const SocketRegistry = require('../../src/ws/SocketRegistry');
 const SocketService = require('../../src/ws/SocketService');
@@ -89,37 +87,6 @@ describe('small reusable units', () => {
         expect(service.tickRateMs).toBeNull();
         expect(service._tickHandle).toBeNull();
         service.onShutdown();
-    });
-
-    test('supports HTMX components and restricts template execution', () => {
-        class Greeting extends RedWebHtmxComponent {
-            render() { return `<p>${this.props.name}</p>`; }
-        }
-        expect(new Greeting({ name: 'Redweb' }).render()).toBe('<p>Redweb</p>');
-        expect(new RedWebHtmxComponent().props).toEqual({});
-        expect(() => new RedWebHtmxComponent().render()).toThrow('Render method must be implemented');
-
-        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-renderer-'));
-        const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-outside-'));
-        try {
-            const builtin = path.join(root, 'builtin.htmx');
-            fs.writeFileSync(builtin, "require('fs')");
-            expect(() => HtmxRenderer.render(builtin)).toThrow('Templates may only require relative modules');
-
-            const outsideModule = path.join(outside, 'value.js');
-            fs.writeFileSync(outsideModule, 'module.exports = 1');
-            const traversal = path.join(root, 'traversal.htmx');
-            const relative = path.relative(root, outsideModule).replaceAll('\\', '/');
-            fs.writeFileSync(traversal, `require('./${relative}')`);
-            expect(() => HtmxRenderer.render(traversal)).toThrow('Template module is outside the allowed root');
-
-            const loop = path.join(root, 'loop.htmx');
-            fs.writeFileSync(loop, 'while (true) {}');
-            expect(() => HtmxRenderer.render(loop, { timeoutMs: 5 })).toThrow(/timed out/i);
-        } finally {
-            fs.rmSync(root, { recursive: true, force: true });
-            fs.rmSync(outside, { recursive: true, force: true });
-        }
     });
 
     test('collects cleanup failures and reports them after all tasks run', async () => {

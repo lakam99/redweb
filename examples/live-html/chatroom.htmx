@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Redweb chatroom</title></head>
+<body>
+    <main>
+        <h1>Chatroom</h1>
+        <ul aria-live="polite">{{ messages }}</ul>
+        <form rw-submit="send" method="post">
+            <label>Name <input name="name" maxlength="40"></label>
+            <label>Message <input name="message" maxlength="500" required></label>
+            <button type="submit">Send</button>
+        </form>
+    </main>
+</body>
+</html>
