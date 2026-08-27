@@ -1,11 +1,12 @@
 class TaskQueue {
-    constructor(maxPending, onError = () => {}) {
+    constructor(maxPending, onError = () => {}, errorContext) {
         if (!Number.isInteger(maxPending) || maxPending < 1) {
             throw new TypeError('`maxPending` must be a positive integer.');
         }
         if (typeof onError !== 'function') throw new TypeError('`onError` must be a function.');
         this.maxPending = maxPending;
         this.onError = onError;
+        this.errorContext = errorContext;
         this.tasks = [];
         this.running = false;
         this.closed = false;
@@ -28,7 +29,7 @@ class TaskQueue {
                 await task();
             } catch (error) {
                 try {
-                    await this.onError(error);
+                    await this.onError.call(this.errorContext, error);
                 } catch {
                     // Error reporting must never interrupt queue cleanup.
                 }

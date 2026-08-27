@@ -224,10 +224,15 @@ Other route options:
 - `exposeErrors`: return handler exception messages to clients; defaults to `false`.
 - `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
 - `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
-- `admission`: optional pre-upgrade authentication/origin/placement policy. It may be a function or `{ authenticate, origins, place, timeoutMs }`. A safe URL returned by `place` produces a `307` before the WebSocket upgrade.
+- `admission`: optional pre-upgrade authentication/origin/placement policy. It may be a function or `{ authenticate, origins, place, allowedPlacementOrigins, allowInsecurePlacement, timeoutMs }`. Secure `wss` placement is the default; returned destinations can be origin-allowlisted.
+- `maxPendingUpgrades`: maximum concurrent pre-upgrade authorization/negotiation operations; defaults to `64`.
 - `limits`: opt-in connection, message-rate, pending-message, and outbound-buffer limits.
 - `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
 - `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
+- `rooms` and `sessions`: optional bounded route-local grouping and resumable session registries. Session payload shape and byte size remain the application's responsibility.
+- `distribution`: optional bounded fan-out adapter. Mark it `required` to fail readiness and reject new upgrades while unavailable.
+- `drainHandlers`: expose a route shutdown signal to handlers and track their work within `shutdownTimeoutMs`.
+- `protocol`: optional version negotiation, stable envelopes, and binary codec hooks.
 
 Production protections are deliberately opt-in, so existing applications retain their behavior and disabled features add no timers or per-connection queues. A protected route can stay compact:
 

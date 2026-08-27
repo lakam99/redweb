@@ -7,7 +7,14 @@ class AdmissionPolicy {
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
             throw new TypeError('`admission` must be a function or an object.');
         }
-        const { authenticate, origins, place, timeoutMs = 5000 } = config;
+        const {
+            authenticate,
+            origins,
+            place,
+            timeoutMs = 5000,
+            allowedPlacementOrigins,
+            allowInsecurePlacement = false,
+        } = config;
         if (authenticate !== undefined && typeof authenticate !== 'function') {
             throw new TypeError('`admission.authenticate` must be a function.');
         }
@@ -23,6 +30,16 @@ class AdmissionPolicy {
         if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
             throw new TypeError('`admission.timeoutMs` must be a positive integer.');
         }
+        if (typeof allowInsecurePlacement !== 'boolean') {
+            throw new TypeError('`admission.allowInsecurePlacement` must be a boolean.');
+        }
+        if (allowedPlacementOrigins !== undefined && !Array.isArray(allowedPlacementOrigins)) {
+            throw new TypeError('`admission.allowedPlacementOrigins` must be an array.');
+        }
+        this.allowedPlacementOrigins = allowedPlacementOrigins?.map(origin => this.validatePlacementOrigin(origin));
+        if (this.allowedPlacementOrigins && new Set(this.allowedPlacementOrigins).size !== this.allowedPlacementOrigins.length) {
+            throw new TypeError('`admission.allowedPlacementOrigins` entries must be unique.');
+        }
         if (!authenticate && !origins && !place) {
             throw new TypeError('`admission` requires `authenticate`, `origins`, or `place`.');
         }
@@ -30,12 +47,16 @@ class AdmissionPolicy {
         this.origins = origins;
         this.place = place;
         this.timeoutMs = timeoutMs;
+        this.allowInsecurePlacement = allowInsecurePlacement;
     }
 
-    async authorize(request, rawSocket, route) {
+    async authorize(request, rawSocket, route, externalSignal) {
         const controller = new AbortController();
         const onClose = () => controller.abort();
+        const onExternalAbort = () => controller.abort();
         rawSocket.once('close', onClose);
+        if (externalSignal?.aborted) controller.abort();
+        else externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
         const timer = setTimeout(() => controller.abort(), this.timeoutMs);
         timer.unref();
         try {
@@ -58,13 +79,33 @@ class AdmissionPolicy {
         } finally {
             clearTimeout(timer);
             rawSocket.off?.('close', onClose);
+            externalSignal?.removeEventListener?.('abort', onExternalAbort);
         }
+    }
+
+    validatePlacementOrigin(origin) {
+        if (typeof origin !== 'string' || !origin) {
+            throw new TypeError('Placement origins must be non-empty strings.');
+        }
+        let parsed;
+        try {
+            parsed = new URL(origin);
+        } catch {
+            throw new TypeError('Placement origins must be valid ws or wss origins.');
+        }
+        if (!['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+            throw new TypeError('Placement origins must be ws or wss origins without credentials, paths, queries, or fragments.');
+        }
+        return parsed.origin;
     }
 
     isSafeRedirect(value) {
         if (!value || value.length > 2048 || /[\r\n]/.test(value)) return false;
         try {
-            return ['http:', 'https:', 'ws:', 'wss:'].includes(new URL(value).protocol);
+            const parsed = new URL(value);
+            if (!['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) return false;
+            if (parsed.protocol === 'ws:' && !this.allowInsecurePlacement) return false;
+            return !this.allowedPlacementOrigins || this.allowedPlacementOrigins.includes(parsed.origin);
         } catch {
             return false;
         }

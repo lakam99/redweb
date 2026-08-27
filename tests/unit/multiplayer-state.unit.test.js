@@ -93,6 +93,10 @@ describe('route-scoped multiplayer state', () => {
         const membershipBound = new RoomRegistry({ maxRooms: 3, maxRoomsPerConnection: 1 });
         expect(membershipBound.join('one', defaultMember)).toBe(true);
         expect(membershipBound.join('two', defaultMember)).toBe(false);
+        expect(membershipBound.close()).toBe(true);
+        expect(membershipBound.close()).toBe(false);
+        expect(membershipBound.join('late', defaultMember)).toBe(false);
+        expect(membershipBound.broadcast('late', {})).toBe(0);
     });
 
     test.each([
@@ -151,6 +155,10 @@ describe('route-scoped multiplayer state', () => {
         sessions.stop();
         sessions.stop();
         expect(second.context.session).toBeNull();
+        expect(sessions.create('late', {})).toBe(false);
+        expect(sessions.resume('old', second)).toBeNull();
+        expect(sessions.remove('old')).toBe(false);
+        expect(sessions.get('old')).toBeUndefined();
     });
 
     test('session reassignment releases prior ownership and expiry sweeps bounded state', () => {
@@ -173,6 +181,8 @@ describe('route-scoped multiplayer state', () => {
 
     test('sessions handle missing records and sockets without framework context', () => {
         const defaults = new SessionRegistry();
+        clearInterval(defaults.timer);
+        defaults.timer = null;
         defaults.stop();
         expect(() => new SessionRegistry({}, null, null)).toThrow('`clock`');
 
@@ -234,12 +244,14 @@ describe('route-scoped multiplayer state', () => {
         expect(() => new FixedStepService('bad', 1.5)).toThrow('tickRateMs');
         expect(() => new FixedStepService('bad', 10, 0)).toThrow('maxCatchUpTicks');
         expect(() => new FixedStepService('bad', 10, 1.5)).toThrow('maxCatchUpTicks');
+        expect(() => new FixedStepService('bad', 10, 1, 9)).toThrow('maxRetainedLagMs');
         const errors = [];
         let now = 0;
         let release;
         const blocked = new Promise(resolve => { release = resolve; });
         class GameLoop extends FixedStepService {
             now() { return now; }
+            onLagDropped(value) { this.dropped = value; }
             async onTick(step, tick) {
                 this.calls ||= [];
                 this.calls.push([step, tick]);
@@ -248,7 +260,11 @@ describe('route-scoped multiplayer state', () => {
             }
         }
         const service = new GameLoop('game', 10, 2);
-        service.onInit({ logger: { error: (_message, error) => errors.push(error.message) } });
+        const observed = [];
+        service.onInit({
+            logger: { error: (_message, error) => errors.push(error.message) },
+            metrics: { observe: (...args) => observed.push(args) },
+        });
         now = 35;
         const running = service.pulse();
         expect(service.pulse()).toBe(running);
@@ -256,8 +272,18 @@ describe('route-scoped multiplayer state', () => {
         await running;
         expect(service.calls).toEqual([[10, 1], [10, 2]]);
         expect(errors).toEqual(['tick failed']);
-        expect(service.accumulatorMs).toBe(15);
+        expect(service.accumulatorMs).toBe(0);
+        expect(service.dropped).toBe(15);
+        expect(observed).toEqual([['redweb.fixed_step.lag_dropped', 15]]);
         await service.onShutdown();
+
+        const brokenLagHook = new GameLoop('broken-lag', 10, 1);
+        brokenLagHook.onLagDropped = () => { throw new Error('lag hook failed'); };
+        brokenLagHook.onInit({ logger: { error: (_message, error) => errors.push(error.message) } });
+        now += 20;
+        await brokenLagHook.pulse();
+        await brokenLagHook.onShutdown();
+        expect(errors).toContain('lag hook failed');
         await service.onShutdown();
         expect(service._tickHandle).toBeNull();
     });

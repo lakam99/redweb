@@ -74,6 +74,8 @@ declare module 'redweb' {
             request: import('http').IncomingMessage,
             context: AdmissionContext
         ) => string | false | null | undefined | Promise<string | false | null | undefined>;
+        allowedPlacementOrigins?: string[];
+        allowInsecurePlacement?: boolean;
         timeoutMs?: number;
     }
 
@@ -142,6 +144,10 @@ declare module 'redweb' {
         maxSeenEvents?: number;
         seenTtlMs?: number;
         lifecycleTimeoutMs?: number;
+        publishTimeoutMs?: number;
+        maxConcurrentPublishes?: number;
+        maxConcurrentEvents?: number;
+        required?: boolean;
         onEvent(event: DistributionEvent, route: SocketRoute): void | Promise<void>;
     }
 
@@ -208,6 +214,7 @@ declare module 'redweb' {
         distribution?: false | DistributionOptions;
         drainHandlers?: boolean;
         protocol?: false | ProtocolOptions;
+        maxPendingUpgrades?: number;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -231,11 +238,13 @@ declare module 'redweb' {
 
     export abstract class FixedStepService extends SocketService {
         maxCatchUpTicks: number;
+        maxRetainedLagMs: number;
         tick: number;
         accumulatorMs: number;
 
-        constructor(name: string, tickRateMs: number, maxCatchUpTicks?: number);
+        constructor(name: string, tickRateMs: number, maxCatchUpTicks?: number, maxRetainedLagMs?: number);
         onTick?(stepMs: number, tick: number): void | Promise<void>;
+        onLagDropped?(droppedLagMs: number): void;
         pulse(): Promise<void>;
         onShutdown(): Promise<void>;
     }
@@ -280,6 +289,7 @@ declare module 'redweb' {
         handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
         handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
         beginDrain(): boolean;
+        isReady(): boolean;
         publish(type: string, payload: unknown): Promise<boolean>;
         shutdown(): Promise<void>;
     }
@@ -312,6 +322,7 @@ declare module 'redweb' {
         has(roomId: string, socket: RedWebSocket): boolean;
         broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         clear(): void;
+        close(): boolean;
         readonly size: number;
     }
 

@@ -87,13 +87,21 @@ describe('ProtocolPolicy', () => {
             () => policy.error('1', 'CODE', ''),
         ]) expect(action).toThrow();
 
-        const valid = { v: '1', type: 'move', requestId: 'r', sequence: 1 };
+        const valid = { v: '1', type: 'move', payload: {}, requestId: 'r', sequence: 1 };
         expect(policy.validateEnvelope(valid, '1')).toBe(true);
         for (const invalid of [
             null, 'x', {}, { ...valid, v: '2' }, { ...valid, type: 1 }, { ...valid, type: '' },
             { ...valid, type: 'x'.repeat(257) }, { ...valid, requestId: 1 }, { ...valid, requestId: '' },
             { ...valid, requestId: 'x'.repeat(257) }, { ...valid, sequence: -1 }, { ...valid, sequence: 1.5 },
+            { v: '1', type: 'move' }, { ...valid, error: {} },
+            { v: '1', type: 'error', payload: null, error: { code: 'X', message: 'x' } },
+            { v: '1', type: 'error' }, { v: '1', type: 'error', error: null },
+            { v: '1', type: 'error', error: { code: '', message: 'x' } },
+            { v: '1', type: 'error', error: { code: 'X', message: '' } },
         ]) expect(policy.validateEnvelope(invalid, '1')).toBe(false);
+        expect(policy.validateEnvelope({
+            v: '1', type: 'error', error: { code: 'X', message: 'failed' }, requestId: 'r',
+        }, '1')).toBe(true);
     });
 
     test('bounds and validates pluggable binary codecs', async () => {
@@ -142,6 +150,11 @@ describe('ProtocolClient', () => {
             () => client.parse('{'),
             () => client.parse(JSON.stringify({ v: '2', type: 'move' })),
             () => client.parse(JSON.stringify({ v: '1' })),
+            () => client.parse(JSON.stringify({ v: '1', type: '', payload: null })),
+            () => client.parse(JSON.stringify({ v: '1', type: 'move' })),
+            () => client.parse(JSON.stringify({ v: '1', type: 'move', payload: {}, requestId: '' })),
+            () => client.parse(JSON.stringify({ v: '1', type: 'move', payload: {}, sequence: -1 })),
+            () => client.parse(JSON.stringify({ v: '1', type: 'error', error: {} })),
         ]) expect(action).toThrow();
     });
 });

@@ -21,6 +21,7 @@ class SessionRegistry {
         this.logger = logger;
         this.clock = clock;
         this.sessions = new Map();
+        this.closed = false;
         this.timer = setInterval(() => this.sweep(), sweepIntervalMs);
         this.timer.unref();
     }
@@ -33,8 +34,9 @@ class SessionRegistry {
 
     create(sessionId, data, socket) {
         this.validateId(sessionId);
-        this.sweep();
-        if (this.sessions.has(sessionId) || this.sessions.size >= this.maxSessions) return false;
+        if (this.closed || this.sessions.has(sessionId)) return false;
+        if (this.sessions.size >= this.maxSessions) this.sweep();
+        if (this.sessions.size >= this.maxSessions) return false;
         const record = { data, socket: null, expiresAt: this.clock() + this.ttlMs };
         this.sessions.set(sessionId, record);
         if (socket) this.assign(sessionId, record, socket);
@@ -43,6 +45,7 @@ class SessionRegistry {
 
     resume(sessionId, socket) {
         this.validateId(sessionId);
+        if (this.closed) return null;
         const record = this.sessions.get(sessionId);
         if (!record) return null;
         if (!record.socket && record.expiresAt <= this.clock()) {
@@ -87,6 +90,7 @@ class SessionRegistry {
 
     remove(sessionId) {
         this.validateId(sessionId);
+        if (this.closed) return false;
         const record = this.sessions.get(sessionId);
         if (!record) return false;
         if (record.socket) {
@@ -98,6 +102,7 @@ class SessionRegistry {
 
     get(sessionId) {
         this.validateId(sessionId);
+        if (this.closed) return undefined;
         return this.sessions.get(sessionId)?.data;
     }
 
@@ -109,8 +114,9 @@ class SessionRegistry {
     }
 
     stop() {
-        if (!this.timer) return;
-        clearInterval(this.timer);
+        if (this.closed) return;
+        this.closed = true;
+        if (this.timer) clearInterval(this.timer);
         this.timer = null;
         this.sessions.forEach(record => {
             if (record.socket) {

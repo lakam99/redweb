@@ -1,4 +1,5 @@
 const schema = require('./src/ws/protocol-schema.json');
+const { validateEnvelope } = require('./src/ws/protocol-validation');
 
 const ERROR_CODES = Object.freeze(Object.fromEntries(schema.errorCodes.map(code => [code, code])));
 
@@ -37,7 +38,7 @@ class ProtocolClient {
     parse(input) {
         const raw = input && typeof input === 'object' && 'data' in input ? input.data : input;
         const message = typeof raw === 'string' ? JSON.parse(raw) : JSON.parse(raw.toString());
-        if (!message || typeof message !== 'object' || message.v !== this.version || typeof message.type !== 'string') {
+        if (!validateEnvelope(message, this.version)) {
             throw new TypeError('Received an invalid Redweb protocol envelope.');
         }
         return message;

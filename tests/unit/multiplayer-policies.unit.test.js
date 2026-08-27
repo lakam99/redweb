@@ -27,6 +27,14 @@ describe('production multiplayer policies', () => {
         [{ origins: [7] }, 'non-empty string'],
         [{ authenticate() {}, timeoutMs: 0 }, '`admission.timeoutMs`'],
         [{ authenticate() {}, timeoutMs: 1.5 }, '`admission.timeoutMs`'],
+        [{ place() {}, allowInsecurePlacement: 'yes' }, '`admission.allowInsecurePlacement`'],
+        [{ place() {}, allowedPlacementOrigins: 'wss://node.example' }, '`admission.allowedPlacementOrigins`'],
+        [{ place() {}, allowedPlacementOrigins: [''] }, 'Placement origins'],
+        [{ place() {}, allowedPlacementOrigins: ['not a url'] }, 'valid ws or wss'],
+        [{ place() {}, allowedPlacementOrigins: ['https://node.example'] }, 'without credentials'],
+        [{ place() {}, allowedPlacementOrigins: ['wss://user@node.example'] }, 'without credentials'],
+        [{ place() {}, allowedPlacementOrigins: ['wss://node.example/path'] }, 'without credentials'],
+        [{ place() {}, allowedPlacementOrigins: ['wss://node.example', 'wss://node.example'] }, 'unique'],
         [{}, 'requires `authenticate`'],
     ])('validates admission configuration %#', (options, message) => {
         expect(() => new AdmissionPolicy(options)).toThrow(message);
@@ -88,6 +96,25 @@ describe('production multiplayer policies', () => {
         });
         expect(await timeoutPolicy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
         expect(timeoutSignal.aborted).toBe(true);
+
+        const external = new AbortController();
+        let externalSignal;
+        const externallyCancelled = new AdmissionPolicy({
+            authenticate(_request, context) {
+                externalSignal = context.signal;
+                return new Promise(() => {});
+            },
+        });
+        const externalResult = externallyCancelled.authorize({ headers: {} }, rawSocket(), route(), external.signal);
+        external.abort();
+        expect(await externalResult).toBe(false);
+        expect(externalSignal.aborted).toBe(true);
+
+        const alreadyAborted = new AbortController();
+        alreadyAborted.abort();
+        expect(await new AdmissionPolicy(() => true).authorize(
+            { headers: {} }, rawSocket(), route(), alreadyAborted.signal
+        )).toBe(false);
     });
 
     test('places authenticated principals before upgrade with safe bounded redirects', async () => {
@@ -103,10 +130,37 @@ describe('production multiplayer policies', () => {
         expect(await redirecting.authorize(request, rawSocket(), route())).toBe(false);
         expect(request[PLACEMENT_REDIRECT]).toBe('wss://node-2.example/game');
 
-        for (const value of [false, 'javascript:alert(1)', 'wss://good.example/\r\nBad: value', 'x'.repeat(2049), 'not a url']) {
+        for (const value of [
+            false,
+            'javascript:alert(1)',
+            'https://good.example/game',
+            'ws://insecure.example/game',
+            'wss://user:pass@good.example/game',
+            'wss://good.example/game#fragment',
+            'wss://good.example/\r\nBad: value',
+            'x'.repeat(2049),
+            'not a url',
+        ]) {
             const policy = new AdmissionPolicy({ place: () => value });
             expect(await policy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
         }
+
+        const allowlisted = new AdmissionPolicy({
+            place: () => 'wss://node-2.example/game',
+            allowedPlacementOrigins: ['wss://node-2.example'],
+        });
+        const allowlistedRequest = { headers: {} };
+        expect(await allowlisted.authorize(allowlistedRequest, rawSocket(), route())).toBe(false);
+        expect(allowlistedRequest[PLACEMENT_REDIRECT]).toBe('wss://node-2.example/game');
+        expect(await new AdmissionPolicy({
+            place: () => 'wss://other.example/game',
+            allowedPlacementOrigins: ['wss://node-2.example'],
+        }).authorize({ headers: {} }, rawSocket(), route())).toBe(false);
+        const insecureRequest = { headers: {} };
+        expect(await new AdmissionPolicy({
+            place: () => 'ws://localhost/game', allowInsecurePlacement: true,
+        }).authorize(insecureRequest, rawSocket(), route())).toBe(false);
+        expect(insecureRequest[PLACEMENT_REDIRECT]).toBe('ws://localhost/game');
 
         const accepted = { headers: {} };
         expect(await new AdmissionPolicy({ place: () => true }).authorize(accepted, rawSocket(), route())).toBe(true);
@@ -215,7 +269,9 @@ describe('production multiplayer policies', () => {
         now = 10;
         monitor.tick();
         expect(healthy.pings).toBe(2);
+        const stalePong = healthy.listeners('pong')[0];
         expect(monitor.detach(healthy)).toBe(true);
+        expect(() => stalePong()).not.toThrow();
 
         const brokenPing = new EventEmitter();
         brokenPing.ping = () => { throw new Error('ping failed'); };
@@ -235,6 +291,24 @@ describe('production multiplayer policies', () => {
         monitor.stop();
         monitor.stop();
         expect(monitor.sockets.size).toBe(0);
+
+        let longNow = 0;
+        const longerTimeout = new HeartbeatMonitor({ intervalMs: 10, timeoutMs: 30 }, null, () => longNow);
+        const silent = new EventEmitter();
+        silent.ping = jest.fn();
+        silent.terminate = jest.fn();
+        longerTimeout.attach(silent);
+        longerTimeout.tick();
+        longNow = 10;
+        longerTimeout.tick();
+        longNow = 29;
+        longerTimeout.tick();
+        expect(silent.ping).toHaveBeenCalledTimes(1);
+        expect(silent.terminate).not.toHaveBeenCalled();
+        longNow = 30;
+        longerTimeout.tick();
+        expect(silent.terminate).toHaveBeenCalledTimes(1);
+        longerTimeout.stop();
     });
 
     test.each([
@@ -287,6 +361,7 @@ describe('production multiplayer policies', () => {
         expect(sendPayload(open, 'abc', policy)).toBe(true);
         expect(sendJson(open, { ok: true }, policy)).toBe(true);
         expect(sendPayload(failing, 'abc', policy)).toBe(false);
+        expect(() => sendJson(failing, { legacy: true })).toThrow('send failed');
         expect(broadcast([open, failing], { event: true }, policy)).toBe(1);
         policy.acceptsSend.mockReturnValue(false);
         expect(sendPayload(open, 'blocked', policy)).toBe(false);

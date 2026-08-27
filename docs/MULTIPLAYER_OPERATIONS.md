@@ -30,3 +30,19 @@ Treat the distribution adapter as ephemeral fan-out. During broker or network pa
 Alert on rejected connections, rate-limited messages, full queues, handler failures, active connections, and readiness. Metrics intentionally contain only the route label. Join high-cardinality player, room, and match diagnostics in application logs or traces under the studio's own privacy and retention policy.
 
 Size `maxConnections`, `maxBufferedBytes`, `maxPendingMessages`, room limits, session limits, adapter event limits, and codec byte limits from measured budgets. Run the included verification scripts on the deployment's Node version and instance class before changing those ceilings.
+
+Redweb limits the number and lifetime of session records, but it deliberately does not inspect application session data. Keep that data small, schema-validated, and free of authoritative state that belongs in durable storage.
+
+## Verification
+
+Run `npm test` for unit, real HTTP/WebSocket/WSS integration, fuzz, type-generation, and 100% coverage gates. The additional production gates are:
+
+```bash
+npm run verify:load
+npm run verify:memory
+npm run verify:recovery
+npm run verify:soak
+npm run verify:overhead -- /path/to/redweb-0.8-baseline
+```
+
+The soak defaults to 60 minutes. Shorter durations are useful for CI smoke checks but are not release evidence.

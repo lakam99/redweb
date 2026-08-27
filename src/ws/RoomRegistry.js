@@ -26,6 +26,7 @@ class RoomRegistry {
         this.onChange = onChange || (() => {});
         this.rooms = new Map();
         this.memberships = new WeakMap();
+        this.closed = false;
     }
 
     validateRoomId(roomId) {
@@ -36,6 +37,7 @@ class RoomRegistry {
 
     join(roomId, socket) {
         this.validateRoomId(roomId);
+        if (this.closed) return false;
         if (!socket || !this.hasConnection(socket)) return false;
         let members = this.rooms.get(roomId);
         if (members?.has(socket)) return true;
@@ -86,6 +88,7 @@ class RoomRegistry {
 
     broadcast(roomId, data, { except } = {}) {
         this.validateRoomId(roomId);
+        if (this.closed) return 0;
         const members = this.rooms.get(roomId);
         if (!members) return 0;
         const recipients = except === undefined
@@ -97,6 +100,13 @@ class RoomRegistry {
     clear() {
         this.rooms.clear();
         this.memberships = new WeakMap();
+    }
+
+    close() {
+        if (this.closed) return false;
+        this.closed = true;
+        this.clear();
+        return true;
     }
 
     get size() {

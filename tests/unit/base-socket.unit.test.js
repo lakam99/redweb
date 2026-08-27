@@ -234,6 +234,14 @@ describe('BaseSocketServer units', () => {
         expect(socketServer.isReady()).toBe(false);
     });
 
+    test('rejects upgrades while a required route dependency is unready', () => {
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
+        socketServer.routes[0].isReady = () => false;
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+    });
+
     test('returns a safe placement redirect before upgrading', async () => {
         class PlacementRoute extends FirstRoute {
             constructor() {
@@ -251,6 +259,22 @@ describe('BaseSocketServer units', () => {
         await new Promise(setImmediate);
         expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('307 Temporary Redirect'));
         expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('Location: wss://node-2.example/game'));
+    });
+
+    test('contains reservation failures before admission hooks run', () => {
+        class BrokenReservationRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            reserveUpgrade() { throw new Error('reservation failed'); }
+        }
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [BrokenReservationRoute], logger });
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        expect(logger.error).toHaveBeenCalledWith('WebSocket admission reservation failed:', expect.any(Error));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
     });
 
     test('owned servers can be created without listening and shutdown repeatedly', async () => {

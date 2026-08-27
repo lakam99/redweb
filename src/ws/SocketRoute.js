@@ -3,14 +3,11 @@ const { sendJson, sendPayload, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
 const { closeWebSocketServer } = require('./shutdown');
-const { AdmissionPolicy, ADMISSION_CONTEXT } = require('./AdmissionPolicy');
-const HeartbeatMonitor = require('./HeartbeatMonitor');
+const { AdmissionPolicy } = require('./AdmissionPolicy');
 const TransportPolicy = require('./TransportPolicy');
-const RoomRegistry = require('./RoomRegistry');
-const SessionRegistry = require('./SessionRegistry');
 const Metrics = require('./Metrics');
-const DistributionBridge = require('./DistributionBridge');
-const { ProtocolPolicy, PROTOCOL_CONTEXT, ERROR_CODES } = require('./ProtocolPolicy');
+const RouteRuntime = require('./RouteRuntime');
+const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -19,6 +16,50 @@ function errorMessage(error) {
 function instantiate(ClassType, label) {
     if (typeof ClassType !== 'function') throw new TypeError(`${label} entries must be constructor functions.`);
     return new ClassType();
+}
+
+function withinDeadline(promise, timeoutMs, message) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+        timer.unref?.();
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function sendJsonFromSocket(data) {
+    return this.__redwebRouteOwner.send(this, data);
+}
+
+function broadcastFromSocket(data) {
+    const route = this.__redwebRouteOwner;
+    const sent = broadcast(
+        [...route.clients.values()].filter(socket => socket !== this),
+        data,
+        route.transportPolicy
+    );
+    if (sent) route.metrics?.increment('redweb.messages.outbound', sent);
+    return sent;
+}
+
+function sendEventFromSocket(type, payload, metadata) {
+    const route = this.__redwebRouteOwner;
+    return route.send(this, route.protocolPolicy.envelope(this.context.protocol.version, type, payload, metadata));
+}
+
+function sendProtocolErrorFromSocket(code, message, metadata) {
+    const route = this.__redwebRouteOwner;
+    return route.send(this, route.protocolPolicy.error(this.context.protocol.version, code, message, metadata));
+}
+
+function sendBinaryEventFromSocket(value) {
+    return this.__redwebRouteOwner.sendBinary(this, value);
+}
+
+function handleRuntimeError(error) {
+    const socket = this;
+    socket.__redwebRouteOwner.handleError(socket, error);
+    socket.close?.(1011, 'Message processing failed');
 }
 
 /**
@@ -56,6 +97,7 @@ class SocketRoute {
         distribution,
         drainHandlers = false,
         protocol,
+        maxPendingUpgrades = 64,
     } = {}) {
         if (typeof path !== 'string' || !path.startsWith('/')) {
             throw new Error('A `path` beginning with "/" must be specified for the SocketRoute.');
@@ -82,6 +124,9 @@ class SocketRoute {
         if (typeof drainHandlers !== 'boolean') {
             throw new TypeError('`drainHandlers` must be a boolean.');
         }
+        if (!Number.isInteger(maxPendingUpgrades) || maxPendingUpgrades < 1) {
+            throw new TypeError('`maxPendingUpgrades` must be a positive integer.');
+        }
         /**
          * The path of the WebSocket route.
          * This determines the endpoint that clients must connect to (e.g., `ws://localhost:3000/chat`).
@@ -101,8 +146,9 @@ class SocketRoute {
         this.metrics = metrics === undefined ? null : new Metrics(metrics, path, this.logger);
         this.protocolPolicy = protocol === undefined || protocol === false ? null : new ProtocolPolicy(protocol);
         this.draining = false;
-        this.inFlight = drainHandlers ? new Set() : null;
-        this.abortController = drainHandlers ? new AbortController() : null;
+        this.maxPendingUpgrades = maxPendingUpgrades;
+        this.pendingUpgrades = 0;
+        this.pendingCapacity = 0;
         /**
          * The array of handler instances associated with this route.
          * Each handler is responsible for managing WebSocket connections and message handling logic.
@@ -140,35 +186,9 @@ class SocketRoute {
             throw error;
         }
         try {
-            this.heartbeatMonitor = heartbeat === undefined
-                ? null
-                : new HeartbeatMonitor(heartbeat, this.logger);
-            this.rooms = rooms === undefined || rooms === false
-                ? null
-                : new RoomRegistry(rooms === true ? {} : rooms, {
-                    hasConnection: socket => this.clients.get(socket.clientKey) === socket,
-                    policy: this.transportPolicy,
-                    onChange: action => {
-                        this.metrics?.increment(`redweb.room.${action}`);
-                        this.metrics?.gauge('redweb.rooms.active', this.rooms.size);
-                    },
-                });
-            this.sessions = sessions === undefined || sessions === false
-                ? null
-                : new SessionRegistry(sessions === true ? {} : sessions, this.logger);
-            if (distribution !== undefined && distribution !== false && typeof distribution?.onEvent !== 'function') {
-                throw new TypeError('`distribution.onEvent` must be a function.');
-            }
-            this.distribution = distribution === undefined || distribution === false
-                ? null
-                : new DistributionBridge(
-                    distribution,
-                    event => distribution.onEvent(event, this),
-                    this.logger
-                );
+            this.runtime = new RouteRuntime(this, { heartbeat, rooms, sessions, distribution, drainHandlers });
+            Object.assign(this, this.runtime.expose());
         } catch (error) {
-            this.heartbeatMonitor?.stop();
-            this.sessions?.stop();
             this.disposeServices();
             this.server.close();
             throw error;
@@ -207,14 +227,34 @@ class SocketRoute {
         return req?.socket?.remoteAddress || 'unknown';
     }
 
-    authorizeUpgrade(request, rawSocket) {
+    authorizeUpgrade(request, rawSocket, signal) {
         if (!this.admissionPolicy && !this.protocolPolicy) return true;
-        return this.authorizePolicies(request, rawSocket);
+        return this.authorizePolicies(request, rawSocket, signal);
     }
 
-    async authorizePolicies(request, rawSocket) {
-        if (this.admissionPolicy && !await this.admissionPolicy.authorize(request, rawSocket, this)) return false;
+    async authorizePolicies(request, rawSocket, signal) {
+        if (this.admissionPolicy && !await this.admissionPolicy.authorize(request, rawSocket, this, signal)) return false;
         return this.protocolPolicy ? this.protocolPolicy.negotiate(request) : true;
+    }
+
+    reserveUpgrade(request) {
+        if (this.draining || this.pendingUpgrades >= this.maxPendingUpgrades) return null;
+        const clientKey = this.resolveRemoteAddress(request);
+        const replacing = !this.allowDuplicateConnections && this.clients.has(clientKey);
+        const capacity = !replacing;
+        if (capacity && this.clients.size + this.pendingCapacity >= (this.transportPolicy?.maxConnections ?? Infinity)) {
+            return null;
+        }
+        this.pendingUpgrades += 1;
+        if (capacity) this.pendingCapacity += 1;
+        return { capacity };
+    }
+
+    releaseUpgrade(reservation) {
+        if (!reservation) return false;
+        this.pendingUpgrades = Math.max(0, this.pendingUpgrades - 1);
+        if (reservation.capacity) this.pendingCapacity = Math.max(0, this.pendingCapacity - 1);
+        return true;
     }
     /**
      * Handles a new WebSocket connection.
@@ -225,16 +265,7 @@ class SocketRoute {
         const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
 
-        if (req?.[ADMISSION_CONTEXT] || req?.[PROTOCOL_CONTEXT] || this.sessions || this.abortController) {
-            socket.context = {
-                connectionId: randomUUID(),
-                principal: req?.[ADMISSION_CONTEXT]?.principal,
-                session: null,
-                metadata: Object.create(null),
-                signal: this.abortController?.signal,
-                protocol: req?.[PROTOCOL_CONTEXT],
-            };
-        }
+        this.runtime.decorate(socket, req);
 
         this.logger.log?.(`New client connected: ${ip}`);
 
@@ -260,51 +291,24 @@ class SocketRoute {
         }
 
         this.clients.set(clientKey, socket);
+        socket.__redwebRouteOwner = this;
         socket.clientKey = clientKey;
         socket.__redwebClientKey = clientKey;
         socket.remoteAddress = socket.remoteAddress || ip;
         socket.isAssigned = false; // Tracks whether the socket has been assigned a handler.
-        socket.sendJson = data => this.send(socket, data);
-        socket.broadcast = (data) => {
-            const sent = broadcast(
-                [...this.clients.values()].filter(sock => sock !== socket),
-                data,
-                this.transportPolicy
-            );
-            if (sent) this.metrics?.increment('redweb.messages.outbound', sent);
-            return sent;
-        };
-        if (this.rooms) {
-            socket.joinRoom = roomId => this.rooms.join(roomId, socket);
-            socket.leaveRoom = roomId => this.rooms.leave(roomId, socket);
-            socket.roomBroadcast = (roomId, data, options) => this.rooms.broadcast(roomId, data, options);
-        }
-        if (this.sessions) {
-            socket.createSession = (sessionId, data) => this.sessions.create(sessionId, data, socket);
-            socket.resumeSession = sessionId => this.sessions.resume(sessionId, socket);
-        }
-        if (this.distribution) socket.publishEvent = (type, payload) => this.publish(type, payload);
+        socket.sendJson = sendJsonFromSocket;
+        socket.broadcast = broadcastFromSocket;
         if (this.protocolPolicy) {
-            const version = socket.context.protocol.version;
-            socket.sendEvent = (type, payload, metadata) => this.send(
-                socket,
-                this.protocolPolicy.envelope(version, type, payload, metadata)
-            );
-            socket.sendProtocolError = (code, message, metadata) => this.send(
-                socket,
-                this.protocolPolicy.error(version, code, message, metadata)
-            );
-            if (this.protocolPolicy.binary) socket.sendBinaryEvent = value => this.sendBinary(socket, value);
+            socket.sendEvent = sendEventFromSocket;
+            socket.sendProtocolError = sendProtocolErrorFromSocket;
+            if (this.protocolPolicy.binary) socket.sendBinaryEvent = sendBinaryEventFromSocket;
         }
-        socket.__redwebRuntime = this.transportPolicy?.createRuntime(error => {
-            this.handleError(socket, error);
-            socket.close?.(1011, 'Message processing failed');
-        }) || null;
+        socket.__redwebRuntime = this.transportPolicy?.createRuntime(handleRuntimeError, socket) || null;
 
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
         socket.on('message', (message, isBinary) => this.receiveMessage(socket, message, isBinary));
-        this.heartbeatMonitor?.attach(socket);
+        this.runtime.attach(socket);
         this.metrics?.increment('redweb.connections.accepted');
         this.metrics?.gauge('redweb.connections.active', this.clients.size);
 
@@ -377,21 +381,19 @@ class SocketRoute {
     }
 
     runMessageTask(task) {
-        if (!this.inFlight) return task();
-        const promise = Promise.resolve().then(task);
-        this.inFlight.add(promise);
-        const cleanup = () => this.inFlight.delete(promise);
-        void promise.then(cleanup, cleanup);
-        return promise;
+        return this.runtime.run(task);
     }
 
     beginDrain() {
         if (this.draining) return false;
         this.draining = true;
-        this.abortController?.abort();
-        this.clients.forEach(socket => socket.__redwebRuntime?.queue?.close());
+        this.runtime.beginDrain();
         this.metrics?.gauge('redweb.ready', 0);
         return true;
+    }
+
+    isReady() {
+        return !this.draining && this.runtime.isReady();
     }
 
     publish(type, payload) {
@@ -490,9 +492,7 @@ class SocketRoute {
         const ip = socket.remoteAddress || 'unknown';
         this.logger.log?.(`Client disconnected: ${ip}`);
         if (key !== undefined && key !== null && this.clients.get(key) === socket) this.clients.delete(key);
-        this.rooms?.leaveAll(socket);
-        this.sessions?.release(socket);
-        this.heartbeatMonitor?.detach(socket);
+        this.runtime.detach(socket);
         socket.__redwebRuntime?.queue?.close();
         this.metrics?.increment('redweb.connections.closed');
         this.metrics?.gauge('redweb.connections.active', this.clients.size);
@@ -506,14 +506,25 @@ class SocketRoute {
 
     async performShutdown() {
         this.beginDrain();
-        this.heartbeatMonitor?.stop();
-        this.rooms?.clear();
-        this.sessions?.stop();
-        const errors = await settleTasks([
+        const deadline = Date.now() + this.shutdownTimeoutMs;
+        this.runtime.stopHeartbeat();
+        const cleanup = settleTasks([
             ...this.services.map(service => () => service.onShutdown?.()),
-            () => this.distribution?.close(),
+            () => this.runtime.closeDistribution(),
             () => this.inFlight ? Promise.allSettled([...this.inFlight]) : undefined,
         ]);
+        let errors;
+        try {
+            errors = await withinDeadline(
+                cleanup,
+                Math.max(0, deadline - Date.now()),
+                'Route cleanup exceeded shutdownTimeoutMs.'
+            );
+        } catch (error) {
+            errors = [error];
+        }
+        this.services = [];
+        this.runtime.closeState();
         const clients = [...this.clients.values()];
         clients.forEach(socket => {
             try {
@@ -524,7 +535,7 @@ class SocketRoute {
         });
         this.clients.clear();
         try {
-            await closeWebSocketServer(this.server, clients, this.shutdownTimeoutMs);
+            await closeWebSocketServer(this.server, clients, Math.max(0, deadline - Date.now()));
         } catch (error) {
             errors.push(error);
         }

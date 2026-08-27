@@ -25,6 +25,10 @@ describe('bounded distribution bridge', () => {
         [{ adapter: adapter(), channel: 'game', maxSeenEvents: 1.5 }, 'maxSeenEvents'],
         [{ adapter: adapter(), channel: 'game', seenTtlMs: -1 }, 'seenTtlMs'],
         [{ adapter: adapter(), channel: 'game', lifecycleTimeoutMs: 0 }, 'lifecycleTimeoutMs'],
+        [{ adapter: adapter(), channel: 'game', publishTimeoutMs: 0 }, 'publishTimeoutMs'],
+        [{ adapter: adapter(), channel: 'game', maxConcurrentPublishes: 0 }, 'maxConcurrentPublishes'],
+        [{ adapter: adapter(), channel: 'game', maxConcurrentEvents: 1.5 }, 'maxConcurrentEvents'],
+        [{ adapter: adapter(), channel: 'game', required: 'yes' }, 'distribution.required'],
     ])('validates distribution options %#', (options, message) => {
         expect(() => new DistributionBridge(options, () => {})).toThrow(message);
     });
@@ -48,6 +52,7 @@ describe('bounded distribution bridge', () => {
             maxEventBytes: 256,
         }, event => calls.push(['event', event]), { error: (_message, error) => errors.push(error.message) });
         expect(await bridge.ready).toBe(true);
+        expect(bridge.isReady()).toBe(true);
         expect(await bridge.publish('', {})).toBe(false);
         expect(await bridge.publish('state', { score: 1 })).toBe(true);
         expect(calls[0]).toBe('start');
@@ -64,6 +69,7 @@ describe('bounded distribution bridge', () => {
         expect(await bridge.publish('state', {})).toBe(false);
         expect(errors).toContain('publish failed');
         await bridge.close();
+        expect(bridge.isReady()).toBe(false);
         expect(await bridge.publish('closed', {})).toBe(false);
     });
 
@@ -181,5 +187,61 @@ describe('bounded distribution bridge', () => {
         const closing = bridge.close();
         expect(await publishing).toBe(false);
         await closing;
+    });
+
+    test('bounds and times out concurrent publishes without retaining a backlog', async () => {
+        const errors = [];
+        const bridge = new DistributionBridge({
+            adapter: adapter({ publish: () => new Promise(() => {}) }),
+            channel: 'game',
+            maxConcurrentPublishes: 1,
+            publishTimeoutMs: 2,
+            lifecycleTimeoutMs: 20,
+        }, () => {}, { error: (_message, error) => errors.push(error.message) });
+        await bridge.ready;
+        const first = bridge.publish('state', {});
+        expect(bridge.publishes.size).toBe(1);
+        expect(await bridge.publish('second', {})).toBe(false);
+        expect(await first).toBe(false);
+        await new Promise(setImmediate);
+        expect(bridge.publishes.size).toBe(0);
+        expect(errors).toContain('Distribution adapter publish timed out.');
+        await bridge.close();
+    });
+
+    test('bounds inbound concurrency and unsubscribes before draining handlers', async () => {
+        const calls = [];
+        let release;
+        const blocked = new Promise(resolve => { release = resolve; });
+        const bridge = new DistributionBridge({
+            adapter: adapter({
+                subscribe: () => () => calls.push('unsubscribe'),
+                close: () => calls.push('close'),
+            }),
+            channel: 'game',
+            maxConcurrentEvents: 1,
+            lifecycleTimeoutMs: 50,
+        }, async () => { calls.push('event-start'); await blocked; calls.push('event-end'); });
+        await bridge.ready;
+        expect(bridge.receive({ id: 'one', source: 'remote', type: 'state' })).toBe(true);
+        expect(bridge.receive({ id: 'two', source: 'remote', type: 'state' })).toBe(false);
+        await new Promise(setImmediate);
+        const closing = bridge.close();
+        await new Promise(setImmediate);
+        expect(calls).toEqual(['event-start', 'unsubscribe']);
+        release();
+        await closing;
+        expect(calls).toEqual(['event-start', 'unsubscribe', 'event-end', 'close']);
+    });
+
+    test('bounds close when an inbound handler does not cooperate', async () => {
+        const bridge = new DistributionBridge({
+            adapter: adapter(),
+            channel: 'game',
+            lifecycleTimeoutMs: 2,
+        }, () => new Promise(() => {}));
+        await bridge.ready;
+        bridge.receive({ id: 'one', source: 'remote', type: 'state' });
+        await expect(bridge.close()).rejects.toMatchObject({ errors: expect.any(Array) });
     });
 });

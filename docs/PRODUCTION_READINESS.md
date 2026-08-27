@@ -42,10 +42,10 @@ The independent senior-review gate rejects releases that weaken any invariant, h
 
 ## Horizontal composition contract
 
-- Placement runs before upgrade within the admission timeout. Only `http`, `https`, `ws`, and `wss` redirect URLs without control characters are accepted.
+- Placement runs before upgrade within the admission timeout. Redirects must use `wss`, contain no credentials or fragment, and may be restricted with `allowedPlacementOrigins`. Plain `ws` placement requires the explicit `allowInsecurePlacement` escape hatch for private development networks.
 - Readiness becomes false before shutdown work begins. New upgrades receive `503`; existing connections stop accepting messages.
 - `drainHandlers` is opt-in. When enabled, every connection context shares the route drain signal and shutdown awaits tracked work. Application handlers remain responsible for observing the signal; non-cooperating promises cannot be forcibly cancelled.
-- Distribution adapters have no framework backlog. Publish failure returns `false`; startup, subscription, unsubscription, and close are bounded and contained.
+- Distribution adapters have no framework backlog. Publish and inbound concurrency are finite; publish failure returns `false`; startup, subscription, unsubscription, draining, and close are bounded and contained. A `required` adapter makes the route unready and new upgrades receive `503`; best-effort adapters do not.
 - Event IDs are deduplicated only inside a finite TTL/size window. Source-node events are ignored to prevent reflection loops.
 - Broker partitions and process failure can lose events. Redweb makes no exactly-once or durable-delivery claim; applications own authoritative persistence, reconciliation, tick/sequence semantics, and partition policy.
 
@@ -57,3 +57,10 @@ The independent senior-review gate rejects releases that weaken any invariant, h
 - Stable framework codes are generated from `src/ws/protocol-schema.json`; the client declarations and runtime constants share that source.
 - Binary replication is a codec hook, not a codec dependency. Size is checked before decode and after encode, and outbound data uses the normal backpressure ceiling.
 - Protocol-disabled routes retain their 0.8 wire shapes and allocate no protocol context.
+
+## Resource ownership
+
+- `maxPendingUpgrades` bounds authorization work before a socket is accepted.
+- Fixed-step services clamp retained lag with `maxRetainedLagMs`; dropped time is observable rather than replayed forever.
+- Session count, ID length, and lifetime are bounded by Redweb. Session `data` is application-owned, so applications must validate and cap its shape and byte size before storing it.
+- Fully enabled idle routes have a 2 KiB framework-metadata budget per connection. Disabled features retain the legacy path and are compared against 0.8 by the performance gate.

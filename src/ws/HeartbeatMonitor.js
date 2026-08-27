@@ -1,5 +1,10 @@
 const { performance } = require('perf_hooks');
 
+function acknowledgePong() {
+    const state = this.__redwebHeartbeatState;
+    if (state) state.awaitingPong = false;
+}
+
 class HeartbeatMonitor {
     constructor({ intervalMs, timeoutMs }, logger = console, clock = () => performance.now()) {
         if (!Number.isInteger(intervalMs) || intervalMs < 1) {
@@ -21,16 +26,16 @@ class HeartbeatMonitor {
     attach(socket) {
         this.detach(socket);
         const state = { awaitingPong: false, lastPing: null };
-        const onPong = () => { state.awaitingPong = false; };
-        state.onPong = onPong;
+        socket.__redwebHeartbeatState = state;
         this.sockets.set(socket, state);
-        socket.on('pong', onPong);
+        socket.on('pong', acknowledgePong);
     }
 
     detach(socket) {
         const state = this.sockets.get(socket);
         if (!state) return false;
-        socket.off?.('pong', state.onPong);
+        socket.off?.('pong', acknowledgePong);
+        delete socket.__redwebHeartbeatState;
         this.sockets.delete(socket);
         return true;
     }
@@ -47,7 +52,7 @@ class HeartbeatMonitor {
                 }
                 return;
             }
-            if (state.lastPing === null || now - state.lastPing >= this.intervalMs) {
+            if (!state.awaitingPong && (state.lastPing === null || now - state.lastPing >= this.intervalMs)) {
                 state.lastPing = now;
                 state.awaitingPong = true;
                 try {

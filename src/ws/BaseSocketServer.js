@@ -46,6 +46,7 @@ class BaseSocketServer {
     this.ownsServer = ownsServer;
     this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
     this.draining = false;
+    this.pendingUpgrades = new Map();
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
@@ -105,12 +106,23 @@ class BaseSocketServer {
 
     if (!route) return sock.destroy();
     if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+    if (route.isReady?.() === false) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
 
-    if (route.admissionPolicy || route.protocolPolicy) {
+    if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
+      let reservation;
+      try {
+        reservation = route.reserveUpgrade(req);
+      } catch (error) {
+        this.logger?.error?.('WebSocket admission reservation failed:', error);
+      }
+      if (!reservation) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+      const controller = new AbortController();
+      this.pendingUpgrades.set(sock, { controller, route, reservation });
       void Promise.resolve()
-        .then(() => route.authorizeUpgrade(req, sock))
+        .then(() => route.authorizeUpgrade(req, sock, controller.signal))
         .then(accepted => {
           if (sock.destroyed) return;
+          if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
           if (!accepted) {
             const redirect = req[PLACEMENT_REDIRECT];
             if (redirect) return this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect });
@@ -119,12 +131,15 @@ class BaseSocketServer {
               ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
               : this.rejectUpgrade(sock, 401, 'Unauthorized');
           }
-          if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
           this.completeUpgrade(route, req, sock, head);
         })
         .catch(error => {
           this.logger?.error?.('WebSocket admission failed:', error);
           if (!sock.destroyed) this.rejectUpgrade(sock, 401, 'Unauthorized');
+        })
+        .finally(() => {
+          this.pendingUpgrades.delete(sock);
+          route.releaseUpgrade(reservation);
         });
       return;
     }
@@ -175,12 +190,13 @@ class BaseSocketServer {
   }
 
   isReady() {
-    return !this.draining;
+    return !this.draining && this.routes.every(route => route.isReady?.() !== false);
   }
 
   beginDrain() {
     if (this.draining) return false;
     this.draining = true;
+    this.pendingUpgrades.forEach(({ controller }) => controller.abort());
     this.routes.forEach(route => route.beginDrain?.());
     return true;
   }

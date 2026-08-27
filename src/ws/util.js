@@ -18,6 +18,11 @@ function sendPayload(socket, payload, policy) {
 }
 
 function sendJson(socket, data, policy) {
+    if (arguments.length < 3) {
+        if (!canSend(socket)) return false;
+        socket.send(JSON.stringify(data));
+        return true;
+    }
     return sendPayload(socket, JSON.stringify(data), policy);
 }
 

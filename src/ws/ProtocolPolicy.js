@@ -1,5 +1,6 @@
 const { Buffer } = require('buffer');
 const schema = require('./protocol-schema.json');
+const { validateEnvelope } = require('./protocol-validation');
 
 const PROTOCOL_CONTEXT = Symbol('redweb.protocolContext');
 const PROTOCOL_REJECTION = Symbol('redweb.protocolRejection');
@@ -107,16 +108,7 @@ class ProtocolPolicy {
     }
 
     validateEnvelope(message, version) {
-        return Boolean(
-            message &&
-            typeof message === 'object' &&
-            message.v === version &&
-            typeof message.type === 'string' &&
-            message.type.length > 0 &&
-            message.type.length <= 256 &&
-            (message.requestId === undefined || typeof message.requestId === 'string' && message.requestId.length > 0 && message.requestId.length <= 256) &&
-            (message.sequence === undefined || Number.isSafeInteger(message.sequence) && message.sequence >= 0)
-        );
+        return validateEnvelope(message, version);
     }
 
     async decodeBinary(buffer, context) {

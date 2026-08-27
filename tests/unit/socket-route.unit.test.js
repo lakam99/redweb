@@ -39,6 +39,7 @@ describe('SocketRoute units', () => {
         [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: 1.5 }, '`shutdownTimeoutMs`'],
         [{ path: '/x', handlers: [NoopHandler], orderedMessages: 'yes' }, '`orderedMessages`'],
         [{ path: '/x', handlers: [NoopHandler], drainHandlers: 'yes' }, '`drainHandlers`'],
+        [{ path: '/x', handlers: [NoopHandler], maxPendingUpgrades: 0 }, '`maxPendingUpgrades`'],
     ])('validates route configuration %#', (options, message) => {
         expect(() => new SocketRoute(options)).toThrow(message);
     });
@@ -288,6 +289,35 @@ describe('SocketRoute units', () => {
         expect(socket.closed).toEqual([]);
     });
 
+    test('reserves bounded pre-upgrade capacity and permits replacement identities', () => {
+        const route = new SocketRoute({
+            path: '/reservations', handlers: [NoopHandler], logger: null,
+            limits: { maxConnections: 1 }, maxPendingUpgrades: 1,
+        });
+        const request = { socket: { remoteAddress: 'client' } };
+        const reservation = route.reserveUpgrade(request);
+        expect(reservation).toEqual({ capacity: true });
+        expect(route.reserveUpgrade(request)).toBeNull();
+        expect(route.releaseUpgrade(reservation)).toBe(true);
+        expect(route.releaseUpgrade(null)).toBe(false);
+
+        route.clients.set('client', {});
+        const replacement = route.reserveUpgrade(request);
+        expect(replacement).toEqual({ capacity: false });
+        expect(route.pendingCapacity).toBe(0);
+        expect(route.releaseUpgrade(replacement)).toBe(true);
+        route.clients.clear();
+        route.draining = true;
+        expect(route.reserveUpgrade(request)).toBeNull();
+
+        const full = new SocketRoute({
+            path: '/full-reservations', handlers: [NoopHandler], logger: null,
+            allowDuplicateConnections: true, limits: { maxConnections: 1 },
+        });
+        full.clients.set('occupied', {});
+        expect(full.reserveUpgrade(request)).toBeNull();
+    });
+
     test('supports shorthand room and session registries and rolls back invalid infrastructure', async () => {
         const route = new SocketRoute({
             path: '/state-defaults',
@@ -330,6 +360,18 @@ describe('SocketRoute units', () => {
         expect(events.some(([name]) => name === 'redweb.messages.outbound')).toBe(false);
     });
 
+    test('keeps a post-upgrade capacity guard for direct route integrations', () => {
+        const route = new SocketRoute({
+            path: '/direct-capacity', handlers: [NoopHandler], logger: null,
+            allowDuplicateConnections: true, limits: { maxConnections: 1 },
+        });
+        route.handleConnection(createSocket(), {});
+        const rejected = createSocket();
+        route.handleConnection(rejected, {});
+        expect(JSON.parse(rejected.sent[0])).toEqual({ error: 'Server capacity reached' });
+        expect(rejected.closed[0]).toEqual([1013, 'Server capacity reached']);
+    });
+
     test('drains tracked handlers cooperatively and exposes no distribution when disabled', async () => {
         const route = new SocketRoute({
             path: '/drain-handlers',
@@ -370,6 +412,30 @@ describe('SocketRoute units', () => {
         })).toThrow('distribution.onEvent');
         await new Promise(setImmediate);
         expect(stopped).toBe(1);
+    });
+
+    test('reflects explicit required and best-effort distribution health in readiness', async () => {
+        const failingAdapter = () => ({
+            publish() {},
+            subscribe() {},
+            start() { return Promise.reject(new Error('offline')); },
+        });
+        const required = new SocketRoute({
+            path: '/required-distribution', handlers: [NoopHandler], logger: null,
+            distribution: { adapter: failingAdapter(), channel: 'game', required: true, onEvent() {} },
+        });
+        expect(required.isReady()).toBe(false);
+        await required.distribution.ready;
+        expect(required.isReady()).toBe(false);
+        await required.shutdown();
+
+        const bestEffort = new SocketRoute({
+            path: '/best-effort-distribution', handlers: [NoopHandler], logger: null,
+            distribution: { adapter: failingAdapter(), channel: 'game', required: false, onEvent() {} },
+        });
+        await bestEffort.distribution.ready;
+        expect(bestEffort.isReady()).toBe(true);
+        await bestEffort.shutdown();
     });
 
     test('contains invalid protocol envelopes and binary codec failures', async () => {

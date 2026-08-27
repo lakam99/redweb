@@ -325,6 +325,44 @@ describe('WebSocket integration without mocks', () => {
         expect(server.routes[0].clients.size).toBe(0);
     });
 
+    test('bounds pending admission and cancels every pending hook before drain', async () => {
+        const signals = [];
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class BoundedAdmissionRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/bounded-admission',
+                    handlers: [NoopHandler],
+                    logger: silentLogger,
+                    maxPendingUpgrades: 2,
+                    admission: {
+                        timeoutMs: 5000,
+                        authenticate(_request, { signal }) {
+                            signals.push(signal);
+                            return new Promise(resolve => signal.addEventListener('abort', () => resolve(false), { once: true }));
+                        },
+                    },
+                });
+            }
+        }
+        const server = await start({ routes: [BoundedAdmissionRoute] });
+        const first = expectConnectionFailure(address(server, '/bounded-admission'));
+        const second = expectConnectionFailure(address(server, '/bounded-admission'));
+        while (signals.length < 2) await new Promise(resolve => setImmediate(resolve));
+        expect(await expectConnectionFailure(address(server, '/bounded-admission'))).toBe(503);
+        expect(server.routes[0].pendingUpgrades).toBe(2);
+
+        expect(server.beginDrain()).toBe(true);
+        expect(await first).toBe(503);
+        expect(await second).toBe(503);
+        expect(signals.every(signal => signal.aborted)).toBe(true);
+        await new Promise(setImmediate);
+        expect(server.routes[0].pendingUpgrades).toBe(0);
+    });
+
     test('serializes messages only when opted in and bounds the pending queue', async () => {
         const completions = [];
         let releaseFirst;
@@ -403,10 +441,7 @@ describe('WebSocket integration without mocks', () => {
 
         const capacityHolder = await trackedConnect(address(server, '/limited'));
         expect(await nextJson(capacityHolder)).toEqual({ ready: true });
-        const rejected = await trackedConnect(address(server, '/limited'));
-        expect(await nextJson(rejected)).toEqual({ error: 'Server capacity reached' });
-        expect((await waitForClose(rejected)).code).toBe(1013);
-        clients.delete(rejected);
+        expect(await expectConnectionFailure(address(server, '/limited'))).toBe(503);
 
         const backpressured = await trackedConnect(address(server, '/backpressured'));
         expect((await waitForClose(backpressured)).code).toBe(1013);
@@ -699,7 +734,7 @@ describe('WebSocket integration without mocks', () => {
                     path: '/placed',
                     handlers: [NoopHandler],
                     logger: silentLogger,
-                    admission: { place: () => location },
+                    admission: { place: () => location, allowInsecurePlacement: true },
                 });
             }
         }
@@ -802,6 +837,8 @@ describe('WebSocket integration without mocks', () => {
                 if (!socket.context.signal.aborted) {
                     await new Promise(resolve => socket.context.signal.addEventListener('abort', resolve, { once: true }));
                 }
+                socket.joinRoom('late-room');
+                socket.createSession('late-session', { drained: true });
             }
         }
         class DrainingRoute extends SocketRoute {
@@ -811,12 +848,15 @@ describe('WebSocket integration without mocks', () => {
                     handlers: [CooperativeHandler],
                     allowDuplicateConnections: true,
                     drainHandlers: true,
+                    rooms: true,
+                    sessions: true,
                     logger: silentLogger,
                 });
             }
         }
         const server = await start({ routes: [DrainingRoute] });
         const client = await trackedConnect(address(server, '/drain'));
+        const serverSocket = [...server.routes[0].clients.values()][0];
         client.send(JSON.stringify({ type: 'work' }));
         await started;
 
@@ -829,6 +869,46 @@ describe('WebSocket integration without mocks', () => {
         socketServers.delete(server);
         clients.delete(client);
         expect(server.routes[0].inFlight.size).toBe(0);
+        expect(server.routes[0].rooms.size).toBe(0);
+        expect(server.routes[0].sessions.size).toBe(0);
+        expect(serverSocket.joinRoom('after-shutdown')).toBe(false);
+        expect(serverSocket.createSession('after-shutdown', {})).toBe(false);
+    });
+
+    test('bounds shutdown when a handler ignores its drain signal', async () => {
+        let startedHandler;
+        const started = new Promise(resolve => { startedHandler = resolve; });
+        class StuckHandler extends BaseHandler {
+            constructor() { super('stuck'); }
+            onMessage() {
+                startedHandler();
+                return new Promise(() => {});
+            }
+        }
+        class StuckRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/stuck',
+                    handlers: [StuckHandler],
+                    allowDuplicateConnections: true,
+                    drainHandlers: true,
+                    shutdownTimeoutMs: 30,
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [StuckRoute] });
+        const client = await trackedConnect(address(server, '/stuck'));
+        client.send(JSON.stringify({ type: 'stuck' }));
+        await started;
+        const startedAt = Date.now();
+        await expect(server.shutdown()).rejects.toMatchObject({
+            message: 'One or more WebSocket server cleanup operations failed.',
+        });
+        expect(Date.now() - startedAt).toBeLessThan(500);
+        expect(server.routes[0].inFlight.size).toBe(0);
+        socketServers.delete(server);
+        clients.delete(client);
     });
 
     test('negotiates an opt-in protocol and exchanges stable text and binary envelopes', async () => {

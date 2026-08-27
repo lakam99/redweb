@@ -46,10 +46,10 @@ class TransportPolicy {
         this.orderedMessages = Boolean(orderedMessages);
     }
 
-    createRuntime(onError) {
+    createRuntime(onError, errorContext) {
         return {
             limiter: this.messageRate ? new TokenBucket(this.messageRate) : null,
-            queue: this.orderedMessages ? new TaskQueue(this.maxPendingMessages, onError) : null,
+            queue: this.orderedMessages ? new TaskQueue(this.maxPendingMessages, onError, errorContext) : null,
         };
     }
 

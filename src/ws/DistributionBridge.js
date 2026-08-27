@@ -1,6 +1,6 @@
 const { randomUUID } = require('crypto');
 const { performance } = require('perf_hooks');
-const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
+const { throwCleanupErrors } = require('../serverLifecycle');
 
 class DistributionBridge {
     constructor(options, onEvent, logger = console, clock = () => performance.now()) {
@@ -15,6 +15,10 @@ class DistributionBridge {
             maxSeenEvents = 10_000,
             seenTtlMs = 60_000,
             lifecycleTimeoutMs = 5000,
+            publishTimeoutMs = lifecycleTimeoutMs,
+            maxConcurrentPublishes = 64,
+            maxConcurrentEvents = 64,
+            required = false,
         } = options;
         if (!adapter || typeof adapter !== 'object') throw new TypeError('`distribution.adapter` is required.');
         ['publish', 'subscribe'].forEach(method => {
@@ -29,35 +33,58 @@ class DistributionBridge {
         if (typeof nodeId !== 'string' || !nodeId || nodeId.length > 256) {
             throw new TypeError('`distribution.nodeId` must be a non-empty string of at most 256 characters.');
         }
-        for (const [name, value] of Object.entries({ maxEventBytes, maxSeenEvents, seenTtlMs, lifecycleTimeoutMs })) {
+        const integers = {
+            maxEventBytes,
+            maxSeenEvents,
+            seenTtlMs,
+            lifecycleTimeoutMs,
+            publishTimeoutMs,
+            maxConcurrentPublishes,
+            maxConcurrentEvents,
+        };
+        for (const [name, value] of Object.entries(integers)) {
             if (!Number.isInteger(value) || value < 1) throw new TypeError(`\`distribution.${name}\` must be a positive integer.`);
         }
+        if (typeof required !== 'boolean') throw new TypeError('`distribution.required` must be a boolean.');
         if (typeof onEvent !== 'function') throw new TypeError('`distribution.onEvent` must be a function.');
         if (typeof clock !== 'function') throw new TypeError('`clock` must be a function.');
-        this.adapter = adapter;
-        this.channel = channel;
-        this.nodeId = nodeId;
-        this.maxEventBytes = maxEventBytes;
-        this.maxSeenEvents = maxSeenEvents;
-        this.seenTtlMs = seenTtlMs;
-        this.lifecycleTimeoutMs = lifecycleTimeoutMs;
-        this.onEvent = onEvent;
-        this.logger = logger;
-        this.clock = clock;
+        Object.assign(this, {
+            adapter,
+            channel,
+            nodeId,
+            maxEventBytes,
+            maxSeenEvents,
+            seenTtlMs,
+            lifecycleTimeoutMs,
+            publishTimeoutMs,
+            maxConcurrentPublishes,
+            maxConcurrentEvents,
+            required,
+            onEvent,
+            logger,
+            clock,
+        });
         this.seen = new Map();
+        this.publishes = new Set();
+        this.events = new Set();
         this.closed = false;
+        this.healthy = false;
+        this.subscribed = false;
         this.ready = this.start();
     }
 
     async start() {
         try {
-            await this.withLifecycleTimeout(() => this.adapter.start?.(), 'start');
+            await this.withTimeout(() => this.adapter.start?.(), this.lifecycleTimeoutMs, 'start');
             if (this.closed) return false;
-            const unsubscribe = await this.withLifecycleTimeout(
+            const unsubscribe = await this.withTimeout(
                 () => this.adapter.subscribe(this.channel, event => this.receive(event)),
+                this.lifecycleTimeoutMs,
                 'subscribe'
             );
             if (typeof unsubscribe === 'function') this.unsubscribe = unsubscribe;
+            this.subscribed = true;
+            this.healthy = true;
             return true;
         } catch (error) {
             this.logger?.error?.('Distribution adapter failed to start:', error);
@@ -65,31 +92,39 @@ class DistributionBridge {
         }
     }
 
-    withLifecycleTimeout(operation, name) {
+    withTimeout(operation, timeoutMs, name) {
         let timer;
         const timeout = new Promise((_, reject) => {
-            timer = setTimeout(
-                () => reject(new Error(`Distribution adapter ${name} timed out.`)),
-                this.lifecycleTimeoutMs
-            );
+            timer = setTimeout(() => reject(new Error(`Distribution adapter ${name} timed out.`)), timeoutMs);
             timer.unref();
         });
         return Promise.race([Promise.resolve().then(operation), timeout]).finally(() => clearTimeout(timer));
     }
 
-    async publish(type, payload) {
-        if (this.closed || typeof type !== 'string' || !type) return false;
-        const event = {
-            id: randomUUID(),
-            source: this.nodeId,
-            type,
-            payload,
-        };
+    isReady() {
+        return this.healthy && !this.closed;
+    }
+
+    publish(type, payload) {
+        if (this.closed || typeof type !== 'string' || !type || this.publishes.size >= this.maxConcurrentPublishes) {
+            return Promise.resolve(false);
+        }
+        const event = { id: randomUUID(), source: this.nodeId, type, payload };
         const serialized = this.serialize(event);
-        if (!serialized) return false;
+        if (!serialized) return Promise.resolve(false);
+        const task = this.performPublish(serialized);
+        this.track(this.publishes, task);
+        return task;
+    }
+
+    async performPublish(serialized) {
         if (!await this.ready || this.closed) return false;
         try {
-            await this.adapter.publish(this.channel, serialized);
+            await this.withTimeout(
+                () => this.adapter.publish(this.channel, serialized),
+                this.publishTimeoutMs,
+                'publish'
+            );
             return true;
         } catch (error) {
             this.logger?.error?.('Distribution publish failed:', error);
@@ -97,8 +132,14 @@ class DistributionBridge {
         }
     }
 
+    track(collection, task) {
+        collection.add(task);
+        const cleanup = () => collection.delete(task);
+        void task.then(cleanup, cleanup);
+    }
+
     receive(input) {
-        if (this.closed) return false;
+        if (this.closed || this.events.size >= this.maxConcurrentEvents) return false;
         let event;
         try {
             const serialized = typeof input === 'string' ? input : JSON.stringify(input);
@@ -109,9 +150,10 @@ class DistributionBridge {
         }
         if (!this.isValid(event) || event.source === this.nodeId || this.hasSeen(event.id)) return false;
         this.remember(event.id);
-        Promise.resolve()
+        const task = Promise.resolve()
             .then(() => this.onEvent(event))
             .catch(error => this.logger?.error?.('Distribution event handler failed:', error));
+        this.track(this.events, task);
         return true;
     }
 
@@ -144,27 +186,59 @@ class DistributionBridge {
         return true;
     }
 
+    evictExpired(now) {
+        while (this.seen.size) {
+            const [eventId, expiry] = this.seen.entries().next().value;
+            if (expiry > now) return;
+            this.seen.delete(eventId);
+        }
+    }
+
     remember(id) {
         const now = this.clock();
-        this.seen.forEach((expiry, eventId) => {
-            if (expiry <= now) this.seen.delete(eventId);
-        });
+        this.evictExpired(now);
         while (this.seen.size >= this.maxSeenEvents) this.seen.delete(this.seen.keys().next().value);
         this.seen.set(id, now + this.seenTtlMs);
+    }
+
+    async stopSubscription() {
+        if (!this.subscribed) return;
+        this.subscribed = false;
+        await this.withTimeout(
+            () => this.unsubscribe ? this.unsubscribe() : this.adapter.unsubscribe?.(this.channel),
+            this.lifecycleTimeoutMs,
+            'unsubscribe'
+        );
+    }
+
+    async drainActivity() {
+        await this.withTimeout(
+            () => Promise.allSettled([...this.publishes, ...this.events]),
+            this.lifecycleTimeoutMs,
+            'drain'
+        );
     }
 
     async close() {
         if (this.closed) return;
         this.closed = true;
+        this.healthy = false;
         await this.ready;
-        const errors = await settleTasks([
-            () => this.withLifecycleTimeout(
-                () => this.unsubscribe ? this.unsubscribe() : this.adapter.unsubscribe?.(this.channel),
-                'unsubscribe'
-            ),
-            () => this.withLifecycleTimeout(() => this.adapter.close?.(), 'close'),
-        ]);
+        const errors = [];
+        for (const operation of [
+            () => this.stopSubscription(),
+            () => this.drainActivity(),
+            () => this.withTimeout(() => this.adapter.close?.(), this.lifecycleTimeoutMs, 'close'),
+        ]) {
+            try {
+                await operation();
+            } catch (error) {
+                errors.push(error);
+            }
+        }
         this.seen.clear();
+        this.publishes.clear();
+        this.events.clear();
         throwCleanupErrors(errors, 'One or more distribution adapter cleanup operations failed.');
     }
 }
