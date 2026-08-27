@@ -221,6 +221,41 @@ Other route options:
 - `exposeErrors`: return handler exception messages to clients; defaults to `false`.
 - `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
 - `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
+- `admission`: optional pre-upgrade authentication/origin policy. It may be a function or `{ authenticate, origins, timeoutMs }`.
+- `limits`: opt-in connection, message-rate, pending-message, and outbound-buffer limits.
+- `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
+- `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
+
+Production protections are deliberately opt-in, so existing applications retain their behavior and disabled features add no timers or per-connection queues. A protected route can stay compact:
+
+```js
+class GameRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/game',
+      handlers: [InputHandler],
+      admission: {
+        origins: ['https://game.example'],
+        timeoutMs: 3000,
+        authenticate: (request, { signal }) => verifySession(request, signal)
+      },
+      limits: {
+        maxConnections: 5000,
+        maxBufferedBytes: 1024 * 1024,
+        maxPendingMessages: 64,
+        messageRate: { capacity: 60, refillPerSecond: 30 }
+      },
+      orderedMessages: true,
+      heartbeat: { intervalMs: 30000, timeoutMs: 10000 },
+      websocketOptions: { maxPayload: 64 * 1024 }
+    });
+  }
+}
+```
+
+Admission completes before the WebSocket upgrade and before any handler hook runs. Its return value becomes `socket.context.principal`; the random `connectionId`, authenticated principal, future resumable session, and legacy IP-based `clientKey` remain separate concepts. Authentication errors are never returned to clients.
+
+Rate and backpressure actions are `"drop"` or `"disconnect"`. Slow-consumer checks apply equally to `sendJson` and `broadcast`, and broadcasts still serialize a message once. Ordered processing never keeps more than `maxPendingMessages` waiting behind the active task.
 
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 

@@ -1,6 +1,4 @@
 const http = require('http');
-const crypto = require('crypto');
-const net = require('net');
 const path = require('path');
 const WebSocket = require('ws');
 const {
@@ -13,6 +11,7 @@ const {
 const {
     closeWebSocket,
     nextMessage,
+    openRawWebSocket,
     silentLogger,
     waitForClose,
     waitForListening,
@@ -48,33 +47,6 @@ async function expectConnectionFailure(url, options) {
         });
         socket.once('error', () => resolve('error'));
     }), 'WebSocket connection failure');
-}
-
-function openRawWebSocket(port, route) {
-    return withTimeout(new Promise((resolve, reject) => {
-        const socket = net.connect(port, '127.0.0.1');
-        let response = '';
-        socket.once('connect', () => {
-            const key = crypto.randomBytes(16).toString('base64');
-            socket.write([
-                `GET ${route} HTTP/1.1`,
-                `Host: 127.0.0.1:${port}`,
-                'Upgrade: websocket',
-                'Connection: Upgrade',
-                `Sec-WebSocket-Key: ${key}`,
-                'Sec-WebSocket-Version: 13',
-                '',
-                '',
-            ].join('\r\n'));
-        });
-        socket.on('data', chunk => {
-            response += chunk.toString('latin1');
-            if (!response.includes('\r\n\r\n')) return;
-            if (!response.startsWith('HTTP/1.1 101')) return reject(new Error(`Unexpected upgrade response: ${response}`));
-            resolve(socket);
-        });
-        socket.once('error', reject);
-    }), 'raw WebSocket upgrade');
 }
 
 describe('WebSocket integration without mocks', () => {
@@ -255,6 +227,198 @@ describe('WebSocket integration without mocks', () => {
 
         const healthyClient = await trackedConnect(address(closeServer, '/close-callback'));
         expect(healthyClient.readyState).toBe(WebSocket.OPEN);
+    });
+
+    test('authenticates before upgrade and exposes separate connection and principal identities', async () => {
+        let initialContacts = 0;
+        class IdentityHandler extends BaseHandler {
+            constructor() { super('identity'); }
+            onInitialContact(socket) {
+                initialContacts += 1;
+                socket.sendJson({
+                    connectionId: socket.context.connectionId,
+                    playerId: socket.context.principal.playerId,
+                    clientKey: socket.clientKey,
+                });
+            }
+            onMessage() {}
+        }
+        class ProtectedRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/protected',
+                    handlers: [IdentityHandler],
+                    allowDuplicateConnections: true,
+                    logger: silentLogger,
+                    admission: {
+                        origins: ['https://game.example'],
+                        async authenticate(request) {
+                            await Promise.resolve();
+                            return request.headers.authorization === 'Bearer valid'
+                                ? { playerId: 'player-7' }
+                                : false;
+                        },
+                    },
+                });
+            }
+        }
+
+        const server = await start({ routes: [ProtectedRoute] });
+        expect(await expectConnectionFailure(address(server, '/protected'), {
+            headers: { origin: 'https://evil.example', authorization: 'Bearer valid' },
+        })).toBe(401);
+        expect(await expectConnectionFailure(address(server, '/protected'), {
+            headers: { origin: 'https://game.example', authorization: 'Bearer invalid' },
+        })).toBe(401);
+        expect(initialContacts).toBe(0);
+
+        const client = await trackedConnect(address(server, '/protected'), {
+            headers: { origin: 'https://game.example', authorization: 'Bearer valid' },
+        });
+        const identity = await nextJson(client);
+        expect(identity).toMatchObject({ playerId: 'player-7' });
+        expect(identity.connectionId).not.toBe(identity.clientKey);
+        expect(initialContacts).toBe(1);
+    });
+
+    test('bounds admission time and rejects generically without running application hooks', async () => {
+        let initialContacts = 0;
+        let aborted = false;
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+            onInitialContact() { initialContacts += 1; }
+        }
+        class TimedAdmissionRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/timed-admission',
+                    handlers: [NoopHandler],
+                    logger: silentLogger,
+                    admission: {
+                        timeoutMs: 10,
+                        authenticate(_request, { signal }) {
+                            signal.addEventListener('abort', () => { aborted = true; }, { once: true });
+                            return new Promise(() => {});
+                        },
+                    },
+                });
+            }
+        }
+        const server = await start({ routes: [TimedAdmissionRoute] });
+        expect(await expectConnectionFailure(address(server, '/timed-admission'))).toBe(401);
+        expect(aborted).toBe(true);
+        expect(initialContacts).toBe(0);
+        expect(server.routes[0].clients.size).toBe(0);
+    });
+
+    test('serializes messages only when opted in and bounds the pending queue', async () => {
+        const completions = [];
+        let releaseFirst;
+        const firstBlocked = new Promise(resolve => { releaseFirst = resolve; });
+        class WorkHandler extends BaseHandler {
+            constructor() { super('work'); }
+            async onMessage(socket, message) {
+                if (message.value === 1) await firstBlocked;
+                completions.push(message.value);
+                socket.sendJson({ value: message.value });
+            }
+        }
+        class OrderedRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/ordered',
+                    handlers: [WorkHandler],
+                    orderedMessages: true,
+                    limits: { maxPendingMessages: 1 },
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [OrderedRoute] });
+        const client = await trackedConnect(address(server, '/ordered'));
+        client.send(JSON.stringify({ type: 'work', value: 1 }));
+        client.send(JSON.stringify({ type: 'work', value: 2 }));
+        client.send(JSON.stringify({ type: 'work', value: 3 }));
+        expect(await nextJson(client)).toEqual({ error: 'Message queue full' });
+        expect((await waitForClose(client)).code).toBe(1013);
+        clients.delete(client);
+        releaseFirst();
+        await new Promise(setImmediate);
+        expect(completions).toEqual([1]);
+    });
+
+    test('enforces message rate, connection capacity, and slow-consumer limits on real sockets', async () => {
+        class EchoHandler extends BaseHandler {
+            constructor() { super('echo'); }
+            onInitialContact(socket) { socket.sendJson({ ready: true }); }
+            onMessage(socket, message) { socket.sendJson({ value: message.value }); }
+        }
+        class LimitedRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/limited',
+                    handlers: [EchoHandler],
+                    allowDuplicateConnections: true,
+                    limits: {
+                        maxConnections: 1,
+                        messageRate: { capacity: 1, refillPerSecond: 0 },
+                    },
+                    logger: silentLogger,
+                });
+            }
+        }
+        class BackpressuredRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/backpressured',
+                    handlers: [EchoHandler],
+                    limits: { maxBufferedBytes: 0 },
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [LimitedRoute, BackpressuredRoute] });
+        const first = await trackedConnect(address(server, '/limited'));
+        expect(await nextJson(first)).toEqual({ ready: true });
+        first.send(JSON.stringify({ type: 'echo', value: 1 }));
+        expect(await nextJson(first)).toEqual({ value: 1 });
+        first.send(JSON.stringify({ type: 'echo', value: 2 }));
+        expect(await nextJson(first)).toEqual({ error: 'Message rate exceeded' });
+        expect((await waitForClose(first)).code).toBe(1008);
+        clients.delete(first);
+
+        const capacityHolder = await trackedConnect(address(server, '/limited'));
+        expect(await nextJson(capacityHolder)).toEqual({ ready: true });
+        const rejected = await trackedConnect(address(server, '/limited'));
+        expect(await nextJson(rejected)).toEqual({ error: 'Server capacity reached' });
+        expect((await waitForClose(rejected)).code).toBe(1013);
+        clients.delete(rejected);
+
+        const backpressured = await trackedConnect(address(server, '/backpressured'));
+        expect((await waitForClose(backpressured)).code).toBe(1013);
+        clients.delete(backpressured);
+    });
+
+    test('terminates a real half-open peer with one route heartbeat scheduler', async () => {
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class HeartbeatRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/heartbeat',
+                    handlers: [NoopHandler],
+                    heartbeat: { intervalMs: 10, timeoutMs: 10 },
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [HeartbeatRoute] });
+        const rawClient = await openRawWebSocket(server.server.address().port, '/heartbeat');
+        await withTimeout(new Promise(resolve => rawClient.once('close', resolve)), 'heartbeat termination');
+        expect(server.routes[0].clients.size).toBe(0);
     });
 
     test('enforces strict paths by default and supports an explicit root fallback', async () => {

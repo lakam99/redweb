@@ -169,6 +169,66 @@ describe('BaseSocketServer units', () => {
         });
     });
 
+    test('contains admission pipeline and rejection-write failures', async () => {
+        class AdmissionRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade() { return Promise.reject(new Error('admission pipeline failed')); }
+        }
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [AdmissionRoute], logger });
+        const rejected = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, rejected, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('WebSocket admission failed:', expect.any(Error));
+        expect(rejected.end).toHaveBeenCalledWith(expect.stringContaining('401 Unauthorized'));
+
+        const destroyed = { destroyed: true, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, destroyed, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(destroyed.end).not.toHaveBeenCalled();
+
+        const fallback = { end() { throw new Error('write failed'); }, destroy: jest.fn() };
+        socketServer.rejectUpgrade(fallback, 503, 'Service Unavailable');
+        expect(fallback.destroy).toHaveBeenCalled();
+    });
+
+    test('rejects upgrades while draining and after admission races with shutdown or close', async () => {
+        let accept;
+        class DeferredAdmissionRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade() { return new Promise(resolve => { accept = resolve; }); }
+        }
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [DeferredAdmissionRoute], logger: null });
+        const drainingSocket = { destroyed: false, end: jest.fn() };
+        socketServer.draining = true;
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, drainingSocket, Buffer.alloc(0));
+        expect(drainingSocket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+
+        socketServer.draining = false;
+        const pendingSocket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, pendingSocket, Buffer.alloc(0));
+        await Promise.resolve();
+        socketServer.draining = true;
+        accept(true);
+        await new Promise(setImmediate);
+        expect(pendingSocket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+
+        socketServer.draining = false;
+        const closedSocket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, closedSocket, Buffer.alloc(0));
+        await Promise.resolve();
+        closedSocket.destroyed = true;
+        accept(true);
+        await new Promise(setImmediate);
+        expect(closedSocket.end).not.toHaveBeenCalled();
+    });
+
     test('owned servers can be created without listening and shutdown repeatedly', async () => {
         const server = new SocketServer({ listen: false, routes: [FirstRoute], logger: null });
         expect(server.ownsServer).toBe(true);

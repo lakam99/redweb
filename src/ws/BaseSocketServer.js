@@ -43,6 +43,7 @@ class BaseSocketServer {
     this.server = server;
     this.ownsServer = ownsServer;
     this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
+    this.draining = false;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
@@ -101,10 +102,43 @@ class BaseSocketServer {
       (this.fallbackToRoot ? this.routes.find(r => r.path === '/') : undefined);
 
     if (!route) return sock.destroy();
+    if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
 
+    if (route.admissionPolicy) {
+      void Promise.resolve()
+        .then(() => route.authorizeUpgrade(req, sock))
+        .then(accepted => {
+          if (sock.destroyed) return;
+          if (!accepted) return this.rejectUpgrade(sock, 401, 'Unauthorized');
+          if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+          this.completeUpgrade(route, req, sock, head);
+        })
+        .catch(error => {
+          this.logger?.error?.('WebSocket admission failed:', error);
+          if (!sock.destroyed) this.rejectUpgrade(sock, 401, 'Unauthorized');
+        });
+      return;
+    }
+
+    this.completeUpgrade(route, req, sock, head);
+  }
+
+  completeUpgrade(route, req, sock, head) {
     route.server.handleUpgrade(req, sock, head, (s, r) =>
       route.server.emit('connection', s, r)
     );
+  }
+
+  rejectUpgrade(socket, statusCode, statusText) {
+    try {
+      socket.end?.(
+        `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+        'Connection: close\r\n' +
+        'Content-Length: 0\r\n\r\n'
+      );
+    } catch {
+      socket.destroy?.();
+    }
   }
 
   /**
@@ -130,6 +164,7 @@ class BaseSocketServer {
   }
 
   async performShutdown() {
+    this.draining = true;
     this.server.off?.('upgrade', this._upgradeHandler);
     const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
     if (this.closeServerOnShutdown && this.server.listening) {

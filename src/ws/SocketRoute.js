@@ -3,6 +3,9 @@ const { sendJson, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
 const { closeWebSocketServer } = require('./shutdown');
+const { AdmissionPolicy, ADMISSION_CONTEXT } = require('./AdmissionPolicy');
+const HeartbeatMonitor = require('./HeartbeatMonitor');
+const TransportPolicy = require('./TransportPolicy');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -38,6 +41,10 @@ class SocketRoute {
         exposeErrors = false,
         logger = console,
         shutdownTimeoutMs = 1000,
+        admission,
+        limits,
+        orderedMessages = false,
+        heartbeat,
     } = {}) {
         if (typeof path !== 'string' || !path.startsWith('/')) {
             throw new Error('A `path` beginning with "/" must be specified for the SocketRoute.');
@@ -58,6 +65,9 @@ class SocketRoute {
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) {
             throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
         }
+        if (typeof orderedMessages !== 'boolean') {
+            throw new TypeError('`orderedMessages` must be a boolean.');
+        }
         /**
          * The path of the WebSocket route.
          * This determines the endpoint that clients must connect to (e.g., `ws://localhost:3000/chat`).
@@ -70,6 +80,10 @@ class SocketRoute {
         this.getClientKey = getClientKey;
         this.exposeErrors = exposeErrors;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
+        this.admissionPolicy = admission === undefined ? null : new AdmissionPolicy(admission);
+        this.transportPolicy = limits === undefined && !orderedMessages
+            ? null
+            : new TransportPolicy(limits, orderedMessages);
         /**
          * The array of handler instances associated with this route.
          * Each handler is responsible for managing WebSocket connections and message handling logic.
@@ -106,6 +120,9 @@ class SocketRoute {
             this.server.close();
             throw error;
         }
+        this.heartbeatMonitor = heartbeat === undefined
+            ? null
+            : new HeartbeatMonitor(heartbeat, this.logger);
     }
 
     disposeServices() {
@@ -139,6 +156,12 @@ class SocketRoute {
         }
         return req?.socket?.remoteAddress || 'unknown';
     }
+
+    authorizeUpgrade(request, rawSocket) {
+        return this.admissionPolicy
+            ? this.admissionPolicy.authorize(request, rawSocket, this)
+            : true;
+    }
     /**
      * Handles a new WebSocket connection.
      * @param {WebSocket} socket - The WebSocket connection instance.
@@ -159,32 +182,41 @@ class SocketRoute {
             }
         }
 
+        const replacesExisting = !this.allowDuplicateConnections && this.clients.has(clientKey);
+        if (!replacesExisting && this.clients.size >= (this.transportPolicy?.maxConnections ?? Infinity)) {
+            sendJson(socket, { error: 'Server capacity reached' }, this.transportPolicy);
+            socket.close?.(1013, 'Server capacity reached');
+            return;
+        }
+
         this.clients.set(clientKey, socket);
         socket.clientKey = clientKey;
         socket.__redwebClientKey = clientKey;
         socket.remoteAddress = socket.remoteAddress || ip;
         socket.isAssigned = false; // Tracks whether the socket has been assigned a handler.
-        socket.sendJson = (data) => sendJson(socket, data);
-        socket.broadcast = (data) => broadcast([...this.clients.values()].filter(sock => sock !== socket), data);
+        socket.sendJson = (data) => sendJson(socket, data, this.transportPolicy);
+        socket.broadcast = (data) => broadcast(
+            [...this.clients.values()].filter(sock => sock !== socket),
+            data,
+            this.transportPolicy
+        );
+        if (req?.[ADMISSION_CONTEXT]) {
+            socket.context = {
+                connectionId: randomUUID(),
+                principal: req[ADMISSION_CONTEXT].principal,
+                session: null,
+                metadata: Object.create(null),
+            };
+        }
+        socket.__redwebRuntime = this.transportPolicy?.createRuntime(error => {
+            this.handleError(socket, error);
+            socket.close?.(1011, 'Message processing failed');
+        }) || null;
 
         socket.on('close', () => this.handleClose(socket));
         socket.on('error', (error) => this.handleError(socket, error));
-        socket.on('message', (message, isBinary) => {
-            if (isBinary) {
-                void this.handleBinaryMessage(socket, message);
-                return;
-            }
-
-            try {
-                const parsed = JSON.parse(message);
-                void this.handleMessage(socket, parsed);
-            } catch (error) {
-                this.logger.error?.(`Error parsing message from ${ip}:`, error);
-                socket.sendJson({ error: 'Invalid JSON format' });
-                socket.close?.(1003, 'Invalid JSON');
-                return;
-            }
-        });
+        socket.on('message', (message, isBinary) => this.receiveMessage(socket, message, isBinary));
+        this.heartbeatMonitor?.attach(socket);
 
         this.invokeLifecycleHook(socket, () => this.connectionOpenCallback(socket, req), true);
         this.handlers.forEach((handler) => {
@@ -201,6 +233,38 @@ class SocketRoute {
                 sendJson(socket, { error: 'Connection initialization failed' });
                 socket.close?.(1011, 'Connection initialization failed');
             });
+    }
+
+    receiveMessage(socket, message, isBinary) {
+        const runtime = socket.__redwebRuntime;
+        if (this.transportPolicy && !this.transportPolicy.acceptsMessage(runtime)) {
+            if (this.transportPolicy.messageRate.action === 'disconnect') {
+                socket.sendJson({ error: 'Message rate exceeded' });
+                socket.close?.(1008, 'Message rate exceeded');
+            }
+            return false;
+        }
+        const task = () => this.dispatchMessage(socket, message, isBinary);
+        if (!runtime?.queue) {
+            void task();
+            return true;
+        }
+        if (runtime.queue.enqueue(task)) return true;
+        socket.sendJson({ error: 'Message queue full' });
+        socket.close?.(1013, 'Message queue full');
+        return false;
+    }
+
+    dispatchMessage(socket, message, isBinary) {
+        if (isBinary) return this.handleBinaryMessage(socket, message);
+        try {
+            return this.handleMessage(socket, JSON.parse(message));
+        } catch (error) {
+            this.logger.error?.(`Error parsing message from ${socket.remoteAddress}:`, error);
+            socket.sendJson({ error: 'Invalid JSON format' });
+            socket.close?.(1003, 'Invalid JSON');
+            return false;
+        }
     }
 
     connectionOpenCallback(socket) {
@@ -263,6 +327,8 @@ class SocketRoute {
         const ip = socket.remoteAddress || 'unknown';
         this.logger.log?.(`Client disconnected: ${ip}`);
         if (key !== undefined && key !== null && this.clients.get(key) === socket) this.clients.delete(key);
+        this.heartbeatMonitor?.detach(socket);
+        socket.__redwebRuntime?.queue?.close();
         this.invokeLifecycleHook(socket, () => this.connectionCloseCallback?.(socket), false);
     }
 
@@ -272,6 +338,7 @@ class SocketRoute {
     }
 
     async performShutdown() {
+        this.heartbeatMonitor?.stop();
         const errors = await settleTasks(this.services.map(service => () => service.onShutdown?.()));
         const clients = [...this.clients.values()];
         clients.forEach(socket => {

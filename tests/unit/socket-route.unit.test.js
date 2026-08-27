@@ -37,6 +37,7 @@ describe('SocketRoute units', () => {
         [{ path: '/x', handlers: [NoopHandler], services: [{}] }, 'Service entries'],
         [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: -1 }, '`shutdownTimeoutMs`'],
         [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: 1.5 }, '`shutdownTimeoutMs`'],
+        [{ path: '/x', handlers: [NoopHandler], orderedMessages: 'yes' }, '`orderedMessages`'],
     ])('validates route configuration %#', (options, message) => {
         expect(() => new SocketRoute(options)).toThrow(message);
     });
@@ -249,5 +250,40 @@ describe('SocketRoute units', () => {
             ],
         });
         expect(route.clients.size).toBe(0);
+    });
+
+    test('contains unexpected failures from ordered dispatch', async () => {
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        const route = new SocketRoute({
+            path: '/ordered-error',
+            handlers: [NoopHandler],
+            orderedMessages: true,
+            logger,
+        });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        route.dispatchMessage = () => { throw new Error('unexpected dispatch failure'); };
+        socket.emit('message', JSON.stringify({ type: 'noop' }), false);
+        await socket.__redwebRuntime.queue.whenIdle();
+        expect(logger.error).toHaveBeenCalledWith(
+            'Socket error from unknown:',
+            expect.objectContaining({ message: 'unexpected dispatch failure' })
+        );
+        expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
+    });
+
+    test('supports admission-free authorization and drop-only message limiting', () => {
+        const route = new SocketRoute({
+            path: '/dropping',
+            handlers: [NoopHandler],
+            limits: { messageRate: { capacity: 1, refillPerSecond: 0, action: 'drop' } },
+            logger: null,
+        });
+        expect(route.authorizeUpgrade({}, {})).toBe(true);
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        expect(route.receiveMessage(socket, JSON.stringify({ type: 'noop' }), false)).toBe(true);
+        expect(route.receiveMessage(socket, JSON.stringify({ type: 'noop' }), false)).toBe(false);
+        expect(socket.closed).toEqual([]);
     });
 });

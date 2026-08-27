@@ -45,9 +45,30 @@ const route = new SocketRoute({
     services: [HeartbeatService],
     shutdownTimeoutMs: 250,
     websocketOptions: { maxPayload: 1024 },
+    admission: {
+        origins: ['https://game.example'],
+        timeoutMs: 1000,
+        authenticate: async (_request, { signal, networkIdentity }) => {
+            if (signal.aborted) return false;
+            return { playerId: networkIdentity };
+        },
+    },
+    limits: {
+        maxConnections: 100,
+        maxBufferedBytes: 1024 * 1024,
+        maxPendingMessages: 32,
+        messageRate: { capacity: 30, refillPerSecond: 15, action: 'disconnect' },
+        slowConsumerAction: 'drop',
+    },
+    orderedMessages: true,
+    heartbeat: { intervalMs: 30_000, timeoutMs: 10_000 },
 });
 
-route.clients.forEach(socket => socket.sendJson({ ready: true }));
+route.clients.forEach(socket => {
+    socket.sendJson({ ready: true });
+    const player = socket.context?.principal;
+    void player;
+});
 void CallbackRoute;
 new HttpServer({ listen: false, corsOptions: false });
 

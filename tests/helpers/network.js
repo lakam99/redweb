@@ -1,5 +1,7 @@
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
+const net = require('net');
 
 const silentLogger = Object.freeze({ log() {}, warn() {}, error() {} });
 
@@ -77,9 +79,37 @@ async function closeWebSocket(socket) {
     await closed;
 }
 
+function openRawWebSocket(port, route) {
+    return withTimeout(new Promise((resolve, reject) => {
+        const socket = net.connect(port, '127.0.0.1');
+        let response = '';
+        socket.once('connect', () => {
+            const key = crypto.randomBytes(16).toString('base64');
+            socket.write([
+                `GET ${route} HTTP/1.1`,
+                `Host: 127.0.0.1:${port}`,
+                'Upgrade: websocket',
+                'Connection: Upgrade',
+                `Sec-WebSocket-Key: ${key}`,
+                'Sec-WebSocket-Version: 13',
+                '',
+                '',
+            ].join('\r\n'));
+        });
+        socket.on('data', chunk => {
+            response += chunk.toString('latin1');
+            if (!response.includes('\r\n\r\n')) return;
+            if (!response.startsWith('HTTP/1.1 101')) return reject(new Error(`Unexpected upgrade response: ${response}`));
+            resolve(socket);
+        });
+        socket.once('error', reject);
+    }), 'raw WebSocket upgrade');
+}
+
 module.exports = {
     closeWebSocket,
     nextMessage,
+    openRawWebSocket,
     request,
     silentLogger,
     waitForClose,

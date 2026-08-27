@@ -33,7 +33,52 @@ declare module 'redweb' {
         isAssigned: boolean;
         sendJson(data: unknown): boolean;
         broadcast(data: unknown): number;
+        context?: RedWebConnectionContext;
     };
+
+    export interface RedWebConnectionContext {
+        connectionId: string;
+        principal: unknown;
+        session: unknown | null;
+        metadata: Record<string, unknown>;
+    }
+
+    export interface AdmissionContext {
+        signal: AbortSignal;
+        networkIdentity: string;
+        route: SocketRoute;
+    }
+
+    export interface AdmissionOptions {
+        authenticate?: (
+            request: import('http').IncomingMessage,
+            context: AdmissionContext
+        ) => unknown | false | Promise<unknown | false>;
+        origins?: string[] | ((
+            origin: string | undefined,
+            request: import('http').IncomingMessage
+        ) => boolean | Promise<boolean>);
+        timeoutMs?: number;
+    }
+
+    export interface MessageRateLimit {
+        capacity: number;
+        refillPerSecond: number;
+        action?: 'drop' | 'disconnect';
+    }
+
+    export interface TransportLimits {
+        maxConnections?: number;
+        maxBufferedBytes?: number;
+        maxPendingMessages?: number;
+        messageRate?: MessageRateLimit;
+        slowConsumerAction?: 'drop' | 'disconnect';
+    }
+
+    export interface HeartbeatOptions {
+        intervalMs: number;
+        timeoutMs: number;
+    }
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
@@ -69,6 +114,10 @@ declare module 'redweb' {
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
         shutdownTimeoutMs?: number;
+        admission?: AdmissionOptions | AdmissionOptions['authenticate'];
+        limits?: TransportLimits;
+        orderedMessages?: boolean;
+        heartbeat?: HeartbeatOptions;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
