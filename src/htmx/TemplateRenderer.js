@@ -166,7 +166,14 @@ class TemplateRenderer {
         const parsed = this.startTag();
         if (!parsed) {
             const recognizedMarkup = isNonStartMarkup(this.source, this.position);
-            const end = recognizedMarkup ? this.tagEnd(this.position + 1) : -1;
+            const recognizedStart = /[A-Za-z]/.test(this.source[this.position + 1]);
+            const beginsMarkup = recognizedMarkup || recognizedStart;
+            const end = beginsMarkup ? this.tagEnd(this.position + 1) : -1;
+            if (beginsMarkup && end < 0) {
+                this.output += this.source.slice(this.position);
+                this.position = this.source.length;
+                return;
+            }
             const next = end < 0 ? this.position + 1 : end + 1;
             this.output += this.source.slice(this.position, next);
             this.position = next;

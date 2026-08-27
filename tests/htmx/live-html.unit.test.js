@@ -352,6 +352,10 @@ describe('decorator-first Live HTML units', () => {
             .toContain('<b>safe {{ secret }}</b>');
         expect(() => HtmlRenderer.render('<div data-rw-state="secret">', cards)).toThrow('empty container');
         expect(HtmlRenderer.render('<section title="unclosed', cards)).toBe('<section title="unclosed');
+        expect(HtmlRenderer.render('<section title="{{ secret }}', cards)).toBe('<section title="{{ secret }}');
+        expect(HtmlRenderer.render('<?instruction {{ secret }}', cards)).toBe('<?instruction {{ secret }}');
+        expect(HtmlRenderer.render('<!doctype {{ secret }}', cards)).toBe('<!doctype {{ secret }}');
+        expect(HtmlRenderer.render('</section {{ secret }}', cards)).toBe('</section {{ secret }}');
         expect(HtmlRenderer.statePayload('cards', cards.cards, cards)).toEqual({
             name: 'cards',
             value: '<article>0: {{ secret }}</article><article>1: Shield</article>',
