@@ -5,7 +5,7 @@ const net = require('net');
 
 const silentLogger = Object.freeze({ log() {}, warn() {}, error() {} });
 
-function withTimeout(promise, label, timeoutMs = 3000) {
+function withTimeout(promise, label, timeoutMs = 10000) {
     let timer;
     return Promise.race([
         promise,
@@ -70,6 +70,14 @@ function nextMessage(socket) {
     }), 'WebSocket message');
 }
 
+async function waitForCondition(predicate, label, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate()) {
+        if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${label}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+}
+
 function waitForClose(socket) {
     if (socket.readyState === socket.CLOSED) return Promise.resolve({ code: 1005, reason: '' });
     return withTimeout(new Promise((resolve) => {
@@ -119,6 +127,7 @@ module.exports = {
     request,
     silentLogger,
     waitForClose,
+    waitForCondition,
     waitForListening,
     waitForOpen,
     withTimeout,

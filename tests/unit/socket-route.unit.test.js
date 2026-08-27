@@ -308,6 +308,36 @@ describe('SocketRoute units', () => {
         expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
     });
 
+    test('cancels pending ordered work synchronously when the queue overflows', async () => {
+        const route = new SocketRoute({
+            path: '/ordered-overflow',
+            handlers: [NoopHandler],
+            orderedMessages: true,
+            limits: { maxPendingMessages: 1 },
+            logger: null,
+        });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        const calls = [];
+        let release;
+        const blocked = new Promise(resolve => { release = resolve; });
+        route.dispatchMessage = async (_socket, message) => {
+            const { value } = JSON.parse(message);
+            if (value === 1) await blocked;
+            calls.push(value);
+        };
+
+        expect(route.receiveMessage(socket, JSON.stringify({ value: 1 }), false)).toBe(true);
+        expect(route.receiveMessage(socket, JSON.stringify({ value: 2 }), false)).toBe(true);
+        expect(route.receiveMessage(socket, JSON.stringify({ value: 3 }), false)).toBe(false);
+        expect(socket.__redwebRuntime.queue.closed).toBe(true);
+        release();
+        await socket.__redwebRuntime.queue.whenIdle();
+
+        expect(calls).toEqual([1]);
+        expect(socket.closed).toContainEqual([1013, 'Message queue full']);
+    });
+
     test('supports admission-free authorization and drop-only message limiting', () => {
         const route = new SocketRoute({
             path: '/dropping',

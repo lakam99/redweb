@@ -16,6 +16,7 @@ const {
     openRawWebSocket,
     silentLogger,
     waitForClose,
+    waitForCondition,
     waitForListening,
     waitForOpen,
     withTimeout,
@@ -191,8 +192,8 @@ describe('WebSocket integration without mocks', () => {
             constructor() { super({ path: '/initial-failure', handlers: [InitialFailureHandler], logger: silentLogger }); }
         }
         const server = await start({ routes: [InitialFailureRoute] });
-        const client = await trackedConnect(address(server, '/initial-failure'));
-        expect(await nextJson(client)).toEqual({ error: 'Connection initialization failed' });
+        const { socket: client, firstMessage } = await trackedConnectWithFirstJson(address(server, '/initial-failure'));
+        expect(await firstMessage).toEqual({ error: 'Connection initialization failed' });
         expect((await waitForClose(client)).code).toBe(1011);
         clients.delete(client);
     });
@@ -226,8 +227,8 @@ describe('WebSocket integration without mocks', () => {
         }
 
         const openServer = await start({ routes: [OpenFailureRoute] });
-        const failedOpen = await trackedConnect(address(openServer, '/open-callback'));
-        expect(await nextJson(failedOpen)).toEqual({ error: 'Connection initialization failed' });
+        const { socket: failedOpen, firstMessage } = await trackedConnectWithFirstJson(address(openServer, '/open-callback'));
+        expect(await firstMessage).toEqual({ error: 'Connection initialization failed' });
         expect((await waitForClose(failedOpen)).code).toBe(1011);
         clients.delete(failedOpen);
 
@@ -286,10 +287,10 @@ describe('WebSocket integration without mocks', () => {
         })).toBe(401);
         expect(initialContacts).toBe(0);
 
-        const client = await trackedConnect(address(server, '/protected'), {
+        const { socket: client, firstMessage } = await trackedConnectWithFirstJson(address(server, '/protected'), {
             headers: { origin: 'https://game.example', authorization: 'Bearer valid' },
         });
-        const identity = await nextJson(client);
+        const identity = await firstMessage;
         expect(identity).toMatchObject({ playerId: 'player-7' });
         expect(identity.connectionId).not.toBe(identity.clientKey);
         expect(initialContacts).toBe(1);
@@ -423,8 +424,9 @@ describe('WebSocket integration without mocks', () => {
         expect(await nextJson(client)).toEqual({ error: 'Message queue full' });
         expect((await waitForClose(client)).code).toBe(1013);
         clients.delete(client);
+        await waitForCondition(() => server.routes[0].clients.size === 0, 'ordered route cleanup');
         releaseFirst();
-        await new Promise(setImmediate);
+        await waitForCondition(() => completions.length === 1, 'active ordered message completion');
         expect(completions).toEqual([1]);
     });
 
@@ -459,8 +461,8 @@ describe('WebSocket integration without mocks', () => {
             }
         }
         const server = await start({ routes: [LimitedRoute, BackpressuredRoute] });
-        const first = await trackedConnect(address(server, '/limited'));
-        expect(await nextJson(first)).toEqual({ ready: true });
+        const { socket: first, firstMessage } = await trackedConnectWithFirstJson(address(server, '/limited'));
+        expect(await firstMessage).toEqual({ ready: true });
         first.send(JSON.stringify({ type: 'echo', value: 1 }));
         expect(await nextJson(first)).toEqual({ value: 1 });
         first.send(JSON.stringify({ type: 'echo', value: 2 }));
@@ -468,8 +470,9 @@ describe('WebSocket integration without mocks', () => {
         expect((await waitForClose(first)).code).toBe(1008);
         clients.delete(first);
 
-        const capacityHolder = await trackedConnect(address(server, '/limited'));
-        expect(await nextJson(capacityHolder)).toEqual({ ready: true });
+        await waitForCondition(() => server.routes[0].clients.size === 0, 'rate-limited client cleanup');
+        const { socket: capacityHolder, firstMessage: capacityReady } = await trackedConnectWithFirstJson(address(server, '/limited'));
+        expect(await capacityReady).toEqual({ ready: true });
         expect(await expectConnectionFailure(address(server, '/limited'))).toBe(503);
 
         const backpressured = await trackedConnect(address(server, '/backpressured'));
@@ -495,6 +498,7 @@ describe('WebSocket integration without mocks', () => {
         const server = await start({ routes: [HeartbeatRoute] });
         const rawClient = await openRawWebSocket(server.server.address().port, '/heartbeat');
         await withTimeout(new Promise(resolve => rawClient.once('close', resolve)), 'heartbeat termination');
+        await waitForCondition(() => server.routes[0].clients.size === 0, 'heartbeat route cleanup');
         expect(server.routes[0].clients.size).toBe(0);
     });
 
@@ -577,11 +581,13 @@ describe('WebSocket integration without mocks', () => {
         expect(await nextJson(second)).toEqual({ resumed: { score: 9 } });
         expect((await firstClosed).code).toBe(4000);
         clients.delete(first);
+        await waitForCondition(() => route.rooms.members('match-1').length === 1, 'session takeover cleanup');
         expect(route.rooms.members('match-1')).toHaveLength(1);
         expect(route.sessions.size).toBe(1);
 
         await closeWebSocket(second);
         clients.delete(second);
+        await waitForCondition(() => route.rooms.size === 0, 'room cleanup');
         expect(route.sessions.size).toBe(1);
         await new Promise(resolve => setTimeout(resolve, 35));
         expect(route.sessions.size).toBe(0);

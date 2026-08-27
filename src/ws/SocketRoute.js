@@ -375,6 +375,7 @@ class SocketRoute {
             return true;
         }
         if (runtime.queue.enqueue(task)) return true;
+        runtime.queue.close();
         this.sendFailure(socket, ERROR_CODES.QUEUE_FULL, 'Message queue full');
         socket.close?.(1013, 'Message queue full');
         this.metrics?.increment('redweb.messages.queue_full');
