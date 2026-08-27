@@ -39,6 +39,7 @@ declare module 'redweb' {
         roomBroadcast?(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         createSession?(sessionId: string, data: unknown): boolean;
         resumeSession?(sessionId: string): unknown | null;
+        publishEvent?(type: string, payload: unknown): Promise<boolean>;
     };
 
     export interface RedWebConnectionContext {
@@ -46,6 +47,7 @@ declare module 'redweb' {
         principal: unknown;
         session: unknown | null;
         metadata: Record<string, unknown>;
+        signal?: AbortSignal;
     }
 
     export interface AdmissionContext {
@@ -63,6 +65,11 @@ declare module 'redweb' {
             origin: string | undefined,
             request: import('http').IncomingMessage
         ) => boolean | Promise<boolean>);
+        place?: (
+            principal: unknown,
+            request: import('http').IncomingMessage,
+            context: AdmissionContext
+        ) => string | false | null | undefined | Promise<string | false | null | undefined>;
         timeoutMs?: number;
     }
 
@@ -103,6 +110,35 @@ declare module 'redweb' {
         increment?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
         gauge?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
         observe?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+    }
+
+    export interface DistributionEvent<T = unknown> {
+        id: string;
+        source: string;
+        type: string;
+        payload: T;
+    }
+
+    export interface DistributionAdapter {
+        start?(): void | Promise<void>;
+        publish(channel: string, serializedEvent: string): void | Promise<void>;
+        subscribe(
+            channel: string,
+            onEvent: (serializedEvent: string | DistributionEvent) => void
+        ): void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
+        unsubscribe?(channel: string): void | Promise<void>;
+        close?(): void | Promise<void>;
+    }
+
+    export interface DistributionOptions {
+        adapter: DistributionAdapter;
+        channel: string;
+        nodeId?: string;
+        maxEventBytes?: number;
+        maxSeenEvents?: number;
+        seenTtlMs?: number;
+        lifecycleTimeoutMs?: number;
+        onEvent(event: DistributionEvent, route: SocketRoute): void | Promise<void>;
     }
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
@@ -146,6 +182,8 @@ declare module 'redweb' {
         rooms?: boolean | RoomOptions;
         sessions?: boolean | SessionOptions;
         metrics?: MetricsSink;
+        distribution?: false | DistributionOptions;
+        drainHandlers?: boolean;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -203,6 +241,8 @@ declare module 'redweb' {
         clients: Map<string, RedWebSocket>;
         rooms: RoomRegistry | null;
         sessions: SessionRegistry | null;
+        distribution: unknown | null;
+        draining: boolean;
         allowDuplicateConnections?: boolean;
         websocketOptions?: SocketRouteConfig['websocketOptions'];
 
@@ -214,6 +254,8 @@ declare module 'redweb' {
         connectionCloseCallback?(socket: RedWebSocket): unknown;
         handleMessage(sock: RedWebSocket, data: any): Promise<boolean>;
         handleBinaryMessage(socket: RedWebSocket, buffer: Buffer): Promise<boolean>;
+        beginDrain(): boolean;
+        publish(type: string, payload: unknown): Promise<boolean>;
         shutdown(): Promise<void>;
     }
 
@@ -227,6 +269,8 @@ declare module 'redweb' {
         constructor(server: NodeHttpServer, options?: SocketServerOptions);
 
         addRoute(route: new () => SocketRoute): SocketRoute;
+        isReady(): boolean;
+        beginDrain(): boolean;
         shutdown(): Promise<void>;
     }
 

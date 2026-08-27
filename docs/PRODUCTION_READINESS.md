@@ -39,3 +39,12 @@ WebSocket provides an ordered byte stream while a connection remains healthy. Re
 - Readiness becomes false before draining and shutdown completes within its documented bound.
 
 The independent senior-review gate rejects releases that weaken any invariant, hide ambiguous delivery semantics, add mandatory brokers or identity libraries, or substitute coverage percentages for race, load, soak, and failure evidence.
+
+## Horizontal composition contract
+
+- Placement runs before upgrade within the admission timeout. Only `http`, `https`, `ws`, and `wss` redirect URLs without control characters are accepted.
+- Readiness becomes false before shutdown work begins. New upgrades receive `503`; existing connections stop accepting messages.
+- `drainHandlers` is opt-in. When enabled, every connection context shares the route drain signal and shutdown awaits tracked work. Application handlers remain responsible for observing the signal; non-cooperating promises cannot be forcibly cancelled.
+- Distribution adapters have no framework backlog. Publish failure returns `false`; startup, subscription, unsubscription, and close are bounded and contained.
+- Event IDs are deduplicated only inside a finite TTL/size window. Source-node events are ignored to prevent reflection loops.
+- Broker partitions and process failure can lose events. Redweb makes no exactly-once or durable-delivery claim; applications own authoritative persistence, reconciliation, tick/sequence semantics, and partition policy.

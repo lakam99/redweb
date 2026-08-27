@@ -671,6 +671,154 @@ describe('WebSocket integration without mocks', () => {
         expect(borrowed.listenerCount('upgrade')).toBe(0);
     });
 
+    test('redirects placement before upgrade and follows the redirect to the selected node', async () => {
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage(socket) { socket.sendJson({ node: 'target' }); }
+        }
+        class TargetRoute extends SocketRoute {
+            constructor() { super({ path: '/placed', handlers: [NoopHandler], logger: silentLogger }); }
+        }
+        const target = await start({ routes: [TargetRoute] });
+        const location = address(target, '/placed');
+        class SourceRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/placed',
+                    handlers: [NoopHandler],
+                    logger: silentLogger,
+                    admission: { place: () => location },
+                });
+            }
+        }
+        const source = await start({ routes: [SourceRoute] });
+
+        const response = await withTimeout(new Promise((resolve) => {
+            const socket = new WebSocket(address(source, '/placed'));
+            socket.once('unexpected-response', (_request, upgradeResponse) => {
+                upgradeResponse.resume();
+                resolve({ status: upgradeResponse.statusCode, location: upgradeResponse.headers.location });
+            });
+            socket.once('error', () => {});
+        }), 'placement response');
+        expect(response).toEqual({ status: 307, location });
+
+        const client = await trackedConnect(address(source, '/placed'), { followRedirects: true });
+        client.send(JSON.stringify({ type: 'noop' }));
+        expect(await nextJson(client)).toEqual({ node: 'target' });
+        expect(source.routes[0].clients.size).toBe(0);
+        expect(target.routes[0].clients.size).toBe(1);
+    });
+
+    test('distributes bounded events between real servers without reflecting them to the source', async () => {
+        class MemoryBus {
+            constructor() { this.channels = new Map(); }
+            adapter() {
+                let subscription;
+                return {
+                    publish: (channel, event) => {
+                        for (const listener of this.channels.get(channel) || []) listener(event);
+                    },
+                    subscribe: (channel, listener) => {
+                        const listeners = this.channels.get(channel) || new Set();
+                        listeners.add(listener);
+                        this.channels.set(channel, listeners);
+                        subscription = { channel, listener };
+                        return () => listeners.delete(listener);
+                    },
+                    close: () => { subscription = undefined; },
+                };
+            }
+        }
+        const bus = new MemoryBus();
+        const routeClass = (nodeId) => class DistributedRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/distributed',
+                    handlers: [class PublishHandler extends BaseHandler {
+                        constructor() { super('publish'); }
+                        onInitialContact(socket) {
+                            socket.joinRoom('match');
+                        }
+                        async onMessage(socket, message) {
+                            socket.sendJson({ published: await socket.publishEvent('state', message.value) });
+                        }
+                    }],
+                    allowDuplicateConnections: true,
+                    logger: silentLogger,
+                    rooms: true,
+                    distribution: {
+                        adapter: bus.adapter(),
+                        channel: 'matches',
+                        nodeId,
+                        onEvent: event => this.rooms.broadcast('match', {
+                            type: event.type,
+                            value: event.payload,
+                            source: event.source,
+                        }),
+                    },
+                });
+            }
+        };
+        const firstServer = await start({ routes: [routeClass('node-a')] });
+        const secondServer = await start({ routes: [routeClass('node-b')] });
+        expect(await firstServer.routes[0].distribution.ready).toBe(true);
+        expect(await secondServer.routes[0].distribution.ready).toBe(true);
+        const first = await trackedConnect(address(firstServer, '/distributed'));
+        const second = await trackedConnect(address(secondServer, '/distributed'));
+        await new Promise(resolve => setImmediate(resolve));
+        expect(firstServer.routes[0].rooms.members('match')).toHaveLength(1);
+        expect(secondServer.routes[0].rooms.members('match')).toHaveLength(1);
+
+        const published = nextJson(first);
+        const replicated = nextJson(second);
+        first.send(JSON.stringify({ type: 'publish', value: { tick: 42 } }));
+        expect(await published).toEqual({ published: true });
+        expect(await replicated).toEqual({ type: 'state', value: { tick: 42 }, source: 'node-a' });
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(firstServer.routes[0].distribution.seen.size).toBe(0);
+        expect(secondServer.routes[0].distribution.seen.size).toBe(1);
+    });
+
+    test('becomes unready, rejects new upgrades, and lets tracked handlers finish cooperatively', async () => {
+        let handlerStarted;
+        const started = new Promise(resolve => { handlerStarted = resolve; });
+        class CooperativeHandler extends BaseHandler {
+            constructor() { super('work'); }
+            async onMessage(socket) {
+                handlerStarted();
+                if (!socket.context.signal.aborted) {
+                    await new Promise(resolve => socket.context.signal.addEventListener('abort', resolve, { once: true }));
+                }
+            }
+        }
+        class DrainingRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/drain',
+                    handlers: [CooperativeHandler],
+                    allowDuplicateConnections: true,
+                    drainHandlers: true,
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [DrainingRoute] });
+        const client = await trackedConnect(address(server, '/drain'));
+        client.send(JSON.stringify({ type: 'work' }));
+        await started;
+
+        expect(server.isReady()).toBe(true);
+        expect(server.beginDrain()).toBe(true);
+        expect(server.isReady()).toBe(false);
+        expect(await expectConnectionFailure(address(server, '/drain'))).toBe(503);
+        const shutdown = server.shutdown();
+        await shutdown;
+        socketServers.delete(server);
+        clients.delete(client);
+        expect(server.routes[0].inFlight.size).toBe(0);
+    });
+
     test('supports TLS WebSockets with real certificates', async () => {
         const server = await start({
             ssl: { key: fixture('localhost.key'), cert: fixture('localhost.crt') },

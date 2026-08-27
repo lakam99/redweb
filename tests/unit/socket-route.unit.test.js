@@ -38,6 +38,7 @@ describe('SocketRoute units', () => {
         [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: -1 }, '`shutdownTimeoutMs`'],
         [{ path: '/x', handlers: [NoopHandler], shutdownTimeoutMs: 1.5 }, '`shutdownTimeoutMs`'],
         [{ path: '/x', handlers: [NoopHandler], orderedMessages: 'yes' }, '`orderedMessages`'],
+        [{ path: '/x', handlers: [NoopHandler], drainHandlers: 'yes' }, '`drainHandlers`'],
     ])('validates route configuration %#', (options, message) => {
         expect(() => new SocketRoute(options)).toThrow(message);
     });
@@ -327,5 +328,47 @@ describe('SocketRoute units', () => {
         route.handleConnection(socket, {});
         expect(socket.broadcast({ empty: true })).toBe(0);
         expect(events.some(([name]) => name === 'redweb.messages.outbound')).toBe(false);
+    });
+
+    test('drains tracked handlers cooperatively and exposes no distribution when disabled', async () => {
+        const route = new SocketRoute({
+            path: '/drain-handlers',
+            handlers: [NoopHandler],
+            drainHandlers: true,
+            distribution: false,
+            logger: null,
+        });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        expect(socket.context.signal.aborted).toBe(false);
+        let release;
+        const blocked = new Promise(resolve => { release = resolve; });
+        const running = route.runMessageTask(() => blocked);
+        expect(route.inFlight.size).toBe(1);
+        expect(route.beginDrain()).toBe(true);
+        expect(route.beginDrain()).toBe(false);
+        expect(socket.context.signal.aborted).toBe(true);
+        expect(route.receiveMessage(socket, '{}', false)).toBe(false);
+        expect(await route.publish('event', {})).toBe(false);
+        release();
+        await running;
+        await new Promise(setImmediate);
+        expect(route.inFlight.size).toBe(0);
+        await route.shutdown();
+    });
+
+    test('rolls back session timers when distribution configuration is invalid', async () => {
+        let stopped = 0;
+        class TrackingService { onShutdown() { stopped += 1; } }
+        expect(() => new SocketRoute({
+            path: '/invalid-distribution',
+            handlers: [NoopHandler],
+            services: [TrackingService],
+            sessions: true,
+            distribution: {},
+            logger: null,
+        })).toThrow('distribution.onEvent');
+        await new Promise(setImmediate);
+        expect(stopped).toBe(1);
     });
 });

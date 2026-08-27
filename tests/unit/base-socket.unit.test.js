@@ -6,6 +6,7 @@ const SocketServer = require('../../src/ws/SocketServer');
 const SecureSocketServer = require('../../src/ws/SecureSocketServer');
 const DefaultRoute = require('../../src/ws/DefaultRoute');
 const { BaseHandler } = require('../../src/ws/BaseHandler');
+const { PLACEMENT_REDIRECT } = require('../../src/ws/AdmissionPolicy');
 
 class NoopHandler extends BaseHandler {
     constructor() { super('noop'); }
@@ -227,6 +228,29 @@ describe('BaseSocketServer units', () => {
         accept(true);
         await new Promise(setImmediate);
         expect(closedSocket.end).not.toHaveBeenCalled();
+        expect(socketServer.isReady()).toBe(true);
+        expect(socketServer.beginDrain()).toBe(true);
+        expect(socketServer.beginDrain()).toBe(false);
+        expect(socketServer.isReady()).toBe(false);
+    });
+
+    test('returns a safe placement redirect before upgrading', async () => {
+        class PlacementRoute extends FirstRoute {
+            constructor() {
+                super();
+                this.admissionPolicy = {};
+            }
+            authorizeUpgrade(request) {
+                request[PLACEMENT_REDIRECT] = 'wss://node-2.example/game';
+                return false;
+            }
+        }
+        const socketServer = new BaseSocketServer(fakeServer(), { routes: [PlacementRoute], logger: null });
+        const socket = { destroyed: false, end: jest.fn() };
+        socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
+        await new Promise(setImmediate);
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('307 Temporary Redirect'));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('Location: wss://node-2.example/game'));
     });
 
     test('owned servers can be created without listening and shutdown repeatedly', async () => {

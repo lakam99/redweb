@@ -1,5 +1,5 @@
 const { EventEmitter } = require('events');
-const { AdmissionPolicy, ADMISSION_CONTEXT } = require('../../src/ws/AdmissionPolicy');
+const { AdmissionPolicy, ADMISSION_CONTEXT, PLACEMENT_REDIRECT } = require('../../src/ws/AdmissionPolicy');
 const HeartbeatMonitor = require('../../src/ws/HeartbeatMonitor');
 const TaskQueue = require('../../src/ws/TaskQueue');
 const TokenBucket = require('../../src/ws/TokenBucket');
@@ -21,12 +21,13 @@ describe('production multiplayer policies', () => {
         [null, 'function or an object'],
         [7, 'function or an object'],
         [{ authenticate: true }, '`admission.authenticate`'],
+        [{ place: true }, '`admission.place`'],
         [{ origins: {} }, '`admission.origins`'],
         [{ origins: [''] }, 'non-empty string'],
         [{ origins: [7] }, 'non-empty string'],
         [{ authenticate() {}, timeoutMs: 0 }, '`admission.timeoutMs`'],
         [{ authenticate() {}, timeoutMs: 1.5 }, '`admission.timeoutMs`'],
-        [{}, 'requires `authenticate` or `origins`'],
+        [{}, 'requires `authenticate`'],
     ])('validates admission configuration %#', (options, message) => {
         expect(() => new AdmissionPolicy(options)).toThrow(message);
     });
@@ -87,6 +88,40 @@ describe('production multiplayer policies', () => {
         });
         expect(await timeoutPolicy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
         expect(timeoutSignal.aborted).toBe(true);
+    });
+
+    test('places authenticated principals before upgrade with safe bounded redirects', async () => {
+        const request = { headers: {} };
+        const redirecting = new AdmissionPolicy({
+            authenticate: () => ({ playerId: 'player' }),
+            place: async (principal, _request, context) => {
+                expect(principal).toEqual({ playerId: 'player' });
+                expect(context.networkIdentity).toBe('127.0.0.1');
+                return 'wss://node-2.example/game';
+            },
+        });
+        expect(await redirecting.authorize(request, rawSocket(), route())).toBe(false);
+        expect(request[PLACEMENT_REDIRECT]).toBe('wss://node-2.example/game');
+
+        for (const value of [false, 'javascript:alert(1)', 'wss://good.example/\r\nBad: value', 'x'.repeat(2049), 'not a url']) {
+            const policy = new AdmissionPolicy({ place: () => value });
+            expect(await policy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
+        }
+
+        const accepted = { headers: {} };
+        expect(await new AdmissionPolicy({ place: () => true }).authorize(accepted, rawSocket(), route())).toBe(true);
+        expect(accepted[ADMISSION_CONTEXT]).toEqual({ principal: undefined });
+
+        let placementAborted = false;
+        const timedPlacement = new AdmissionPolicy({
+            timeoutMs: 1,
+            place(_principal, _request, { signal }) {
+                signal.addEventListener('abort', () => { placementAborted = true; }, { once: true });
+                return new Promise(() => {});
+            },
+        });
+        expect(await timedPlacement.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
+        expect(placementAborted).toBe(true);
     });
 
     test('token buckets refill monotonically and validate costs and options', () => {

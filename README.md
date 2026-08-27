@@ -224,7 +224,7 @@ Other route options:
 - `exposeErrors`: return handler exception messages to clients; defaults to `false`.
 - `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
 - `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
-- `admission`: optional pre-upgrade authentication/origin policy. It may be a function or `{ authenticate, origins, timeoutMs }`.
+- `admission`: optional pre-upgrade authentication/origin/placement policy. It may be a function or `{ authenticate, origins, place, timeoutMs }`. A safe URL returned by `place` produces a `307` before the WebSocket upgrade.
 - `limits`: opt-in connection, message-rate, pending-message, and outbound-buffer limits.
 - `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
 - `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
@@ -281,6 +281,30 @@ class MatchRoute extends SocketRoute {
   }
 }
 ```
+
+### Horizontal composition and draining
+
+Distribution is an opt-in adapter seam, not a bundled broker. Provide `distribution: { adapter, channel, nodeId, onEvent }`; the adapter only needs `publish(channel, serializedEvent)` and `subscribe(channel, listener)`. Optional `start`, `unsubscribe`, and `close` hooks have bounded lifecycles. Redweb validates event size, ignores events published by the same node, and retains a bounded, expiring deduplication window. Delivery remains at-most-effort: partitions can lose events and reconnects can duplicate them, so authoritative games should include their own tick or sequence in payloads.
+
+Sockets on distributed routes receive `publishEvent(type, payload)`. The application decides how a received event affects rooms or state:
+
+```js
+super({
+  path: '/match',
+  handlers: [MatchHandler],
+  rooms: true,
+  distribution: {
+    adapter: brokerAdapter,
+    channel: 'matches',
+    nodeId: process.env.INSTANCE_ID,
+    onEvent(event, route) {
+      route.rooms.broadcast('match-42', event.payload)
+    }
+  }
+})
+```
+
+`server.beginDrain()` flips readiness before rejecting new upgrades with `503`; `server.isReady()` exposes the state. Set `drainHandlers: true` to give connection contexts an `AbortSignal` and make shutdown wait for active handlers. Handlers must cooperate with that signal—JavaScript cannot forcibly cancel arbitrary application promises. This option is off by default, adding no per-message tracking to existing routes.
 
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 

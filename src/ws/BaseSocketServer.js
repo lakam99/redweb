@@ -7,6 +7,7 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
+const { PLACEMENT_REDIRECT } = require('./AdmissionPolicy');
 const {
   listenServer,
   closeServer,
@@ -109,7 +110,12 @@ class BaseSocketServer {
         .then(() => route.authorizeUpgrade(req, sock))
         .then(accepted => {
           if (sock.destroyed) return;
-          if (!accepted) return this.rejectUpgrade(sock, 401, 'Unauthorized');
+          if (!accepted) {
+            const redirect = req[PLACEMENT_REDIRECT];
+            return redirect
+              ? this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect })
+              : this.rejectUpgrade(sock, 401, 'Unauthorized');
+          }
           if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
           this.completeUpgrade(route, req, sock, head);
         })
@@ -129,10 +135,12 @@ class BaseSocketServer {
     );
   }
 
-  rejectUpgrade(socket, statusCode, statusText) {
+  rejectUpgrade(socket, statusCode, statusText, headers = {}) {
     try {
+      const extraHeaders = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join('');
       socket.end?.(
         `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+        extraHeaders +
         'Connection: close\r\n' +
         'Content-Length: 0\r\n\r\n'
       );
@@ -163,8 +171,19 @@ class BaseSocketServer {
     return this._shutdownPromise;
   }
 
-  async performShutdown() {
+  isReady() {
+    return !this.draining;
+  }
+
+  beginDrain() {
+    if (this.draining) return false;
     this.draining = true;
+    this.routes.forEach(route => route.beginDrain?.());
+    return true;
+  }
+
+  async performShutdown() {
+    this.beginDrain();
     this.server.off?.('upgrade', this._upgradeHandler);
     const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
     if (this.closeServerOnShutdown && this.server.listening) {
