@@ -1,6 +1,6 @@
 import { page, start, state } from 'redweb';
 
-@page('/', { template: 'counter.htmx', css: 'counter.css' })
+@page('/', { template: 'counter.html', css: 'counter.css' })
 export class CounterPage {
     @state()
     count = 0;

@@ -2,6 +2,7 @@ import {
     BaseHandler,
     FixedStepService,
     HttpServer,
+    HtmlRenderer,
     RedWebSocket,
     RoomRegistry,
     SessionRegistry,
@@ -15,9 +16,10 @@ import {
     page,
     state,
     start,
+    view,
 } from 'redweb';
 
-@page('/counter', { template: 'counter.htmx', css: ['base.css', 'counter.css'] })
+@page('/counter', { template: 'counter.html', css: ['base.css', 'counter.css'] })
 class CounterPage extends LivePage {
     @state()
     count = 0;
@@ -28,6 +30,19 @@ class CounterPage extends LivePage {
         return html`<strong>${this.count}</strong>`;
     }
 }
+
+class CardView {
+    @state()
+    cards = [{ title: 'Redweb' }];
+
+    @view('cards')
+    card(item: { title: string }) {
+        return html`<article>${item.title}</article>`;
+    }
+}
+void CardView;
+const renderedCards: string = HtmlRenderer.collection(new CardView(), 'cards', new CardView().cards);
+void renderedCards;
 
 const live = new LiveHtmlServer({ pages: [CounterPage], listen: false });
 void live.shutdown();

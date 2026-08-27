@@ -1,4 +1,4 @@
-const HtmxRenderer = require('./HtmxRenderer');
+const HtmlRenderer = require('./HtmlRenderer');
 const { forEachState, getActionImplementation, getStateConfig } = require('./metadata');
 
 const RUNTIME = new WeakMap();
@@ -82,7 +82,7 @@ class LivePage {
         if (internal.disposed) throw new Error('Cannot connect a disposed page.');
         internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
-            socket.sendEvent?.('redweb:state', HtmxRenderer.statePayload(name, this[name]));
+            socket.sendEvent?.('redweb:state', HtmlRenderer.statePayload(name, this[name], this));
         });
         return this.connected?.(context);
     }
@@ -95,7 +95,7 @@ class LivePage {
 
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
-        const payload = HtmxRenderer.statePayload(name, value);
+        const payload = HtmlRenderer.statePayload(name, value, this);
         runtime(this).connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
         return true;
     }

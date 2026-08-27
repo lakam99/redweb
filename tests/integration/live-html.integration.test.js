@@ -4,8 +4,10 @@ const { RedwebClient } = require('redweb-client');
 const { LiveHtmlServer, LivePage, page, start: startPages } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { ChatroomPage } = require('../../examples/live-html/chatroom');
+const { CardsPage } = require('../../examples/live-html/cards');
 const createCounterServer = options => startPages(CounterPage, options);
 const createChatroomServer = options => startPages(ChatroomPage, options);
+const createCardsServer = options => startPages(CardsPage, options);
 const {
     closeWebSocket,
     nextMessage,
@@ -189,6 +191,27 @@ describe('Live HTML integration without mocks', () => {
         await waitForCondition(() => reconnectUpdates.length === 1, 'authoritative reconnect snapshot');
         expect(reconnectUpdates[0].value).toContain('Missed');
         expect(reconnectUpdates[0].value.indexOf('alert(1)')).toBeLessThan(reconnectUpdates[0].value.indexOf('Missed'));
+    });
+
+    test('the shipped card collection SSRs and replaces its safe server-rendered items', async () => {
+        const server = await start(createCardsServer);
+        const page = await getPage(server);
+        expect(page.response.body.match(/<article class="card">/g)).toHaveLength(2);
+        expect(page.response.body).toContain('data-rw-state="cards" data-rw-html');
+
+        const updates = [];
+        const client = liveClient(page.port, page.config);
+        client.on('redweb:state', message => updates.push(message.payload));
+        clients.add(client);
+        await client.connect();
+        await waitForCondition(() => updates.length === 1, 'initial card collection');
+        expect(updates[0].value.match(/<article class="card">/g)).toHaveLength(2);
+
+        client.send('redweb:html', { kind: 'action', name: 'add', args: [] });
+        await waitForCondition(() => updates.length === 2, 'updated card collection');
+        expect(updates[1].html).toBe(true);
+        expect(updates[1].value.match(/<article class="card">/g)).toHaveLength(3);
+        expect(updates[1].value).toContain('Card 3');
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {

@@ -405,6 +405,7 @@ declare module 'redweb' {
     /** ─────────────────── LIVE HTML ─────────────────── */
 
     export interface HtmlFragment {
+        readonly __redwebHtmlFragment: true;
         toString(): string;
     }
 
@@ -458,9 +459,18 @@ declare module 'redweb' {
         ): Value;
     }
 
+    export interface LiveViewDecorator {
+        (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
+        <This, Value extends (this: This, item: any, index: number) => HtmlFragment>(
+            value: Value,
+            context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
     export function page(path: string, options?: PageOptions): ClassDecorator;
     export function state(options?: StateOptions): LiveStateDecorator;
     export function action(): LiveActionDecorator;
+    export function view(stateName: string): LiveViewDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
 
     export type LivePageClass = new () => object;
@@ -497,11 +507,12 @@ declare module 'redweb' {
         options?: Omit<LiveHtmlServerOptions, 'pages'>
     ): LiveHtmlServer;
 
-    export class HtmxRenderer {
+    export class HtmlRenderer {
         static template(filePath: string, rootDir: string): string;
         static stylesheet(filePath: string, rootDir: string): string;
         static render(source: string, page: object): string;
-        static statePayload(name: string, value: unknown): { name: string; value: string; html: boolean };
+        static collection(page: object, name: string, value: unknown): string;
+        static statePayload(name: string, value: unknown, page?: object): { name: string; value: string; html: boolean };
         static document(markup: string, config: Record<string, unknown> & { runtimePath: string }, stylesheets?: string[]): string;
     }
 

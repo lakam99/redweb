@@ -9,6 +9,7 @@ const WebSocket = require('ws');
 const { start } = require('..');
 const { CounterPage } = require('../examples/live-html/counter');
 const { ChatroomPage } = require('../examples/live-html/chatroom');
+const { CardsPage } = require('../examples/live-html/cards');
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -132,10 +133,11 @@ async function main() {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-browser-'));
     const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
     const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
+    const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     try {
-        await Promise.all([waitForListening(counter.server), waitForListening(chat.server)]);
+        await Promise.all([waitForListening(counter.server), waitForListening(chat.server), waitForListening(cards.server)]);
         browser = launchBrowser(executable, profile);
         const endpoint = new URL(await browser.endpoint);
         const debugPort = Number(endpoint.port);
@@ -169,7 +171,15 @@ async function main() {
         if (!safety.every(Boolean)) throw new Error('Escaped chat content executed in the browser.');
         const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('button')).backgroundColor");
         if (chatButtonColor !== 'rgb(34, 211, 238)') throw new Error(`Chatroom CSS was not applied: ${chatButtonColor}`);
-        console.log('Live HTML browser gate passed: CSS, counter DOM updates, and two-client chat interaction.');
+
+        const cardsPage = await openPage(debugPort, `http://127.0.0.1:${cards.server.address().port}/`);
+        pages.push(cardsPage);
+        await cardsPage.evaluate(eventual(`document.querySelectorAll('.card').length === 2`, 'initial server-rendered cards'));
+        await cardsPage.evaluate("document.querySelector('[rw-click=\"add\"]').click()");
+        await cardsPage.evaluate(eventual(`document.querySelectorAll('.card').length === 3`, 'realtime card collection update'));
+        const cardBackground = await cardsPage.evaluate("getComputedStyle(document.querySelector('.card')).backgroundColor");
+        if (cardBackground !== 'rgb(31, 41, 55)') throw new Error(`Card CSS was not applied: ${cardBackground}`);
+        console.log('Live HTML browser gate passed: CSS, collections, counter updates, and two-client chat interaction.');
     } finally {
         pages.forEach(page => page.socket.close());
         if (browser?.child.exitCode === null) {
@@ -177,7 +187,7 @@ async function main() {
             browser.child.kill();
             await exited;
         }
-        await Promise.allSettled([counter.shutdown(), chat.shutdown()]);
+        await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown()]);
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     }
 }

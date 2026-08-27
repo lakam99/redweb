@@ -1,29 +1,41 @@
 const { assertTextContext, escapeHtml, isHtml, renderValue } = require('./Html');
 const PageAssetLoader = require('./PageAssetLoader');
+const { getViewImplementation } = require('./metadata');
 
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
+const COLLECTION = /(<([A-Za-z][\w:-]*)\b[^>]*\srw-each="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
 
 function serializeJson(value) {
     return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
-class HtmxRenderer {
+class HtmlRenderer {
     static file(filePath, rootDir, kind) {
         return new PageAssetLoader().load(filePath, rootDir, kind).content;
     }
 
     static template(filePath, rootDir) {
-        return HtmxRenderer.file(filePath, rootDir, 'template');
+        return HtmlRenderer.file(filePath, rootDir, 'template');
     }
 
     static stylesheet(filePath, rootDir) {
-        return HtmxRenderer.file(filePath, rootDir, 'stylesheet');
+        return HtmlRenderer.file(filePath, rootDir, 'stylesheet');
     }
 
     static render(source, page) {
         if (typeof source !== 'string') throw new TypeError('Page markup must be a string.');
-        const targets = source.replace(TARGET, (match, opening, _tag, property, _content, closing) => {
+        const collections = source.replace(COLLECTION, (_match, opening, _tag, property, _content, closing) => {
+            if (!(property in page)) throw new Error(`Unknown page collection "${property}".`);
+            const content = HtmlRenderer.collection(page, property, page[property]);
+            const existingState = opening.match(/\sdata-rw-state="([A-Za-z_$][\w$]*)"/i)?.[1];
+            if (existingState && existingState !== property) {
+                throw new Error(`Page collection "${property}" conflicts with state binding "${existingState}".`);
+            }
+            const markers = `${existingState ? '' : ` data-rw-state="${property}"`}${/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? '' : ' data-rw-html'}`;
+            return opening.replace(/>$/, `${markers}>`) + content + closing;
+        });
+        const targets = collections.replace(TARGET, (match, opening, _tag, property, _content, closing) => {
             if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
             const value = page[property];
             const htmlMarker = isHtml(value) && !/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? ' data-rw-html' : '';
@@ -37,7 +49,21 @@ class HtmxRenderer {
         });
     }
 
-    static statePayload(name, value) {
+    static collection(page, name, value) {
+        if (!Array.isArray(value)) throw new TypeError(`Page collection "${name}" must be an array.`);
+        const renderItem = getViewImplementation(page.constructor, name);
+        if (!renderItem) throw new Error(`Page collection "${name}" is missing @view metadata.`);
+        return value.map((item, index) => {
+            const rendered = renderItem.call(page, item, index);
+            if (!isHtml(rendered)) throw new TypeError(`View for page collection "${name}" must return html.`);
+            return rendered.toString();
+        }).join('');
+    }
+
+    static statePayload(name, value, page) {
+        if (page && getViewImplementation(page.constructor, name)) {
+            return { name, value: HtmlRenderer.collection(page, name, value), html: true };
+        }
         return { name, value: isHtml(value) ? value.toString() : String(value ?? ''), html: isHtml(value) };
     }
 
@@ -54,4 +80,4 @@ class HtmxRenderer {
     }
 }
 
-module.exports = HtmxRenderer;
+module.exports = HtmlRenderer;

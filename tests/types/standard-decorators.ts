@@ -1,4 +1,4 @@
-import { action, html, page, start, state } from 'redweb';
+import { action, html, page, start, state, view } from 'redweb';
 
 @page('/standard', { css: 'standard.css' })
 class StandardPage {
@@ -12,6 +12,11 @@ class StandardPage {
 
     render() {
         return '<h1>{{ name }}</h1>';
+    }
+
+    @view('items')
+    item(value: string) {
+        return html`<span>${value}</span>`;
     }
 }
 

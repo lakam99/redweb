@@ -2,7 +2,7 @@ const { createHash, randomUUID } = require('crypto');
 const path = require('path');
 const { BaseHandler } = require('../ws/BaseHandler');
 const { SocketRoute } = require('../ws');
-const HtmxRenderer = require('./HtmxRenderer');
+const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
@@ -175,9 +175,9 @@ class PageManager {
             const source = record.template ?? await page.render?.(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
             if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-            const markup = HtmxRenderer.render(source.toString(), page);
+            const markup = HtmlRenderer.render(source.toString(), page);
             const session = this.createSession(page, ownsPage, principal);
-            return HtmxRenderer.document(markup, {
+            return HtmlRenderer.document(markup, {
                 pageId: session.id,
                 socketPath: this.paths.socket,
                 runtimePath: this.paths.runtime,

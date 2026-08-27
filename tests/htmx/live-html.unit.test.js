@@ -6,23 +6,28 @@ const Module = require('module');
 const ts = require('typescript');
 const { pathToFileURL } = require('url');
 const {
-    HtmxRenderer,
+    HtmlRenderer,
     LivePage,
     action,
     html,
     page,
     start,
     state,
+    view,
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const browserRuntime = require('../../src/htmx/browserRuntime');
-const { getActionMetadata, getPageMetadata, getStateMetadata } = require('../../src/htmx/metadata');
+const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
 
 function decorateAction(PageClass, name) {
     action()(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
+}
+
+function decorateView(PageClass, stateName, name) {
+    view(stateName)(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
 }
 
 describe('decorator-first Live HTML units', () => {
@@ -34,6 +39,9 @@ describe('decorator-first Live HTML units', () => {
         expect(isHtml(null)).toBe(false);
         expect(renderValue(strong)).toBe('<strong>&lt;Redweb&gt;</strong>');
         expect(renderValue('<b>unsafe</b>')).toBe('&lt;b&gt;unsafe&lt;/b&gt;');
+        expect(renderValue([html`<i>${'one'}</i>`, html`<i>${'two'}</i>`])).toBe('<i>one</i><i>two</i>');
+        expect(() => renderValue([html`<i>safe</i>`, '<b>unsafe</b>'])).toThrow('arrays of HtmlFragment');
+        expect(html`${[html`<i>one</i>`, html`<i>two</i>`]}`.toString()).toBe('<i>one</i><i>two</i>');
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
         expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('element text');
@@ -60,6 +68,10 @@ describe('decorator-first Live HTML units', () => {
         expect(() => action()(null, 'run', { value() {} })).toThrow('class member');
         expect(() => action()({}, 'run', {})).toThrow('method');
         expect(() => action()(() => {}, { kind: 'method', private: true, name: 'run' })).toThrow('public instance method');
+        expect(() => view('')).toThrow('state name');
+        expect(() => view('items')(null, 'item', { value() {} })).toThrow('class member');
+        expect(() => view('items')({}, 'item', {})).toThrow('method');
+        expect(() => view('items')(() => {}, { kind: 'method', private: true, name: 'item' })).toThrow('public instance method');
 
         class MetadataPage extends LivePage {
             run() { return 'ok'; }
@@ -68,10 +80,10 @@ describe('decorator-first Live HTML units', () => {
         decorateAction(MetadataPage, 'run');
         state({ writable: true })(MetadataPage.prototype, 'name');
         decorateAction(MetadataPage, 'run');
-        page('/metadata', { template: 'page.htmx', css: ['page.css', 'page.css'], scope: 'shared' })(MetadataPage);
+        page('/metadata', { template: 'page.html', css: ['page.css', 'page.css'], scope: 'shared' })(MetadataPage);
 
         expect(getPageMetadata(MetadataPage)).toEqual({
-            path: '/metadata', template: 'page.htmx', css: ['page.css'], scope: 'shared',
+            path: '/metadata', template: 'page.html', css: ['page.css'], scope: 'shared',
         });
         expect(Object.isFrozen(getPageMetadata(MetadataPage).css)).toBe(true);
         expect(getStateMetadata(MetadataPage).get('name')).toEqual({ writable: true });
@@ -127,6 +139,31 @@ describe('decorator-first Live HTML units', () => {
         actionInitializer.call(new ReplacedStandardAction());
         ReplacedStandardAction.prototype.run = () => 'replacement';
         expect(getActionMetadata(ReplacedStandardAction)).toEqual(new Set());
+
+        let viewInitializer;
+        class StandardViewPage { item(value) { return html`<i>${value}</i>`; } }
+        const viewValue = view('items')(StandardViewPage.prototype.item, {
+            kind: 'method', static: false, private: false, name: 'item',
+            addInitializer: initializer => { viewInitializer = initializer; },
+        });
+        const standardView = new StandardViewPage();
+        viewInitializer.call(standardView);
+        viewInitializer.call(standardView);
+        viewInitializer.call({ constructor: class WrongViewOwner {}, item() {} });
+        expect(viewValue).toBe(StandardViewPage.prototype.item);
+        expect(getViewImplementation(StandardViewPage, 'items')).toBe(StandardViewPage.prototype.item);
+        class InheritedViewPage extends StandardViewPage {}
+        expect(getViewImplementation(InheritedViewPage, 'items')).toBe(StandardViewPage.prototype.item);
+        class HiddenViewPage extends StandardViewPage { item() { return html`hidden`; } }
+        expect(getViewImplementation(HiddenViewPage, 'items')).toBeUndefined();
+        class ReplacedViewPage extends StandardViewPage {}
+        ReplacedViewPage.prototype.item = StandardViewPage.prototype.item;
+        viewInitializer.call(new ReplacedViewPage());
+        ReplacedViewPage.prototype.item = () => html`replacement`;
+        expect(getViewImplementation(ReplacedViewPage, 'items')).toBeUndefined();
+        class DecoratedViewPage extends StandardViewPage { item() { return html`decorated`; } }
+        decorateView(DecoratedViewPage, 'items', 'item');
+        expect(getViewImplementation(DecoratedViewPage, 'items')).toBe(DecoratedViewPage.prototype.item);
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {
@@ -176,17 +213,17 @@ describe('decorator-first Live HTML units', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-unit-'));
         const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-outside-'));
         try {
-            fs.writeFileSync(path.join(root, 'page.htmx'), '<h1>{{ title }}</h1>');
+            fs.writeFileSync(path.join(root, 'page.html'), '<h1>{{ title }}</h1>');
             fs.writeFileSync(path.join(root, 'page.css'), 'h1 { color: cyan; }');
             fs.writeFileSync(path.join(outsideRoot, 'secret.css'), 'secret');
             fs.symlinkSync(outsideRoot, path.join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
-            expect(HtmxRenderer.template('page.htmx', root)).toBe('<h1>{{ title }}</h1>');
-            expect(HtmxRenderer.stylesheet('page.css', root)).toBe('h1 { color: cyan; }');
-            expect(() => HtmxRenderer.template('../outside.htmx', root)).toThrow('outside');
-            expect(() => HtmxRenderer.template('missing.htmx', root)).toThrow('not found');
-            expect(() => HtmxRenderer.stylesheet('../outside.css', root)).toThrow('outside');
-            expect(() => HtmxRenderer.stylesheet('linked/secret.css', root)).toThrow('outside');
-            expect(() => HtmxRenderer.stylesheet('missing.css', root)).toThrow('not found');
+            expect(HtmlRenderer.template('page.html', root)).toBe('<h1>{{ title }}</h1>');
+            expect(HtmlRenderer.stylesheet('page.css', root)).toBe('h1 { color: cyan; }');
+            expect(() => HtmlRenderer.template('../outside.html', root)).toThrow('outside');
+            expect(() => HtmlRenderer.template('missing.html', root)).toThrow('not found');
+            expect(() => HtmlRenderer.stylesheet('../outside.css', root)).toThrow('outside');
+            expect(() => HtmlRenderer.stylesheet('linked/secret.css', root)).toThrow('outside');
+            expect(() => HtmlRenderer.stylesheet('missing.css', root)).toThrow('not found');
             const assets = new PageAssetLoader();
             expect(assets.load('page.css', root, 'stylesheet')).toBe(assets.load('page.css', root, 'stylesheet'));
         } finally {
@@ -195,41 +232,73 @@ describe('decorator-first Live HTML units', () => {
         }
 
         const pageState = { title: '<unsafe>', body: html`<b>${'safe'}</b>` };
-        expect(HtmxRenderer.render('{{title}} {{ body }}', pageState)).toBe(
+        expect(HtmlRenderer.render('{{title}} {{ body }}', pageState)).toBe(
             '<span data-rw-state="title">&lt;unsafe&gt;</span> ' +
             '<span data-rw-state="body" data-rw-html><b>safe</b></span>'
         );
-        expect(HtmxRenderer.render('<ul data-rw-state="body"></ul>', pageState)).toBe(
+        expect(HtmlRenderer.render('<ul data-rw-state="body"></ul>', pageState)).toBe(
             '<ul data-rw-state="body" data-rw-html><b>safe</b></ul>'
         );
-        expect(HtmxRenderer.render('<ul data-rw-state="body" data-rw-html></ul>', pageState)).toContain('<b>safe</b>');
-        expect(() => HtmxRenderer.render('<p data-rw-state="missing"></p>', pageState)).toThrow('Unknown page binding');
-        expect(() => HtmxRenderer.render(null, pageState)).toThrow('string');
-        expect(() => HtmxRenderer.render('{{missing}}', pageState)).toThrow('Unknown page binding');
-        expect(() => HtmxRenderer.render('<a href="{{ title }}">link</a>', pageState)).toThrow('element text');
-        expect(() => HtmxRenderer.render('<script>{{ title }}</script>', pageState)).toThrow('script or style');
-        expect(HtmxRenderer.statePayload('empty', null)).toEqual({ name: 'empty', value: '', html: false });
-        expect(HtmxRenderer.statePayload('body', pageState.body)).toEqual({ name: 'body', value: '<b>safe</b>', html: true });
+        expect(HtmlRenderer.render('<ul data-rw-state="body" data-rw-html></ul>', pageState)).toContain('<b>safe</b>');
+        expect(() => HtmlRenderer.render('<p data-rw-state="missing"></p>', pageState)).toThrow('Unknown page binding');
+        expect(() => HtmlRenderer.render(null, pageState)).toThrow('string');
+        expect(() => HtmlRenderer.render('{{missing}}', pageState)).toThrow('Unknown page binding');
+        expect(() => HtmlRenderer.render('<a href="{{ title }}">link</a>', pageState)).toThrow('element text');
+        expect(() => HtmlRenderer.render('<script>{{ title }}</script>', pageState)).toThrow('script or style');
+        expect(HtmlRenderer.statePayload('empty', null)).toEqual({ name: 'empty', value: '', html: false });
+        expect(HtmlRenderer.statePayload('body', pageState.body)).toEqual({ name: 'body', value: '<b>safe</b>', html: true });
+
+        class CardsPage {
+            cards = [{ title: '<Sword>' }, { title: 'Shield' }];
+            card(card, index) { return html`<article>${index}: ${card.title}</article>`; }
+        }
+        state()(CardsPage.prototype, 'cards');
+        decorateView(CardsPage, 'cards', 'card');
+        decorateView(CardsPage, 'cards', 'card');
+        const cards = new CardsPage();
+        expect(HtmlRenderer.render('<section rw-each="cards"></section>', cards)).toBe(
+            '<section rw-each="cards" data-rw-state="cards" data-rw-html>' +
+            '<article>0: &lt;Sword&gt;</article><article>1: Shield</article></section>'
+        );
+        expect(HtmlRenderer.render('<section rw-each="cards" data-rw-state="cards"></section>', cards))
+            .toContain('data-rw-state="cards" data-rw-html');
+        expect(HtmlRenderer.render('<section rw-each="cards" data-rw-state="cards" data-rw-html></section>', cards)
+            .match(/data-rw-html/g)).toHaveLength(1);
+        expect(() => HtmlRenderer.render('<section rw-each="cards" data-rw-state="other"></section>', cards))
+            .toThrow('conflicts with state binding');
+        expect(HtmlRenderer.statePayload('cards', cards.cards, cards)).toEqual({
+            name: 'cards',
+            value: '<article>0: &lt;Sword&gt;</article><article>1: Shield</article>',
+            html: true,
+        });
+        expect(() => HtmlRenderer.render('<section rw-each="missing"></section>', cards)).toThrow('Unknown page collection');
+        cards.cards = null;
+        expect(() => HtmlRenderer.collection(cards, 'cards', cards.cards)).toThrow('must be an array');
+        class MissingView { items = []; }
+        expect(() => HtmlRenderer.collection(new MissingView(), 'items', [])).toThrow('missing @view');
+        class UnsafeView { items = ['unsafe']; item() { return '<b>unsafe</b>'; } }
+        decorateView(UnsafeView, 'items', 'item');
+        expect(() => HtmlRenderer.collection(new UnsafeView(), 'items', ['unsafe'])).toThrow('must return html');
 
         const config = { pageId: '<id>', socketPath: '/live', runtimePath: '/runtime.js', version: '1' };
-        const fragment = HtmxRenderer.document('<p>hello</p>', config);
+        const fragment = HtmlRenderer.document('<p>hello</p>', config);
         expect(fragment).toContain('<main data-rw-root><p>hello</p></main>');
         expect(fragment).toContain('"pageId":"\\u003cid>"');
-        const document = HtmxRenderer.document('<html><body>hello</body></html>', config);
+        const document = HtmlRenderer.document('<html><body>hello</body></html>', config);
         expect(document).toContain('hello<script type="application/json"');
         expect(document.match(/<body>/g)).toHaveLength(1);
-        const styledDocument = HtmxRenderer.document(
+        const styledDocument = HtmlRenderer.document(
             '<html><head><title>Styled</title></head><body>hello</body></html>', config, ['/one.css', '/two.css']
         );
         expect(styledDocument).toContain('<link rel="stylesheet" href="/one.css"><link rel="stylesheet" href="/two.css"></head>');
-        expect(HtmxRenderer.document('<html><body>hello</body></html>', config, ['/page.css']))
+        expect(HtmlRenderer.document('<html><body>hello</body></html>', config, ['/page.css']))
             .toContain('hello<link rel="stylesheet" href="/page.css"><script');
-        expect(HtmxRenderer.document('<html><body data-label="a > b">hello</body></html>', config, ['/quoted.css']))
+        expect(HtmlRenderer.document('<html><body data-label="a > b">hello</body></html>', config, ['/quoted.css']))
             .toContain('<body data-label="a > b">hello<link rel="stylesheet" href="/quoted.css"><script');
-        expect(HtmxRenderer.document('<p>hello</p>', config, ['/fragment.css']))
+        expect(HtmlRenderer.document('<p>hello</p>', config, ['/fragment.css']))
             .toContain('<head><link rel="stylesheet" href="/fragment.css"></head>');
         const hostilePath = '/asset"><script>window.injected=true</script>';
-        const escapedDocument = HtmxRenderer.document('<p>safe</p>', { ...config, runtimePath: hostilePath }, [hostilePath]);
+        const escapedDocument = HtmlRenderer.document('<p>safe</p>', { ...config, runtimePath: hostilePath }, [hostilePath]);
         expect(escapedDocument).not.toContain('<script>window.injected=true</script>');
         expect(escapedDocument).toContain('href="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
         expect(escapedDocument).toContain('src="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
@@ -327,7 +396,7 @@ describe('decorator-first Live HTML units', () => {
             message = 'inferred';
         }
         state()(InferredPlainPage.prototype, 'message');
-        page('/inferred', { template: 'inferred.htmx' })(InferredPlainPage);
+        page('/inferred', { template: 'inferred.html' })(InferredPlainPage);
         const inferred = start(InferredPlainPage, { listen: false });
         const inferredRecord = inferred.manager.records.get('/inferred');
         expect(inferredRecord.template).toContain('{{ message }}');

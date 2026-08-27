@@ -2,14 +2,14 @@
 
 Live HTML is Redweb's decorator-first server-rendering layer. It uses the existing `HttpServer`, `SocketRoute`, admission, protocol, ordering, backpressure, and shutdown implementations rather than maintaining a second network stack.
 
-This layer deliberately owns page concerns only: `@page`, `@state`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
+This layer deliberately owns page concerns only: `@page`, `@state`, `@view`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
 
 ## Page model
 
 Every page is a plain class registered with `@page(path, options)`. Extending `LivePage` remains compatible but is not required:
 
 ```ts
-@page('/profile', { template: 'profile.htmx', css: 'profile.css' })
+@page('/profile', { template: 'profile.html', css: 'profile.css' })
 class ProfilePage {
   @state()
   displayName = 'Guest';
@@ -27,15 +27,15 @@ Pages use connection scope by default: each rendered browser page receives its o
 Declare a stylesheet on the same decorator—no Express static middleware or manual `<link>` is required:
 
 ```ts
-@page('/profile', { template: 'profile.htmx', css: 'profile.css' })
+@page('/profile', { template: 'profile.html', css: 'profile.css' })
 class ProfilePage {}
 ```
 
 For composed styles, use `css: ['base.css', 'profile.css']`. Paths resolve from the same captured source directory as the template and cannot traverse outside it. Redweb reads each file once at startup, injects stylesheet links into the server-rendered document, and serves the CSS from a content-addressed URL with the correct content type and immutable caching. Remote URLs and static asset hosting remain under the application's control.
 
-## Declarative `.htmx` templates
+## Declarative HTML templates
 
-`.htmx` files contain HTML, not executable JavaScript:
+Template files use the ordinary `.html` extension and contain no executable server code:
 
 ```html
 <h1>{{ displayName }}</h1>
@@ -51,6 +51,22 @@ For composed styles, use `css: ['base.css', 'profile.css']`. Paths resolve from 
 During SSR Redweb fills the bound element with the current property value, and subsequent assignments to a decorated `@state()` property update the same element.
 
 Ordinary values are escaped during SSR and applied with `textContent` in the browser. The `html` tagged template returns an explicit `HtmlFragment`; its interpolations are escaped, while the resulting fragment may be applied as HTML.
+
+## Rendering collections
+
+Keep collection data as an ordinary array and decorate the method that renders one item:
+
+```ts
+@state()
+cards = [{ title: 'Sword' }, { title: 'Shield' }];
+
+@view('cards')
+card(item: { title: string }) {
+    return html`<article class="card"><h2>${item.title}</h2></article>`;
+}
+```
+
+Place the collection in the template with `<section rw-each="cards"></section>`. Redweb server-renders every item, escapes interpolated values, and replaces the collection contents when the array is reassigned. View methods are synchronous and must return an `HtmlFragment`. Arrays of fragments also compose naturally inside `html`, such as ``html`<div>${items.map(renderItem)}</div>` ``.
 
 For a small, auditable safety model, `html` interpolations are allowed only in element text. Dynamic attributes, URLs, `<script>`, and `<style>` content are rejected; construct those values outside HTML or expose them through a purpose-built static template instead.
 
@@ -110,7 +126,7 @@ The injected module uses the published `redweb-client` package served by the sam
 `start(PageClass, options)` accepts normal HTTP options plus the following Live HTML controls. `new LiveHtmlServer({ pages, ...options })` remains available for explicit composition:
 
 - `pages`: non-empty array of decorated class constructors when using `LiveHtmlServer` directly.
-- `templateRoot`: optional root for all `.htmx` templates and CSS files; when omitted, each page uses the source directory captured by its `@page()` decorator.
+- `templateRoot`: optional root for all `.html` templates and CSS files; when omitted, each page uses the source directory captured by its `@page()` decorator.
 - `livePaths.css`: optional internal URL prefix for generated stylesheet routes; defaults to `/__redweb/css`.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
@@ -125,5 +141,6 @@ The internal paths and application page paths must be unique.
 
 - `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
 - `examples/live-html/chatroom.ts` uses `@page()`, colocated CSS, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
+- `examples/live-html/cards.ts` uses `@view()` and `rw-each` to prove server-rendered collection SSR and realtime replacement in a real browser.
 
-Run the examples immediately with `npm run example:counter` and `npm run example:chatroom`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.

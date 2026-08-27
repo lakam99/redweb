@@ -14,6 +14,10 @@ function isHtml(value) {
 }
 
 function renderValue(value) {
+    if (Array.isArray(value)) {
+        if (!value.every(isHtml)) throw new TypeError('Only arrays of HtmlFragment values can be rendered as HTML.');
+        return value.map(fragment => fragment.toString()).join('');
+    }
     return isHtml(value) ? value.toString() : escapeHtml(value);
 }
 

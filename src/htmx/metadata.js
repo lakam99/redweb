@@ -4,6 +4,9 @@ const ACTION_METADATA = new WeakMap();
 const RESOLVED_STATE = new WeakMap();
 const RESOLVED_ACTION = new WeakMap();
 const STANDARD_ACTIONS = new WeakMap();
+const VIEW_METADATA = new WeakMap();
+const RESOLVED_VIEW = new WeakMap();
+const STANDARD_VIEWS = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
 const { decoratorDirectory } = require('./sourceRoot');
 let metadataVersion = 0;
@@ -48,6 +51,15 @@ function registerStandardAction(PageClass, method, implementation) {
     metadataVersion += 1;
 }
 
+function registerView(store, PageClass, stateName, method, implementation) {
+    const views = new Map(store.get(PageClass) || []);
+    const existing = views.get(stateName);
+    if (existing?.method === method && existing.implementation === implementation) return;
+    views.set(stateName, Object.freeze({ method, implementation }));
+    store.set(PageClass, views);
+    metadataVersion += 1;
+}
+
 function resolvedState(PageClass) {
     const cached = RESOLVED_STATE.get(PageClass);
     if (cached?.version === metadataVersion) return cached.value;
@@ -74,6 +86,24 @@ function resolvedAction(PageClass) {
         own.forEach((implementation, method) => value.set(method, implementation));
     });
     RESOLVED_ACTION.set(PageClass, { version: metadataVersion, value });
+    return value;
+}
+
+function resolvedView(PageClass) {
+    const cached = RESOLVED_VIEW.get(PageClass);
+    if (cached?.version === metadataVersion) return cached.value;
+    const value = new Map();
+    hierarchy(PageClass).forEach(CurrentClass => {
+        const own = new Map(VIEW_METADATA.get(CurrentClass) || []);
+        STANDARD_VIEWS.get(CurrentClass)?.forEach((entry, stateName) => {
+            if (CurrentClass.prototype[entry.method] === entry.implementation) own.set(stateName, entry);
+        });
+        value.forEach((entry, stateName) => {
+            if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, entry.method) && !own.has(stateName)) value.delete(stateName);
+        });
+        own.forEach((entry, stateName) => value.set(stateName, entry));
+    });
+    RESOLVED_VIEW.set(PageClass, { version: metadataVersion, value });
     return value;
 }
 
@@ -158,6 +188,27 @@ function action() {
     };
 }
 
+function view(stateName) {
+    if (typeof stateName !== 'string' || !stateName) throw new TypeError('view() requires a non-empty state name.');
+    return (target, method, descriptor) => {
+        if (method?.kind === 'method') {
+            if (method.static || method.private || typeof method.name !== 'string' || !method.name || typeof target !== 'function') {
+                throw new TypeError('view() requires a public instance method with a string name.');
+            }
+            method.addInitializer(function registerStandardViewInitializer() {
+                if (this[method.name] === target) registerView(STANDARD_VIEWS, this.constructor, stateName, method.name, target);
+            });
+            return target;
+        }
+        const PageClass = assertDecoratorTarget(target, 'view()');
+        if (typeof method !== 'string' || !method || typeof descriptor?.value !== 'function') {
+            throw new TypeError('view() must decorate a method.');
+        }
+        registerView(VIEW_METADATA, PageClass, stateName, method, descriptor.value);
+        return descriptor;
+    };
+}
+
 function getPageMetadata(PageClass) {
     return PAGE_METADATA.get(PageClass);
 }
@@ -186,6 +237,10 @@ function getActionImplementation(PageClass, method) {
     return resolvedAction(PageClass).get(method);
 }
 
+function getViewImplementation(PageClass, stateName) {
+    return resolvedView(PageClass).get(stateName)?.implementation;
+}
+
 module.exports = {
     action,
     forEachState,
@@ -195,6 +250,8 @@ module.exports = {
     getPageTemplateRoot,
     getStateConfig,
     getStateMetadata,
+    getViewImplementation,
     page,
     state,
+    view,
 };

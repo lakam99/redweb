@@ -1,8 +1,8 @@
-const HtmxRenderer = require('./HtmxRenderer');
+const HtmlRenderer = require('./HtmlRenderer');
 const LiveHtmlServer = require('./LiveHtmlServer');
 const LivePage = require('./LivePage');
 const { html } = require('./Html');
-const { action, page, state } = require('./metadata');
+const { action, page, state, view } = require('./metadata');
 const { start } = require('./start');
 
-module.exports = { action, html, HtmxRenderer, LiveHtmlServer, LivePage, page, start, state };
+module.exports = { action, html, HtmlRenderer, LiveHtmlServer, LivePage, page, start, state, view };
