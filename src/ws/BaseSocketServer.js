@@ -7,7 +7,7 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
-const { PLACEMENT_REDIRECT } = require('./AdmissionPolicy');
+const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
 const {
   listenServer,
@@ -47,6 +47,12 @@ class BaseSocketServer {
     this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
     this.draining = false;
     this.pendingUpgrades = new Map();
+    this.rawConnections = ownsServer ? new Set() : null;
+    this._connectionHandler = this.rawConnections ? socket => {
+      this.rawConnections.add(socket);
+      socket.once('close', () => this.rawConnections.delete(socket));
+    } : null;
+    if (this._connectionHandler) this.server.on('connection', this._connectionHandler);
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
@@ -137,7 +143,8 @@ class BaseSocketServer {
           this.logger?.error?.('WebSocket admission failed:', error);
           if (!sock.destroyed) this.rejectUpgrade(sock, 401, 'Unauthorized');
         })
-        .finally(() => {
+        .finally(async () => {
+          await req[ADMISSION_SETTLEMENT];
           this.pendingUpgrades.delete(sock);
           route.releaseUpgrade(reservation);
         });
@@ -204,15 +211,30 @@ class BaseSocketServer {
   async performShutdown() {
     this.beginDrain();
     this.server.off?.('upgrade', this._upgradeHandler);
+    const deadline = Date.now() + Math.max(0, ...this.routes.map(route => route.shutdownTimeoutMs));
     const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
     if (this.closeServerOnShutdown && this.server.listening) {
       try {
-        await closeServer(this.server);
+        await this.closeOwnedServer(Math.max(0, deadline - Date.now()));
       } catch (error) {
         errors.push(error);
       }
     }
+    if (this._connectionHandler) this.server.off?.('connection', this._connectionHandler);
     throwCleanupErrors(errors, 'One or more WebSocket server cleanup operations failed.');
+  }
+
+  closeOwnedServer(timeoutMs) {
+    let timer;
+    const closing = closeServer(this.server);
+    const timeout = new Promise(resolve => {
+      timer = setTimeout(() => {
+        this.rawConnections?.forEach(socket => socket.destroy?.());
+        resolve();
+      }, timeoutMs);
+      timer.unref?.();
+    });
+    return Promise.race([closing, timeout]).finally(() => clearTimeout(timer));
   }
 }
 

@@ -254,6 +254,12 @@ describe('SocketRoute units', () => {
         expect(route.clients.size).toBe(0);
     });
 
+    test('preserves legacy send exceptions when transport limits are disabled', () => {
+        const route = new SocketRoute({ path: '/legacy-send', handlers: [NoopHandler], logger: null });
+        const socket = { readyState: 1, send() { throw new Error('legacy send failure'); } };
+        expect(() => route.send(socket, {})).toThrow('legacy send failure');
+    });
+
     test('contains unexpected failures from ordered dispatch', async () => {
         const logger = { log() {}, warn() {}, error: jest.fn() };
         const route = new SocketRoute({
@@ -382,6 +388,7 @@ describe('SocketRoute units', () => {
         });
         const socket = createSocket();
         route.handleConnection(socket, {});
+        await new Promise(setImmediate);
         expect(socket.context.signal.aborted).toBe(false);
         let release;
         const blocked = new Promise(resolve => { release = resolve; });

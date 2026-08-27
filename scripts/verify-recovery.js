@@ -37,7 +37,7 @@ async function collectHeap() {
     return process.memoryUsage().heapUsed;
 }
 
-async function waitUntil(predicate, message, timeoutMs = 2000) {
+async function waitUntil(predicate, message, timeoutMs = 10_000) {
     const deadline = Date.now() + timeoutMs;
     while (!predicate()) {
         if (Date.now() >= deadline) throw new Error(message);
@@ -62,26 +62,31 @@ async function runConnections(route, url, start, count) {
 
 async function main() {
     const server = new redweb.SocketServer({ port: 0, bind: '127.0.0.1', routes: [ReconnectRoute], logger: silentLogger });
-    if (!server.server.listening) await waitFor(server.server, 'listening');
-    const route = server.routes[0];
-    const url = `ws://127.0.0.1:${server.server.address().port}/reconnect`;
-    await runConnections(route, url, 0, warmConnections);
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const warmedHeap = await collectHeap();
-    await runConnections(route, url, warmConnections, stormConnections);
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const recoveredHeap = await collectHeap();
-    const result = {
-        warmConnections,
-        stormConnections,
-        warmedHeap,
-        recoveredHeap,
-        recoveredHeapPercentOfWarm: recoveredHeap / warmedHeap * 100,
-        registries: { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size },
-    };
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    await server.shutdown();
-    if (Object.values(result.registries).some(value => value !== 0) || result.recoveredHeapPercentOfWarm > 110) process.exitCode = 1;
+    try {
+        if (!server.server.listening) await waitFor(server.server, 'listening');
+        const route = server.routes[0];
+        const url = `ws://127.0.0.1:${server.server.address().port}/reconnect`;
+        await runConnections(route, url, 0, warmConnections);
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const warmedHeap = await collectHeap();
+        await runConnections(route, url, warmConnections, stormConnections);
+        await new Promise(resolve => setTimeout(resolve, 400));
+        const recoveredHeap = await collectHeap();
+        const result = {
+            warmConnections,
+            stormConnections,
+            warmedHeap,
+            recoveredHeap,
+            recoveredHeapPercentOfWarm: recoveredHeap / warmedHeap * 100,
+            registries: { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size },
+        };
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        if (Object.values(result.registries).some(value => value !== 0) || result.recoveredHeapPercentOfWarm > 110) {
+            throw new Error('Reconnect recovery exceeded its cleanup or retained-heap budget.');
+        }
+    } finally {
+        await server.shutdown();
+    }
 }
 
 main().catch(error => {

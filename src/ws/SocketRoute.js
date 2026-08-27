@@ -319,18 +319,19 @@ class SocketRoute {
     }
 
     invokeLifecycleHook(socket, hook, closeOnError) {
-        Promise.resolve()
-            .then(hook)
-            .catch(error => {
+        const task = () => Promise.resolve().then(hook).catch(error => {
                 this.handleError(socket, error);
                 if (!closeOnError) return;
                 this.sendFailure(socket, ERROR_CODES.INITIALIZATION_FAILED, 'Connection initialization failed');
                 socket.close?.(1011, 'Connection initialization failed');
             });
+        void this.runtime.run(task);
     }
 
     send(socket, data) {
-        const sent = sendJson(socket, data, this.transportPolicy);
+        const sent = this.transportPolicy
+            ? sendJson(socket, data, this.transportPolicy)
+            : sendJson(socket, data);
         if (sent) this.metrics?.increment('redweb.messages.outbound');
         return sent;
     }
@@ -539,6 +540,16 @@ class SocketRoute {
         } catch (error) {
             errors.push(error);
         }
+        try {
+            await withinDeadline(
+                this.inFlight ? Promise.allSettled([...this.inFlight]) : Promise.resolve(),
+                Math.max(0, deadline - Date.now()),
+                'Route lifecycle cleanup exceeded shutdownTimeoutMs.'
+            );
+        } catch (error) {
+            errors.push(error);
+        }
+        this.runtime.clearInFlight();
         throwCleanupErrors(errors, 'One or more WebSocket route cleanup operations failed.');
     }
 

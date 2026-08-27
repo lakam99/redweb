@@ -230,7 +230,7 @@ Other route options:
 - `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
 - `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
 - `rooms` and `sessions`: optional bounded route-local grouping and resumable session registries. Session payload shape and byte size remain the application's responsibility.
-- `distribution`: optional bounded fan-out adapter. Mark it `required` to fail readiness and reject new upgrades while unavailable.
+- `distribution`: optional bounded fan-out adapter. Mark it `required` to fail readiness and reject new upgrades after startup or publish failure; adapter operations receive cancellation signals.
 - `drainHandlers`: expose a route shutdown signal to handlers and track their work within `shutdownTimeoutMs`.
 - `protocol`: optional version negotiation, stable envelopes, and binary codec hooks.
 

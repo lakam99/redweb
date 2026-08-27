@@ -37,7 +37,14 @@ class ProtocolClient {
 
     parse(input) {
         const raw = input && typeof input === 'object' && 'data' in input ? input.data : input;
-        const message = typeof raw === 'string' ? JSON.parse(raw) : JSON.parse(raw.toString());
+        let serialized;
+        if (typeof raw === 'string') serialized = raw;
+        else if (raw instanceof ArrayBuffer) serialized = new TextDecoder().decode(new Uint8Array(raw));
+        else if (ArrayBuffer.isView(raw)) serialized = new TextDecoder().decode(
+            new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+        );
+        else serialized = raw.toString();
+        const message = JSON.parse(serialized);
         if (!validateEnvelope(message, this.version)) {
             throw new TypeError('Received an invalid Redweb protocol envelope.');
         }

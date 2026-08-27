@@ -136,6 +136,9 @@ describe('ProtocolClient', () => {
         client.send('move', { x: 2 });
         expect(client.parse(sent[0])).toEqual({ v: '1', type: 'move', payload: { x: 2 } });
         expect(client.parse({ data: Buffer.from(sent[0]) })).toEqual({ v: '1', type: 'move', payload: { x: 2 } });
+        expect(client.parse(new TextEncoder().encode(sent[0]))).toEqual({ v: '1', type: 'move', payload: { x: 2 } });
+        expect(client.parse(new TextEncoder().encode(sent[0]).buffer)).toEqual({ v: '1', type: 'move', payload: { x: 2 } });
+        expect(client.parse({ toString: () => sent[0] })).toEqual({ v: '1', type: 'move', payload: { x: 2 } });
     });
 
     test('rejects invalid client inputs and received versions', () => {

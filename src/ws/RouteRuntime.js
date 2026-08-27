@@ -128,9 +128,12 @@ class RouteRuntime {
     }
 
     closeState() {
-        this.inFlight?.clear();
         this.rooms?.close();
         this.sessions?.stop();
+    }
+
+    clearInFlight() {
+        this.inFlight?.clear();
     }
 }
 

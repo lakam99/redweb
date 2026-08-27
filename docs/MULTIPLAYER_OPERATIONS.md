@@ -25,6 +25,8 @@ The admission `place(principal, request, context)` hook can return another node'
 
 Treat the distribution adapter as ephemeral fan-out. During broker or network partitions, pause affected matches, continue from one authoritative owner, or reconcile from durable application state. Do not treat adapter delivery or its bounded deduplication window as persistence.
 
+Adapter lifecycle and publish methods receive an optional final `AbortSignal`. Observe it in broker clients that support cancellation. Redweb compensates late startup and subscription completion, but a publish that the broker has already accepted cannot be recalled.
+
 ## Capacity signals
 
 Alert on rejected connections, rate-limited messages, full queues, handler failures, active connections, and readiness. Metrics intentionally contain only the route label. Join high-cardinality player, room, and match diagnostics in application logs or traces under the studio's own privacy and retention policy.

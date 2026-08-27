@@ -1,5 +1,6 @@
 const ADMISSION_CONTEXT = Symbol('redweb.admissionContext');
 const PLACEMENT_REDIRECT = Symbol('redweb.placementRedirect');
+const ADMISSION_SETTLEMENT = Symbol('redweb.admissionSettlement');
 
 class AdmissionPolicy {
     constructor(options) {
@@ -60,11 +61,13 @@ class AdmissionPolicy {
         const timer = setTimeout(() => controller.abort(), this.timeoutMs);
         timer.unref();
         try {
+            const evaluation = Promise.resolve().then(() => this.evaluate(request, route, controller.signal));
+            request[ADMISSION_SETTLEMENT] = evaluation.then(() => undefined, () => undefined);
             const cancelled = new Promise((_, reject) => {
                 controller.signal.addEventListener('abort', () => reject(new Error('Admission cancelled.')), { once: true });
             });
             const result = await Promise.race([
-                this.evaluate(request, route, controller.signal),
+                evaluation,
                 cancelled,
             ]);
             if (result === false || rawSocket.destroyed || controller.signal.aborted) return false;
@@ -139,4 +142,4 @@ class AdmissionPolicy {
     }
 }
 
-module.exports = { AdmissionPolicy, ADMISSION_CONTEXT, PLACEMENT_REDIRECT };
+module.exports = { AdmissionPolicy, ADMISSION_CONTEXT, PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT };

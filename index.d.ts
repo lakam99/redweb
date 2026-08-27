@@ -126,14 +126,15 @@ declare module 'redweb' {
     }
 
     export interface DistributionAdapter {
-        start?(): void | Promise<void>;
-        publish(channel: string, serializedEvent: string): void | Promise<void>;
+        start?(signal?: AbortSignal): void | Promise<void>;
+        publish(channel: string, serializedEvent: string, signal?: AbortSignal): void | Promise<void>;
         subscribe(
             channel: string,
-            onEvent: (serializedEvent: string | DistributionEvent) => void
+            onEvent: (serializedEvent: string | DistributionEvent) => void,
+            signal?: AbortSignal
         ): void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
-        unsubscribe?(channel: string): void | Promise<void>;
-        close?(): void | Promise<void>;
+        unsubscribe?(channel: string, signal?: AbortSignal): void | Promise<void>;
+        close?(signal?: AbortSignal): void | Promise<void>;
     }
 
     export interface DistributionOptions {

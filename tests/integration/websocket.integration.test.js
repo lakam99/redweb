@@ -1,4 +1,5 @@
 const http = require('http');
+const net = require('net');
 const path = require('path');
 const WebSocket = require('ws');
 const {
@@ -363,6 +364,34 @@ describe('WebSocket integration without mocks', () => {
         expect(server.routes[0].pendingUpgrades).toBe(0);
     });
 
+    test('retains admission capacity until a timed-out non-cooperating hook settles', async () => {
+        let finishAuthentication;
+        class NonCooperatingRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/non-cooperating-admission',
+                    handlers: [class extends BaseHandler {
+                        constructor() { super('noop'); }
+                        onMessage() {}
+                    }],
+                    logger: silentLogger,
+                    maxPendingUpgrades: 1,
+                    admission: {
+                        timeoutMs: 5,
+                        authenticate: () => new Promise(resolve => { finishAuthentication = resolve; }),
+                    },
+                });
+            }
+        }
+        const server = await start({ routes: [NonCooperatingRoute] });
+        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(401);
+        expect(server.routes[0].pendingUpgrades).toBe(1);
+        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(503);
+        finishAuthentication(false);
+        while (server.routes[0].pendingUpgrades) await new Promise(resolve => setImmediate(resolve));
+        expect(server.routes[0].pendingUpgrades).toBe(0);
+    });
+
     test('serializes messages only when opted in and bounds the pending queue', async () => {
         const completions = [];
         let releaseFirst;
@@ -716,6 +745,63 @@ describe('WebSocket integration without mocks', () => {
         socketServers.delete(server);
         expect(borrowed.listening).toBe(true);
         expect(borrowed.listenerCount('upgrade')).toBe(0);
+    });
+
+    test('bounds owned-server shutdown with an incomplete HTTP peer', async () => {
+        class ShortRoute extends SocketRoute {
+            constructor() {
+                super({ path: '/', handlers: [class extends BaseHandler {
+                    constructor() { super('noop'); }
+                    onMessage() {}
+                }], logger: silentLogger, shutdownTimeoutMs: 25 });
+            }
+        }
+        const server = await start({ routes: [ShortRoute] });
+        const peer = net.connect(server.server.address().port, '127.0.0.1');
+        await new Promise((resolve, reject) => {
+            peer.once('connect', resolve);
+            peer.once('error', reject);
+        });
+        peer.write('GET / HTTP/1.1\r\nHost: localhost\r\n');
+        const peerClosed = new Promise(resolve => peer.once('close', resolve));
+        const started = Date.now();
+        await server.shutdown();
+        await peerClosed;
+        socketServers.delete(server);
+        expect(Date.now() - started).toBeLessThan(250);
+        expect(peer.destroyed).toBe(true);
+    });
+
+    test('tracks connection lifecycle hooks within the drain deadline', async () => {
+        let initialFinished = false;
+        let closeFinished = false;
+        class LifecycleHandler extends BaseHandler {
+            constructor() { super('lifecycle'); }
+            onMessage() {}
+            async onInitialContact(socket) {
+                await new Promise(resolve => socket.context.signal.addEventListener('abort', resolve, { once: true }));
+                initialFinished = true;
+                expect(socket.joinRoom('late')).toBe(false);
+            }
+        }
+        class LifecycleRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/lifecycle', handlers: [LifecycleHandler], logger: silentLogger,
+                    rooms: true, drainHandlers: true, shutdownTimeoutMs: 100,
+                });
+            }
+            async connectionCloseCallback() {
+                await new Promise(resolve => setTimeout(resolve, 10));
+                closeFinished = true;
+            }
+        }
+        const server = await start({ routes: [LifecycleRoute] });
+        await trackedConnect(address(server, '/lifecycle'));
+        await server.shutdown();
+        socketServers.delete(server);
+        expect(initialFinished).toBe(true);
+        expect(closeFinished).toBe(true);
     });
 
     test('redirects placement before upgrade and follows the redirect to the selected node', async () => {

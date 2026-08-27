@@ -67,7 +67,11 @@ describe('bounded distribution bridge', () => {
 
         bridge.adapter.publish = () => Promise.reject(new Error('publish failed'));
         expect(await bridge.publish('state', {})).toBe(false);
+        expect(bridge.isReady()).toBe(false);
         expect(errors).toContain('publish failed');
+        bridge.adapter.publish = () => {};
+        expect(await bridge.publish('state', {})).toBe(true);
+        expect(bridge.isReady()).toBe(true);
         await bridge.close();
         expect(bridge.isReady()).toBe(false);
         expect(await bridge.publish('closed', {})).toBe(false);
@@ -144,6 +148,74 @@ describe('bounded distribution bridge', () => {
         await expect(cleanup.close()).rejects.toMatchObject({ errors: expect.any(Array) });
         await cleanup.close();
         expect(calls).toEqual(expect.arrayContaining(['unsubscribe', 'failed-close']));
+    });
+
+    test('aborts timed-out adapter work and compensates a late subscription', async () => {
+        const calls = [];
+        const logger = { error: jest.fn() };
+        let finishSubscribe;
+        const bridge = new DistributionBridge({
+            adapter: adapter({
+                start(signal) { expect(signal).toBeInstanceOf(AbortSignal); },
+                subscribe(_channel, _listener, signal) {
+                    signal.addEventListener('abort', () => calls.push('aborted'));
+                    return new Promise(resolve => { finishSubscribe = resolve; });
+                },
+                close(signal) { expect(signal).toBeInstanceOf(AbortSignal); calls.push('close'); },
+            }),
+            channel: 'game',
+            lifecycleTimeoutMs: 2,
+        }, () => {}, logger);
+        expect(await bridge.ready).toBe(false);
+        expect(calls).toContain('aborted');
+        finishSubscribe(() => { calls.push('late-unsubscribe'); throw new Error('late cleanup failed'); });
+        await new Promise(setImmediate);
+        expect(calls).toContain('late-unsubscribe');
+        expect(logger.error).toHaveBeenCalledWith('Late distribution subscribe cleanup failed:', expect.any(Error));
+        await bridge.close();
+        expect(calls).toContain('close');
+
+        let finishStart;
+        const lateStart = new DistributionBridge({
+            adapter: adapter({
+                start: () => new Promise(resolve => { finishStart = resolve; }),
+                close: () => calls.push('late-start-close'),
+            }),
+            channel: 'game',
+            lifecycleTimeoutMs: 2,
+        }, () => {}, { error: jest.fn() });
+        expect(await lateStart.ready).toBe(false);
+        finishStart();
+        await new Promise(setImmediate);
+        expect(calls).toContain('late-start-close');
+        await lateStart.close();
+
+        let finishWithoutCallback;
+        const lateAdapterUnsubscribe = new DistributionBridge({
+            adapter: adapter({
+                subscribe: () => new Promise(resolve => { finishWithoutCallback = resolve; }),
+                unsubscribe: channel => calls.push(`late-adapter-unsubscribe:${channel}`),
+            }),
+            channel: 'game',
+            lifecycleTimeoutMs: 2,
+        }, () => {}, logger);
+        expect(await lateAdapterUnsubscribe.ready).toBe(false);
+        finishWithoutCallback();
+        await new Promise(setImmediate);
+        expect(calls).toContain('late-adapter-unsubscribe:game');
+        await lateAdapterUnsubscribe.close();
+
+        let failLateStart;
+        const rejectedLateStart = new DistributionBridge({
+            adapter: adapter({ start: () => new Promise((_resolve, reject) => { failLateStart = reject; }) }),
+            channel: 'game',
+            lifecycleTimeoutMs: 2,
+        }, () => {}, logger);
+        expect(await rejectedLateStart.ready).toBe(false);
+        failLateStart(new Error('late start failed'));
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('Distribution adapter start failed after timeout:', expect.any(Error));
+        await rejectedLateStart.close();
     });
 
     test('uses adapter unsubscribe when subscribe does not return one', async () => {

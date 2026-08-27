@@ -75,12 +75,20 @@ class DistributionBridge {
 
     async start() {
         try {
-            await this.withTimeout(() => this.adapter.start?.(), this.lifecycleTimeoutMs, 'start');
+            await this.withTimeout(
+                signal => this.adapter.start?.(signal),
+                this.lifecycleTimeoutMs,
+                'start',
+                () => this.adapter.close?.()
+            );
             if (this.closed) return false;
             const unsubscribe = await this.withTimeout(
-                () => this.adapter.subscribe(this.channel, event => this.receive(event)),
+                signal => this.adapter.subscribe(this.channel, event => this.receive(event), signal),
                 this.lifecycleTimeoutMs,
-                'subscribe'
+                'subscribe',
+                lateUnsubscribe => typeof lateUnsubscribe === 'function'
+                    ? lateUnsubscribe()
+                    : this.adapter.unsubscribe?.(this.channel)
             );
             if (typeof unsubscribe === 'function') this.unsubscribe = unsubscribe;
             this.subscribed = true;
@@ -92,13 +100,28 @@ class DistributionBridge {
         }
     }
 
-    withTimeout(operation, timeoutMs, name) {
+    withTimeout(operation, timeoutMs, name, compensateLate) {
         let timer;
+        let timedOut = false;
+        const controller = new AbortController();
+        const task = Promise.resolve().then(() => operation(controller.signal));
+        void task.then(value => {
+            if (!timedOut || !compensateLate) return;
+            Promise.resolve()
+                .then(() => compensateLate(value))
+                .catch(error => this.logger?.error?.(`Late distribution ${name} cleanup failed:`, error));
+        }, error => {
+            if (timedOut) this.logger?.error?.(`Distribution adapter ${name} failed after timeout:`, error);
+        });
         const timeout = new Promise((_, reject) => {
-            timer = setTimeout(() => reject(new Error(`Distribution adapter ${name} timed out.`)), timeoutMs);
+            timer = setTimeout(() => {
+                timedOut = true;
+                controller.abort();
+                reject(new Error(`Distribution adapter ${name} timed out.`));
+            }, timeoutMs);
             timer.unref();
         });
-        return Promise.race([Promise.resolve().then(operation), timeout]).finally(() => clearTimeout(timer));
+        return Promise.race([task, timeout]).finally(() => clearTimeout(timer));
     }
 
     isReady() {
@@ -121,12 +144,14 @@ class DistributionBridge {
         if (!await this.ready || this.closed) return false;
         try {
             await this.withTimeout(
-                () => this.adapter.publish(this.channel, serialized),
+                signal => this.adapter.publish(this.channel, serialized, signal),
                 this.publishTimeoutMs,
                 'publish'
             );
+            this.healthy = true;
             return true;
         } catch (error) {
+            this.healthy = false;
             this.logger?.error?.('Distribution publish failed:', error);
             return false;
         }
@@ -205,7 +230,7 @@ class DistributionBridge {
         if (!this.subscribed) return;
         this.subscribed = false;
         await this.withTimeout(
-            () => this.unsubscribe ? this.unsubscribe() : this.adapter.unsubscribe?.(this.channel),
+            signal => this.unsubscribe ? this.unsubscribe() : this.adapter.unsubscribe?.(this.channel, signal),
             this.lifecycleTimeoutMs,
             'unsubscribe'
         );
@@ -228,7 +253,7 @@ class DistributionBridge {
         for (const operation of [
             () => this.stopSubscription(),
             () => this.drainActivity(),
-            () => this.withTimeout(() => this.adapter.close?.(), this.lifecycleTimeoutMs, 'close'),
+            () => this.withTimeout(signal => this.adapter.close?.(signal), this.lifecycleTimeoutMs, 'close'),
         ]) {
             try {
                 await operation();
