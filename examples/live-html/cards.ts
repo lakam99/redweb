@@ -5,7 +5,7 @@ interface Card {
     description: string;
 }
 
-@page('/', { template: 'cards.html', css: 'cards.css' })
+@page('/', { template: 'cards.html', css: 'cards.css', shared: true })
 export class CardsPage {
     @state()
     cards: Card[] = [

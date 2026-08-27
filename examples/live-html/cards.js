@@ -37,7 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CardsPage = void 0;
 const redweb_1 = require('../..');
 let CardsPage = (() => {
-    let _classDecorators = [(0, redweb_1.page)('/', { template: 'cards.html', css: 'cards.css' })];
+    let _classDecorators = [(0, redweb_1.page)('/', { template: 'cards.html', css: 'cards.css', shared: true })];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;

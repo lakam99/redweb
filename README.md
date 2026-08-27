@@ -106,7 +106,7 @@ Collections use the same model without manual concatenation. Keep the array in `
 
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [card collection](examples/live-html/cards.ts). Run them with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 ## Multiplayer in 0.9
 

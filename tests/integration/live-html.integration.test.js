@@ -193,7 +193,7 @@ describe('Live HTML integration without mocks', () => {
         expect(reconnectUpdates[0].value.indexOf('alert(1)')).toBeLessThan(reconnectUpdates[0].value.indexOf('Missed'));
     });
 
-    test('the shipped card collection SSRs and replaces its safe server-rendered items', async () => {
+    test('the shipped card collection persists across renders and replaces its safe server-rendered items', async () => {
         const server = await start(createCardsServer);
         const page = await getPage(server);
         expect(page.response.body.match(/<article class="card">/g)).toHaveLength(2);
@@ -212,6 +212,19 @@ describe('Live HTML integration without mocks', () => {
         expect(updates[1].html).toBe(true);
         expect(updates[1].value.match(/<article class="card">/g)).toHaveLength(3);
         expect(updates[1].value).toContain('Card 3');
+
+        const refreshed = await getPage(server);
+        expect(refreshed.response.body.match(/<article class="card">/g)).toHaveLength(3);
+        expect(refreshed.response.body).toContain('Card 3');
+
+        const refreshedUpdates = [];
+        const refreshedClient = liveClient(refreshed.port, refreshed.config);
+        refreshedClient.on('redweb:state', message => refreshedUpdates.push(message.payload));
+        clients.add(refreshedClient);
+        await refreshedClient.connect();
+        await waitForCondition(() => refreshedUpdates.length === 1, 'persisted card collection snapshot');
+        expect(refreshedUpdates[0].value.match(/<article class="card">/g)).toHaveLength(3);
+        expect(refreshedUpdates[0].value).toContain('Card 3');
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {

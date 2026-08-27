@@ -141,6 +141,6 @@ The internal paths and application page paths must be unique.
 
 - `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
 - `examples/live-html/chatroom.ts` uses `@page()`, colocated CSS, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
-- `examples/live-html/cards.ts` uses `@view()` and `rw-each` to prove server-rendered collection SSR and realtime replacement in a real browser.
+- `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
 
 Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
