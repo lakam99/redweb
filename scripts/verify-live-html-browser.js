@@ -6,11 +6,39 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { attribute, codeBlock, each, html, start, url } = require('..');
+const { action, attribute, codeBlock, component, each, html, page, start, state, url } = require('..');
 const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
 const { ChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
+const { ComponentsPage } = require('../examples/live-html/components');
+
+class TableComponent {
+    count = 0;
+    increment() { this.count += 1; }
+    render() {
+        return html`<tr><td><output data-rw-state="count">${this.count}</output></td><td><button rw-click="increment">Add</button></td></tr>`;
+    }
+}
+component()(TableComponent);
+state()(TableComponent.prototype, 'count');
+action()(TableComponent.prototype, 'increment', Object.getOwnPropertyDescriptor(TableComponent.prototype, 'increment'));
+class OptionComponent {
+    label = 'Scoped option';
+    render() { return html`<option data-rw-state="label">${this.label}</option>`; }
+}
+component()(OptionComponent);
+state()(OptionComponent.prototype, 'label');
+class ComponentBoundaryPage {
+    row = new TableComponent();
+    option = new OptionComponent();
+    render() {
+        return html`<!doctype html><html><head>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' ws:; style-src 'none'">
+        </head><body><table><tbody>${this.row}</tbody></table><select>${this.option}</select></body></html>`;
+    }
+}
+page('/')(ComponentBoundaryPage);
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -153,11 +181,19 @@ async function main() {
     const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
     const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
+    const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
+    const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     let failure;
     try {
-        await Promise.all([waitForListening(counter.server), waitForListening(chat.server), waitForListening(cards.server)]);
+        await Promise.all([
+            waitForListening(counter.server),
+            waitForListening(chat.server),
+            waitForListening(cards.server),
+            waitForListening(components.server),
+            waitForListening(componentBoundaries.server),
+        ]);
         browser = launchBrowser(executable, profile);
         const endpoint = new URL(await browser.endpoint);
         const debugPort = Number(endpoint.port);
@@ -199,6 +235,37 @@ async function main() {
         await cardsPage.evaluate(eventual(`document.querySelectorAll('.card').length === 3`, 'realtime card collection update'));
         const cardBackground = await cardsPage.evaluate("getComputedStyle(document.querySelector('.card')).backgroundColor");
         if (cardBackground !== 'rgb(31, 41, 55)') throw new Error(`Card CSS was not applied: ${cardBackground}`);
+
+        const componentsPage = await openPage(debugPort, `http://127.0.0.1:${components.server.address().port}/`);
+        pages.push(componentsPage);
+        await componentsPage.evaluate(eventual(
+            `document.querySelectorAll('button[data-rw-component]').length === 2`,
+            'component DOM readiness'
+        ));
+        await componentsPage.evaluate(`document.querySelector('button[data-rw-component="primary"]').click()`);
+        await componentsPage.evaluate(eventual(
+            `document.querySelector('output[data-rw-component="primary"]').textContent === '1'`,
+            'the primary component server action'
+        ));
+        const componentIsolation = await componentsPage.evaluate(
+            `document.querySelector('output[data-rw-component="secondary"]').textContent === '0'`
+        );
+        if (!componentIsolation) throw new Error('A component action updated a sibling component instance.');
+
+        const boundaryPage = await openPage(debugPort, `http://127.0.0.1:${componentBoundaries.server.address().port}/`);
+        pages.push(boundaryPage);
+        const validBoundaries = await boundaryPage.evaluate(`
+            document.querySelector('tr').parentElement.tagName === 'TBODY' &&
+            document.querySelector('option').parentElement.tagName === 'SELECT' &&
+            !document.querySelector('rw-component') &&
+            !document.querySelector('[data-rw-component][style]')
+        `);
+        if (!validBoundaries) throw new Error('Component boundaries changed restricted HTML structure or required inline styles.');
+        await boundaryPage.evaluate(`document.querySelector('button[data-rw-component="row"]').click()`);
+        await boundaryPage.evaluate(eventual(
+            `document.querySelector('output[data-rw-component="row"]').textContent === '1'`,
+            'the table component action under strict CSP'
+        ));
 
         const noscriptMarkup = HtmlRenderer.render(
             '<body><noscript><span id="hidden">{{ value }}</span></noscript><p id="after">{{ value }}</p></body>',
@@ -249,7 +316,7 @@ async function main() {
             document.querySelector('#http code').textContent.includes("section = 'HTTP'")
         `);
         if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
-        console.log('Live HTML browser gate passed: CSS, collections, counter, chat, raw-text safety, and documentation composition.');
+        console.log('Live HTML browser gate passed: CSS, collections, components, counter, chat, raw-text safety, and documentation composition.');
     } catch (error) {
         failure = error;
     } finally {
@@ -259,7 +326,9 @@ async function main() {
             browser.child.kill();
             await exited;
         }
-        await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown()]);
+        await Promise.allSettled([
+            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), componentBoundaries.shutdown(),
+        ]);
         try {
             await removeTemporaryDirectory(profile);
         } catch (error) {

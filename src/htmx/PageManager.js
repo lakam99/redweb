@@ -6,7 +6,7 @@ const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
-const { isHtml } = require('./Html');
+const { isHtml, renderValue } = require('./Html');
 const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
 
 const PROTOCOL_VERSION = '1';
@@ -215,11 +215,14 @@ class PageManager {
                 signal: this.renderAbortController.signal,
             });
             await page.loading?.(context);
+            await page._loadComponents(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
-            const source = record.template ?? await page.render?.(context);
-            if (this.closing) throw new Error('Live HTML server is shutting down.');
-            if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-            const markup = isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), page, { live });
+            const markup = await LivePage.withRenderContext(context, async () => {
+                const source = record.template ?? await page.render?.(context);
+                if (this.closing) throw new Error('Live HTML server is shutting down.');
+                if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
+                return isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
+            });
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
                 if (ownsPage) await page.dispose();
@@ -245,7 +248,7 @@ class PageManager {
 
     createSession(page, ownsPage, principal) {
         const id = randomUUID();
-        const session = { id, page, ownsPage, principal, socket: null, timer: null };
+        const session = { id, page, ownsPage, principal, socket: null, timer: null, detaching: null };
         this.pending.set(id, session);
         this.expire(session);
         return session;
@@ -268,12 +271,12 @@ class PageManager {
         }
         if (typeof id !== 'string' || id.length > 128) return false;
         const session = this.pending.get(id) || this.active.get(id);
-        if (!session || session.socket) return false;
+        if (!session || session.socket || session.detaching) return false;
         if (this.authenticateRequest) {
             const principal = await this.authenticateRequest(request);
             if (!Object.is(principal, session.principal)) return false;
         }
-        return !session.socket && !LivePage.isDisposed(session.page) ? session : false;
+        return !session.socket && !session.detaching && !LivePage.isDisposed(session.page) ? session : false;
     }
 
     acceptsOrigin(origin, request) {
@@ -290,7 +293,9 @@ class PageManager {
     }
 
     connect(session, socket) {
-        if (!session || session.socket || LivePage.isDisposed(session.page)) throw new Error('Page session is unavailable.');
+        if (!session || session.socket || session.detaching || LivePage.isDisposed(session.page)) {
+            throw new Error('Page session is unavailable.');
+        }
         clearTimeout(session.timer);
         this.pending.delete(session.id);
         this.active.set(session.id, session);
@@ -302,12 +307,12 @@ class PageManager {
     async disconnect(socket) {
         const session = socket.__redwebPageSession;
         if (!session || session.socket !== socket) return false;
-        try {
-            await session.page._detach(socket, Object.freeze({ socket }));
-        } finally {
-            session.socket = null;
-            this.expire(session);
-        }
+        const detaching = Promise.resolve(session.page._detach(socket, Object.freeze({ socket })))
+            .finally(() => { session.detaching = null; });
+        session.detaching = detaching;
+        session.socket = null;
+        this.expire(session);
+        await detaching;
         return true;
     }
 
@@ -325,8 +330,12 @@ class PageManager {
         const payload = message.payload;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Live HTML payload must be an object.');
         const name = boundedName(payload.name, 'Live HTML member name');
+        const target = payload.component === undefined || payload.component === null
+            ? session.page
+            : session.page._component(boundedName(payload.component, 'Live HTML component name'));
+        if (!target) throw new Error('Unknown Live HTML component.');
         if (payload.kind === 'action') {
-            const result = await session.page._invoke(name, payload.args, Object.freeze({
+            const result = await LivePage.invoke(target, name, payload.args, Object.freeze({
                 socket,
                 signal: socket.context?.signal,
                 principal: session.principal,
@@ -337,7 +346,7 @@ class PageManager {
             return;
         }
         if (payload.kind === 'state') {
-            session.page._setFromClient(name, payload.value);
+            LivePage.setFromClient(target, name, payload.value);
             return;
         }
         throw new TypeError('Live HTML message kind must be "action" or "state".');

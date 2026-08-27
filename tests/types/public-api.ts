@@ -14,6 +14,7 @@ import {
     action,
     attribute,
     codeBlock,
+    component,
     each,
     exportStatic,
     html,
@@ -23,6 +24,20 @@ import {
     url,
     view,
 } from 'redweb';
+
+@component()
+class TypedComponent {
+    @state()
+    count = 0;
+
+    @action()
+    increment() { this.count += 1; }
+
+    render() { return html`<button rw-click="increment">${this.count}</button>`; }
+}
+
+const typedComponent = new TypedComponent();
+void typedComponent;
 
 @page('/counter', { template: 'counter.html', css: ['base.css', 'counter.css'] })
 class CounterPage extends LivePage {

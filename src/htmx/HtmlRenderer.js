@@ -41,7 +41,7 @@ class HtmlRenderer {
         return value.map((item, index) => {
             const rendered = view.implementation.call(page, item, index);
             if (!isHtml(rendered)) throw new TypeError(`View for page collection "${name}" must return html.`);
-            return rendered.toString();
+            return renderValue(rendered);
         }).join('');
     }
 

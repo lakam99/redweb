@@ -1,0 +1,7 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #07111f; color: #e2e8f0; }
+body { margin: 0; }
+main { width: min(54rem, calc(100% - 2rem)); margin: 4rem auto; }
+.counter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.counter-card { display: grid; gap: 1rem; padding: 1.5rem; border: 1px solid #334155; border-radius: 1rem; background: #111827; }
+output { font-size: 2rem; font-weight: 700; color: #67e8f9; }
+button { border: 0; border-radius: .65rem; padding: .75rem 1rem; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }

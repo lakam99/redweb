@@ -10,6 +10,7 @@
     "example:counter": "node examples/live-html/counter.js",
     "example:chatroom": "node examples/live-html/chatroom.js",
     "example:cards": "node examples/live-html/cards.js",
+    "example:components": "node examples/live-html/components.js",
     "generate:protocol-types": "node scripts/generate-protocol-types.js",
     "verify:overhead": "node scripts/verify-disabled-overhead.js",
     "verify:soak": "node --expose-gc scripts/verify-soak.js",

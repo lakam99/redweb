@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added reusable `@component()` Live HTML classes with nested composition, isolated state/actions, shared request and connection lifecycle hooks, and deterministic cascading cleanup.
 - Added explicit safe attribute and URL interpolation for Live HTML.
 - Added nested fragment composition and reusable safe code blocks.
 - Added page head metadata, non-live ETag/cache handling, and runtime-free static export with content-addressed CSS.

@@ -70,6 +70,55 @@ Place the collection in the template with `<section rw-each="cards"></section>`.
 
 For a small, auditable safety model, ordinary `html` interpolations are allowed only in element text. Dynamic attributes and URLs require the explicit wrappers below. Interpolation in event handlers, inline styles, `srcdoc`, `srcset`, `<script>`, and `<style>` remains prohibited.
 
+## Reusable components
+
+Decorate a plain class with `@component()` to give a reusable HTML snippet its own server state, actions, and lifecycle. Store component instances in page fields and interpolate them like any other safe HTML fragment:
+
+```ts
+import { action, component, html, page, start, state } from 'redweb';
+
+@component()
+class Counter {
+  @state()
+  count = 0;
+
+  constructor(private readonly label: string) {}
+
+  @action()
+  increment() {
+    this.count += 1;
+  }
+
+  render() {
+    return html`
+      <article>
+        <h2>${this.label}</h2>
+        <output data-rw-state="count">${this.count}</output>
+        <button rw-click="increment">Increment</button>
+      </article>
+    `;
+  }
+}
+
+@page('/')
+class Dashboard {
+  primary = new Counter('Primary');
+  secondary = new Counter('Independent');
+
+  render() {
+    return html`<main>${this.primary}${this.secondary}</main>`;
+  }
+}
+
+start(Dashboard);
+```
+
+The field path is the component's public protocol namespace, so both counters can expose `count` and `increment` without collisions. Browser events carry that visible namespace and the server resolves it through its component registry; client-supplied object paths are never evaluated. It is routing metadata, not an authorization boundary—component actions must enforce the same application authorization as page actions. Components may contain other decorated components, and state updates retain the complete nested namespace.
+
+Component instances are owned by exactly one construction-time page or component field. Their synchronous `render(context)` method may return a safe `HtmlFragment` or a declarative template string; request context is propagated per render, including on concurrent shared pages. Components receive the same `loading`, `connected`, `disconnected`, and `disposed` hooks as their page, including the authenticated principal and cancellation signal where applicable. Disposal starts every child and owner cleanup together and preserves every settled failure, so one broken sibling cannot starve later hooks.
+
+Redweb scopes only elements that carry a state, binding, or action directive; it does not add layout wrappers or inline styles. Components therefore remain valid in restricted contexts such as tables and selects and work with strict `style-src` policies.
+
 ### Safe attributes and links
 
 Dynamic document navigation remains explicit:
@@ -187,8 +236,9 @@ The internal paths and application page paths must be unique.
 - `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
 - `examples/live-html/chatroom.ts` uses `@page()`, colocated CSS, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
 - `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
+- `examples/live-html/components.ts` uses two instances of one `@component()` class to prove reusable markup, isolated server state, scoped actions, and component CSS composition.
 
-Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, `npm run example:cards`, and `npm run example:components`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
 
 ## Static pages and documentation export
 

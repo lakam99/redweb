@@ -28,21 +28,30 @@ async function main() {
         const manifest = require(path.join(packageRoot, 'package.json'));
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||
             manifest.scripts['example:chatroom'] !== 'node examples/live-html/chatroom.js' ||
-            manifest.scripts['example:cards'] !== 'node examples/live-html/cards.js') {
+            manifest.scripts['example:cards'] !== 'node examples/live-html/cards.js' ||
+            manifest.scripts['example:components'] !== 'node examples/live-html/components.js') {
             throw new Error('Packed example commands must run precompiled artifacts without development tooling.');
         }
         const { CounterPage } = require(path.join(packageRoot, 'examples', 'live-html', 'counter.js'));
         const { ChatroomPage } = require(path.join(packageRoot, 'examples', 'live-html', 'chatroom.js'));
         const { CardsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'cards.js'));
+        const { ComponentsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'components.js'));
         const examples = [
             installed.start(CounterPage, { listen: false }),
             installed.start(ChatroomPage, { listen: false }),
             installed.start(CardsPage, { listen: false }),
+            installed.start(ComponentsPage, { listen: false }),
         ];
         const packedCards = examples[2].manager.records.get('/');
         const renderedCards = await examples[2].manager.render(packedCards, { params: {}, query: {}, body: undefined });
         if ((renderedCards.match(/<article class="card">/g) || []).length !== 2 || !renderedCards.includes('rw-each="cards"')) {
             throw new Error('Packed card collection did not render standard @view metadata.');
+        }
+        const packedComponents = examples[3].manager.records.get('/');
+        const renderedComponents = await examples[3].manager.render(packedComponents, { params: {}, query: {}, body: undefined });
+        if ((renderedComponents.match(/data-rw-component="primary"/g) || []).length !== 2 ||
+            !renderedComponents.includes('data-rw-component="secondary"')) {
+            throw new Error('Packed reusable components did not render isolated instances.');
         }
         await Promise.all(examples.map(server => server.shutdown()));
         class SmokePage extends installed.LivePage {

@@ -1,13 +1,15 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, codeBlock, html, page, start: startPages } = require('../..');
+const { LiveHtmlServer, LivePage, codeBlock, component, html, page, start: startPages } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { ChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
+const { ComponentsPage } = require('../../examples/live-html/components');
 const createCounterServer = options => startPages(CounterPage, options);
 const createChatroomServer = options => startPages(ChatroomPage, options);
 const createCardsServer = options => startPages(CardsPage, options);
+const createComponentsServer = options => startPages(ComponentsPage, options);
 class StaticReferencePage {
     render() { return '<html><body><h1>Static reference</h1></body></html>'; }
 }
@@ -256,6 +258,127 @@ describe('Live HTML integration without mocks', () => {
         await waitForCondition(() => refreshedUpdates.length === 1, 'persisted card collection snapshot');
         expect(refreshedUpdates[0].value.match(/<article class="card">/g)).toHaveLength(3);
         expect(refreshedUpdates[0].value).toContain('Card 3');
+    });
+
+    test('reusable components isolate server state and route actions to the owning instance', async () => {
+        const server = await start(createComponentsServer);
+        const page = await getPage(server);
+        expect(page.response.body.match(/data-rw-component="primary"/g)).toHaveLength(2);
+        expect(page.response.body.match(/data-rw-component="secondary"/g)).toHaveLength(2);
+        expect(page.response.body).toContain('data-rw-state="count" data-rw-component="primary">0</output>');
+        expect(page.response.body).toContain('data-rw-state="count" data-rw-component="secondary">0</output>');
+
+        const updates = [];
+        const client = liveClient(page.port, page.config);
+        client.on('redweb:state', message => updates.push(message.payload));
+        clients.add(client);
+        await client.connect();
+        await waitForCondition(() => updates.length === 2, 'component state snapshots');
+        expect(updates).toEqual([
+            { component: 'primary', name: 'count', value: '0', html: false },
+            { component: 'secondary', name: 'count', value: '0', html: false },
+        ]);
+
+        await client.request('redweb:html', { kind: 'action', component: 'primary', name: 'increment', args: [] });
+        await waitForCondition(() => updates.length === 3, 'component action state update');
+        expect(updates[2]).toEqual({ component: 'primary', name: 'count', value: '1', html: false });
+        const session = server.manager.active.get(page.config.pageId);
+        expect(session.page.primary.count).toBe(1);
+        expect(session.page.secondary.count).toBe(0);
+    });
+
+    test('keeps shared component render contexts isolated across concurrent requests', async () => {
+        let firstStarted;
+        let releaseFirst;
+        const started = new Promise(resolve => { firstStarted = resolve; });
+        const release = new Promise(resolve => { releaseFirst = resolve; });
+        class RequestComponent {
+            async loading({ query }) {
+                if (query.id === 'a') {
+                    firstStarted();
+                    await release;
+                }
+            }
+            render({ query }) { return html`<p>${String(query.id)}</p>`; }
+        }
+        component()(RequestComponent);
+        class SharedComponentPage {
+            request = new RequestComponent();
+            render() { return html`${this.request}`; }
+        }
+        page('/shared-component-context', { shared: true })(SharedComponentPage);
+        const server = await start(options => startPages(SharedComponentPage, options));
+        const port = server.server.address().port;
+        const first = request({ port, path: '/shared-component-context?id=a' });
+        await started;
+        const second = await request({ port, path: '/shared-component-context?id=b' });
+        releaseFirst();
+        const firstResult = await first;
+        expect(firstResult.body).toContain('<p>a</p>');
+        expect(firstResult.body).not.toContain('<p>b</p>');
+        expect(second.body).toContain('<p>b</p>');
+        expect(second.body).not.toContain('<p>a</p>');
+    });
+
+    test('renders an owned component returned directly by a page', async () => {
+        class DirectComponent {
+            render() { return html`<main>Direct component</main>`; }
+        }
+        component()(DirectComponent);
+        class DirectComponentPage {
+            content = new DirectComponent();
+            render() { return this.content; }
+        }
+        page('/direct-component')(DirectComponentPage);
+        const server = await start(options => startPages(DirectComponentPage, options));
+        const response = await request({ port: server.server.address().port, path: '/direct-component' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('<main>Direct component</main>');
+        expect(response.body).not.toContain('[object Object]');
+    });
+
+    test('rejects a real reconnect until delayed disconnect lifecycle work finishes', async () => {
+        let beginDisconnect;
+        let finishDisconnect;
+        const disconnectStarted = new Promise(resolve => { beginDisconnect = resolve; });
+        const disconnectReleased = new Promise(resolve => { finishDisconnect = resolve; });
+        const lifecycle = [];
+        class DelayedReconnectPage {
+            connected() { lifecycle.push('connected'); }
+            async disconnected() {
+                lifecycle.push('disconnect:start');
+                beginDisconnect();
+                await disconnectReleased;
+                lifecycle.push('disconnect:end');
+            }
+            render() { return html`<main>Reconnect lifecycle</main>`; }
+        }
+        page('/delayed-reconnect')(DelayedReconnectPage);
+        const server = await start(options => startPages(DelayedReconnectPage, options));
+        const port = server.server.address().port;
+        const response = await request({ port, path: '/delayed-reconnect' });
+        const config = pageConfig(response.body);
+        const first = liveClient(port, config);
+        clients.add(first);
+        await first.connect();
+        await closeLiveClient(first);
+        clients.delete(first);
+        await disconnectStarted;
+
+        const session = server.manager.active.get(config.pageId);
+        expect(session.detaching).toBeInstanceOf(Promise);
+        const url = `ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`;
+        expect(await websocketUpgradeStatus(url, {
+            headers: { Origin: `http://127.0.0.1:${port}` },
+        })).toBe(401);
+        expect(lifecycle).toEqual(['connected', 'disconnect:start']);
+
+        finishDisconnect();
+        await waitForCondition(() => session.detaching === null, 'disconnect lifecycle completion');
+        const second = liveClient(port, config);
+        clients.add(second);
+        await second.connect();
+        expect(lifecycle).toEqual(['connected', 'disconnect:start', 'disconnect:end', 'connected']);
     });
 
     test('serves non-live documentation with metadata, ETags, and no browser runtime', async () => {

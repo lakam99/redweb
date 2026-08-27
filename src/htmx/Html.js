@@ -1,6 +1,7 @@
 const HTML_FRAGMENT = Symbol('redweb.htmlFragment');
 const HTML_ATTRIBUTE = Symbol('redweb.htmlAttribute');
 const HTML_URL = Symbol('redweb.htmlUrl');
+const HTML_RENDERERS = new WeakMap();
 const URL_ATTRIBUTES = new Set(['action', 'background', 'cite', 'data', 'formaction', 'href', 'manifest', 'ping', 'poster', 'src', 'xlink:href']);
 const FORBIDDEN_ATTRIBUTES = new Set(['srcdoc', 'srcset', 'style']);
 const { interpolationContext } = require('./HtmlSyntax');
@@ -16,7 +17,12 @@ function escapeHtml(value) {
 
 function isHtml(value) {
     if (Array.isArray(value)) return value.every(isHtml);
-    return Boolean(value?.[HTML_FRAGMENT]);
+    return Boolean(value?.[HTML_FRAGMENT]) || Boolean(value && typeof value === 'object' && HTML_RENDERERS.has(value));
+}
+
+function markHtml(value, toString) {
+    HTML_RENDERERS.set(value, toString);
+    return value;
 }
 
 function trustedValue(brand, value) {
@@ -47,6 +53,7 @@ function renderValue(value) {
         if (!isHtml(value)) throw new TypeError('Only arrays of HtmlFragment values can be rendered as HTML.');
         return value.map(renderValue).join('');
     }
+    if (HTML_RENDERERS.has(value)) return HTML_RENDERERS.get(value).call(value);
     return isHtml(value) ? value.toString() : escapeHtml(value);
 }
 
@@ -105,4 +112,4 @@ function codeBlock(code, options = {}) {
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;
 }
 
-module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, renderValue, safeUrl };
+module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderValue, safeUrl };
