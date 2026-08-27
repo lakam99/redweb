@@ -238,7 +238,11 @@ function getActionImplementation(PageClass, method) {
 }
 
 function getViewImplementation(PageClass, stateName) {
-    return resolvedView(PageClass).get(stateName)?.implementation;
+    return getViewMetadata(PageClass, stateName)?.implementation;
+}
+
+function getViewMetadata(PageClass, stateName) {
+    return resolvedView(PageClass).get(stateName);
 }
 
 module.exports = {
@@ -251,6 +255,7 @@ module.exports = {
     getStateConfig,
     getStateMetadata,
     getViewImplementation,
+    getViewMetadata,
     page,
     state,
     view,

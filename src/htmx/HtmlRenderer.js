@@ -1,11 +1,7 @@
-const { assertTextContext, escapeHtml, isHtml, renderValue } = require('./Html');
-const { randomUUID } = require('crypto');
+const { escapeHtml, isHtml, renderValue } = require('./Html');
 const PageAssetLoader = require('./PageAssetLoader');
-const { getStateConfig, getViewImplementation } = require('./metadata');
-
-const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
-const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
-const COLLECTION = /(<([A-Za-z][\w:-]*)\b[^>]*\srw-each="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
+const TemplateRenderer = require('./TemplateRenderer');
+const { getStateConfig, getViewMetadata } = require('./metadata');
 
 function serializeJson(value) {
     return JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -26,54 +22,24 @@ class HtmlRenderer {
 
     static render(source, page) {
         if (typeof source !== 'string') throw new TypeError('Page markup must be a string.');
-        const prefix = `\0redweb-${randomUUID()}-`;
-        const replacements = [];
-        const hold = value => `${prefix}${replacements.push(value) - 1}\0`;
-        const collections = source.replace(COLLECTION, (_match, opening, _tag, property, _content, closing) => {
-            if (!(property in page)) throw new Error(`Unknown page collection "${property}".`);
-            const content = HtmlRenderer.collection(page, property, page[property]);
-            const existingState = opening.match(/\sdata-rw-state="([A-Za-z_$][\w$]*)"/i)?.[1];
-            if (!existingState && /\sdata-rw-state(?:\s|=|>|\/)/i.test(opening)) {
-                throw new Error(`Page collection "${property}" has an invalid state binding.`);
-            }
-            if (existingState && existingState !== property) {
-                throw new Error(`Page collection "${property}" conflicts with state binding "${existingState}".`);
-            }
-            const markers = `${existingState ? '' : ` data-rw-state="${property}"`}${/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? '' : ' data-rw-html'}`;
-            return hold(opening.replace(/>$/, `${markers}>`) + content + closing);
-        });
-        if (/\srw-each(?:\s|=|>|\/)/i.test(collections)) {
-            throw new Error('rw-each requires a valid state name on an empty container.');
-        }
-        const targets = collections.replace(TARGET, (match, opening, _tag, property, _content, closing) => {
-            if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
-            const value = page[property];
-            const htmlMarker = isHtml(value) && !/\sdata-rw-html(?:\s|=|>)/i.test(opening) ? ' data-rw-html' : '';
-            return hold(opening.replace(/>$/, `${htmlMarker}>`) + renderValue(value) + closing);
-        });
-        const rendered = targets.replace(BINDING, (_match, property, offset, whole) => {
-            assertTextContext(whole.slice(0, offset));
-            if (!(property in page)) throw new Error(`Unknown page binding "${property}".`);
-            const value = page[property];
-            return hold(`<span data-rw-state="${property}"${isHtml(value) ? ' data-rw-html' : ''}>${renderValue(value)}</span>`);
-        });
-        return replacements.reduce((result, value, index) => result.replaceAll(`${prefix}${index}\0`, value), rendered);
+        return new TemplateRenderer(source, page, HtmlRenderer.collection).render();
     }
 
     static collection(page, name, value) {
         if (!getStateConfig(page.constructor, name)) throw new Error(`Page collection "${name}" is missing @state metadata.`);
         if (!Array.isArray(value)) throw new TypeError(`Page collection "${name}" must be an array.`);
-        const renderItem = getViewImplementation(page.constructor, name);
-        if (!renderItem) throw new Error(`Page collection "${name}" is missing @view metadata.`);
+        const view = getViewMetadata(page.constructor, name);
+        if (!view) throw new Error(`Page collection "${name}" is missing @view metadata.`);
+        if (page[view.method] !== view.implementation) throw new Error(`View for page collection "${name}" was replaced.`);
         return value.map((item, index) => {
-            const rendered = renderItem.call(page, item, index);
+            const rendered = view.implementation.call(page, item, index);
             if (!isHtml(rendered)) throw new TypeError(`View for page collection "${name}" must return html.`);
             return rendered.toString();
         }).join('');
     }
 
     static statePayload(name, value, page) {
-        if (page && getViewImplementation(page.constructor, name)) {
+        if (page && getViewMetadata(page.constructor, name)) {
             return { name, value: HtmlRenderer.collection(page, name, value), html: true };
         }
         return { name, value: isHtml(value) ? renderValue(value) : String(value ?? ''), html: isHtml(value) };
@@ -83,10 +49,13 @@ class HtmlRenderer {
         const bootstrap = `<script type="application/json" id="__redweb_page">${serializeJson(config)}</script>` +
             `<script type="module" src="${escapeHtml(config.runtimePath)}"></script>`;
         const links = stylesheets.map(href => `<link rel="stylesheet" href="${escapeHtml(href)}">`).join('');
-        if (/<\/body\s*>/i.test(markup)) {
-            const hasHead = /<\/head\s*>/i.test(markup);
-            const styled = links && hasHead ? markup.replace(/<\/head\s*>/i, `${links}</head>`) : markup;
-            return styled.replace(/<\/body\s*>/i, `${hasHead ? '' : links}${bootstrap}</body>`);
+        const body = TemplateRenderer.closingTag(markup, 'body');
+        if (body >= 0) {
+            const head = TemplateRenderer.closingTag(markup, 'head');
+            const insertions = [{ position: body, value: `${head >= 0 ? '' : links}${bootstrap}` }];
+            if (links && head >= 0) insertions.push({ position: head, value: links });
+            return insertions.sort((left, right) => right.position - left.position)
+                .reduce((result, insertion) => result.slice(0, insertion.position) + insertion.value + result.slice(insertion.position), markup);
         }
         return `<!doctype html><html><head>${links}</head><body><main data-rw-root>${markup}</main>${bootstrap}</body></html>`;
     }

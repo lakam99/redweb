@@ -247,7 +247,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => HtmlRenderer.render(null, pageState)).toThrow('string');
         expect(() => HtmlRenderer.render('{{missing}}', pageState)).toThrow('Unknown page binding');
         expect(() => HtmlRenderer.render('<a href="{{ title }}">link</a>', pageState)).toThrow('element text');
-        expect(() => HtmlRenderer.render('<script>{{ title }}</script>', pageState)).toThrow('script or style');
+        expect(HtmlRenderer.render('<script>{{ title }}</script>', pageState)).toBe('<script>{{ title }}</script>');
         expect(HtmlRenderer.statePayload('empty', null)).toEqual({ name: 'empty', value: '', html: false });
         expect(HtmlRenderer.statePayload('body', pageState.body)).toEqual({
             name: 'body', value: '<b>safe {{ secret }}</b>', html: true,
@@ -280,11 +280,51 @@ describe('decorator-first Live HTML units', () => {
             .toThrow('conflicts with state binding');
         expect(() => HtmlRenderer.render('<section rw-each="cards">Loading...</section>', cards))
             .toThrow('empty container');
-        expect(() => HtmlRenderer.render("<section rw-each='cards'></section>", cards))
-            .toThrow('valid state name');
+        expect(HtmlRenderer.render("<section title='1 > 0' rw-each='cards'></section>", cards))
+            .toContain('<article>0: {{ secret }}</article>');
+        expect(HtmlRenderer.render('<section rw-each=cards></section>', cards))
+            .toContain('<article>0: {{ secret }}</article>');
+        expect(HtmlRenderer.render('<section rw-each = cards></section>', cards))
+            .toContain('<article>0: {{ secret }}</article>');
         expect(() => HtmlRenderer.render('<section rw-each></section>', cards)).toThrow('valid state name');
-        expect(() => HtmlRenderer.render("<section rw-each=\"cards\" data-rw-state='cards'></section>", cards))
-            .toThrow('invalid state binding');
+        expect(HtmlRenderer.render("<section rw-each=\"cards\" data-rw-state='cards'></section>", cards))
+            .toContain('data-rw-state=\'cards\' data-rw-html');
+        expect(() => HtmlRenderer.render('<section rw-each="cards" rw-each="other"></section>', cards))
+            .toThrow('Duplicate Live HTML directive');
+        expect(() => HtmlRenderer.render('<section data-rw-state="cards" data-rw-state="cards"></section>', cards))
+            .toThrow('Duplicate Live HTML directive');
+        expect(() => HtmlRenderer.render('<section rw-each="cards" data-rw-html data-rw-html></section>', cards))
+            .toThrow('Duplicate Live HTML directive');
+        expect(() => HtmlRenderer.render('<section rw-each="cards" data-rw-html="yes"></section>', cards))
+            .toThrow('boolean attribute');
+        expect(HtmlRenderer.render('<p>Document rw-each= here. {{ secret }}</p>', cards))
+            .toBe('<p>Document rw-each= here. <span data-rw-state="secret">LEAK</span></p>');
+        const raw = '<!-- rw-each="cards" {{ secret }} --><script>const fake = \'<i data-rw-state="secret"></i>\'; {{ secret }}</script>';
+        expect(HtmlRenderer.render(raw, cards)).toBe(raw);
+        expect(HtmlRenderer.render('<!-- unclosed rw-each="cards"')).toBe('<!-- unclosed rw-each="cards"');
+        expect(HtmlRenderer.render('<style>{{ secret }}</style>', cards)).toBe('<style>{{ secret }}</style>');
+        expect(HtmlRenderer.render('<script>{{ secret }}', cards)).toBe('<script>{{ secret }}');
+        expect(() => HtmlRenderer.render('<script data-rw-state="secret"></script>', cards))
+            .toThrow('not allowed on raw-text');
+        expect(HtmlRenderer.render('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>', cards))
+            .toBe('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>');
+        expect(HtmlRenderer.render('<!doctype html><p>ok</p>', cards)).toBe('<!doctype html><p>ok</p>');
+        expect(HtmlRenderer.render('<?instruction?><p title=value>ok</p>', cards))
+            .toBe('<?instruction?><p title=value>ok</p>');
+        expect(HtmlRenderer.render('<br/>', cards)).toBe('<br/>');
+        expect(HtmlRenderer.render('<', cards)).toBe('<');
+        expect(HtmlRenderer.render('<a', cards)).toBe('<a');
+        expect(() => HtmlRenderer.render('<section /bad></section>', cards)).toThrow('Malformed HTML attribute');
+        expect(() => HtmlRenderer.render('<div data-rw-state></div>', cards)).toThrow('valid state name');
+        expect(() => HtmlRenderer.render('<div data-rw-state="missing"></div>', cards)).toThrow('Unknown page binding');
+        expect(HtmlRenderer.render('<div data-rw-state="secret"></div>', cards))
+            .toBe('<div data-rw-state="secret">LEAK</div>');
+        expect(HtmlRenderer.render('<div data-rw-state="secret"> \n </div>', cards))
+            .toBe('<div data-rw-state="secret">LEAK \n </div>');
+        expect(HtmlRenderer.render('<div data-rw-state="body" data-rw-html></div>', pageState))
+            .toContain('<b>safe {{ secret }}</b>');
+        expect(() => HtmlRenderer.render('<div data-rw-state="secret">', cards)).toThrow('empty container');
+        expect(HtmlRenderer.render('<section title="unclosed', cards)).toBe('<section title="unclosed');
         expect(HtmlRenderer.statePayload('cards', cards.cards, cards)).toEqual({
             name: 'cards',
             value: '<article>0: {{ secret }}</article><article>1: Shield</article>',
@@ -303,6 +343,13 @@ describe('decorator-first Live HTML units', () => {
         class MissingState { items = []; item() { return html`<i>item</i>`; } }
         decorateView(MissingState, 'items', 'item');
         expect(() => HtmlRenderer.collection(new MissingState(), 'items', [])).toThrow('missing @state');
+        class ShadowedCards extends CardsPage {
+            constructor() {
+                super();
+                this.card = () => html`<p>shadow</p>`;
+            }
+        }
+        expect(() => HtmlRenderer.collection(new ShadowedCards(), 'cards', [])).toThrow('was replaced');
 
         const config = { pageId: '<id>', socketPath: '/live', runtimePath: '/runtime.js', version: '1' };
         const fragment = HtmlRenderer.document('<p>hello</p>', config);
@@ -326,6 +373,16 @@ describe('decorator-first Live HTML units', () => {
         expect(escapedDocument).not.toContain('<script>window.injected=true</script>');
         expect(escapedDocument).toContain('href="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
         expect(escapedDocument).toContain('src="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
+        const scriptBody = '<html><head></head><body><script>const fake = "</body>";</script>safe</body></html>';
+        const bootstrapped = HtmlRenderer.document(scriptBody, config, ['/safe.css']);
+        expect(bootstrapped).toContain('<script>const fake = "</body>";</script>safe<script type="application/json"');
+        expect(bootstrapped).toContain('<link rel="stylesheet" href="/safe.css"></head>');
+        expect(HtmlRenderer.document('plain text', config)).toContain('<main data-rw-root>plain text</main>');
+        expect(HtmlRenderer.document('<!-- fake </body> --><body>safe</body>', config))
+            .toContain('<body>safe<script type="application/json"');
+        expect(HtmlRenderer.document('<!-- unclosed </body>', config)).toContain('<main data-rw-root><!-- unclosed </body></main>');
+        expect(HtmlRenderer.document('<body title="unclosed', config)).toContain('<main data-rw-root><body title="unclosed</main>');
+        expect(HtmlRenderer.document('<script>fake </body>', config)).toContain('<main data-rw-root><script>fake </body></main>');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {
