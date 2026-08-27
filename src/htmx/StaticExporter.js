@@ -1,9 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const { PageManager } = require('./PageManager');
+const { getPageMetadata } = require('./metadata');
+
+const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 
 function pageFile(outDir, route) {
-    if (!/^\/(?:[A-Za-z0-9._~-]+\/?)*$/.test(route) || route.split('/').some(part => part === '.' || part === '..')) {
+    const segments = route.split('/').filter(Boolean);
+    if (!/^\/(?:[A-Za-z0-9._~-]+\/?)*$/.test(route) ||
+        segments.some(part => part === '.' || part === '..' || part.endsWith('.') || WINDOWS_RESERVED.test(part))) {
         throw new TypeError(`Static page path cannot be exported: ${route}`);
     }
     const relative = route === '/' ? 'index.html' : path.join(route.slice(1), 'index.html');
@@ -26,18 +31,20 @@ async function exportStatic(pageOrPages, options = {}) {
     const { outDir, templateRoot, logger = console } = options;
     if (typeof outDir !== 'string' || !outDir) throw new TypeError('exportStatic() requires a non-empty outDir.');
     const root = path.resolve(outDir);
+    const pageFiles = new Set();
+    const preflight = pages.map(PageClass => {
+        const metadata = getPageMetadata(PageClass);
+        if (!metadata) throw new TypeError(`${PageClass.name || 'Page'} is missing @page metadata.`);
+        if (metadata.live !== false) throw new Error(`Static export requires live: false on ${PageClass.name}.`);
+        const file = pageFile(root, metadata.path);
+        const key = path.relative(root, file).replaceAll('\\', '/').toLowerCase();
+        if (pageFiles.has(key)) throw new Error(`Static page paths resolve to the same output file: ${file}`);
+        pageFiles.add(key);
+        return { metadata, file };
+    });
     const manager = new PageManager({ pages, templateRoot, logger });
     try {
-        const pageFiles = new Set();
-        const pagePlan = [...manager.records.values()].map(record => {
-            if (record.metadata.live !== false) {
-                throw new Error(`Static export requires live: false on ${record.PageClass.name}.`);
-            }
-            const file = pageFile(root, record.metadata.path);
-            if (pageFiles.has(file)) throw new Error(`Static page paths resolve to the same output file: ${file}`);
-            pageFiles.add(file);
-            return { record, file };
-        });
+        const pagePlan = preflight.map(({ metadata, file }) => ({ record: manager.records.get(metadata.path), file }));
         const assetPlan = [...manager.stylesheets].map(([url, content]) => ({
             file: path.join(root, ...url.slice(1).split('/')),
             content,

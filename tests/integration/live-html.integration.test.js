@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, page, start: startPages } = require('../..');
+const { LiveHtmlServer, LivePage, codeBlock, html, page, start: startPages } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { ChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
@@ -33,6 +33,12 @@ class AuthenticatedStaticPage {
 }
 page('/private-reference', { live: false, cache: { maxAge: 3600 } })(AuthenticatedStaticPage);
 const createAuthenticatedStaticServer = options => startPages(AuthenticatedStaticPage, options);
+class LiteralFragmentPage {
+    secret = 'must not bind';
+    render() { return html`<p>${'{{ secret }}'}</p>${codeBlock('{{ missing }}')}`; }
+}
+page('/literal-fragment')(LiteralFragmentPage);
+const createLiteralFragmentServer = options => startPages(LiteralFragmentPage, options);
 const {
     closeWebSocket,
     nextMessage,
@@ -295,6 +301,33 @@ describe('Live HTML integration without mocks', () => {
         expect(second.body).toContain('<p>Grace</p>');
         expect(first.headers['cache-control']).toBe('private, no-store');
         expect(second.headers['cache-control']).toBe('private, no-store');
+    });
+
+    test('serves composed HTML fragments without reparsing documentation braces', async () => {
+        const server = await start(createLiteralFragmentServer);
+        const response = await request({ port: server.server.address().port, path: '/literal-fragment' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('<p>{{ secret }}</p>');
+        expect(response.body).toContain('{{ missing }}');
+        expect(response.body).not.toContain('must not bind');
+    });
+
+    test('serves non-live documentation while the live session registry is full', async () => {
+        class CapacityLivePage { render() { return '<p>live</p>'; } }
+        class CapacityDocsPage { render() { return '<p>docs available</p>'; } }
+        page('/capacity-live')(CapacityLivePage);
+        page('/capacity-docs', { live: false })(CapacityDocsPage);
+        const server = await start(options => new LiveHtmlServer({
+            pages: [CapacityLivePage, CapacityDocsPage],
+            maxSessions: 1,
+            ...options,
+        }));
+        const port = server.server.address().port;
+        expect((await request({ port, path: '/capacity-live' })).status).toBe(200);
+        expect(server.manager.pending.size).toBe(1);
+        const docs = await request({ port, path: '/capacity-docs' });
+        expect(docs.status).toBe(200);
+        expect(docs.body).toContain('docs available');
     });
 
     test('real socket admission rejects foreign origins and unexposed members', async () => {

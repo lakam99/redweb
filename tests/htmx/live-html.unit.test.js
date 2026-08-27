@@ -561,11 +561,21 @@ describe('decorator-first Live HTML units', () => {
         await expect(exportStatic(Undecorated, null)).rejects.toThrow('options');
         await expect(exportStatic(Undecorated)).rejects.toThrow('outDir');
         await expect(exportStatic(Undecorated, {})).rejects.toThrow('outDir');
+        await expect(exportStatic(Undecorated, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('Undecorated is missing @page metadata');
+        await expect(exportStatic(class {}, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('Page is missing @page metadata');
 
         class LiveExport { render() { return '<p>live</p>'; } }
         page('/live-export')(LiveExport);
         await expect(exportStatic(LiveExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
             .rejects.toThrow('live: false');
+        let ineligibleConstructions = 0;
+        class IneligibleSharedExport { constructor() { ineligibleConstructions += 1; } }
+        page('/ineligible-shared-export', { shared: true })(IneligibleSharedExport);
+        await expect(exportStatic(IneligibleSharedExport, { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
+            .rejects.toThrow('live: false');
+        expect(ineligibleConstructions).toBe(0);
         const failedOutput = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-failed-export-'));
         class ValidBeforeLive { render() { return '<p>valid</p>'; } }
         page('/valid-before-live', { live: false })(ValidBeforeLive);
@@ -591,6 +601,18 @@ describe('decorator-first Live HTML units', () => {
         page('/same/', { live: false })(DuplicateB);
         await expect(exportStatic([DuplicateA, DuplicateB], { outDir: path.join(os.tmpdir(), 'unused-redweb-export') }))
             .rejects.toThrow('same output file');
+        class UppercaseDocs { render() { return '<p>upper</p>'; } }
+        class LowercaseDocs { render() { return '<p>lower</p>'; } }
+        page('/Docs', { live: false })(UppercaseDocs);
+        page('/docs', { live: false })(LowercaseDocs);
+        await expect(exportStatic([UppercaseDocs, LowercaseDocs], { outDir: failedOutput }))
+            .rejects.toThrow('same output file');
+        expect(fs.existsSync(path.join(failedOutput, 'Docs', 'index.html'))).toBe(false);
+        for (const route of ['/con', '/guide.']) {
+            class NonPortableExport { render() { return '<p>invalid</p>'; } }
+            page(route, { live: false })(NonPortableExport);
+            await expect(exportStatic(NonPortableExport, { outDir: failedOutput })).rejects.toThrow('cannot be exported');
+        }
         fs.rmSync(failedOutput, { recursive: true, force: true });
 
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-static-source-'));
@@ -617,6 +639,17 @@ describe('decorator-first Live HTML units', () => {
             expect(result.assets).toHaveLength(1);
             expect(fs.readFileSync(result.assets[0], 'utf8')).toBe('body { color: red; }');
             expect(document).toContain('/__redweb/css/');
+
+            class FragmentDocs {
+                secret = 'must not bind';
+                render() { return html`<p>${'{{ secret }}'}</p>${codeBlock('{{ missing }}')}`; }
+            }
+            page('/fragment-docs', { live: false })(FragmentDocs);
+            const fragmentResult = await exportStatic(FragmentDocs, { outDir: output });
+            const fragmentDocument = fs.readFileSync(fragmentResult.pages[0], 'utf8');
+            expect(fragmentDocument).toContain('<p>{{ secret }}</p>');
+            expect(fragmentDocument).toContain('{{ missing }}');
+            expect(fragmentDocument).not.toContain('must not bind');
 
             class RootStatic {
                 render({ request }) {
@@ -682,6 +715,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], templateRoot: '' })).toThrow('templateRoot');
         expect(() => new PageManager({ pages: [PlainPage], sessionTtlMs: -1 })).toThrow('sessionTtlMs');
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
+        expect(() => new PageManager({ pages: [PlainPage], maxConcurrentRenders: 0 })).toThrow('maxConcurrentRenders');
         expect(() => new PageManager({ pages: [PlainPage], shutdownTimeoutMs: -1 })).toThrow('shutdownTimeoutMs');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
@@ -763,7 +797,7 @@ describe('decorator-first Live HTML units', () => {
     test('covers manager rendering, admission, messaging, expiry, and lifecycle failures', async () => {
         class ManagedPage extends LivePage {
             async loading(context) { this.loaded = context.query.loaded; }
-            render() { return html`<h1>{{ loaded }}</h1>`; }
+            render() { return '<h1>{{ loaded }}</h1>'; }
             echo(value) { return value; }
             noop() {}
         }

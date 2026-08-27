@@ -6,6 +6,7 @@ const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
+const { isHtml } = require('./Html');
 const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
 
 const PROTOCOL_VERSION = '1';
@@ -59,11 +60,14 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
         if (!Number.isInteger(maxSessions) || maxSessions < 1) throw new TypeError('`maxSessions` must be a positive integer.');
+        if (!Number.isInteger(maxConcurrentRenders) || maxConcurrentRenders < 1) {
+            throw new TypeError('`maxConcurrentRenders` must be a positive integer.');
+        }
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
         if (authenticate !== undefined && typeof authenticate !== 'function') throw new TypeError('`authenticate` must be a function.');
@@ -88,6 +92,7 @@ class PageManager {
         this.hasExplicitTemplateRoot = templateRoot !== undefined;
         this.sessionTtlMs = sessionTtlMs;
         this.maxSessions = maxSessions;
+        this.maxConcurrentRenders = maxConcurrentRenders;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.authenticateRequest = authenticate;
@@ -100,6 +105,7 @@ class PageManager {
         this.assets = new PageAssetLoader();
         this.sharedPages = new Set();
         this.rendering = 0;
+        this.liveRendering = 0;
         this.renderWaiters = [];
         this.renderPages = new Set();
         this.renderAbortController = new AbortController();
@@ -180,12 +186,15 @@ class PageManager {
     }
 
     async render(record, request) {
-        if (this.closing || this.pending.size + this.active.size + this.rendering >= this.maxSessions) {
+        const live = record.metadata.live !== false;
+        const sessionsFull = live && this.pending.size + this.active.size + this.liveRendering >= this.maxSessions;
+        if (this.closing || this.rendering >= this.maxConcurrentRenders || sessionsFull) {
             const error = new Error('Live HTML session capacity reached.');
             error.status = 503;
             throw error;
         }
         this.rendering += 1;
+        if (live) this.liveRendering += 1;
         const ownsPage = record.metadata.scope === 'connection';
         let page;
         try {
@@ -210,7 +219,7 @@ class PageManager {
             const source = record.template ?? await page.render?.(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
             if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-            const markup = HtmlRenderer.render(source.toString(), page, { live: record.metadata.live !== false });
+            const markup = isHtml(source) ? source.toString() : HtmlRenderer.render(source.toString(), page, { live });
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
                 if (ownsPage) await page.dispose();
@@ -229,6 +238,7 @@ class PageManager {
         } finally {
             if (page) this.renderPages.delete(page);
             this.rendering -= 1;
+            if (live) this.liveRendering -= 1;
             if (this.rendering === 0) this.renderWaiters.splice(0).forEach(resolve => resolve());
         }
     }

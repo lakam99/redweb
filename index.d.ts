@@ -530,6 +530,7 @@ declare module 'redweb' {
         };
         sessionTtlMs?: number;
         maxSessions?: number;
+        maxConcurrentRenders?: number;
         shutdownTimeoutMs?: number;
         authenticate?(request: import('http').IncomingMessage | import('express').Request):
             string | number | bigint | boolean | false | null | undefined |

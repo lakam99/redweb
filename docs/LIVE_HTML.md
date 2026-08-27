@@ -112,6 +112,8 @@ const reference = each(apiSections, section => html`
 
 `codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
 
+An `HtmlFragment` returned from `render()` is already fully composed and is never reparsed for `{{ bindings }}` or directives. This keeps code samples literal and prevents escaped documentation text from becoming executable template syntax. Return a string or use `template` when Redweb should process declarative bindings.
+
 State observation is deliberately shallow. Assigning a new value publishes an update; mutating a nested object or array in place does not. Reassign after nested changes:
 
 ```ts
@@ -146,7 +148,7 @@ Names such as `constructor`, `prototype`, and `__proto__` are rejected. Arbitrar
 
 Pages can implement these optional hooks:
 
-- `loading(context)` runs before SSR and receives the Express request, params, query, body, and shutdown `signal`.
+- `loading(context)` runs before SSR and receives the portable page request, params, query, body, and shutdown `signal`.
 - `connected(context)` runs after the page's authenticated socket connects and receives the socket and cancellation signal.
 - `disconnected(context)` runs when that socket closes and may be asynchronous.
 - `disposed()` runs once when a connection-scoped page expires or the server shuts down and may be asynchronous.
@@ -172,6 +174,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `livePaths.css`: optional internal URL prefix for generated stylesheet routes; defaults to `/__redweb/css`.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
+- `maxConcurrentRenders`: maximum simultaneous HTTP page renders, independent of live session occupancy; defaults to `maxSessions`.
 - `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
 - `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
