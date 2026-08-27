@@ -38,6 +38,14 @@ function registerAction(PageClass, method) {
     metadataVersion += 1;
 }
 
+function registerStandardAction(PageClass, method, implementation) {
+    const methods = new Map(STANDARD_ACTIONS.get(PageClass) || []);
+    if (methods.get(method) === implementation) return;
+    methods.set(method, implementation);
+    STANDARD_ACTIONS.set(PageClass, methods);
+    metadataVersion += 1;
+}
+
 function resolvedState(PageClass) {
     const cached = RESOLVED_STATE.get(PageClass);
     if (cached?.version === metadataVersion) return cached.value;
@@ -55,9 +63,8 @@ function resolvedAction(PageClass) {
     const value = new Set();
     hierarchy(PageClass).forEach(CurrentClass => {
         const own = new Set(ACTION_METADATA.get(CurrentClass) || []);
-        Object.getOwnPropertyNames(CurrentClass.prototype).forEach(method => {
-            const decoratedNames = STANDARD_ACTIONS.get(Object.getOwnPropertyDescriptor(CurrentClass.prototype, method)?.value);
-            if (decoratedNames?.has(method)) own.add(method);
+        STANDARD_ACTIONS.get(CurrentClass)?.forEach((implementation, method) => {
+            if (CurrentClass.prototype[method] === implementation) own.add(method);
         });
         value.forEach(method => {
             if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, method) && !own.has(method)) value.delete(method);
@@ -118,12 +125,9 @@ function action() {
             if (method.static || method.private || typeof method.name !== 'string' || !method.name || typeof target !== 'function') {
                 throw new TypeError('action() requires a public instance method with a string name.');
             }
-            const names = STANDARD_ACTIONS.get(target) || new Set();
-            if (!names.has(method.name)) {
-                names.add(method.name);
-                STANDARD_ACTIONS.set(target, names);
-                metadataVersion += 1;
-            }
+            method.addInitializer(function registerStandardActionInitializer() {
+                if (this[method.name] === target) registerStandardAction(this.constructor, method.name, target);
+            });
             return target;
         }
         const PageClass = assertDecoratorTarget(target, 'action()');

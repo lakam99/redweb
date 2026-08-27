@@ -92,14 +92,15 @@ describe('decorator-first Live HTML units', () => {
             kind: 'field', static: false, private: false, name: 'value',
             addInitializer: initializer => { stateInitializer = initializer; },
         });
+        let actionInitializer;
         const actionValue = action()(StandardMetadataPage.prototype.run, {
             kind: 'method', static: false, private: false, name: 'run',
-            addInitializer: initializer => initializer.call(new StandardMetadataPage()),
-        });
-        action()(StandardMetadataPage.prototype.run, {
-            kind: 'method', static: false, private: false, name: 'run', addInitializer() {},
+            addInitializer: initializer => { actionInitializer = initializer; },
         });
         stateInitializer.call(new StandardMetadataPage());
+        actionInitializer.call(new StandardMetadataPage());
+        actionInitializer.call(new StandardMetadataPage());
+        actionInitializer.call({ constructor: class WrongActionOwner {}, run() { return 'different'; } });
         expect(stateIdentity('initial')).toBe('initial');
         expect(actionValue).toBe(StandardMetadataPage.prototype.run);
         expect(getStateMetadata(StandardMetadataPage).get('value')).toEqual({ writable: true });
@@ -107,7 +108,13 @@ describe('decorator-first Live HTML units', () => {
         class AliasedStandardAction extends LivePage {}
         AliasedStandardAction.prototype.run = StandardMetadataPage.prototype.run;
         AliasedStandardAction.prototype.secret = StandardMetadataPage.prototype.run;
-        expect(getActionMetadata(AliasedStandardAction)).toEqual(new Set(['run']));
+        expect(getActionMetadata(AliasedStandardAction)).toEqual(new Set());
+        await expect(new AliasedStandardAction()._invoke('run', [], {})).rejects.toThrow('Unknown page action');
+        class ReplacedStandardAction extends LivePage {}
+        ReplacedStandardAction.prototype.run = StandardMetadataPage.prototype.run;
+        actionInitializer.call(new ReplacedStandardAction());
+        ReplacedStandardAction.prototype.run = () => 'replacement';
+        expect(getActionMetadata(ReplacedStandardAction)).toEqual(new Set());
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {

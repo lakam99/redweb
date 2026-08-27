@@ -28,6 +28,18 @@ function internalPath(value, label) {
     return value;
 }
 
+function withinDeadline(promise, deadline) {
+    const remaining = Math.max(0, deadline - Date.now());
+    if (remaining === 0) return Promise.resolve({ completed: false });
+    return new Promise(resolve => {
+        const timer = setTimeout(() => resolve({ completed: false }), remaining);
+        promise.then(value => {
+            clearTimeout(timer);
+            resolve({ completed: true, value });
+        });
+    });
+}
+
 class PageManager {
     constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
@@ -288,28 +300,31 @@ class PageManager {
         this.closing = true;
         this.renderAbortController.abort();
         const errors = [];
+        const deadline = Date.now() + this.shutdownTimeoutMs;
         if (this.rendering > 0) {
-            let timer;
             const drained = new Promise(resolve => this.renderWaiters.push(resolve));
-            const deadline = new Promise(resolve => {
-                timer = setTimeout(() => resolve(false), this.shutdownTimeoutMs);
-            });
-            const completed = await Promise.race([drained.then(() => true), deadline]);
-            clearTimeout(timer);
-            if (!completed) {
+            const drain = await withinDeadline(drained, deadline);
+            if (!drain.completed) {
                 const timeout = new Error('Live HTML render cleanup exceeded shutdownTimeoutMs.');
                 timeout.code = 'LIVE_HTML_SHUTDOWN_TIMEOUT';
                 errors.push(timeout);
             }
         }
-        const results = await Promise.allSettled([
+        const cleanup = Promise.allSettled([
             ...[...this.pending.values(), ...this.active.values()].map(session => this.release(session)),
             ...[...this.sharedPages].map(page => page.dispose()),
             ...[...this.renderPages].map(page => page.dispose()),
         ]);
         this.sharedPages.clear();
         this.renderPages.clear();
-        errors.push(...results.filter(result => result.status === 'rejected').map(result => result.reason));
+        const cleanupResult = await withinDeadline(cleanup, deadline);
+        if (cleanupResult.completed) {
+            errors.push(...cleanupResult.value.filter(result => result.status === 'rejected').map(result => result.reason));
+        } else {
+            const timeout = new Error('Live HTML page disposal exceeded shutdownTimeoutMs.');
+            timeout.code = 'LIVE_HTML_SHUTDOWN_TIMEOUT';
+            errors.push(timeout);
+        }
         if (errors.length) {
             const aggregate = new AggregateError(errors, 'Live HTML page cleanup failed.');
             if (errors.some(error => error?.code === 'LIVE_HTML_SHUTDOWN_TIMEOUT')) {

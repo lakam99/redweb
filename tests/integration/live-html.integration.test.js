@@ -190,7 +190,9 @@ describe('Live HTML integration without mocks', () => {
         rawSockets.add(foreign);
         foreign.on('error', () => {});
         const status = await new Promise(resolve => {
-            foreign.once('unexpected-response', (_request, response) => {
+            foreign.once('unexpected-response', (upgradeRequest, response) => {
+                upgradeRequest.on('error', () => {});
+                response.on('error', () => {});
                 response.resume();
                 resolve(response.statusCode);
             });
@@ -246,7 +248,9 @@ describe('Live HTML integration without mocks', () => {
         );
         rawSockets.add(insecureOrigin);
         insecureOrigin.on('error', () => {});
-        const rejectedStatus = await new Promise(resolve => insecureOrigin.once('unexpected-response', (_request, rejectedResponse) => {
+        const rejectedStatus = await new Promise(resolve => insecureOrigin.once('unexpected-response', (upgradeRequest, rejectedResponse) => {
+            upgradeRequest.on('error', () => {});
+            rejectedResponse.on('error', () => {});
             rejectedResponse.resume();
             resolve(rejectedResponse.statusCode);
         }));
@@ -268,7 +272,9 @@ describe('Live HTML integration without mocks', () => {
         });
         rawSockets.add(stolen);
         stolen.on('error', () => {});
-        const denied = await new Promise(resolve => stolen.once('unexpected-response', (_request, deniedResponse) => {
+        const denied = await new Promise(resolve => stolen.once('unexpected-response', (upgradeRequest, deniedResponse) => {
+            upgradeRequest.on('error', () => {});
+            deniedResponse.on('error', () => {});
             deniedResponse.resume();
             resolve(deniedResponse.statusCode);
         }));
@@ -293,6 +299,26 @@ describe('Live HTML integration without mocks', () => {
         expect((await request({ port, path: '/' })).status).toBe(200);
         servers.delete(server);
         await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        expect(server.server.listening).toBe(false);
+    });
+
+    test('bounds a non-cooperative disposed hook and still closes the real listener', async () => {
+        class HangingCleanupPage extends LivePage {
+            render() { return '<p>cleanup</p>'; }
+            disposed() { return new Promise(() => {}); }
+        }
+        page('/')(HangingCleanupPage);
+        const server = await start(options => new LiveHtmlServer({
+            pages: [HangingCleanupPage],
+            ...options,
+            shutdownTimeoutMs: 25,
+        }));
+        const port = server.server.address().port;
+        expect((await request({ port, path: '/' })).status).toBe(200);
+        servers.delete(server);
+        const began = Date.now();
+        await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        expect(Date.now() - began).toBeLessThan(1000);
         expect(server.server.listening).toBe(false);
     });
 
