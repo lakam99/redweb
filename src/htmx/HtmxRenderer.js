@@ -1,14 +1,8 @@
-const fs = require('fs');
-const path = require('path');
 const { assertTextContext, escapeHtml, isHtml, renderValue } = require('./Html');
+const PageAssetLoader = require('./PageAssetLoader');
 
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
-
-function outside(root, candidate) {
-    const relative = path.relative(root, candidate);
-    return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
-}
 
 function serializeJson(value) {
     return JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -16,16 +10,7 @@ function serializeJson(value) {
 
 class HtmxRenderer {
     static file(filePath, rootDir, kind) {
-        const root = path.resolve(rootDir);
-        const resolved = path.resolve(root, filePath);
-        if (outside(root, resolved)) {
-            throw new Error(`Page ${kind} is outside the configured template root.`);
-        }
-        if (!fs.existsSync(resolved)) throw new Error(`Page ${kind} not found: ${resolved}`);
-        if (outside(fs.realpathSync(root), fs.realpathSync(resolved))) {
-            throw new Error(`Page ${kind} is outside the configured template root.`);
-        }
-        return fs.readFileSync(resolved, 'utf8');
+        return new PageAssetLoader().load(filePath, rootDir, kind).content;
     }
 
     static template(filePath, rootDir) {
@@ -61,10 +46,9 @@ class HtmxRenderer {
             `<script type="module" src="${escapeHtml(config.runtimePath)}"></script>`;
         const links = stylesheets.map(href => `<link rel="stylesheet" href="${escapeHtml(href)}">`).join('');
         if (/<\/body\s*>/i.test(markup)) {
-            const styled = links && /<\/head\s*>/i.test(markup)
-                ? markup.replace(/<\/head\s*>/i, `${links}</head>`)
-                : markup.replace(/<body([^>]*)>/i, `<body$1>${links}`);
-            return styled.replace(/<\/body\s*>/i, `${bootstrap}</body>`);
+            const hasHead = /<\/head\s*>/i.test(markup);
+            const styled = links && hasHead ? markup.replace(/<\/head\s*>/i, `${links}</head>`) : markup;
+            return styled.replace(/<\/body\s*>/i, `${hasHead ? '' : links}${bootstrap}</body>`);
         }
         return `<!doctype html><html><head>${links}</head><body><main data-rw-root>${markup}</main>${bootstrap}</body></html>`;
     }

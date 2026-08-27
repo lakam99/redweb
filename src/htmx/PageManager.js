@@ -3,6 +3,7 @@ const path = require('path');
 const { BaseHandler } = require('../ws/BaseHandler');
 const { SocketRoute } = require('../ws');
 const HtmxRenderer = require('./HtmxRenderer');
+const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
 const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
@@ -79,6 +80,8 @@ class PageManager {
         this.active = new Map();
         this.records = new Map();
         this.stylesheets = new Map();
+        this.stylesheetUrls = new Map();
+        this.assets = new PageAssetLoader();
         this.sharedPages = new Set();
         this.rendering = 0;
         this.renderWaiters = [];
@@ -99,10 +102,7 @@ class PageManager {
         const record = {
             PageClass,
             metadata,
-            template: metadata.template ? HtmxRenderer.template(
-                metadata.template,
-                root
-            ) : null,
+            template: metadata.template ? this.assets.load(metadata.template, root, 'template').content : null,
             stylesheets: [...new Set((metadata.css || []).map(file => this.registerStylesheet(file, root)))],
             shared: null,
         };
@@ -114,10 +114,13 @@ class PageManager {
     }
 
     registerStylesheet(file, root) {
-        const content = HtmxRenderer.stylesheet(file, root);
-        const digest = createHash('sha256').update(content).digest('hex');
+        const asset = this.assets.load(file, root, 'stylesheet');
+        const existing = this.stylesheetUrls.get(asset.path);
+        if (existing) return existing;
+        const digest = createHash('sha256').update(asset.content).digest('hex');
         const url = `${this.paths.css}/${digest}.css`;
-        this.stylesheets.set(url, content);
+        this.stylesheets.set(url, asset.content);
+        this.stylesheetUrls.set(asset.path, url);
         return url;
     }
 

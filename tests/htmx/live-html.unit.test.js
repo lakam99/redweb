@@ -16,6 +16,7 @@ const {
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
+const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const browserRuntime = require('../../src/htmx/browserRuntime');
 const { getActionMetadata, getPageMetadata, getStateMetadata } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
@@ -186,6 +187,8 @@ describe('decorator-first Live HTML units', () => {
             expect(() => HtmxRenderer.stylesheet('../outside.css', root)).toThrow('outside');
             expect(() => HtmxRenderer.stylesheet('linked/secret.css', root)).toThrow('outside');
             expect(() => HtmxRenderer.stylesheet('missing.css', root)).toThrow('not found');
+            const assets = new PageAssetLoader();
+            expect(assets.load('page.css', root, 'stylesheet')).toBe(assets.load('page.css', root, 'stylesheet'));
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
             fs.rmSync(outsideRoot, { recursive: true, force: true });
@@ -220,7 +223,9 @@ describe('decorator-first Live HTML units', () => {
         );
         expect(styledDocument).toContain('<link rel="stylesheet" href="/one.css"><link rel="stylesheet" href="/two.css"></head>');
         expect(HtmxRenderer.document('<html><body>hello</body></html>', config, ['/page.css']))
-            .toContain('<body><link rel="stylesheet" href="/page.css">hello');
+            .toContain('hello<link rel="stylesheet" href="/page.css"><script');
+        expect(HtmxRenderer.document('<html><body data-label="a > b">hello</body></html>', config, ['/quoted.css']))
+            .toContain('<body data-label="a > b">hello<link rel="stylesheet" href="/quoted.css"><script');
         expect(HtmxRenderer.document('<p>hello</p>', config, ['/fragment.css']))
             .toContain('<head><link rel="stylesheet" href="/fragment.css"></head>');
         const hostilePath = '/asset"><script>window.injected=true</script>';
@@ -335,6 +340,23 @@ describe('decorator-first Live HTML units', () => {
         const explicit = start(InferredPlainPage, { listen: false, templateRoot: __dirname });
         expect(explicit.manager.records.get('/inferred').template).toContain('{{ message }}');
         await explicit.shutdown();
+
+        const sharedStyleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-shared-style-'));
+        try {
+            fs.writeFileSync(path.join(sharedStyleRoot, 'shared.css'), 'body { color: cyan; }');
+            class FirstStyledPage { render() { return 'first'; } }
+            class SecondStyledPage { render() { return 'second'; } }
+            page('/first-style', { css: 'shared.css' })(FirstStyledPage);
+            page('/second-style', { css: 'shared.css' })(SecondStyledPage);
+            const styled = start([FirstStyledPage, SecondStyledPage], { listen: false, templateRoot: sharedStyleRoot });
+            expect(styled.manager.records.get('/first-style').stylesheets)
+                .toEqual(styled.manager.records.get('/second-style').stylesheets);
+            expect(styled.manager.stylesheets.size).toBe(1);
+            expect(styled.manager.stylesheetUrls.size).toBe(1);
+            await styled.shutdown();
+        } finally {
+            fs.rmSync(sharedStyleRoot, { recursive: true, force: true });
+        }
 
         class DuplicatePage extends LivePage {}
         page('/plain')(DuplicatePage);
