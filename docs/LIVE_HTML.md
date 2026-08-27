@@ -77,12 +77,14 @@ Names such as `constructor`, `prototype`, and `__proto__` are rejected. Arbitrar
 
 Pages can implement these optional hooks:
 
-- `loading(context)` runs before SSR and receives the Express request, params, query, and body.
+- `loading(context)` runs before SSR and receives the Express request, params, query, body, and shutdown `signal`.
 - `connected(context)` runs after the page's authenticated socket connects and receives the socket and cancellation signal.
 - `disconnected(context)` runs when that socket closes and may be asynchronous.
 - `disposed()` runs once when a connection-scoped page expires or the server shuts down and may be asynchronous.
 
 Timers and subscriptions created by a page should be owned by that page and stopped in `disconnected()` or `disposed()`. `dispose()` is idempotent.
+
+Shutdown aborts the render signal and waits up to `shutdownTimeoutMs` (one second by default) for active `loading()` and `render()` hooks. If a hook ignores cancellation, Redweb disposes its page, force-closes the affected HTTP connection, completes the remaining cleanup phases, and then reports the timeout.
 
 HTTP rendering produces an unpredictable page ID. The browser presents it during a same-origin, versioned WebSocket upgrade. Pending and disconnected sessions expire, the registry is bounded by `maxSessions`, and a page ID cannot own two active sockets simultaneously.
 
@@ -100,6 +102,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `templateRoot`: root directory for `.htmx` templates; defaults to the current directory.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
+- `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
 - `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
 - `livePaths`: optional `{ socket, client, runtime }` internal path overrides.

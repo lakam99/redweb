@@ -414,6 +414,7 @@ declare module 'redweb' {
         query: Record<string, unknown>;
         body: unknown;
         principal?: string | number | bigint | boolean;
+        signal: AbortSignal;
     }
 
     export interface LivePageConnectionContext {
@@ -470,6 +471,7 @@ declare module 'redweb' {
         };
         sessionTtlMs?: number;
         maxSessions?: number;
+        shutdownTimeoutMs?: number;
         authenticate?(request: import('http').IncomingMessage | import('express').Request):
             string | number | bigint | boolean | false | null | undefined |
             Promise<string | number | bigint | boolean | false | null | undefined>;

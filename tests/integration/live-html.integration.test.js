@@ -318,4 +318,34 @@ describe('Live HTML integration without mocks', () => {
         expect((await first).status).toBe(200);
         expect(server.manager.pending.size).toBe(1);
     });
+
+    test('bounds shutdown and closes the listener when an HTTP render ignores cancellation', async () => {
+        let loadingStarted;
+        let renderSignal;
+        const started = new Promise(resolve => { loadingStarted = resolve; });
+        class NonCooperativePage extends LivePage {
+            loading(context) {
+                renderSignal = context.signal;
+                loadingStarted();
+                return new Promise(() => {});
+            }
+            render() { return '<p>never</p>'; }
+        }
+        page('/')(NonCooperativePage);
+        const server = await start(options => new LiveHtmlServer({
+            pages: [NonCooperativePage],
+            ...options,
+            shutdownTimeoutMs: 25,
+        }));
+        const port = server.server.address().port;
+        const hangingRequest = request({ port, path: '/' }).then(value => value, error => error);
+        await started;
+        servers.delete(server);
+        const began = Date.now();
+        await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        expect(Date.now() - began).toBeLessThan(1000);
+        expect(renderSignal.aborted).toBe(true);
+        expect(server.server.listening).toBe(false);
+        expect(await hangingRequest).toHaveProperty('message');
+    });
 });

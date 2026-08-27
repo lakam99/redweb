@@ -15,6 +15,7 @@ class LiveHtmlServer {
             livePaths,
             sessionTtlMs,
             maxSessions,
+            shutdownTimeoutMs = 1000,
             authenticate,
             origins,
             server: suppliedApp,
@@ -30,6 +31,7 @@ class LiveHtmlServer {
             paths: livePaths,
             sessionTtlMs,
             maxSessions,
+            shutdownTimeoutMs,
             authenticate,
             origins,
             logger: httpOptions.logger,
@@ -63,14 +65,15 @@ class LiveHtmlServer {
 
     async performShutdown() {
         const errors = [];
-        for (const cleanup of [
-            () => this.sockets.shutdown(),
-            () => this.manager.shutdown(),
-            () => this.http.shutdown(),
-        ]) {
-            try { await cleanup(); }
-            catch (error) { errors.push(error); }
+        try { await this.sockets.shutdown(); }
+        catch (error) { errors.push(error); }
+        try { await this.manager.shutdown(); }
+        catch (error) {
+            errors.push(error);
+            if (error?.code === 'LIVE_HTML_SHUTDOWN_TIMEOUT') this.server.closeAllConnections?.();
         }
+        try { await this.http.shutdown(); }
+        catch (error) { errors.push(error); }
         if (errors.length) throw new AggregateError(errors, 'Live HTML shutdown failed.');
     }
 }

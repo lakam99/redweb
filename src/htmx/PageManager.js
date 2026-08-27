@@ -29,11 +29,12 @@ function internalPath(value, label) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, authenticate, origins, logger = console }) {
+    constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (typeof templateRoot !== 'string' || !templateRoot) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
         if (!Number.isInteger(maxSessions) || maxSessions < 1) throw new TypeError('`maxSessions` must be a positive integer.');
+        if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
         if (authenticate !== undefined && typeof authenticate !== 'function') throw new TypeError('`authenticate` must be a function.');
         if (origins !== undefined && typeof origins !== 'function' &&
@@ -50,6 +51,7 @@ class PageManager {
         this.templateRoot = path.resolve(templateRoot);
         this.sessionTtlMs = sessionTtlMs;
         this.maxSessions = maxSessions;
+        this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.authenticateRequest = authenticate;
         this.origins = origins;
@@ -59,6 +61,8 @@ class PageManager {
         this.sharedPages = new Set();
         this.rendering = 0;
         this.renderWaiters = [];
+        this.renderPages = new Set();
+        this.renderAbortController = new AbortController();
         this.closing = false;
         pages.forEach(PageClass => this.register(PageClass));
     }
@@ -112,15 +116,25 @@ class PageManager {
         let page;
         try {
             page = ownsPage ? this.instantiate(record) : record.shared;
+            this.renderPages.add(page);
             const principal = this.authenticateRequest ? await this.authenticateRequest(request) : undefined;
             if (this.authenticateRequest && (principal === false || principal === null || principal === undefined || typeof principal === 'object')) {
                 const error = new Error('Live HTML authentication failed.');
                 error.status = 401;
                 throw error;
             }
-            const context = Object.freeze({ request, params: request.params, query: request.query, body: request.body, principal });
+            const context = Object.freeze({
+                request,
+                params: request.params,
+                query: request.query,
+                body: request.body,
+                principal,
+                signal: this.renderAbortController.signal,
+            });
             await page.loading?.(context);
+            if (this.closing) throw new Error('Live HTML server is shutting down.');
             const source = record.template ?? await page.render?.(context);
+            if (this.closing) throw new Error('Live HTML server is shutting down.');
             if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
             const markup = HtmxRenderer.render(source.toString(), page);
             const session = this.createSession(page, ownsPage, principal);
@@ -134,6 +148,7 @@ class PageManager {
             if (ownsPage && page) await page.dispose();
             throw error;
         } finally {
+            if (page) this.renderPages.delete(page);
             this.rendering -= 1;
             if (this.rendering === 0) this.renderWaiters.splice(0).forEach(resolve => resolve());
         }
@@ -254,6 +269,7 @@ class PageManager {
                     allowDuplicateConnections: true,
                     orderedMessages: true,
                     drainHandlers: true,
+                    shutdownTimeoutMs: manager.shutdownTimeoutMs,
                     limits: { maxPendingMessages: 64, maxBufferedBytes: 256 * 1024 },
                     websocketOptions: { maxPayload: 64 * 1024 },
                     protocol: { versions: [PROTOCOL_VERSION] },
@@ -270,14 +286,38 @@ class PageManager {
 
     async shutdown() {
         this.closing = true;
-        if (this.rendering > 0) await new Promise(resolve => this.renderWaiters.push(resolve));
+        this.renderAbortController.abort();
+        const errors = [];
+        if (this.rendering > 0) {
+            let timer;
+            const drained = new Promise(resolve => this.renderWaiters.push(resolve));
+            const deadline = new Promise(resolve => {
+                timer = setTimeout(() => resolve(false), this.shutdownTimeoutMs);
+                timer.unref?.();
+            });
+            const completed = await Promise.race([drained.then(() => true), deadline]);
+            clearTimeout(timer);
+            if (!completed) {
+                const timeout = new Error('Live HTML render cleanup exceeded shutdownTimeoutMs.');
+                timeout.code = 'LIVE_HTML_SHUTDOWN_TIMEOUT';
+                errors.push(timeout);
+            }
+        }
         const results = await Promise.allSettled([
             ...[...this.pending.values(), ...this.active.values()].map(session => this.release(session)),
             ...[...this.sharedPages].map(page => page.dispose()),
+            ...[...this.renderPages].map(page => page.dispose()),
         ]);
         this.sharedPages.clear();
-        const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
-        if (errors.length) throw new AggregateError(errors, 'Live HTML page cleanup failed.');
+        this.renderPages.clear();
+        errors.push(...results.filter(result => result.status === 'rejected').map(result => result.reason));
+        if (errors.length) {
+            const aggregate = new AggregateError(errors, 'Live HTML page cleanup failed.');
+            if (errors.some(error => error?.code === 'LIVE_HTML_SHUTDOWN_TIMEOUT')) {
+                aggregate.code = 'LIVE_HTML_SHUTDOWN_TIMEOUT';
+            }
+            throw aggregate;
+        }
     }
 }
 

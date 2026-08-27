@@ -104,6 +104,10 @@ describe('decorator-first Live HTML units', () => {
         expect(actionValue).toBe(StandardMetadataPage.prototype.run);
         expect(getStateMetadata(StandardMetadataPage).get('value')).toEqual({ writable: true });
         expect(getActionMetadata(StandardMetadataPage).has('run')).toBe(true);
+        class AliasedStandardAction extends LivePage {}
+        AliasedStandardAction.prototype.run = StandardMetadataPage.prototype.run;
+        AliasedStandardAction.prototype.secret = StandardMetadataPage.prototype.run;
+        expect(getActionMetadata(AliasedStandardAction)).toEqual(new Set(['run']));
     });
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {
@@ -228,6 +232,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], templateRoot: '' })).toThrow('templateRoot');
         expect(() => new PageManager({ pages: [PlainPage], sessionTtlMs: -1 })).toThrow('sessionTtlMs');
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
+        expect(() => new PageManager({ pages: [PlainPage], shutdownTimeoutMs: -1 })).toThrow('shutdownTimeoutMs');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
         expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');
@@ -426,7 +431,7 @@ describe('decorator-first Live HTML units', () => {
         const slowShutdown = slowManager.shutdown();
         await expect(slowManager.render(slowRecord, request)).rejects.toMatchObject({ status: 503 });
         releaseSlowRender();
-        await slowRender;
+        await expect(slowRender).rejects.toThrow('shutting down');
         await slowShutdown;
         expect(slowManager.rendering).toBe(0);
         expect(slowManager.pending.size).toBe(0);
@@ -448,6 +453,19 @@ describe('decorator-first Live HTML units', () => {
         parallelReleases[1]();
         await parallelSecond;
         await parallelManager.shutdown();
+
+        let releaseBodyRender;
+        class SlowBodyRender extends LivePage {
+            render() { return new Promise(resolve => { releaseBodyRender = () => resolve('<p>body</p>'); }); }
+        }
+        page('/slow-body')(SlowBodyRender);
+        const slowBodyManager = new PageManager({ pages: [SlowBodyRender] });
+        const slowBodyRender = slowBodyManager.render(slowBodyManager.records.get('/slow-body'), request);
+        await new Promise(resolve => setImmediate(resolve));
+        const slowBodyShutdown = slowBodyManager.shutdown();
+        releaseBodyRender();
+        await expect(slowBodyRender).rejects.toThrow('shutting down');
+        await slowBodyShutdown;
     });
 
     test('validates and composes LiveHtmlServer with an existing app and idempotent shutdown', async () => {
@@ -464,5 +482,17 @@ describe('decorator-first Live HTML units', () => {
         const second = server.shutdown();
         expect(second).toBe(first);
         await first;
+
+        const failing = new LiveHtmlServer({ pages: [Page], server: express(), listen: false });
+        failing.sockets.shutdown = async () => { throw new Error('socket cleanup'); };
+        failing.manager.shutdown = async () => {};
+        failing.http.shutdown = async () => { throw new Error('http cleanup'); };
+        await expect(failing.shutdown()).rejects.toMatchObject({
+            message: 'Live HTML shutdown failed.',
+            errors: expect.arrayContaining([
+                expect.objectContaining({ message: 'socket cleanup' }),
+                expect.objectContaining({ message: 'http cleanup' }),
+            ]),
+        });
     });
 });

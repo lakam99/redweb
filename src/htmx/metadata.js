@@ -3,7 +3,7 @@ const STATE_METADATA = new WeakMap();
 const ACTION_METADATA = new WeakMap();
 const RESOLVED_STATE = new WeakMap();
 const RESOLVED_ACTION = new WeakMap();
-const STANDARD_ACTIONS = new WeakSet();
+const STANDARD_ACTIONS = new WeakMap();
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -56,7 +56,8 @@ function resolvedAction(PageClass) {
     hierarchy(PageClass).forEach(CurrentClass => {
         const own = new Set(ACTION_METADATA.get(CurrentClass) || []);
         Object.getOwnPropertyNames(CurrentClass.prototype).forEach(method => {
-            if (STANDARD_ACTIONS.has(Object.getOwnPropertyDescriptor(CurrentClass.prototype, method)?.value)) own.add(method);
+            const decoratedNames = STANDARD_ACTIONS.get(Object.getOwnPropertyDescriptor(CurrentClass.prototype, method)?.value);
+            if (decoratedNames?.has(method)) own.add(method);
         });
         value.forEach(method => {
             if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, method) && !own.has(method)) value.delete(method);
@@ -117,8 +118,10 @@ function action() {
             if (method.static || method.private || typeof method.name !== 'string' || !method.name || typeof target !== 'function') {
                 throw new TypeError('action() requires a public instance method with a string name.');
             }
-            if (!STANDARD_ACTIONS.has(target)) {
-                STANDARD_ACTIONS.add(target);
+            const names = STANDARD_ACTIONS.get(target) || new Set();
+            if (!names.has(method.name)) {
+                names.add(method.name);
+                STANDARD_ACTIONS.set(target, names);
                 metadataVersion += 1;
             }
             return target;
