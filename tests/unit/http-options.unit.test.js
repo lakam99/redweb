@@ -15,13 +15,21 @@ describe('HTTP option validation and lifecycle units', () => {
         [{ port: 65536 }, '`port`'],
         [{ bind: 7 }, '`bind`'],
         [{ bind: '' }, '`bind`'],
+        [{ listen: null }, '`listen`'],
+        [{ listenCallback: 'bad' }, '`listenCallback`'],
         [{ encoding: 'xml' }, '`encoding`'],
         [{ publicPaths: 'public' }, '`publicPaths`'],
+        [{ publicPaths: [''] }, 'public path'],
+        [{ publicPaths: [1] }, 'public path'],
         [{ services: {} }, '`services`'],
         [{ services: [null] }, 'serviceName'],
         [{ services: [{ serviceName: '', method: 'get', function() {} }] }, 'serviceName'],
         [{ services: [{ serviceName: '/x', method: 'trace', function() {} }] }, 'Unsupported HTTP'],
         [{ services: [{ serviceName: '/x', method: 'get' }] }, 'must provide a function'],
+        [{ services: [
+            { serviceName: '*', method: 'get', function() {} },
+            { serviceName: '*', method: 'get', function() {} },
+        ] }, 'Only one catch-all'],
         [{ server: {} }, 'Express-compatible'],
     ])('rejects invalid configuration %#', (options, message) => {
         expect(() => new BaseHttpServer(options)).toThrow(message);

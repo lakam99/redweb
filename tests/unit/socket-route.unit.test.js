@@ -29,6 +29,12 @@ describe('SocketRoute units', () => {
         [{ path: '/x', handlers: [NoopHandler], websocketOptions: [] }, '`websocketOptions`'],
         [{ path: '/x', handlers: [NoopHandler], websocketOptions: 'bad' }, '`websocketOptions`'],
         [{ path: '/x', handlers: [NoopHandler], getClientKey: 'bad' }, '`getClientKey`'],
+        [{ path: '/x', handlers: [NoopHandler], websocketOptions: { noServer: false } }, 'controls websocketOptions.noServer'],
+        [{ path: '/x', handlers: [NoopHandler], websocketOptions: { path: '/other' } }, 'controls websocketOptions.path'],
+        [{ path: '/x', handlers: [NoopHandler], websocketOptions: { server: {} } }, 'controls websocketOptions.server'],
+        [{ path: '/x', handlers: [NoopHandler], websocketOptions: { port: 1 } }, 'controls websocketOptions.port'],
+        [{ path: '/x', handlers: [{}] }, 'Handler entries'],
+        [{ path: '/x', handlers: [NoopHandler], services: [{}] }, 'Service entries'],
     ])('validates route configuration %#', (options, message) => {
         expect(() => new SocketRoute(options)).toThrow(message);
     });
@@ -98,6 +104,17 @@ describe('SocketRoute units', () => {
         route.handleClose({ __redwebClientKey: 'missing' });
         route.handleError({}, new Error('ignored by no-op logger'));
         expect(closed).toEqual([second, expect.any(Object)]);
+
+        const emptyKeyRoute = new SocketRoute({
+            path: '/empty-key',
+            handlers: [NoopHandler],
+            getClientKey: () => '',
+            logger: null,
+        });
+        const emptyKeySocket = createSocket();
+        emptyKeyRoute.handleConnection(emptyKeySocket, {});
+        emptyKeyRoute.handleClose(emptyKeySocket);
+        expect(emptyKeyRoute.clients.size).toBe(0);
     });
 
     test('optionally exposes text and binary handler errors', async () => {

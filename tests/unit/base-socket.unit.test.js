@@ -38,6 +38,9 @@ describe('BaseSocketServer units', () => {
         expect(() => new BaseSocketServer(server, { port: 1.5 })).toThrow('`port`');
         expect(() => new BaseSocketServer(server, { port: -1 })).toThrow('`port`');
         expect(() => new BaseSocketServer(server, { port: 65536 })).toThrow('`port`');
+        expect(() => new BaseSocketServer(server, { bind: '' })).toThrow('`bind`');
+        expect(() => new BaseSocketServer(server, { listen: 'yes' })).toThrow('`listen`');
+        expect(() => new BaseSocketServer(server, { listenCallback: 'bad' })).toThrow('`listenCallback`');
         expect(() => new BaseSocketServer(server, { routes: 'bad' })).toThrow('`routes`');
     });
 
@@ -47,6 +50,24 @@ describe('BaseSocketServer units', () => {
 
         const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
         expect(() => server.addRoute(DuplicateRoute)).toThrow('already exists');
+    });
+
+    test('logs asynchronous cleanup failures for rejected duplicate routes', async () => {
+        const logger = { log() {}, warn() {}, error: jest.fn() };
+        class RejectingRoute extends FirstRoute {
+            shutdown() { return Promise.reject(new Error('cleanup failed')); }
+        }
+        expect(() => new BaseSocketServer(fakeServer(), {
+            routes: [FirstRoute, RejectingRoute],
+            logger,
+        })).toThrow('unique');
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('Error shutting down route:', expect.any(Error));
+
+        const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger });
+        expect(() => server.addRoute(RejectingRoute)).toThrow('already exists');
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledTimes(2);
     });
 
     test('normalizes query strings and rejects malformed or unmatched upgrades', () => {
