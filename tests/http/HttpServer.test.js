@@ -7,6 +7,12 @@ const closeServer = (server) =>
         server.server.close((error) => (error ? reject(error) : resolve()));
     });
 
+const waitForListening = (server) => new Promise((resolve, reject) => {
+    if (server.server.listening) return resolve();
+    server.server.once('listening', resolve);
+    server.server.once('error', reject);
+});
+
 describe('HttpServer', () => {
     afterEach(() => {
         jest.restoreAllMocks();
@@ -42,6 +48,7 @@ describe('HttpServer', () => {
         const server = new HttpServer({ port: 0 });
 
         try {
+            await waitForListening(server);
             expect(server.server).toBeDefined();
             expect(server.server.listening).toBe(true);
         } finally {

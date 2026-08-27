@@ -43,7 +43,6 @@ describe('SocketRoute', () => {
 
         expect(WebSocketServer).toHaveBeenLastCalledWith({
             noServer: true,
-            path: '/limited',
             maxPayload: 1024,
             perMessageDeflate: false,
         });
@@ -51,7 +50,7 @@ describe('SocketRoute', () => {
 
     test('should throw an error if no path is provided', () => {
         expect(() => new SocketRoute({ handlers: [MockHandler] })).toThrow(
-            'A `path` must be specified for the SocketRoute.'
+            'A `path` beginning with "/" must be specified for the SocketRoute.'
         );
     });
 
@@ -110,18 +109,18 @@ describe('SocketRoute', () => {
         expect(mockSocket1.close).toHaveBeenCalled();
     });
 
-    test('should handle messages and route to appropriate handler', () => {
+    test('should handle messages and route to appropriate handler', async () => {
         const mockSocket = { send: jest.fn() };
         const message = JSON.stringify({ type: 'MockHandler', data: { key: 'value' } });
 
-        route.handleMessage(mockSocket, JSON.parse(message));
+        await route.handleMessage(mockSocket, JSON.parse(message));
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: 'mockResponse', data: { type: 'MockHandler', data: { key: 'value' } } })
         );
     });
 
-    test('should route JSON socket messages to appropriate handler', () => {
+    test('should route JSON socket messages to appropriate handler', async () => {
         const mockSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const mockReq = { socket: { remoteAddress: '127.0.0.1' } };
 
@@ -129,13 +128,14 @@ describe('SocketRoute', () => {
         const messageHandler = mockSocket.on.mock.calls.find(([event]) => event === 'message')[1];
 
         messageHandler(JSON.stringify({ type: 'MockHandler', data: { key: 'value' } }), false);
+        await new Promise(setImmediate);
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: 'mockResponse', data: { type: 'MockHandler', data: { key: 'value' } } })
         );
     });
 
-    test('should route binary socket messages to onBinaryMessage without parsing JSON', () => {
+    test('should route binary socket messages to onBinaryMessage without parsing JSON', async () => {
         class BinaryHandler extends BaseHandler {
             constructor() {
                 super('BinaryHandler');
@@ -161,6 +161,7 @@ describe('SocketRoute', () => {
         const messageHandler = mockSocket.on.mock.calls.find(([event]) => event === 'message')[1];
 
         messageHandler(Buffer.from([0xff, 0x00]), true);
+        await new Promise(setImmediate);
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: 'binaryResponse', length: 2 })
@@ -168,7 +169,7 @@ describe('SocketRoute', () => {
         expect(mockSocket.close).not.toHaveBeenCalled();
     });
 
-    test('should send an error for unsupported binary messages without closing the socket', () => {
+    test('should send an error for unsupported binary messages without closing the socket', async () => {
         const mockSocket = {
             send: jest.fn(),
             sendJson(data) {
@@ -177,7 +178,7 @@ describe('SocketRoute', () => {
             close: jest.fn(),
         };
 
-        route.handleBinaryMessage(mockSocket, Buffer.from([0x01]));
+        await route.handleBinaryMessage(mockSocket, Buffer.from([0x01]));
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ error: 'Binary messages are not supported by this handler' })
@@ -185,7 +186,7 @@ describe('SocketRoute', () => {
         expect(mockSocket.close).not.toHaveBeenCalled();
     });
 
-    test('should use acceptsBinary to select a binary handler', () => {
+    test('should use acceptsBinary to select a binary handler', async () => {
         class JsonHandler extends BaseHandler {
             constructor() {
                 super('JsonHandler');
@@ -230,7 +231,7 @@ describe('SocketRoute', () => {
             close: jest.fn(),
         };
 
-        binaryRoute.handleBinaryMessage(mockSocket, Buffer.from([0x01, 0x02, 0x03]));
+        await binaryRoute.handleBinaryMessage(mockSocket, Buffer.from([0x01, 0x02, 0x03]));
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: 'acceptedBinary', length: 3 })

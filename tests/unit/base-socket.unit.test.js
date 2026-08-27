@@ -1,0 +1,110 @@
+const http = require('http');
+const { EventEmitter } = require('events');
+const { BaseSocketServer } = require('../../src/ws/BaseSocketServer');
+const SocketRoute = require('../../src/ws/SocketRoute');
+const SocketServer = require('../../src/ws/SocketServer');
+const SecureSocketServer = require('../../src/ws/SecureSocketServer');
+const DefaultRoute = require('../../src/ws/DefaultRoute');
+const { BaseHandler } = require('../../src/ws/BaseHandler');
+
+class NoopHandler extends BaseHandler {
+    constructor() { super('noop'); }
+    onMessage() {}
+}
+
+class FirstRoute extends SocketRoute {
+    constructor() { super({ path: '/first', handlers: [NoopHandler], logger: null }); }
+}
+
+function fakeServer() {
+    const server = new EventEmitter();
+    server.listening = false;
+    server.listen = (port, bind, callback) => {
+        server.listening = true;
+        server.address = () => ({ port, address: bind });
+        callback();
+    };
+    server.close = callback => {
+        server.listening = false;
+        callback();
+    };
+    return server;
+}
+
+describe('BaseSocketServer units', () => {
+    test('validates the server and options', () => {
+        expect(() => new BaseSocketServer()).toThrow('server is required');
+        const server = fakeServer();
+        expect(() => new BaseSocketServer(server, { port: 1.5 })).toThrow('`port`');
+        expect(() => new BaseSocketServer(server, { port: -1 })).toThrow('`port`');
+        expect(() => new BaseSocketServer(server, { port: 65536 })).toThrow('`port`');
+        expect(() => new BaseSocketServer(server, { routes: 'bad' })).toThrow('`routes`');
+    });
+
+    test('rejects duplicate initial and dynamically-added route paths', () => {
+        class DuplicateRoute extends FirstRoute {}
+        expect(() => new BaseSocketServer(fakeServer(), { routes: [FirstRoute, DuplicateRoute] })).toThrow('unique');
+
+        const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
+        expect(() => server.addRoute(DuplicateRoute)).toThrow('already exists');
+    });
+
+    test('normalizes query strings and rejects malformed or unmatched upgrades', () => {
+        const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
+        const matched = server.routes[0];
+        const original = matched.server.handleUpgrade;
+        const upgrades = [];
+        matched.server.handleUpgrade = (req, socket, head, callback) => {
+            upgrades.push([req, socket, head]);
+            callback('accepted', req);
+        };
+        matched.server.emit = (event, socket) => upgrades.push([event, socket]);
+
+        server.handleUpgrade({ url: '/first?token=x', headers: { host: 'localhost' } }, {}, Buffer.alloc(0));
+        expect(upgrades[1]).toEqual(['connection', 'accepted']);
+
+        let destroyed = 0;
+        server.handleUpgrade({ url: 'http://[', headers: {} }, { destroy: () => { destroyed += 1; } }, Buffer.alloc(0));
+        server.handleUpgrade({ url: '/missing', headers: {} }, { destroy: () => { destroyed += 1; } }, Buffer.alloc(0));
+        expect(destroyed).toBe(2);
+        matched.server.handleUpgrade = original;
+    });
+
+    test('can listen on a supplied server when explicitly requested', async () => {
+        const server = fakeServer();
+        const socketServer = new BaseSocketServer(server, {
+            routes: [FirstRoute],
+            listen: true,
+            port: 4321,
+            bind: '127.0.0.1',
+            closeServerOnShutdown: true,
+            logger: null,
+        });
+        expect(server.listening).toBe(true);
+        expect(server.address()).toEqual({ port: 4321, address: '127.0.0.1' });
+        await socketServer.shutdown();
+        expect(server.listening).toBe(false);
+    });
+
+    test('owned servers can be created without listening and shutdown repeatedly', async () => {
+        const server = new SocketServer({ listen: false, routes: [FirstRoute], logger: null });
+        expect(server.ownsServer).toBe(true);
+        expect(server.server.listening).toBe(false);
+        await server.shutdown();
+        await server.shutdown();
+    });
+
+    test('secure socket servers can borrow an existing server without TLS file options', async () => {
+        const borrowed = http.createServer();
+        const server = new SecureSocketServer({ server: borrowed, routes: [FirstRoute], logger: null });
+        expect(server.ownsServer).toBe(false);
+        expect(server.server).toBe(borrowed);
+        await server.shutdown();
+    });
+
+    test('default constructors validate required TLS and route inputs', () => {
+        const route = new DefaultRoute();
+        expect(route.path).toBe('/');
+        expect(() => new SecureSocketServer()).toThrow('SSL key and certificate paths must be provided');
+    });
+});

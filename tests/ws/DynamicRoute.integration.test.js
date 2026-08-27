@@ -33,12 +33,7 @@ const ensureStaysOpen = (ws, ms = 200) =>
     });
   });
 
-const shutdownServer = (socketServer) =>
-  new Promise((resolve) => {
-    if (!socketServer?.server) return resolve();
-    socketServer.server.once('close', resolve);
-    socketServer.shutdown();
-  });
+const shutdownServer = (socketServer) => socketServer?.shutdown();
 
 describe('SocketServer dynamic route (integration)', () => {
   test('client stays connected after adding a route at runtime', async () => {
