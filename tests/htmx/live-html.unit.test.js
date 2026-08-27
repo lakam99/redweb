@@ -309,11 +309,19 @@ describe('decorator-first Live HTML units', () => {
             .toBe('<p></<script>{{ body }}</script></p>');
         expect(HtmlRenderer.render('<p></?<script>{{ body }}</script></p>', pageState))
             .toBe('<p></?<script>{{ body }}</script></p>');
+        expect(HtmlRenderer.render('<script foo">{{ body }}</script>', pageState))
+            .toBe('<script foo">{{ body }}</script>');
+        const nbsp = '\u00a0';
+        const rawNbsp = `<script>safe</script${nbsp}>{{ body }}</script>`;
+        expect(HtmlRenderer.render(rawNbsp, pageState)).toBe(rawNbsp);
+        expect(HtmlRenderer.render(`<div data-rw-state${nbsp}="body"></div>`, pageState))
+            .toBe(`<div data-rw-state${nbsp}="body"></div>`);
         const raw = '<!-- rw-each="cards" {{ secret }} --><script>const fake = \'<i data-rw-state="secret"></i>\'; {{ secret }}</script>';
         expect(HtmlRenderer.render(raw, cards)).toBe(raw);
         expect(HtmlRenderer.render('<!-- unclosed rw-each="cards"')).toBe('<!-- unclosed rw-each="cards"');
         expect(HtmlRenderer.render('<style>{{ secret }}</style>', cards)).toBe('<style>{{ secret }}</style>');
         expect(HtmlRenderer.render('<script>{{ secret }}', cards)).toBe('<script>{{ secret }}');
+        expect(HtmlRenderer.render('<script>safe</script ', cards)).toBe('<script>safe</script ');
         expect(() => HtmlRenderer.render('<script data-rw-state="secret"></script>', cards))
             .toThrow('not allowed on raw-text');
         expect(HtmlRenderer.render('<title>{{ secret }}</title><textarea>{{ secret }}</textarea>', cards))
@@ -322,6 +330,8 @@ describe('decorator-first Live HTML units', () => {
         expect(HtmlRenderer.render('<?instruction?><p title=value>ok</p>', cards))
             .toBe('<?instruction?><p title=value>ok</p>');
         expect(HtmlRenderer.render('<br/>', cards)).toBe('<br/>');
+        expect(HtmlRenderer.render('<br disabled />', cards)).toBe('<br disabled />');
+        expect(HtmlRenderer.render('<p title=value >ok</p>', cards)).toBe('<p title=value >ok</p>');
         expect(HtmlRenderer.render('<', cards)).toBe('<');
         expect(HtmlRenderer.render('<a', cards)).toBe('<a');
         expect(() => HtmlRenderer.render('<section /bad></section>', cards)).toThrow('Malformed HTML attribute');

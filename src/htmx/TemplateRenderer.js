@@ -6,6 +6,10 @@ const NAME = /^[A-Za-z_$][\w$]*$/;
 const RAW_TEXT = new Set(['iframe', 'noembed', 'noframes', 'plaintext', 'script', 'style', 'textarea', 'title', 'xmp']);
 const DIRECTIVES = new Set(['data-rw-state', 'data-rw-html', 'rw-each']);
 
+function isHtmlSpace(character) {
+    return character === ' ' || character === '\t' || character === '\n' || character === '\f' || character === '\r';
+}
+
 function isNonStartMarkup(source, start) {
     const marker = source[start + 1];
     if (marker === '!' || marker === '?') return true;
@@ -13,15 +17,47 @@ function isNonStartMarkup(source, start) {
 }
 
 function tagEnd(source, position) {
-    let quote = null;
+    let state = 'beforeAttribute';
+    let quote;
     for (; position < source.length; position += 1) {
         const character = source[position];
-        if (quote) {
-            if (character === quote) quote = null;
-        } else if (character === '"' || character === "'") quote = character;
-        else if (character === '>') return position;
+        if (state === 'quotedValue') {
+            if (character === quote) state = 'beforeAttribute';
+            continue;
+        }
+        if (character === '>') return position;
+        if (state === 'beforeValue') {
+            if (isHtmlSpace(character)) continue;
+            if (character === '"' || character === "'") {
+                quote = character;
+                state = 'quotedValue';
+            } else state = 'unquotedValue';
+        } else if (state === 'beforeAttribute') {
+            if (!isHtmlSpace(character) && character !== '/') state = 'attributeName';
+        } else if (state === 'attributeName') {
+            if (character === '=') state = 'beforeValue';
+            else if (isHtmlSpace(character)) state = 'afterAttributeName';
+        } else if (state === 'afterAttributeName') {
+            if (character === '=') state = 'beforeValue';
+            else if (!isHtmlSpace(character) && character !== '/') state = 'attributeName';
+        } else if (isHtmlSpace(character)) state = 'beforeAttribute';
     }
     return -1;
+}
+
+function rawClosingTag(source, name, position) {
+    const prefix = `</${name}`;
+    const lowerSource = source.toLowerCase();
+    while (true) {
+        const start = lowerSource.indexOf(prefix, position);
+        if (start < 0) return null;
+        const boundary = source[start + prefix.length];
+        if (boundary === '>' || boundary === '/' || isHtmlSpace(boundary)) {
+            const end = tagEnd(source, start + prefix.length);
+            if (end >= 0) return { start, end: end + 1 };
+        }
+        position = start + 2;
+    }
 }
 
 function closingTag(source, target) {
@@ -42,14 +78,12 @@ function closingTag(source, target) {
         const end = tagEnd(source, start + 1);
         if (end < 0) return -1;
         const tag = source.slice(start, end + 1);
-        const closing = /^<\/\s*([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
+        const closing = /^<\/([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
         if (closing === target) return start;
         const opening = /^<([A-Za-z][\w:-]*)/i.exec(tag)?.[1]?.toLowerCase();
         if (opening && RAW_TEXT.has(opening)) {
-            const close = new RegExp(`<\\/${opening}\\s*>`, 'ig');
-            close.lastIndex = end + 1;
-            const match = close.exec(source);
-            position = match ? close.lastIndex : source.length;
+            const close = rawClosingTag(source, opening, end + 1);
+            position = close ? close.end : source.length;
         } else {
             position = end + 1;
         }
@@ -61,17 +95,17 @@ function attributes(tag, nameEnd) {
     const found = new Map();
     let position = nameEnd;
     while (position < tag.length - 1) {
-        while (/\s/.test(tag[position])) position += 1;
+        while (isHtmlSpace(tag[position])) position += 1;
         if (tag[position] === '>' || (tag[position] === '/' && tag[position + 1] === '>')) break;
         const start = position;
-        while (position < tag.length && !/[\s=/>]/.test(tag[position])) position += 1;
+        while (position < tag.length && !/[ \t\n\f\r=/>]/.test(tag[position])) position += 1;
         if (start === position) throw new Error('Malformed HTML attribute.');
         const name = tag.slice(start, position).toLowerCase();
-        while (/\s/.test(tag[position])) position += 1;
+        while (isHtmlSpace(tag[position])) position += 1;
         let value = null;
         if (tag[position] === '=') {
             position += 1;
-            while (/\s/.test(tag[position])) position += 1;
+            while (isHtmlSpace(tag[position])) position += 1;
             const quote = tag[position];
             if (quote === '"' || quote === "'") {
                 const valueStart = ++position;
@@ -79,7 +113,7 @@ function attributes(tag, nameEnd) {
                 value = tag.slice(valueStart, position++);
             } else {
                 const valueStart = position;
-                while (position < tag.length && !/[\s>]/.test(tag[position])) position += 1;
+                while (position < tag.length && !/[ \t\n\f\r>]/.test(tag[position])) position += 1;
                 value = tag.slice(valueStart, position);
             }
         }
@@ -134,10 +168,8 @@ class TemplateRenderer {
             if ([...parsed.attributes.keys()].some(name => DIRECTIVES.has(name))) {
                 throw new Error('Live HTML directives are not allowed on raw-text elements.');
             }
-            const close = new RegExp(`<\\/${parsed.name}\\s*>`, 'ig');
-            close.lastIndex = this.position;
-            const match = close.exec(this.source);
-            const next = match ? close.lastIndex : this.source.length;
+            const close = rawClosingTag(this.source, parsed.name, this.position);
+            const next = close ? close.end : this.source.length;
             this.output += this.source.slice(parsed.start, next);
             this.position = next;
             return;
@@ -192,8 +224,8 @@ class TemplateRenderer {
 
     emptyClosing(name) {
         const contentStart = this.position;
-        while (this.position < this.source.length && /\s/.test(this.source[this.position])) this.position += 1;
-        const close = new RegExp(`^<\\/${name}\\s*>`, 'i').exec(this.source.slice(this.position));
+        while (this.position < this.source.length && isHtmlSpace(this.source[this.position])) this.position += 1;
+        const close = new RegExp(`^<\\/${name}[ \\t\\n\\f\\r]*>`, 'i').exec(this.source.slice(this.position));
         if (!close) throw new Error(`Live HTML binding on <${name}> requires an empty container.`);
         return {
             source: this.source.slice(contentStart, this.position) + close[0],
