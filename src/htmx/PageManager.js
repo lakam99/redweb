@@ -293,7 +293,6 @@ class PageManager {
             const drained = new Promise(resolve => this.renderWaiters.push(resolve));
             const deadline = new Promise(resolve => {
                 timer = setTimeout(() => resolve(false), this.shutdownTimeoutMs);
-                timer.unref?.();
             });
             const completed = await Promise.race([drained.then(() => true), deadline]);
             clearTimeout(timer);
