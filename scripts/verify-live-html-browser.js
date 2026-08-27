@@ -128,6 +128,19 @@ function eventual(expression, label) {
     })()`;
 }
 
+async function removeTemporaryDirectory(directory) {
+    const deadline = Date.now() + 5_000;
+    while (true) {
+        try {
+            fs.rmSync(directory, { recursive: true, force: true });
+            return;
+        } catch (error) {
+            if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error.code) || Date.now() >= deadline) throw error;
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+}
+
 async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chrome, Edge, or Chromium is required for the Live HTML browser gate.');
@@ -239,7 +252,7 @@ async function main() {
             await exited;
         }
         await Promise.allSettled([counter.shutdown(), chat.shutdown(), cards.shutdown()]);
-        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+        await removeTemporaryDirectory(profile);
     }
 }
 
