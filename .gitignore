@@ -1,3 +1,4 @@
 node_modules
 coverage
-node_modules
+examples/live-html/counter.js
+examples/live-html/chatroom.js

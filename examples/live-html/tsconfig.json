@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "experimentalDecorators": false,
+    "useDefineForClassFields": true,
+    "skipLibCheck": false,
+    "baseUrl": "../..",
+    "paths": {
+      "redweb": ["."]
+    }
+  },
+  "files": ["counter.ts", "chatroom.ts"]
+}

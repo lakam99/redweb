@@ -111,7 +111,7 @@ The internal paths and application page paths must be unique.
 
 ## Verification examples
 
-- `examples/live-html/counter.js` proves a connection-owned server timer can update browser state and is stopped on disconnect.
-- `examples/live-html/chatroom.js` proves bounded shared history, action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
+- `examples/live-html/counter.ts` uses `@page()` and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
+- `examples/live-html/chatroom.ts` uses `@page()`, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
 
-Both examples are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+Run the examples with `npm run example:counter` and `npm run example:chatroom`. Their TypeScript sources are compiled before execution and launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.

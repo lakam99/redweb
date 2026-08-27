@@ -105,7 +105,7 @@ Interpolations created with `html` are escaped by default and are restricted to 
 
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable [server counter](examples/live-html/counter.js), and [chatroom](examples/live-html/chatroom.js). Both examples are exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), and [chatroom](examples/live-html/chatroom.ts). Run them with `npm run example:counter` and `npm run example:chatroom`. Both decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 ## Multiplayer in 0.9
 
