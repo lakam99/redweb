@@ -5,8 +5,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "pretest": "node scripts/build-live-html-examples.js && node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.standard.json",
-    "prepack": "node scripts/build-live-html-examples.js",
+    "pretest": "node scripts/build-live-html-examples.js --check && node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.standard.json",
+    "prepack": "node scripts/build-live-html-examples.js --check",
     "example:counter": "node examples/live-html/counter.js",
     "example:chatroom": "node examples/live-html/chatroom.js",
     "generate:protocol-types": "node scripts/generate-protocol-types.js",
@@ -15,9 +15,9 @@
     "verify:memory": "node scripts/verify-memory-overhead.js",
     "verify:load": "node scripts/verify-load.js",
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
-    "verify:live-html": "node scripts/build-live-html-examples.js && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
-    "verify:live-html:browser": "node scripts/build-live-html-examples.js && node scripts/verify-live-html-browser.js",
-    "verify:live-html:load": "node scripts/build-live-html-examples.js && node --expose-gc scripts/verify-live-html-load.js",
+    "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
+    "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",
+    "verify:live-html:load": "node scripts/build-live-html-examples.js --check && node --expose-gc scripts/verify-live-html-load.js",
     "verify:live-html:package": "node scripts/verify-live-html-package.js",
     "test": "npx jest"
   },

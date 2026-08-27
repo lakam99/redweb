@@ -99,7 +99,7 @@ The injected module uses the published `redweb-client` package served by the sam
 `start(PageClass, options)` accepts normal HTTP options plus the following Live HTML controls. `new LiveHtmlServer({ pages, ...options })` remains available for explicit composition:
 
 - `pages`: non-empty array of decorated class constructors when using `LiveHtmlServer` directly.
-- `templateRoot`: root directory for `.htmx` templates; defaults to the current directory.
+- `templateRoot`: optional root for all `.htmx` templates; when omitted, each page uses the source directory captured by its `@page()` decorator.
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
@@ -114,4 +114,4 @@ The internal paths and application page paths must be unique.
 - `examples/live-html/counter.ts` uses `@page()` and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
 - `examples/live-html/chatroom.ts` uses `@page()`, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
 
-Run the examples with `npm run example:counter` and `npm run example:chatroom`. Their TypeScript sources are compiled before execution and launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+Run the examples immediately with `npm run example:counter` and `npm run example:chatroom`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
