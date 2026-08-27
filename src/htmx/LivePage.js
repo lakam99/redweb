@@ -49,6 +49,10 @@ class LivePage {
         return page;
     }
 
+    static isDisposed(page) {
+        return runtime(page).disposed;
+    }
+
     get _connections() { return runtime(this).connections; }
     get _disposed() { return runtime(this).disposed; }
     get _disposePromise() { return runtime(this).disposePromise; }

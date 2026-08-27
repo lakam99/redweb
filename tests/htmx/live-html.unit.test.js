@@ -287,6 +287,7 @@ describe('decorator-first Live HTML units', () => {
 
         class InferredPlainPage {
             _connections = 'application-owned';
+            _disposed = 'application-owned';
             message = 'inferred';
         }
         state()(InferredPlainPage.prototype, 'message');
@@ -296,6 +297,8 @@ describe('decorator-first Live HTML units', () => {
         expect(inferredRecord.template).toContain('{{ message }}');
         const inferredPage = inferred.manager.instantiate(inferredRecord);
         expect(inferredPage._connections).toBe('application-owned');
+        expect(inferredPage._disposed).toBe('application-owned');
+        expect(LivePage.isDisposed(inferredPage)).toBe(false);
         expect(inferredPage.message).toBe('inferred');
         await inferred.shutdown();
         const explicit = start(InferredPlainPage, { listen: false, templateRoot: __dirname });

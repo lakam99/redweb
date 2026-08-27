@@ -199,7 +199,7 @@ class PageManager {
             const principal = await this.authenticateRequest(request);
             if (!Object.is(principal, session.principal)) return false;
         }
-        return !session.socket && !session.page._disposed ? session : false;
+        return !session.socket && !LivePage.isDisposed(session.page) ? session : false;
     }
 
     acceptsOrigin(origin, request) {
@@ -216,7 +216,7 @@ class PageManager {
     }
 
     connect(session, socket) {
-        if (!session || session.socket || session.page._disposed) throw new Error('Page session is unavailable.');
+        if (!session || session.socket || LivePage.isDisposed(session.page)) throw new Error('Page session is unavailable.');
         clearTimeout(session.timer);
         this.pending.delete(session.id);
         this.active.set(session.id, session);
