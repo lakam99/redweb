@@ -1,7 +1,17 @@
 const { BaseHttpServer, METHODS } = require('./src/http');
 const { ENCODINGS, HTTP_OPTIONS } = require('./src/http/BaseHttpServer');
 const { sendJson } = require('./src/ws/util');
-const { SocketServer, SecureSocketServer, SOCKET_OPTIONS, SocketRoute, SocketService, SocketRegistry } = require('./src/ws');
+const {
+    SocketServer,
+    SecureSocketServer,
+    SOCKET_OPTIONS,
+    SocketRoute,
+    SocketService,
+    FixedStepService,
+    SocketRegistry,
+    RoomRegistry,
+    SessionRegistry,
+} = require('./src/ws');
 const { BaseHandler } = require('./src/ws/BaseHandler');
 const HttpServer = require('./src/http/HttpServer');
 const HttpsServer = require('./src/http/HttpsServer');
@@ -14,7 +24,10 @@ module.exports = {
     BaseHandler,
     SocketRoute,
     SocketService,
+    FixedStepService,
     SocketRegistry,
+    RoomRegistry,
+    SessionRegistry,
     sendJson,
     SOCKET_OPTIONS,
     HTTP_OPTIONS,

@@ -1,7 +1,10 @@
 import {
     BaseHandler,
+    FixedStepService,
     HttpServer,
     RedWebSocket,
+    RoomRegistry,
+    SessionRegistry,
     SocketRoute,
     SocketService,
 } from 'redweb';
@@ -39,6 +42,13 @@ class CallbackRoute extends SocketRoute {
     }
 }
 
+class Simulation extends FixedStepService {
+    constructor() { super('simulation', 50, 2); }
+    override async onTick(stepMs: number, tick: number) {
+        await Promise.resolve(stepMs + tick);
+    }
+}
+
 const route = new SocketRoute({
     path: '/events',
     handlers: [EchoHandler],
@@ -62,13 +72,27 @@ const route = new SocketRoute({
     },
     orderedMessages: true,
     heartbeat: { intervalMs: 30_000, timeoutMs: 10_000 },
+    rooms: { maxRooms: 100, maxMembersPerRoom: 16 },
+    sessions: { ttlMs: 30_000, maxSessions: 1000 },
+    metrics: {
+        increment(_name, _value, attributes) { void attributes.route; },
+        gauge() {},
+    },
 });
 
 route.clients.forEach(socket => {
     socket.sendJson({ ready: true });
     const player = socket.context?.principal;
+    socket.joinRoom?.('lobby');
+    socket.roomBroadcast?.('lobby', { ready: true }, { except: socket });
+    socket.createSession?.('opaque-session', { player });
     void player;
 });
+const standaloneRooms = new RoomRegistry({ maxRooms: 2 });
+const standaloneSessions = new SessionRegistry<{ score: number }>({ maxSessions: 2 });
+void standaloneRooms;
+void standaloneSessions;
+void Simulation;
 void CallbackRoute;
 new HttpServer({ listen: false, corsOptions: false });
 

@@ -3,6 +3,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const {
     BaseHandler,
+    FixedStepService,
     SecureSocketServer,
     SocketRoute,
     SocketServer,
@@ -419,6 +420,103 @@ describe('WebSocket integration without mocks', () => {
         const rawClient = await openRawWebSocket(server.server.address().port, '/heartbeat');
         await withTimeout(new Promise(resolve => rawClient.once('close', resolve)), 'heartbeat termination');
         expect(server.routes[0].clients.size).toBe(0);
+    });
+
+    test('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks', async () => {
+        const metricEvents = [];
+        let ticks = 0;
+        class GameLoop extends FixedStepService {
+            constructor() { super('game-loop', 5, 2); }
+            onTick() { ticks += 1; }
+        }
+        class MultiplayerHandler extends BaseHandler {
+            constructor() { super('multiplayer'); }
+            onMessage(socket, message) {
+                if (message.action === 'join') {
+                    socket.sendJson({ joined: socket.joinRoom(message.roomId) });
+                } else if (message.action === 'leave') {
+                    socket.sendJson({ left: socket.leaveRoom(message.roomId) });
+                } else if (message.action === 'broadcast') {
+                    const recipients = socket.roomBroadcast(
+                        message.roomId,
+                        { roomEvent: message.value },
+                        { except: socket }
+                    );
+                    socket.sendJson({ recipients });
+                } else if (message.action === 'create-session') {
+                    socket.sendJson({ created: socket.createSession(message.sessionId, message.data) });
+                } else if (message.action === 'resume-session') {
+                    socket.sendJson({ resumed: socket.resumeSession(message.sessionId) });
+                }
+            }
+        }
+        class MultiplayerRoute extends SocketRoute {
+            constructor() {
+                super({
+                    path: '/multiplayer',
+                    handlers: [MultiplayerHandler],
+                    services: [GameLoop],
+                    allowDuplicateConnections: true,
+                    rooms: { maxRooms: 4, maxMembersPerRoom: 4 },
+                    sessions: { ttlMs: 20, maxSessions: 4, sweepIntervalMs: 5 },
+                    metrics: {
+                        increment(name, value, attributes) { metricEvents.push(['increment', name, value, attributes]); },
+                        gauge(name, value, attributes) { metricEvents.push(['gauge', name, value, attributes]); },
+                    },
+                    logger: silentLogger,
+                });
+            }
+        }
+        const server = await start({ routes: [MultiplayerRoute] });
+        const route = server.routes[0];
+        const first = await trackedConnect(address(server, '/multiplayer'));
+        const second = await trackedConnect(address(server, '/multiplayer'));
+
+        first.send(JSON.stringify({ type: 'multiplayer', action: 'join', roomId: 'match-1' }));
+        expect(await nextJson(first)).toEqual({ joined: true });
+        second.send(JSON.stringify({ type: 'multiplayer', action: 'join', roomId: 'match-1' }));
+        expect(await nextJson(second)).toEqual({ joined: true });
+        expect(route.rooms.members('match-1')).toHaveLength(2);
+
+        const senderAck = nextJson(first);
+        const peerEvent = nextJson(second);
+        first.send(JSON.stringify({ type: 'multiplayer', action: 'broadcast', roomId: 'match-1', value: 7 }));
+        expect(await senderAck).toEqual({ recipients: 1 });
+        expect(await peerEvent).toEqual({ roomEvent: 7 });
+
+        second.send(JSON.stringify({ type: 'multiplayer', action: 'leave', roomId: 'match-1' }));
+        expect(await nextJson(second)).toEqual({ left: true });
+        second.send(JSON.stringify({ type: 'multiplayer', action: 'join', roomId: 'match-1' }));
+        expect(await nextJson(second)).toEqual({ joined: true });
+
+        first.send(JSON.stringify({
+            type: 'multiplayer',
+            action: 'create-session',
+            sessionId: 'opaque-1',
+            data: { score: 9 },
+        }));
+        expect(await nextJson(first)).toEqual({ created: true });
+        const firstClosed = waitForClose(first);
+        second.send(JSON.stringify({ type: 'multiplayer', action: 'resume-session', sessionId: 'opaque-1' }));
+        expect(await nextJson(second)).toEqual({ resumed: { score: 9 } });
+        expect((await firstClosed).code).toBe(4000);
+        clients.delete(first);
+        expect(route.rooms.members('match-1')).toHaveLength(1);
+        expect(route.sessions.size).toBe(1);
+
+        await closeWebSocket(second);
+        clients.delete(second);
+        expect(route.sessions.size).toBe(1);
+        await new Promise(resolve => setTimeout(resolve, 35));
+        expect(route.sessions.size).toBe(0);
+        expect(route.rooms.size).toBe(0);
+        expect(ticks).toBeGreaterThan(0);
+        expect(metricEvents).toEqual(expect.arrayContaining([
+            ['increment', 'redweb.connections.accepted', 1, { route: '/multiplayer' }],
+            ['increment', 'redweb.room.join', 1, { route: '/multiplayer' }],
+            ['gauge', 'redweb.rooms.active', 0, { route: '/multiplayer' }],
+        ]));
+        expect(metricEvents.every(event => Object.keys(event[3]).join() === 'route')).toBe(true);
     });
 
     test('enforces strict paths by default and supports an explicit root fallback', async () => {

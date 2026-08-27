@@ -4,6 +4,9 @@ module.exports = {
     SocketServer: require('./SocketServer'),
     SocketRoute: require('./SocketRoute'),
     SocketService: require('./SocketService'),
+    FixedStepService: require('./FixedStepService'),
     SocketRegistry: require('./SocketRegistry'),
+    RoomRegistry: require('./RoomRegistry'),
+    SessionRegistry: require('./SessionRegistry'),
     SOCKET_OPTIONS
 }

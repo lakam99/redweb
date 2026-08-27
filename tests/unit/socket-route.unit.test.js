@@ -286,4 +286,46 @@ describe('SocketRoute units', () => {
         expect(route.receiveMessage(socket, JSON.stringify({ type: 'noop' }), false)).toBe(false);
         expect(socket.closed).toEqual([]);
     });
+
+    test('supports shorthand room and session registries and rolls back invalid infrastructure', async () => {
+        const route = new SocketRoute({
+            path: '/state-defaults',
+            handlers: [NoopHandler],
+            rooms: true,
+            sessions: true,
+            logger: null,
+        });
+        expect(route.rooms).toBeTruthy();
+        expect(route.sessions).toBeTruthy();
+        await route.shutdown();
+
+        let stopped = 0;
+        class TrackingService {
+            onShutdown() { stopped += 1; }
+        }
+        expect(() => new SocketRoute({
+            path: '/invalid-state',
+            handlers: [NoopHandler],
+            services: [TrackingService],
+            heartbeat: { intervalMs: 10, timeoutMs: 10 },
+            rooms: null,
+            logger: null,
+        })).toThrow('`rooms`');
+        await new Promise(setImmediate);
+        expect(stopped).toBe(1);
+    });
+
+    test('does not record outbound fanout when a broadcast has no recipients', () => {
+        const events = [];
+        const route = new SocketRoute({
+            path: '/empty-broadcast',
+            handlers: [NoopHandler],
+            metrics: { increment: (...args) => events.push(args) },
+            logger: null,
+        });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        expect(socket.broadcast({ empty: true })).toBe(0);
+        expect(events.some(([name]) => name === 'redweb.messages.outbound')).toBe(false);
+    });
 });

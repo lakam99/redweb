@@ -18,7 +18,10 @@ const {
   SecureSocketServer,  // WebSocket over HTTPS
   SocketRoute,         // Per-path WebSocket routing
   SocketService,       // Route-scoped background/tick logic
+  FixedStepService,    // Drift-aware, non-overlapping simulation ticks
   SocketRegistry,      // Evented in-memory store
+  RoomRegistry,        // Bounded route-local connection groups
+  SessionRegistry,     // Bounded, expiring application-issued sessions
   BaseHttpServer,      // Express app builder for advanced composition
   BaseHandler,         // WebSocket message handler base
   sendJson,            // Utility to stringify+send
@@ -257,6 +260,28 @@ Admission completes before the WebSocket upgrade and before any handler hook run
 
 Rate and backpressure actions are `"drop"` or `"disconnect"`. Slow-consumer checks apply equally to `sendJson` and `broadcast`, and broadcasts still serialize a message once. Ordered processing never keeps more than `maxPendingMessages` waiting behind the active task.
 
+### Rooms, resumable sessions, and metrics
+
+Set `rooms: true` to add bounded route-local rooms, or pass limits such as `{ maxRooms, maxMembersPerRoom, maxRoomsPerConnection, maxRoomIdLength }`. Connected sockets receive `joinRoom`, `leaveRoom`, and `roomBroadcast`. Joins and leaves are idempotent, disconnect removes every membership, and empty rooms are reclaimed.
+
+Set `sessions: true` or provide `{ ttlMs, maxSessions, maxSessionIdLength, sweepIntervalMs }`. Applications supply opaque session IDs; Redweb does not create credentials. Sockets receive `createSession` and `resumeSession`. A successful takeover closes the former owner, and a stale close cannot release the replacement. Disconnected sessions expire through one route scheduler.
+
+The optional `metrics` sink is vendor-neutral and supports `increment`, `gauge`, and `observe`. Framework attributes contain only the static route path—never player IDs, room IDs, tokens, payloads, or exception text.
+
+```js
+class MatchRoute extends SocketRoute {
+  constructor() {
+    super({
+      path: '/match',
+      handlers: [MatchHandler],
+      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },
+      sessions: { ttlMs: 30000, maxSessions: 10000 },
+      metrics: myMetricsSink
+    });
+  }
+}
+```
+
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 
 ### Sharing an HTTP/HTTPS server
@@ -300,6 +325,17 @@ class ClockService extends SocketService {
 ```
 
 Add with `services: [ClockService]` when constructing a `SocketRoute`.
+
+For authoritative simulation timing, extend `FixedStepService`. It compensates for timer drift, caps catch-up work, contains tick failures, and never overlaps an asynchronous tick with itself:
+
+```js
+class Simulation extends FixedStepService {
+  constructor() { super('simulation', 50, 3); }
+  async onTick(stepMs, tick) {
+    await game.update(stepMs, tick);
+  }
+}
+```
 
 ### Socket registries
 

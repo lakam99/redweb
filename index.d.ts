@@ -34,6 +34,11 @@ declare module 'redweb' {
         sendJson(data: unknown): boolean;
         broadcast(data: unknown): number;
         context?: RedWebConnectionContext;
+        joinRoom?(roomId: string): boolean;
+        leaveRoom?(roomId: string): boolean;
+        roomBroadcast?(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        createSession?(sessionId: string, data: unknown): boolean;
+        resumeSession?(sessionId: string): unknown | null;
     };
 
     export interface RedWebConnectionContext {
@@ -80,6 +85,26 @@ declare module 'redweb' {
         timeoutMs: number;
     }
 
+    export interface RoomOptions {
+        maxRooms?: number;
+        maxMembersPerRoom?: number;
+        maxRoomsPerConnection?: number;
+        maxRoomIdLength?: number;
+    }
+
+    export interface SessionOptions {
+        ttlMs?: number;
+        maxSessions?: number;
+        maxSessionIdLength?: number;
+        sweepIntervalMs?: number;
+    }
+
+    export interface MetricsSink {
+        increment?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+        gauge?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+        observe?(name: string, value: number, attributes: Readonly<{ route: string }>): void | Promise<void>;
+    }
+
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
     export interface SocketServerOptions {
@@ -118,6 +143,9 @@ declare module 'redweb' {
         limits?: TransportLimits;
         orderedMessages?: boolean;
         heartbeat?: HeartbeatOptions;
+        rooms?: boolean | RoomOptions;
+        sessions?: boolean | SessionOptions;
+        metrics?: MetricsSink;
     }
 
     /** Socket‑side autonomous service (game loops, timers, etc.) */
@@ -133,10 +161,21 @@ declare module 'redweb' {
         onInit(route: SocketRoute): void;
 
         /** Optional recurring tick (respecting tickRateMs) */
-        onTick?(): void;
+        onTick?(...args: any[]): unknown;
 
         /** Called on process shutdown / route removal */
         onShutdown(): void;
+    }
+
+    export abstract class FixedStepService extends SocketService {
+        maxCatchUpTicks: number;
+        tick: number;
+        accumulatorMs: number;
+
+        constructor(name: string, tickRateMs: number, maxCatchUpTicks?: number);
+        onTick?(stepMs: number, tick: number): void | Promise<void>;
+        pulse(): Promise<void>;
+        onShutdown(): Promise<void>;
     }
 
     /** Message handler, triggered by client messages */
@@ -162,6 +201,8 @@ declare module 'redweb' {
         handlers: BaseHandler[];
         services: SocketService[];
         clients: Map<string, RedWebSocket>;
+        rooms: RoomRegistry | null;
+        sessions: SessionRegistry | null;
         allowDuplicateConnections?: boolean;
         websocketOptions?: SocketRouteConfig['websocketOptions'];
 
@@ -192,6 +233,30 @@ declare module 'redweb' {
     /** ─────────────────── REGISTRY & UTIL TYPES ─────────────────── */
 
     export function sendJson(socket: WebSocket, data: unknown): boolean;
+
+    export class RoomRegistry {
+        constructor(options?: RoomOptions);
+        join(roomId: string, socket: RedWebSocket): boolean;
+        leave(roomId: string, socket: RedWebSocket): boolean;
+        leaveAll(socket: RedWebSocket): number;
+        members(roomId: string): RedWebSocket[];
+        has(roomId: string, socket: RedWebSocket): boolean;
+        broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        clear(): void;
+        readonly size: number;
+    }
+
+    export class SessionRegistry<T = unknown> {
+        constructor(options?: SessionOptions, logger?: RedWebLogger | null);
+        create(sessionId: string, data: T, socket?: RedWebSocket): boolean;
+        resume(sessionId: string, socket: RedWebSocket): T | null;
+        release(socket: RedWebSocket): boolean;
+        remove(sessionId: string): boolean;
+        get(sessionId: string): T | undefined;
+        sweep(): void;
+        stop(): void;
+        readonly size: number;
+    }
 
     export interface SocketWrapper {
         socket: RedWebSocket;
