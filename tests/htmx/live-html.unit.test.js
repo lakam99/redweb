@@ -173,17 +173,22 @@ describe('decorator-first Live HTML units', () => {
 
     test('loads declarative templates safely and renders text, HTML, state patches, and documents', () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-unit-'));
+        const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-outside-'));
         try {
             fs.writeFileSync(path.join(root, 'page.htmx'), '<h1>{{ title }}</h1>');
             fs.writeFileSync(path.join(root, 'page.css'), 'h1 { color: cyan; }');
+            fs.writeFileSync(path.join(outsideRoot, 'secret.css'), 'secret');
+            fs.symlinkSync(outsideRoot, path.join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
             expect(HtmxRenderer.template('page.htmx', root)).toBe('<h1>{{ title }}</h1>');
             expect(HtmxRenderer.stylesheet('page.css', root)).toBe('h1 { color: cyan; }');
             expect(() => HtmxRenderer.template('../outside.htmx', root)).toThrow('outside');
             expect(() => HtmxRenderer.template('missing.htmx', root)).toThrow('not found');
             expect(() => HtmxRenderer.stylesheet('../outside.css', root)).toThrow('outside');
+            expect(() => HtmxRenderer.stylesheet('linked/secret.css', root)).toThrow('outside');
             expect(() => HtmxRenderer.stylesheet('missing.css', root)).toThrow('not found');
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
+            fs.rmSync(outsideRoot, { recursive: true, force: true });
         }
 
         const pageState = { title: '<unsafe>', body: html`<b>${'safe'}</b>` };
@@ -218,6 +223,11 @@ describe('decorator-first Live HTML units', () => {
             .toContain('<body><link rel="stylesheet" href="/page.css">hello');
         expect(HtmxRenderer.document('<p>hello</p>', config, ['/fragment.css']))
             .toContain('<head><link rel="stylesheet" href="/fragment.css"></head>');
+        const hostilePath = '/asset"><script>window.injected=true</script>';
+        const escapedDocument = HtmxRenderer.document('<p>safe</p>', { ...config, runtimePath: hostilePath }, [hostilePath]);
+        expect(escapedDocument).not.toContain('<script>window.injected=true</script>');
+        expect(escapedDocument).toContain('href="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
+        expect(escapedDocument).toContain('src="/asset&quot;&gt;&lt;script&gt;window.injected=true&lt;/script&gt;"');
     });
 
     test('generates a small delegated browser runtime around redweb-client', () => {

@@ -1,9 +1,14 @@
 const fs = require('fs');
 const path = require('path');
-const { assertTextContext, isHtml, renderValue } = require('./Html');
+const { assertTextContext, escapeHtml, isHtml, renderValue } = require('./Html');
 
 const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const TARGET = /(<([A-Za-z][\w:-]*)\b[^>]*\sdata-rw-state="([A-Za-z_$][\w$]*)"[^>]*>)(\s*)(<\/\2\s*>)/gi;
+
+function outside(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
 
 function serializeJson(value) {
     return JSON.stringify(value).replaceAll('<', '\\u003c');
@@ -13,11 +18,13 @@ class HtmxRenderer {
     static file(filePath, rootDir, kind) {
         const root = path.resolve(rootDir);
         const resolved = path.resolve(root, filePath);
-        const relative = path.relative(root, resolved);
-        if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        if (outside(root, resolved)) {
             throw new Error(`Page ${kind} is outside the configured template root.`);
         }
         if (!fs.existsSync(resolved)) throw new Error(`Page ${kind} not found: ${resolved}`);
+        if (outside(fs.realpathSync(root), fs.realpathSync(resolved))) {
+            throw new Error(`Page ${kind} is outside the configured template root.`);
+        }
         return fs.readFileSync(resolved, 'utf8');
     }
 
@@ -51,8 +58,8 @@ class HtmxRenderer {
 
     static document(markup, config, stylesheets = []) {
         const bootstrap = `<script type="application/json" id="__redweb_page">${serializeJson(config)}</script>` +
-            `<script type="module" src="${config.runtimePath}"></script>`;
-        const links = stylesheets.map(href => `<link rel="stylesheet" href="${href}">`).join('');
+            `<script type="module" src="${escapeHtml(config.runtimePath)}"></script>`;
+        const links = stylesheets.map(href => `<link rel="stylesheet" href="${escapeHtml(href)}">`).join('');
         if (/<\/body\s*>/i.test(markup)) {
             const styled = links && /<\/head\s*>/i.test(markup)
                 ? markup.replace(/<\/head\s*>/i, `${links}</head>`)
