@@ -20,7 +20,7 @@ The decorators support both TypeScript's current standard decorator emit and the
 
 Pages use connection scope by default: each rendered browser page receives its own instance. `shared: true` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history. `scope: 'shared'` remains available as the explicit equivalent.
 
-`start(PageClass)` creates the Live HTML server and infers `templateRoot` from the module exporting the page. Pass `templateRoot` explicitly only when pages and templates live in different directories. Template traversal outside that root is rejected.
+`start(PageClass)` creates the Live HTML server. `@page()` captures its source directory when the module is evaluated, so colocated templates work for unexported classes, CommonJS, ESM, and barrel exports without module scanning. Pass `templateRoot` explicitly only when pages and templates live in different directories. Template traversal outside that root is rejected.
 
 ## Declarative `.htmx` templates
 

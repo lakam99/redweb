@@ -25,6 +25,18 @@ async function main() {
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
         const installed = require(packageRoot);
+        const manifest = require(path.join(packageRoot, 'package.json'));
+        if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||
+            manifest.scripts['example:chatroom'] !== 'node examples/live-html/chatroom.js') {
+            throw new Error('Packed example commands must run precompiled artifacts without development tooling.');
+        }
+        const { CounterPage } = require(path.join(packageRoot, 'examples', 'live-html', 'counter.js'));
+        const { ChatroomPage } = require(path.join(packageRoot, 'examples', 'live-html', 'chatroom.js'));
+        const examples = [
+            installed.start(CounterPage, { listen: false }),
+            installed.start(ChatroomPage, { listen: false }),
+        ];
+        await Promise.all(examples.map(server => server.shutdown()));
         class SmokePage extends installed.LivePage {
             constructor() {
                 super();

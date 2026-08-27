@@ -5,7 +5,7 @@ const { SocketRoute } = require('../ws');
 const HtmxRenderer = require('./HtmxRenderer');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
-const { getPageMetadata } = require('./metadata');
+const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_PATHS = Object.freeze({
@@ -41,9 +41,9 @@ function withinDeadline(promise, deadline) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot = process.cwd(), paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
-        if (typeof templateRoot !== 'string' || !templateRoot) throw new TypeError('`templateRoot` must be a non-empty string.');
+        if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
         if (!Number.isInteger(maxSessions) || maxSessions < 1) throw new TypeError('`maxSessions` must be a positive integer.');
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
@@ -60,7 +60,8 @@ class PageManager {
         if (new Set(Object.values(this.paths)).size !== Object.values(this.paths).length) {
             throw new Error('Live HTML internal paths must be unique.');
         }
-        this.templateRoot = path.resolve(templateRoot);
+        this.templateRoot = path.resolve(templateRoot || process.cwd());
+        this.hasExplicitTemplateRoot = templateRoot !== undefined;
         this.sessionTtlMs = sessionTtlMs;
         this.maxSessions = maxSessions;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
@@ -89,7 +90,10 @@ class PageManager {
         const record = {
             PageClass,
             metadata,
-            template: metadata.template ? HtmxRenderer.template(metadata.template, this.templateRoot) : null,
+            template: metadata.template ? HtmxRenderer.template(
+                metadata.template,
+                this.hasExplicitTemplateRoot ? this.templateRoot : getPageTemplateRoot(PageClass)
+            ) : null,
             shared: null,
         };
         if (metadata.scope === 'shared') {

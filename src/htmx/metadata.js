@@ -4,6 +4,8 @@ const ACTION_METADATA = new WeakMap();
 const RESOLVED_STATE = new WeakMap();
 const RESOLVED_ACTION = new WeakMap();
 const STANDARD_ACTIONS = new WeakMap();
+const PAGE_ROOTS = new WeakMap();
+const { decoratorDirectory } = require('./sourceRoot');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -76,6 +78,7 @@ function resolvedAction(PageClass) {
 }
 
 function page(routePath, options = {}) {
+    const templateRoot = decoratorDirectory();
     if (typeof routePath !== 'string' || !routePath.startsWith('/')) {
         throw new TypeError('A page path beginning with "/" is required.');
     }
@@ -98,6 +101,7 @@ function page(routePath, options = {}) {
     return PageClass => {
         if (typeof PageClass !== 'function') throw new TypeError('page() must decorate a class.');
         PAGE_METADATA.set(PageClass, Object.freeze({ path: routePath, template, scope }));
+        PAGE_ROOTS.set(PageClass, templateRoot);
         return PageClass;
     };
 }
@@ -149,6 +153,10 @@ function getPageMetadata(PageClass) {
     return PAGE_METADATA.get(PageClass);
 }
 
+function getPageTemplateRoot(PageClass) {
+    return PAGE_ROOTS.get(PageClass);
+}
+
 function getStateMetadata(PageClass) {
     return new Map(resolvedState(PageClass));
 }
@@ -175,6 +183,7 @@ module.exports = {
     getActionImplementation,
     getActionMetadata,
     getPageMetadata,
+    getPageTemplateRoot,
     getStateConfig,
     getStateMetadata,
     page,

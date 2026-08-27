@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const Module = require('module');
 const ts = require('typescript');
+const { pathToFileURL } = require('url');
 const {
     HtmxRenderer,
     LivePage,
@@ -17,6 +18,7 @@ const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
 const browserRuntime = require('../../src/htmx/browserRuntime');
 const { getActionMetadata, getPageMetadata, getStateMetadata } = require('../../src/htmx/metadata');
+const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
 
 function decorateAction(PageClass, name) {
     action()(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
@@ -122,6 +124,7 @@ describe('decorator-first Live HTML units', () => {
 
     test('publishes shallow state, allows explicit writes and actions, and cleans up idempotently', async () => {
         const lifecycle = [];
+        expect(new LivePage()._connections).toBeInstanceOf(Set);
         class TestPage extends LivePage {
             connected(context) { lifecycle.push(['connected', context.signal]); }
             disconnected() { lifecycle.push(['disconnected']); }
@@ -208,6 +211,18 @@ describe('decorator-first Live HTML units', () => {
         expect(source).toContain("document.addEventListener('input'");
     });
 
+    test('resolves decorator source roots for filesystem and ESM call sites', () => {
+        const source = path.join(os.tmpdir(), 'redweb-source', 'page.ts');
+        const sourceUrl = pathToFileURL(source).href;
+        expect(filePath(source)).toBe(source);
+        expect(filePath(sourceUrl)).toBe(source);
+        expect(callerDirectory([
+            { getFileName: () => __filename },
+            { getFileName: () => sourceUrl },
+        ], __dirname)).toBe(path.dirname(source));
+        expect(callerDirectory([{ getFileName: () => undefined }], __dirname)).toBe(process.cwd());
+    });
+
     test.each([
         ['legacy', true],
         ['standard', false],
@@ -269,6 +284,23 @@ describe('decorator-first Live HTML units', () => {
         const started = start([PlainPage], { listen: false });
         expect(started.manager.templateRoot).toBe(process.cwd());
         await started.shutdown();
+
+        class InferredPlainPage {
+            _connections = 'application-owned';
+            message = 'inferred';
+        }
+        state()(InferredPlainPage.prototype, 'message');
+        page('/inferred', { template: 'inferred.htmx' })(InferredPlainPage);
+        const inferred = start(InferredPlainPage, { listen: false });
+        const inferredRecord = inferred.manager.records.get('/inferred');
+        expect(inferredRecord.template).toContain('{{ message }}');
+        const inferredPage = inferred.manager.instantiate(inferredRecord);
+        expect(inferredPage._connections).toBe('application-owned');
+        expect(inferredPage.message).toBe('inferred');
+        await inferred.shutdown();
+        const explicit = start(InferredPlainPage, { listen: false, templateRoot: __dirname });
+        expect(explicit.manager.records.get('/inferred').template).toContain('{{ message }}');
+        await explicit.shutdown();
 
         class DuplicatePage extends LivePage {}
         page('/plain')(DuplicatePage);

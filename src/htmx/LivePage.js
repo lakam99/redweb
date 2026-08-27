@@ -1,6 +1,7 @@
 const HtmxRenderer = require('./HtmxRenderer');
 const { forEachState, getActionImplementation, getStateConfig } = require('./metadata');
 
+const RUNTIME = new WeakMap();
 const RUNTIME_METHODS = Object.freeze([
     '_activateState',
     '_attach',
@@ -12,14 +13,18 @@ const RUNTIME_METHODS = Object.freeze([
 ]);
 
 function initializeRuntime(page) {
-    if (Object.prototype.hasOwnProperty.call(page, '_connections')) return;
-    Object.assign(page, {
-        _connections: new Set(),
-        _disposed: false,
-        _stateActive: false,
-        _stateValues: new Map(),
-        _disposePromise: null,
+    if (RUNTIME.has(page)) return;
+    RUNTIME.set(page, {
+        connections: new Set(),
+        disposed: false,
+        stateActive: false,
+        stateValues: new Map(),
+        disposePromise: null,
     });
+}
+
+function runtime(page) {
+    return RUNTIME.get(page);
 }
 
 class LivePage {
@@ -44,28 +49,34 @@ class LivePage {
         return page;
     }
 
+    get _connections() { return runtime(this).connections; }
+    get _disposed() { return runtime(this).disposed; }
+    get _disposePromise() { return runtime(this).disposePromise; }
+
     _activateState() {
-        if (this._stateActive) return false;
+        const internal = runtime(this);
+        if (internal.stateActive) return false;
         forEachState(this.constructor, (_options, name) => {
-            this._stateValues.set(name, this[name]);
+            internal.stateValues.set(name, this[name]);
             Object.defineProperty(this, name, {
                 configurable: true,
                 enumerable: true,
-                get: () => this._stateValues.get(name),
+                get: () => internal.stateValues.get(name),
                 set: value => {
-                    const previous = this._stateValues.get(name);
-                    this._stateValues.set(name, value);
+                    const previous = internal.stateValues.get(name);
+                    internal.stateValues.set(name, value);
                     if (previous !== value) this._stateChanged(name, value);
                 },
             });
         });
-        this._stateActive = true;
+        internal.stateActive = true;
         return true;
     }
 
     _attach(socket, context) {
-        if (this._disposed) throw new Error('Cannot connect a disposed page.');
-        this._connections.add(socket);
+        const internal = runtime(this);
+        if (internal.disposed) throw new Error('Cannot connect a disposed page.');
+        internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
             socket.sendEvent?.('redweb:state', HtmxRenderer.statePayload(name, this[name]));
         });
@@ -73,7 +84,7 @@ class LivePage {
     }
 
     async _detach(socket, context) {
-        const removed = this._connections.delete(socket);
+        const removed = runtime(this).connections.delete(socket);
         if (removed) await this.disconnected?.(context);
         return removed;
     }
@@ -81,7 +92,7 @@ class LivePage {
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
         const payload = HtmxRenderer.statePayload(name, value);
-        this._connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
+        runtime(this).connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
         return true;
     }
 
@@ -99,11 +110,12 @@ class LivePage {
     }
 
     async dispose() {
-        if (this._disposePromise) return this._disposePromise;
-        this._disposed = true;
-        this._connections.clear();
-        this._disposePromise = Promise.resolve().then(() => this.disposed?.()).then(() => true);
-        return this._disposePromise;
+        const internal = runtime(this);
+        if (internal.disposePromise) return internal.disposePromise;
+        internal.disposed = true;
+        internal.connections.clear();
+        internal.disposePromise = Promise.resolve().then(() => this.disposed?.()).then(() => true);
+        return internal.disposePromise;
     }
 }
 
