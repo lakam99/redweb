@@ -38,7 +38,12 @@ exports.ChatroomComponent = void 0;
 exports.createChatroomPage = createChatroomPage;
 const redweb_1 = require('../..');
 const MAX_VISIBLE_MEMBERS = 100;
-const UNSAFE_NAME = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/;
+const UNSAFE_TEXT = /[\p{Cc}\p{Cf}]/u;
+function messageView(messages) {
+    return messages.length
+        ? (0, redweb_1.each)([...messages], entry => (0, redweb_1.html) `<li><strong>${entry.sender}</strong><p>${entry.text}</p></li>`)
+        : (0, redweb_1.html) `<li class="empty-message">No messages yet. Say hello.</li>`;
+}
 function presenceView(members) {
     const visible = members.slice(0, MAX_VISIBLE_MEMBERS);
     const remaining = members.length - visible.length;
@@ -61,7 +66,7 @@ class ChatRoom {
         }
         this.participants.add(participant);
         this.online.add(participant);
-        participant.updateMessages(this.history);
+        participant.updateMessages(messageView(this.history));
         this.publishPresence();
         return true;
     }
@@ -80,8 +85,9 @@ class ChatRoom {
         if (!this.online.has(participant))
             return false;
         this.history = [...this.history, { sender: participant.displayName, text }].slice(-100);
+        const messages = messageView(this.history);
         for (const member of this.participants)
-            member.updateMessages(this.history);
+            member.updateMessages(messages);
         return true;
     }
     publishPresence() {
@@ -133,7 +139,7 @@ let ChatroomComponent = (() => {
         room = __runInitializers(this, _instanceExtraInitializers);
         displayName = '';
         screen = __runInitializers(this, _screen_initializers, this.joinScreen());
-        messages = (__runInitializers(this, _screen_extraInitializers), __runInitializers(this, _messages_initializers, this.messageList([])));
+        messages = (__runInitializers(this, _screen_extraInitializers), __runInitializers(this, _messages_initializers, messageView([])));
         presence = (__runInitializers(this, _messages_extraInitializers), __runInitializers(this, _presence_initializers, presenceView([])));
         constructor(room) {
             __runInitializers(this, _presence_extraInitializers);
@@ -157,7 +163,7 @@ let ChatroomComponent = (() => {
                 return false;
             }
             const displayName = name.normalize('NFKC').trim();
-            if (!displayName || displayName.length > 40 || UNSAFE_NAME.test(displayName)) {
+            if (!displayName || displayName.length > 40 || UNSAFE_TEXT.test(displayName)) {
                 this.screen = this.joinScreen('Choose a visible display name of at most 40 characters.');
                 return false;
             }
@@ -174,7 +180,7 @@ let ChatroomComponent = (() => {
             if (typeof message !== 'string')
                 return false;
             const text = message.normalize('NFKC').trim();
-            if (!text || text.length > 500 || UNSAFE_NAME.test(text))
+            if (!text || text.length > 500 || UNSAFE_TEXT.test(text))
                 return false;
             return this.room.send(this, text);
         }
@@ -184,7 +190,7 @@ let ChatroomComponent = (() => {
             this.screen = this.joinScreen();
         }
         updateMessages(messages) {
-            this.messages = this.messageList(messages);
+            this.messages = messages;
         }
         updatePresence(presence) {
             this.presence = presence;
@@ -209,11 +215,6 @@ let ChatroomComponent = (() => {
                 </form>
             </section>
         `;
-        }
-        messageList(messages) {
-            return messages.length
-                ? (0, redweb_1.each)([...messages], entry => (0, redweb_1.html) `<li><strong>${entry.sender}</strong><p>${entry.text}</p></li>`)
-                : (0, redweb_1.html) `<li class="empty-message">No messages yet. Say hello.</li>`;
         }
         roomScreen() {
             return (0, redweb_1.html) `

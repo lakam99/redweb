@@ -96,7 +96,7 @@ async function main() {
         });
         await waitFor(
             () => updates.every(messages => messages.at(-1)?.value.includes('ordered-broadcast')),
-            '30-client ordered broadcast'
+            `${liveClients}-client ordered broadcast`
         );
 
         await Promise.all(clients.splice(0).map(closeClient));
