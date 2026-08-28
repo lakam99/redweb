@@ -8,8 +8,10 @@ const VIEW_METADATA = new WeakMap();
 const RESOLVED_VIEW = new WeakMap();
 const STANDARD_VIEWS = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
+const PAGE_STYLESHEET_ROOTS = new WeakMap();
 const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
+const synchronous = require('./synchronous');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -199,8 +201,7 @@ function component(render) {
     if (render !== undefined) {
         if (typeof render !== 'function') throw new TypeError('component() requires a render function.');
         return function FunctionalComponent(properties) {
-            const result = render(properties);
-            if (result?.then) throw new TypeError('Function components must render synchronously.');
+            const result = synchronous(render(properties), 'Function components must render synchronously.');
             const { isHtml } = require('./Html');
             if (!isHtml(result)) throw new TypeError('Function components must return html.');
             return result;
@@ -289,6 +290,14 @@ function getPageTemplateRoot(PageClass) {
     return PAGE_ROOTS.get(PageClass);
 }
 
+function getPageStylesheetRoots(PageClass) {
+    return PAGE_STYLESHEET_ROOTS.get(PageClass);
+}
+
+function setPageStylesheetRoots(PageClass, roots) {
+    PAGE_STYLESHEET_ROOTS.set(PageClass, Object.freeze([...roots]));
+}
+
 function getStateMetadata(PageClass) {
     return new Map(resolvedState(PageClass));
 }
@@ -324,6 +333,7 @@ module.exports = {
     getActionImplementation,
     getActionMetadata,
     getPageMetadata,
+    getPageStylesheetRoots,
     getPageTemplateRoot,
     getStateConfig,
     getStateMetadata,
@@ -331,6 +341,9 @@ module.exports = {
     getViewMetadata,
     isComponentClass,
     page,
+    pageCache,
+    pageHead,
+    setPageStylesheetRoots,
     state,
     view,
 };

@@ -17,6 +17,8 @@ describe('static site ergonomics', () => {
         expect(() => defineSite({ css: ['base.css', null] })).toThrow('Site css');
         expect(() => defineSite({ head: null })).toThrow('Site head');
         expect(() => defineSite({ layout: true })).toThrow('Site layout');
+        expect(() => defineSite({ head: { unknown: true } })).toThrow('Unknown page head');
+        expect(() => defineSite({ cache: null })).toThrow('Page cache');
 
         const site = defineSite();
         expect(Object.isFrozen(site)).toBe(true);
@@ -24,9 +26,12 @@ describe('static site ergonomics', () => {
         expect(() => site.page('/docs', { live: true })).toThrow('live: false');
         expect(() => site.page('/docs', { css: [] })).toThrow('Page css');
         expect(() => site.page('/docs', { head: null })).toThrow('Page head');
+        expect(() => defineSite({ cache: { maxAge: 60 } }).page('/docs', { cache: null })).toThrow('Page cache');
+        expect(() => defineSite({ layout: () => html`` }).page('/docs', { layout: null })).toThrow('Page layout');
         await expect(site.export(class Page {}, null)).rejects.toThrow('Site export options');
         await expect(site.export(class Page {})).rejects.toThrow('outDir');
         await expect(site.export(class Page {}, { outDir: 'dist', publicDir: '' })).rejects.toThrow('publicDir');
+        await expect(site.export(class Page {}, { outDir: 'dist', publicDir: 1 })).rejects.toThrow('publicDir');
     });
 
     test('merges reusable defaults into frozen page metadata', () => {
@@ -89,10 +94,67 @@ describe('static site ergonomics', () => {
             expect(document).toContain('<body data-path="/docs"><h1>Docs</h1></body>');
             expect(fs.readFileSync(path.join(outDir, 'favicon.txt'), 'utf8')).toBe('redweb');
             expect(fs.readFileSync(result.assets[0], 'utf8')).toBe('body { color: navy; }');
+            expect(result.assets).toContain(path.join(outDir, 'favicon.txt'));
 
             await expect(site.export(DocsPage, { outDir: publicDir, publicDir })).rejects.toThrow('cannot be the publicDir');
             await expect(site.export(DocsPage, { outDir: path.join(publicDir, 'nested'), publicDir }))
                 .rejects.toThrow('descendants');
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('resolves shared and page styles from their own modules', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-roots-'));
+        const pages = path.join(root, 'pages');
+        try {
+            fs.mkdirSync(pages);
+            fs.writeFileSync(path.join(root, 'site.css'), 'site { display: block; }');
+            fs.writeFileSync(path.join(pages, 'page.css'), 'page { display: block; }');
+            const redwebPath = JSON.stringify(path.resolve(__dirname, '../..'));
+            fs.writeFileSync(path.join(root, 'site.js'),
+                `const { defineSite } = require(${redwebPath});\nmodule.exports = defineSite({ css: 'site.css' });`);
+            fs.writeFileSync(path.join(pages, 'page.js'),
+                `const { html } = require(${redwebPath});\nconst site = require('../site');\nclass Page { render() { return html\`<h1>Cross directory</h1>\`; } }\nsite.page('/cross', { css: 'page.css' })(Page);\nmodule.exports = { Page, site };`);
+            const { Page, site } = require(path.join(pages, 'page.js'));
+            const result = await site.export(Page, { outDir: path.join(root, 'dist'), logger: null });
+            expect(result.assets.map(file => fs.readFileSync(file, 'utf8')).sort()).toEqual([
+                'page { display: block; }',
+                'site { display: block; }',
+            ]);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    test('does not touch output when rendering fails and rejects public links', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-atomic-'));
+        const outDir = path.join(root, 'dist');
+        const publicDir = path.join(root, 'public');
+        try {
+            fs.mkdirSync(outDir);
+            fs.mkdirSync(publicDir);
+            fs.writeFileSync(path.join(outDir, 'existing.txt'), 'preserved');
+            fs.writeFileSync(path.join(publicDir, 'new.txt'), 'not copied');
+            class FailingPage { render() { throw new Error('render failed'); } }
+            const site = defineSite();
+            site.page('/failing')(FailingPage);
+            await expect(site.export(FailingPage, { outDir, publicDir, logger: null })).rejects.toThrow('render failed');
+            expect(fs.readFileSync(path.join(outDir, 'existing.txt'), 'utf8')).toBe('preserved');
+            expect(fs.existsSync(path.join(outDir, 'new.txt'))).toBe(false);
+
+            const target = path.join(root, 'target');
+            fs.mkdirSync(target);
+            fs.symlinkSync(target, path.join(publicDir, 'linked'), 'junction');
+            await expect(site.export(FailingPage, { outDir, publicDir, logger: null })).rejects.toThrow('cannot contain links');
+            fs.rmSync(path.join(publicDir, 'linked'));
+            await expect(site.export(FailingPage, { outDir, publicDir: path.join(publicDir, 'new.txt'), logger: null }))
+                .rejects.toThrow('must be a directory');
+
+            class ValidPage { render() { return html`valid`; } }
+            site.page('/valid')(ValidPage);
+            fs.symlinkSync(target, path.join(outDir, 'linked'), 'junction');
+            await expect(site.export(ValidPage, { outDir, logger: null })).rejects.toThrow('outDir cannot contain links');
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
         }
@@ -107,9 +169,10 @@ describe('static site ergonomics', () => {
                 .rejects.toThrow('must return html');
 
             class AsyncPage { render() { return html`safe`; } }
-            defineSite({ layout: async content => html`<main>${content}</main>` }).page('/async')(AsyncPage);
+            defineSite({ layout: async () => { throw new Error('async failure'); } }).page('/async')(AsyncPage);
             await expect(defineSite().export(AsyncPage, { outDir: path.join(root, 'async'), logger: null }))
                 .rejects.toThrow('synchronously');
+            await new Promise(resolve => setImmediate(resolve));
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
         }

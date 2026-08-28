@@ -119,6 +119,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => codeBlock('x', { language: 'not valid' })).toThrow('safe name');
         expect(() => codeBlock('x', { label: null })).toThrow('label');
         expect(() => codeBlock('x', { highlight: true })).toThrow('highlight must be a function');
+        expect(() => codeBlock('x', { highlight: async () => { throw new Error('async failure'); } })).toThrow('synchronously');
         expect(() => codeBlock(html`<b>x</b>`, { highlight: () => html`` })).toThrow('cannot highlight');
         expect(() => codeBlock('x', { highlight: source => source })).toThrow('must return an HtmlFragment');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
@@ -135,7 +136,7 @@ describe('decorator-first Live HTML units', () => {
         expect(html`<p>1 < 2 ${'safe'}</p>`.toString()).toBe('<p>1 < 2 safe</p>');
         const Badge = component(properties => html`<strong>${properties.label}</strong>`);
         expect(Badge({ label: '<Ready>' }).toString()).toBe('<strong>&lt;Ready&gt;</strong>');
-        const AsyncBadge = component(async () => html`async`);
+        const AsyncBadge = component(async () => { throw new Error('async failure'); });
         expect(() => AsyncBadge()).toThrow('synchronously');
         const UnsafeBadge = component(() => '<strong>unsafe</strong>');
         expect(() => UnsafeBadge()).toThrow('return html');

@@ -5,6 +5,7 @@ const HTML_RENDERERS = new WeakMap();
 const URL_ATTRIBUTES = new Set(['action', 'background', 'cite', 'data', 'formaction', 'href', 'manifest', 'ping', 'poster', 'src', 'xlink:href']);
 const FORBIDDEN_ATTRIBUTES = new Set(['srcdoc', 'srcset', 'style']);
 const { interpolationContext } = require('./HtmlSyntax');
+const synchronous = require('./synchronous');
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -123,7 +124,7 @@ function codeBlock(code, options = {}) {
     let content = isHtml(code) ? code : String(code ?? '');
     if (highlight) {
         if (isHtml(code)) throw new TypeError('codeBlock() cannot highlight an HtmlFragment.');
-        content = highlight(content, language);
+        content = synchronous(highlight(content, language), 'codeBlock() highlight must render synchronously.');
         if (!isHtml(content)) throw new TypeError('codeBlock() highlight must return an HtmlFragment.');
     }
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;

@@ -1,6 +1,8 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
-const { page } = require('./metadata');
+const { decoratorDirectory } = require('./sourceRoot');
+const { getPageTemplateRoot, page, pageCache, pageHead, setPageStylesheetRoots } = require('./metadata');
 const { exportStatic } = require('./StaticExporter');
 
 function plainObject(value, label) {
@@ -37,29 +39,67 @@ function resolveHead(origin, route, defaults, overrides) {
     return Object.keys(head).length ? head : undefined;
 }
 
-function copyPublic(publicDir, outDir) {
-    if (publicDir === undefined) return;
-    if (typeof publicDir !== 'string' || !publicDir) throw new TypeError('Site publicDir must be a non-empty path.');
+function publicFiles(publicDir) {
+    if (publicDir === undefined) return [];
     const source = path.resolve(publicDir);
-    const destination = path.resolve(outDir);
-    if (source === destination || destination.startsWith(`${source}${path.sep}`)) {
-        throw new TypeError('Site outDir cannot be the publicDir or one of its descendants.');
+    const files = [];
+    const visit = (directory, relative = '') => {
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const entryPath = path.join(directory, entry.name);
+            const entryRelative = path.join(relative, entry.name);
+            if (entry.isSymbolicLink()) throw new TypeError(`Site publicDir cannot contain links: ${entryPath}`);
+            if (entry.isDirectory()) {
+                visit(entryPath, entryRelative);
+                continue;
+            }
+            /* istanbul ignore else -- Windows cannot create a directory-contained special file for this guard. */
+            if (entry.isFile()) {
+                files.push({ source: entryPath, relative: entryRelative });
+                continue;
+            }
+            /* istanbul ignore next */
+            throw new TypeError(`Site publicDir can contain only files and directories: ${entryPath}`);
+        }
+    };
+    const details = fs.lstatSync(source);
+    if (details.isSymbolicLink() || !details.isDirectory()) throw new TypeError('Site publicDir must be a directory, not a link.');
+    visit(source);
+    return files;
+}
+
+function rejectOutputLinks(outDir) {
+    if (!fs.existsSync(outDir)) return;
+    const visit = directory => {
+        const details = fs.lstatSync(directory);
+        if (details.isSymbolicLink()) throw new TypeError(`Site outDir cannot contain links: ${directory}`);
+        if (!details.isDirectory()) return;
+        for (const name of fs.readdirSync(directory)) visit(path.join(directory, name));
+    };
+    visit(outDir);
+}
+
+function merge(directory, outDir) {
+    rejectOutputLinks(outDir);
+    for (const entry of publicFiles(directory)) {
+        const destination = path.join(outDir, entry.relative);
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.copyFileSync(entry.source, destination);
     }
-    fs.mkdirSync(destination, { recursive: true });
-    fs.cpSync(source, destination, { recursive: true, force: true });
 }
 
 function defineSite(options = {}) {
+    const siteRoot = decoratorDirectory();
     plainObject(options, 'Site options');
     const allowed = new Set(['origin', 'css', 'head', 'cache', 'layout']);
     const unknown = Object.keys(options).find(name => !allowed.has(name));
     if (unknown) throw new TypeError(`Unknown site option: ${unknown}.`);
     const origin = siteOrigin(options.origin);
     const sharedCss = files(options.css, 'Site css');
-    const defaultHead = options.head === undefined ? {} : plainObject(options.head, 'Site head');
-    const defaultCache = options.cache;
+    const defaultHead = options.head === undefined ? {} : Object.freeze({ ...plainObject(options.head, 'Site head') });
+    const defaultCache = pageCache(options.cache, false);
     const defaultLayout = options.layout;
     if (defaultLayout !== undefined && typeof defaultLayout !== 'function') throw new TypeError('Site layout must be a function.');
+    pageHead(resolveHead(origin, '/', defaultHead));
 
     const decorate = (route, pageOptions = {}) => {
         plainObject(pageOptions, 'Site page options');
@@ -68,14 +108,21 @@ function defineSite(options = {}) {
         }
         if (pageOptions.head !== undefined) plainObject(pageOptions.head, 'Page head');
         const css = [...new Set([...sharedCss, ...files(pageOptions.css, 'Page css')])];
-        return page(route, {
+        const decorator = page(route, {
             ...pageOptions,
             live: false,
             ...(css.length && { css }),
             head: resolveHead(origin, route, defaultHead, pageOptions.head),
-            cache: pageOptions.cache ?? defaultCache,
-            layout: pageOptions.layout ?? defaultLayout,
+            cache: pageOptions.cache === undefined ? defaultCache : pageOptions.cache,
+            layout: pageOptions.layout === undefined ? defaultLayout : pageOptions.layout,
         });
+        return PageClass => {
+            decorator(PageClass);
+            const pageRoot = getPageTemplateRoot(PageClass);
+            const shared = new Set(sharedCss);
+            setPageStylesheetRoots(PageClass, css.map(file => shared.has(file) ? siteRoot : pageRoot));
+            return PageClass;
+        };
     };
 
     const exportSite = async (pageOrPages, exportOptions = {}) => {
@@ -84,8 +131,33 @@ function defineSite(options = {}) {
         if (typeof staticOptions.outDir !== 'string' || !staticOptions.outDir) {
             throw new TypeError('Site export requires a non-empty outDir.');
         }
-        copyPublic(publicDir, staticOptions.outDir);
-        return exportStatic(pageOrPages, staticOptions);
+        if (publicDir !== undefined && (typeof publicDir !== 'string' || !publicDir)) {
+            throw new TypeError('Site publicDir must be a non-empty path.');
+        }
+        const outDir = path.resolve(staticOptions.outDir);
+        const source = publicDir === undefined ? undefined : path.resolve(publicDir);
+        if (source && (source === outDir || outDir.startsWith(`${source}${path.sep}`))) {
+            throw new TypeError('Site outDir cannot be the publicDir or one of its descendants.');
+        }
+        const plannedPublic = publicFiles(publicDir);
+        const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-site-'));
+        try {
+            for (const entry of plannedPublic) {
+                const destination = path.join(staging, entry.relative);
+                fs.mkdirSync(path.dirname(destination), { recursive: true });
+                fs.copyFileSync(entry.source, destination);
+            }
+            const staged = await exportStatic(pageOrPages, { ...staticOptions, outDir: staging });
+            merge(staging, outDir);
+            const destination = file => path.join(outDir, path.relative(staging, file));
+            const publicAssets = plannedPublic.map(entry => path.join(outDir, entry.relative));
+            return Object.freeze({
+                pages: Object.freeze(staged.pages.map(destination)),
+                assets: Object.freeze([...new Set([...staged.assets.map(destination), ...publicAssets])]),
+            });
+        } finally {
+            fs.rmSync(staging, { recursive: true, force: true });
+        }
     };
 
     return Object.freeze({ page: decorate, export: exportSite });
