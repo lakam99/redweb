@@ -533,6 +533,7 @@ declare module 'redweb' {
         maxSessions?: number;
         maxConcurrentRenders?: number;
         shutdownTimeoutMs?: number;
+        heartbeat?: HeartbeatOptions;
         authenticate?(request: import('http').IncomingMessage | import('express').Request):
             string | number | bigint | boolean | false | null | undefined |
             Promise<string | number | bigint | boolean | false | null | undefined>;
