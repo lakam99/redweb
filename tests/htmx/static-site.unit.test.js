@@ -160,6 +160,26 @@ describe('static site ergonomics', () => {
         }
     });
 
+    test('rejects collisions between public files and generated output without touching the destination', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-collision-'));
+        const outDir = path.join(root, 'dist');
+        const publicDir = path.join(root, 'public');
+        try {
+            fs.mkdirSync(path.join(publicDir, 'DoCs'), { recursive: true });
+            fs.mkdirSync(outDir);
+            fs.writeFileSync(path.join(publicDir, 'DoCs', 'Index.HTML'), 'public collision');
+            fs.writeFileSync(path.join(outDir, 'existing.txt'), 'preserved');
+            class DocsPage { render() { return html`generated`; } }
+            const site = defineSite();
+            site.page('/docs')(DocsPage);
+            await expect(site.export(DocsPage, { outDir, publicDir, logger: null })).rejects.toThrow('paths collide');
+            expect(fs.readFileSync(path.join(outDir, 'existing.txt'), 'utf8')).toBe('preserved');
+            expect(fs.existsSync(path.join(outDir, 'docs'))).toBe(false);
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
     test('rejects unsafe layout results during a real static render', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-layout-'));
         try {

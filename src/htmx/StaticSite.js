@@ -67,6 +67,19 @@ function publicFiles(publicDir) {
     return files;
 }
 
+function outputKey(file) {
+    return file.replaceAll('\\', '/').toLowerCase();
+}
+
+function rejectCollisions(files, occupied = []) {
+    const seen = new Set(occupied.map(outputKey));
+    for (const file of files) {
+        const key = outputKey(file);
+        if (seen.has(key)) throw new TypeError(`Site output paths collide: ${file}`);
+        seen.add(key);
+    }
+}
+
 function rejectOutputLinks(outDir) {
     if (!fs.existsSync(outDir)) return;
     const visit = directory => {
@@ -140,6 +153,7 @@ function defineSite(options = {}) {
             throw new TypeError('Site outDir cannot be the publicDir or one of its descendants.');
         }
         const plannedPublic = publicFiles(publicDir);
+        rejectCollisions(plannedPublic.map(entry => entry.relative));
         const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-site-'));
         try {
             for (const entry of plannedPublic) {
@@ -148,6 +162,8 @@ function defineSite(options = {}) {
                 fs.copyFileSync(entry.source, destination);
             }
             const staged = await exportStatic(pageOrPages, { ...staticOptions, outDir: staging });
+            const generated = [...staged.pages, ...staged.assets].map(file => path.relative(staging, file));
+            rejectCollisions(plannedPublic.map(entry => entry.relative), generated);
             merge(staging, outDir);
             const destination = file => path.join(outDir, path.relative(staging, file));
             const publicAssets = plannedPublic.map(entry => path.join(outDir, entry.relative));
