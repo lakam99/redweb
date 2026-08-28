@@ -5,6 +5,7 @@ const express = require('express');
 const Module = require('module');
 const ts = require('typescript');
 const { pathToFileURL } = require('url');
+const { spawn } = require('child_process');
 const {
     HtmlRenderer,
     LivePage,
@@ -28,6 +29,7 @@ const TemplateRenderer = require('../../src/htmx/TemplateRenderer');
 const browserRuntime = require('../../src/htmx/browserRuntime');
 const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
+const { stopBrowser } = require('../../scripts/verify-live-html-browser');
 
 function decorateAction(PageClass, name) {
     action()(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
@@ -38,6 +40,19 @@ function decorateView(PageClass, stateName, name) {
 }
 
 describe('decorator-first Live HTML units', () => {
+    test('browser cleanup recognizes a real child terminated by signal', async () => {
+        const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+        await new Promise((resolve, reject) => {
+            child.once('spawn', resolve);
+            child.once('error', reject);
+        });
+        const started = Date.now();
+        await stopBrowser(child);
+        expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+        expect(Date.now() - started).toBeLessThan(1500);
+        await expect(stopBrowser(child)).resolves.toBeUndefined();
+    });
+
     test('escapes values and composes explicitly trusted HTML fragments', () => {
         expect(escapeHtml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;');
         expect(escapeHtml(null)).toBe('');

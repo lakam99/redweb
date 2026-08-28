@@ -100,16 +100,17 @@ function launchBrowser(executable, profile) {
 }
 
 async function stopBrowser(child) {
-    if (!child || child.exitCode !== null) return;
+    const exited = () => child.exitCode !== null || child.signalCode !== null;
+    if (!child || exited()) return;
     const waitForExit = milliseconds => new Promise(resolve => {
-        if (child.exitCode !== null) return resolve();
+        if (exited()) return resolve();
         const done = () => { clearTimeout(timer); child.off('exit', done); resolve(); };
         const timer = setTimeout(done, milliseconds);
         child.once('exit', done);
     });
     child.kill();
     await waitForExit(2_000);
-    if (child.exitCode === null) {
+    if (!exited()) {
         child.kill('SIGKILL');
         await waitForExit(2_000);
     }
@@ -400,4 +401,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { combineFailures };
+module.exports = { combineFailures, stopBrowser };

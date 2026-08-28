@@ -560,8 +560,15 @@ describe('Live HTML integration without mocks', () => {
             payload: { kind: 'action', name: 'dispose', args: [] },
             requestId: 'forbidden-action',
         }));
-        let rejected = await nextJson(socket);
-        if (rejected.type === 'redweb:state') rejected = await nextJson(socket);
+        const snapshots = [];
+        let rejected;
+        while (!rejected && snapshots.length < 4) {
+            const message = await nextJson(socket);
+            if (message.type === 'error') rejected = message;
+            else snapshots.push(message);
+        }
+        expect(snapshots.length).toBeGreaterThan(0);
+        expect(snapshots.every(message => message.type === 'redweb:state' && message.payload.component === 'chat')).toBe(true);
         expect(rejected.type).toBe('error');
         expect(rejected.error.code).toBe('HANDLER_FAILED');
         expect(rejected.requestId).toBe('forbidden-action');
