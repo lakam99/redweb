@@ -99,6 +99,38 @@ function launchBrowser(executable, profile) {
     return { child, endpoint };
 }
 
+async function stopBrowser(child) {
+    if (!child || child.exitCode !== null) return;
+    const waitForExit = milliseconds => new Promise(resolve => {
+        if (child.exitCode !== null) return resolve();
+        const done = () => { clearTimeout(timer); child.off('exit', done); resolve(); };
+        const timer = setTimeout(done, milliseconds);
+        child.once('exit', done);
+    });
+    child.kill();
+    await waitForExit(2_000);
+    if (child.exitCode === null) {
+        child.kill('SIGKILL');
+        await waitForExit(2_000);
+    }
+}
+
+async function launchBrowserWithRetry(executable, profileRoot) {
+    const errors = [];
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const profile = path.join(profileRoot, `attempt-${attempt}`);
+        fs.mkdirSync(profile);
+        const browser = launchBrowser(executable, profile);
+        try {
+            return { browser, endpoint: await browser.endpoint };
+        } catch (error) {
+            errors.push(error);
+            await stopBrowser(browser.child);
+        }
+    }
+    throw new AggregateError(errors, 'Browser did not expose DevTools after two bounded attempts.');
+}
+
 async function openPage(debugPort, url) {
     const target = await jsonRequest(`http://127.0.0.1:${debugPort}/json/new?about:blank`, 'PUT');
     const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -195,8 +227,9 @@ async function main() {
             waitForListening(components.server),
             waitForListening(componentBoundaries.server),
         ]);
-        browser = launchBrowser(executable, profile);
-        const endpoint = new URL(await browser.endpoint);
+        const launched = await launchBrowserWithRetry(executable, profile);
+        browser = launched.browser;
+        const endpoint = new URL(launched.endpoint);
         const debugPort = Number(endpoint.port);
 
         const counterPage = await openPage(debugPort, `http://127.0.0.1:${counter.server.address().port}/`);
@@ -347,11 +380,7 @@ async function main() {
         failure = error;
     } finally {
         pages.forEach(page => page.socket.close());
-        if (browser?.child.exitCode === null) {
-            const exited = new Promise(resolve => browser.child.once('exit', resolve));
-            browser.child.kill();
-            await exited;
-        }
+        await stopBrowser(browser?.child);
         await Promise.allSettled([
             counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), componentBoundaries.shutdown(),
         ]);
