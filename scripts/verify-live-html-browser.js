@@ -76,6 +76,7 @@ function launchBrowser(executable, profile) {
     const child = spawn(executable, [
         '--headless=new',
         '--disable-gpu',
+        '--disable-dev-shm-usage',
         '--no-first-run',
         '--no-default-browser-check',
         '--remote-debugging-port=0',
@@ -84,7 +85,7 @@ function launchBrowser(executable, profile) {
     ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     const endpoint = new Promise((resolve, reject) => {
         let stderr = '';
-        const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 10_000);
+        const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 20_000);
         child.stderr.on('data', chunk => {
             stderr += chunk.toString();
             const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
