@@ -212,20 +212,34 @@ async function main() {
         const second = await openPage(debugPort, chatUrl);
         pages.push(first, second);
         await Promise.all([first, second].map(page => page.evaluate(eventual(
-            `document.querySelector('form[rw-submit]') && document.querySelector('[data-rw-state="messages"]')`,
-            'chat DOM readiness'
+            `document.querySelector('form[rw-submit="join"][data-rw-component="chat"]') && document.querySelector('[data-rw-state="screen"]')`,
+            'chat join readiness'
         ))));
         await first.evaluate(`(() => {
             document.querySelector('[name="name"]').value = '<Admin>';
-            document.querySelector('[name="message"]').value = '<script>window.__redwebInjected = true<\\/script>';
-            document.querySelector('form[rw-submit]').requestSubmit();
+            document.querySelector('form[rw-submit="join"]').requestSubmit();
             return true;
         })()`);
-        const received = `document.querySelector('[data-rw-state="messages"]')?.textContent.includes('<script>window.__redwebInjected = true</script>')`;
+        await first.evaluate(eventual(`document.querySelector('form[rw-submit="send"]')`, 'first participant join'));
+        await second.evaluate(`(() => {
+            document.querySelector('[name="name"]').value = 'Ada';
+            document.querySelector('form[rw-submit="join"]').requestSubmit();
+            return true;
+        })()`);
+        await Promise.all([first, second].map(page => page.evaluate(eventual(
+            `document.querySelector('.presence')?.textContent.includes('Online · 2')`,
+            'chat presence update'
+        ))));
+        await first.evaluate(`(() => {
+            document.querySelector('[name="message"]').value = '<script>window.__redwebInjected = true<\\/script>';
+            document.querySelector('form[rw-submit="send"]').requestSubmit();
+            return true;
+        })()`);
+        const received = `document.querySelector('.message-list')?.textContent.includes('<script>window.__redwebInjected = true</script>')`;
         await Promise.all([first, second].map(page => page.evaluate(eventual(received, 'the real browser chat broadcast'))));
         const safety = await Promise.all([first, second].map(page => page.evaluate('window.__redwebInjected !== true')));
         if (!safety.every(Boolean)) throw new Error('Escaped chat content executed in the browser.');
-        const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('button')).backgroundColor");
+        const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('.composer button')).backgroundColor");
         if (chatButtonColor !== 'rgb(34, 211, 238)') throw new Error(`Chatroom CSS was not applied: ${chatButtonColor}`);
 
         const cardsPage = await openPage(debugPort, `http://127.0.0.1:${cards.server.address().port}/`);

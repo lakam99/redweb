@@ -76,10 +76,21 @@ async function main() {
         configs.forEach((config, index) => clients.push(createClient(port, config, updates[index])));
         await Promise.all(clients.map(client => client.connect()));
         await waitFor(() => updates.every(messages => messages.length >= 1), 'initial state fan-out');
+        await Promise.all(clients.map((client, index) => client.request('redweb:html', {
+            kind: 'action',
+            component: 'chat',
+            name: 'join',
+            args: [{ name: `load-${index}` }],
+        })));
+        await waitFor(
+            () => updates.every(messages => messages.at(-1)?.value.includes('Online · 30')),
+            '30-client room presence'
+        );
         clients[0].send('redweb:html', {
             kind: 'action',
+            component: 'chat',
             name: 'send',
-            args: [{ name: 'load-gate', message: 'ordered-broadcast' }],
+            args: [{ message: 'ordered-broadcast' }],
         });
         await waitFor(
             () => updates.every(messages => messages.at(-1)?.value.includes('ordered-broadcast')),
