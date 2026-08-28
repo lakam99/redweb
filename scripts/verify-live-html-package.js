@@ -33,12 +33,12 @@ async function main() {
             throw new Error('Packed example commands must run precompiled artifacts without development tooling.');
         }
         const { CounterPage } = require(path.join(packageRoot, 'examples', 'live-html', 'counter.js'));
-        const { ChatroomPage } = require(path.join(packageRoot, 'examples', 'live-html', 'chatroom.js'));
+        const { createChatroomPage } = require(path.join(packageRoot, 'examples', 'live-html', 'chatroom.js'));
         const { CardsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'cards.js'));
         const { ComponentsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'components.js'));
         const examples = [
             installed.start(CounterPage, { listen: false }),
-            installed.start(ChatroomPage, { listen: false }),
+            installed.start(createChatroomPage(), { listen: false }),
             installed.start(CardsPage, { listen: false }),
             installed.start(ComponentsPage, { listen: false }),
         ];

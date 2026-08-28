@@ -9,7 +9,7 @@ const WebSocket = require('ws');
 const { action, attribute, codeBlock, component, each, html, page, start, state, url } = require('..');
 const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
-const { ChatroomPage } = require('../examples/live-html/chatroom');
+const { createChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
 const { ComponentsPage } = require('../examples/live-html/components');
 
@@ -179,7 +179,7 @@ async function main() {
     if (!executable) throw new Error('Chrome, Edge, or Chromium is required for the Live HTML browser gate.');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-browser-'));
     const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
-    const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
+    const chat = start(createChatroomPage(), { port: 0, bind: '127.0.0.1', logger });
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
@@ -221,6 +221,12 @@ async function main() {
             return true;
         })()`);
         await first.evaluate(eventual(`document.querySelector('form[rw-submit="send"]')`, 'first participant join'));
+        await first.evaluate(`(() => {
+            const input = document.querySelector('[name="message"]');
+            input.value = 'draft survives presence';
+            input.focus();
+            return true;
+        })()`);
         await second.evaluate(`(() => {
             document.querySelector('[name="name"]').value = 'Ada';
             document.querySelector('form[rw-submit="join"]').requestSubmit();
@@ -230,6 +236,11 @@ async function main() {
             `document.querySelector('.presence')?.textContent.includes('Online · 2')`,
             'chat presence update'
         ))));
+        const preservedDraft = await first.evaluate(`(() => {
+            const input = document.querySelector('[name="message"]');
+            return input.value === 'draft survives presence' && document.activeElement === input;
+        })()`);
+        if (!preservedDraft) throw new Error('A presence update replaced the active chat composer.');
         await first.evaluate(`(() => {
             document.querySelector('[name="message"]').value = '<script>window.__redwebInjected = true<\\/script>';
             document.querySelector('form[rw-submit="send"]').requestSubmit();

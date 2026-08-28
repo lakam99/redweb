@@ -1,4 +1,7 @@
-import { action, component, each, html, page, start, state } from 'redweb';
+import { action, component, each, html, page, start, state, type HtmlFragment } from 'redweb';
+
+const MAX_VISIBLE_MEMBERS = 100;
+const UNSAFE_NAME = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/;
 
 interface JoinForm {
     name?: string;
@@ -15,7 +18,20 @@ interface StoredMessage {
 
 interface RoomParticipant {
     readonly displayName: string;
-    refresh(messages: readonly StoredMessage[], members: readonly string[]): void;
+    updateMessages(messages: readonly StoredMessage[]): void;
+    updatePresence(presence: HtmlFragment): void;
+}
+
+function presenceView(members: readonly string[]) {
+    const visible = members.slice(0, MAX_VISIBLE_MEMBERS);
+    const remaining = members.length - visible.length;
+    return html`
+        <p class="eyebrow">Online · ${members.length}</p>
+        <ul>
+            ${each([...visible], member => html`<li>${member}</li>`)}
+            ${remaining ? html`<li class="more-members">+${remaining} more</li>` : html``}
+        </ul>
+    `;
 }
 
 class ChatRoom {
@@ -30,35 +46,35 @@ class ChatRoom {
         }
         this.participants.add(participant);
         this.online.add(participant);
-        this.publish();
+        participant.updateMessages(this.history);
+        this.publishPresence();
         return true;
     }
 
     disconnect(participant: RoomParticipant) {
         if (!this.online.delete(participant)) return;
-        this.publish();
+        this.publishPresence();
     }
 
     leave(participant: RoomParticipant) {
         this.online.delete(participant);
         if (!this.participants.delete(participant)) return;
-        this.publish();
+        this.publishPresence();
     }
 
     send(participant: RoomParticipant, text: string) {
         if (!this.online.has(participant)) return false;
         this.history = [...this.history, { sender: participant.displayName, text }].slice(-100);
-        this.publish();
+        for (const member of this.participants) member.updateMessages(this.history);
         return true;
     }
 
-    private publish() {
+    private publishPresence() {
         const members = [...this.online].map(participant => participant.displayName);
-        for (const participant of this.participants) participant.refresh(this.history, members);
+        const presence = presenceView(members);
+        for (const participant of this.participants) participant.updatePresence(presence);
     }
 }
-
-const room = new ChatRoom();
 
 @component()
 export class ChatroomComponent implements RoomParticipant {
@@ -66,6 +82,12 @@ export class ChatroomComponent implements RoomParticipant {
 
     @state()
     screen = this.joinScreen();
+
+    @state()
+    messages = this.messageList([]);
+
+    @state()
+    presence = presenceView([]);
 
     constructor(private readonly room: ChatRoom) {}
 
@@ -84,13 +106,20 @@ export class ChatroomComponent implements RoomParticipant {
     @action()
     join({ name }: JoinForm) {
         if (this.displayName) return false;
-        const displayName = String(name || '').trim().slice(0, 40);
-        if (!displayName) {
-            this.screen = this.joinScreen('Choose a display name before joining.');
+        if (typeof name !== 'string') {
+            this.screen = this.joinScreen('Display name must be text.');
+            return false;
+        }
+        const displayName = name.normalize('NFKC').trim();
+        if (!displayName || displayName.length > 40 || UNSAFE_NAME.test(displayName)) {
+            this.screen = this.joinScreen('Choose a visible display name of at most 40 characters.');
             return false;
         }
         this.displayName = displayName;
-        if (this.room.join(this)) return true;
+        if (this.room.join(this)) {
+            this.screen = this.roomScreen();
+            return true;
+        }
         this.displayName = '';
         this.screen = this.joinScreen('That display name is already in use.');
         return false;
@@ -98,8 +127,9 @@ export class ChatroomComponent implements RoomParticipant {
 
     @action()
     send({ message }: MessageForm) {
-        const text = String(message || '').trim().slice(0, 500);
-        if (!text) return false;
+        if (typeof message !== 'string') return false;
+        const text = message.normalize('NFKC').trim();
+        if (!text || text.length > 500 || UNSAFE_NAME.test(text)) return false;
         return this.room.send(this, text);
     }
 
@@ -110,8 +140,12 @@ export class ChatroomComponent implements RoomParticipant {
         this.screen = this.joinScreen();
     }
 
-    refresh(messages: readonly StoredMessage[], members: readonly string[]) {
-        this.screen = this.roomScreen(messages, members);
+    updateMessages(messages: readonly StoredMessage[]) {
+        this.messages = this.messageList(messages);
+    }
+
+    updatePresence(presence: HtmlFragment) {
+        this.presence = presence;
     }
 
     render() {
@@ -137,11 +171,13 @@ export class ChatroomComponent implements RoomParticipant {
         `;
     }
 
-    private roomScreen(messages: readonly StoredMessage[], members: readonly string[]) {
-        const messageItems = messages.length
+    private messageList(messages: readonly StoredMessage[]) {
+        return messages.length
             ? each([...messages], entry => html`<li><strong>${entry.sender}</strong><p>${entry.text}</p></li>`)
             : html`<li class="empty-message">No messages yet. Say hello.</li>`;
-        const memberItems = each([...members], member => html`<li>${member}</li>`);
+    }
+
+    private roomScreen() {
         return html`
             <div class="room-layout">
                 <section class="conversation">
@@ -149,29 +185,32 @@ export class ChatroomComponent implements RoomParticipant {
                         <div><p class="eyebrow">Connected as</p><h1>${this.displayName}</h1></div>
                         <button type="button" class="quiet-button" rw-click="leave">Leave</button>
                     </header>
-                    <ol class="message-list" aria-live="polite">${messageItems}</ol>
+                    <ol class="message-list" aria-live="polite" data-rw-state="messages">${this.messages}</ol>
                     <form rw-submit="send" class="composer">
                         <label class="sr-only" for="chat-message">Message</label>
                         <input id="chat-message" name="message" maxlength="500" autocomplete="off" placeholder="Message the room…" required autofocus>
                         <button type="submit">Send</button>
                     </form>
                 </section>
-                <aside class="presence" aria-label="People in the room">
-                    <p class="eyebrow">Online · ${members.length}</p>
-                    <ul>${memberItems}</ul>
-                </aside>
+                <aside class="presence" aria-label="People in the room" data-rw-state="presence">${this.presence}</aside>
             </div>
         `;
     }
 }
 
-@page('/', { css: 'chatroom.css' })
-export class ChatroomPage {
-    chat = new ChatroomComponent(room);
+export function createChatroomPage() {
+    const room = new ChatRoom();
 
-    render() {
-        return html`<main>${this.chat}</main>`;
+    @page('/', { css: 'chatroom.css' })
+    class ChatroomPage {
+        chat = new ChatroomComponent(room);
+
+        render() {
+            return html`<main>${this.chat}</main>`;
+        }
     }
+
+    return ChatroomPage;
 }
 
-if (require.main === module) start(ChatroomPage, { port: 8080 });
+if (require.main === module) start(createChatroomPage(), { port: 8080 });

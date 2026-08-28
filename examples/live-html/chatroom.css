@@ -133,6 +133,8 @@ button {
 .presence ul { padding: 0; list-style: none; }
 .presence li { padding: .45rem 0; }
 .presence li::before { content: '●'; margin-right: .5rem; color: #4ade80; }
+.presence .more-members { color: #8ca3b8; }
+.presence .more-members::before { content: ''; margin: 0; }
 
 .sr-only {
     position: absolute;
