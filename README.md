@@ -79,25 +79,24 @@ CSS is colocated with the page and needs no static-server setup. Pass one file w
 Browser events can call only explicitly exposed actions:
 
 ```ts
-@page('/chat', { template: 'chatroom.html', css: 'chatroom.css', shared: true })
-class ChatroomPage {
+@component()
+class Chatroom {
   @state()
-  messages = html``;
+  screen = html`<form rw-submit="join"><input name="name"><button>Join</button></form>`;
 
   @action()
-  send({ name, message }: { name: string; message: string }) {
-    this.messages = html`${this.messages}<p><b>${name}</b>: ${message}</p>`;
+  join({ name }: { name: string }) {
+    this.screen = html`<p>Connected as ${name}</p><form rw-submit="send"><input name="message"><button>Send</button></form>`;
   }
 }
 ```
 
-```html
-<section aria-live="polite" data-rw-state="messages"></section>
-<form rw-submit="send">
-  <input name="name">
-  <input name="message" required>
-  <button>Send</button>
-</form>
+```ts
+@page('/chat', { css: 'chatroom.css' })
+class ChatroomPage {
+  chat = new Chatroom();
+  render() { return html`<main>${this.chat}</main>`; }
+}
 ```
 
 Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
@@ -145,7 +144,7 @@ An `html` fragment returned by `render()` is final safe markup, so documentation
 
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), component-based [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The chatroom separates joining from its stable message composer, tracks online members, preserves bounded history, restores identity and missed messages after reconnect, and creates an isolated room for every server. The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 Reusable snippets can own server behavior without page-level forwarding methods. Decorate a class with `@component()`, put instances in page fields, and interpolate them directly: `` html`<main>${this.primary}${this.secondary}</main>` ``. Each instance gets isolated `@state()`, scoped `@action()` methods, nested-component support, and page-owned lifecycle cleanup. See the runnable [component counters](examples/live-html/components.ts) or run `npm run example:components`.
 

@@ -189,6 +189,8 @@ save(form: { displayName: string }) {
 
 `rw-click="action"` prevents default navigation and invokes an action without arguments. `rw-submit="action"` prevents submission, passes form fields as the first argument, preserves duplicate field names as arrays, and resets only after the server acknowledges success. `rw-bind="property"` sends text values or checkbox state only when that property was declared with `@state({ writable: true })`.
 
+When an HTML-valued component state renders new actions or bindings, Redweb automatically scopes those directives back to that component. A component can therefore replace a join form with a composer—or swap any other interactive view—without manual component IDs or browser glue.
+
 The document emits `redweb:connection` events as transport state changes and `redweb:error` events when an interaction fails. A bounded queue covers interaction during initial connection; actions are request/response operations and are not replayed during reconnect.
 
 Names such as `constructor`, `prototype`, and `__proto__` are rejected. Arbitrary methods and undeclared state cannot be reached through the Live HTML protocol.
@@ -234,7 +236,7 @@ The internal paths and application page paths must be unique.
 ## Verification examples
 
 - `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
-- `examples/live-html/chatroom.ts` uses `@page()`, colocated CSS, `@state()`, and `@action()` to prove bounded shared history, safe action invocation, safe HTML fragments, multi-client broadcasts, and reconnect behavior.
+- `examples/live-html/chatroom.ts` uses a connection-scoped `@component()` backed by a room service created by `createChatroomPage()`, so separate server instances cannot leak history or names. Visitors join once, receive a stable dedicated composer, see a capped presence list with the total online count, share bounded history, and recover their identity and missed messages after reconnect.
 - `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
 - `examples/live-html/components.ts` uses two instances of one `@component()` class to prove reusable markup, isolated server state, scoped actions, and component CSS composition.
 

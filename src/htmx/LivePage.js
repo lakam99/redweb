@@ -71,6 +71,15 @@ class LivePage {
     static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
     static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
 
+    static statePayload(page, name, value) {
+        const internal = runtime(page);
+        const payload = HtmlRenderer.statePayload(name, value, page);
+        if (!internal.componentId) return payload;
+        payload.component = internal.componentId;
+        if (payload.html) payload.value = TemplateRenderer.component(payload.value, internal.componentId);
+        return payload;
+    }
+
     static withRenderContext(context, render) {
         return COMPONENT_RENDER_CONTEXT.run(context, render);
     }
@@ -155,8 +164,7 @@ class LivePage {
         if (internal.disposed) throw new Error('Cannot connect a disposed page.');
         internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
-            const payload = HtmlRenderer.statePayload(name, this[name], this);
-            if (internal.componentId) payload.component = internal.componentId;
+            const payload = LivePage.statePayload(this, name, this[name]);
             socket.sendEvent?.('redweb:state', payload);
         });
         const connected = this.connected?.(context);
@@ -181,8 +189,7 @@ class LivePage {
 
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
-        const payload = HtmlRenderer.statePayload(name, value, this);
-        if (runtime(this).componentId) payload.component = runtime(this).componentId;
+        const payload = LivePage.statePayload(this, name, value);
         runtime(this).connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
         return true;
     }

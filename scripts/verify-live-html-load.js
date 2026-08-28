@@ -4,7 +4,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
 const { start } = require('..');
-const { ChatroomPage } = require('../examples/live-html/chatroom');
+const { createChatroomPage } = require('../examples/live-html/chatroom');
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -53,7 +53,7 @@ function closeClient(client) {
 }
 
 async function main() {
-    const server = start(ChatroomPage, {
+    const server = start(createChatroomPage(), {
         port: 0,
         bind: '127.0.0.1',
         logger,
@@ -71,19 +71,32 @@ async function main() {
         if (server.manager.pending.size !== 200) throw new Error('Pending-session concurrency accounting failed.');
         await waitFor(() => server.manager.pending.size === 0, 'pending-session expiry');
 
-        const configs = await Promise.all(Array.from({ length: 30 }, () => getPage(port)));
+        const liveClients = 110;
+        const configs = await Promise.all(Array.from({ length: liveClients }, () => getPage(port)));
         const updates = configs.map(() => []);
         configs.forEach((config, index) => clients.push(createClient(port, config, updates[index])));
         await Promise.all(clients.map(client => client.connect()));
         await waitFor(() => updates.every(messages => messages.length >= 1), 'initial state fan-out');
+        await Promise.all(clients.map((client, index) => client.request('redweb:html', {
+            kind: 'action',
+            component: 'chat',
+            name: 'join',
+            args: [{ name: `load-${index}` }],
+        })));
+        await waitFor(
+            () => updates.every(messages => messages.at(-1)?.value.includes(`Online · ${liveClients}`)),
+            `${liveClients}-client room presence`
+        );
+        if (!updates[0].at(-1)?.value.includes('+10 more')) throw new Error('Visible presence list was not capped.');
         clients[0].send('redweb:html', {
             kind: 'action',
+            component: 'chat',
             name: 'send',
-            args: [{ name: 'load-gate', message: 'ordered-broadcast' }],
+            args: [{ message: 'ordered-broadcast' }],
         });
         await waitFor(
             () => updates.every(messages => messages.at(-1)?.value.includes('ordered-broadcast')),
-            '30-client ordered broadcast'
+            `${liveClients}-client ordered broadcast`
         );
 
         await Promise.all(clients.splice(0).map(closeClient));
@@ -92,9 +105,9 @@ async function main() {
         await pause(50);
         global.gc?.();
         const growth = process.memoryUsage().heapUsed - baseline;
-        const limit = 16 * 1024 * 1024;
+        const limit = 24 * 1024 * 1024;
         if (growth > limit) throw new Error(`Live HTML heap grew by ${growth} bytes; limit is ${limit}.`);
-        console.log(`Live HTML load gate passed: 200 expired renders, 30 live clients, heap delta ${growth} bytes.`);
+        console.log(`Live HTML load gate passed: 200 expired renders, ${liveClients} live clients, heap delta ${growth} bytes.`);
     } finally {
         await Promise.allSettled(clients.map(closeClient));
         await server.shutdown();

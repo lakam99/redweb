@@ -9,7 +9,7 @@ const WebSocket = require('ws');
 const { action, attribute, codeBlock, component, each, html, page, start, state, url } = require('..');
 const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
-const { ChatroomPage } = require('../examples/live-html/chatroom');
+const { createChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
 const { ComponentsPage } = require('../examples/live-html/components');
 
@@ -76,6 +76,7 @@ function launchBrowser(executable, profile) {
     const child = spawn(executable, [
         '--headless=new',
         '--disable-gpu',
+        '--disable-dev-shm-usage',
         '--no-first-run',
         '--no-default-browser-check',
         '--remote-debugging-port=0',
@@ -84,7 +85,7 @@ function launchBrowser(executable, profile) {
     ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     const endpoint = new Promise((resolve, reject) => {
         let stderr = '';
-        const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 10_000);
+        const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 20_000);
         child.stderr.on('data', chunk => {
             stderr += chunk.toString();
             const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/);
@@ -96,6 +97,39 @@ function launchBrowser(executable, profile) {
         child.once('exit', code => { clearTimeout(timer); reject(new Error(`Browser exited early (${code}). ${stderr}`)); });
     });
     return { child, endpoint };
+}
+
+async function stopBrowser(child) {
+    const exited = () => child.exitCode !== null || child.signalCode !== null;
+    if (!child || exited()) return;
+    const waitForExit = milliseconds => new Promise(resolve => {
+        if (exited()) return resolve();
+        const done = () => { clearTimeout(timer); child.off('exit', done); resolve(); };
+        const timer = setTimeout(done, milliseconds);
+        child.once('exit', done);
+    });
+    child.kill();
+    await waitForExit(2_000);
+    if (!exited()) {
+        child.kill('SIGKILL');
+        await waitForExit(2_000);
+    }
+}
+
+async function launchBrowserWithRetry(executable, profileRoot) {
+    const errors = [];
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const profile = path.join(profileRoot, `attempt-${attempt}`);
+        fs.mkdirSync(profile);
+        const browser = launchBrowser(executable, profile);
+        try {
+            return { browser, endpoint: await browser.endpoint };
+        } catch (error) {
+            errors.push(error);
+            await stopBrowser(browser.child);
+        }
+    }
+    throw new AggregateError(errors, 'Browser did not expose DevTools after two bounded attempts.');
 }
 
 async function openPage(debugPort, url) {
@@ -179,7 +213,7 @@ async function main() {
     if (!executable) throw new Error('Chrome, Edge, or Chromium is required for the Live HTML browser gate.');
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-browser-'));
     const counter = start(CounterPage, { port: 0, bind: '127.0.0.1', logger });
-    const chat = start(ChatroomPage, { port: 0, bind: '127.0.0.1', logger });
+    const chat = start(createChatroomPage(), { port: 0, bind: '127.0.0.1', logger });
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
@@ -194,8 +228,9 @@ async function main() {
             waitForListening(components.server),
             waitForListening(componentBoundaries.server),
         ]);
-        browser = launchBrowser(executable, profile);
-        const endpoint = new URL(await browser.endpoint);
+        const launched = await launchBrowserWithRetry(executable, profile);
+        browser = launched.browser;
+        const endpoint = new URL(launched.endpoint);
         const debugPort = Number(endpoint.port);
 
         const counterPage = await openPage(debugPort, `http://127.0.0.1:${counter.server.address().port}/`);
@@ -212,20 +247,45 @@ async function main() {
         const second = await openPage(debugPort, chatUrl);
         pages.push(first, second);
         await Promise.all([first, second].map(page => page.evaluate(eventual(
-            `document.querySelector('form[rw-submit]') && document.querySelector('[data-rw-state="messages"]')`,
-            'chat DOM readiness'
+            `document.querySelector('form[rw-submit="join"][data-rw-component="chat"]') && document.querySelector('[data-rw-state="screen"]')`,
+            'chat join readiness'
         ))));
         await first.evaluate(`(() => {
             document.querySelector('[name="name"]').value = '<Admin>';
-            document.querySelector('[name="message"]').value = '<script>window.__redwebInjected = true<\\/script>';
-            document.querySelector('form[rw-submit]').requestSubmit();
+            document.querySelector('form[rw-submit="join"]').requestSubmit();
             return true;
         })()`);
-        const received = `document.querySelector('[data-rw-state="messages"]')?.textContent.includes('<script>window.__redwebInjected = true</script>')`;
+        await first.evaluate(eventual(`document.querySelector('form[rw-submit="send"]')`, 'first participant join'));
+        await first.evaluate(`(() => {
+            const input = document.querySelector('[name="message"]');
+            input.value = 'draft survives presence';
+            input.focus();
+            return true;
+        })()`);
+        await second.evaluate(`(() => {
+            document.querySelector('[name="name"]').value = 'Ada';
+            document.querySelector('form[rw-submit="join"]').requestSubmit();
+            return true;
+        })()`);
+        await Promise.all([first, second].map(page => page.evaluate(eventual(
+            `document.querySelector('.presence')?.textContent.includes('Online · 2')`,
+            'chat presence update'
+        ))));
+        const preservedDraft = await first.evaluate(`(() => {
+            const input = document.querySelector('[name="message"]');
+            return input.value === 'draft survives presence' && document.activeElement === input;
+        })()`);
+        if (!preservedDraft) throw new Error('A presence update replaced the active chat composer.');
+        await first.evaluate(`(() => {
+            document.querySelector('[name="message"]').value = '<script>window.__redwebInjected = true<\\/script>';
+            document.querySelector('form[rw-submit="send"]').requestSubmit();
+            return true;
+        })()`);
+        const received = `document.querySelector('.message-list')?.textContent.includes('<script>window.__redwebInjected = true</script>')`;
         await Promise.all([first, second].map(page => page.evaluate(eventual(received, 'the real browser chat broadcast'))));
         const safety = await Promise.all([first, second].map(page => page.evaluate('window.__redwebInjected !== true')));
         if (!safety.every(Boolean)) throw new Error('Escaped chat content executed in the browser.');
-        const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('button')).backgroundColor");
+        const chatButtonColor = await first.evaluate("getComputedStyle(document.querySelector('.composer button')).backgroundColor");
         if (chatButtonColor !== 'rgb(34, 211, 238)') throw new Error(`Chatroom CSS was not applied: ${chatButtonColor}`);
 
         const cardsPage = await openPage(debugPort, `http://127.0.0.1:${cards.server.address().port}/`);
@@ -321,11 +381,7 @@ async function main() {
         failure = error;
     } finally {
         pages.forEach(page => page.socket.close());
-        if (browser?.child.exitCode === null) {
-            const exited = new Promise(resolve => browser.child.once('exit', resolve));
-            browser.child.kill();
-            await exited;
-        }
+        await stopBrowser(browser?.child);
         await Promise.allSettled([
             counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), componentBoundaries.shutdown(),
         ]);
@@ -345,4 +401,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { combineFailures };
+module.exports = { combineFailures, stopBrowser };
