@@ -227,6 +227,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `maxConcurrentRenders`: maximum simultaneous HTTP page renders, independent of live session occupancy; defaults to `maxSessions`.
 - `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
+- `heartbeat`: optional `{ intervalMs, timeoutMs }` WebSocket liveness policy. Live HTML defaults to a 15-second ping interval and 10-second pong timeout so half-open browsers are disconnected and component `disconnected()` hooks update presence promptly.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
 - `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
 - `livePaths`: optional `{ socket, client, runtime }` internal path overrides.

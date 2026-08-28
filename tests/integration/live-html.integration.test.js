@@ -314,6 +314,45 @@ describe('Live HTML integration without mocks', () => {
         expect(latest(isolatedUpdates, 'messages').value).not.toContain('alert(1)');
     });
 
+    test('the Live HTML heartbeat removes a half-open browser from component presence', async () => {
+        const server = await start(createChatroomServer, { heartbeat: { intervalMs: 20, timeoutMs: 20 } });
+        const firstPage = await getPage(server);
+        const secondPage = await getPage(server);
+        const updates = [];
+        const first = liveClient(firstPage.port, firstPage.config);
+        first.on('redweb:state', message => updates.push(message.payload));
+        clients.add(first);
+        await first.connect();
+        await first.request('redweb:html', {
+            kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Observer' }],
+        });
+
+        const url = `ws://127.0.0.1:${secondPage.port}${secondPage.config.socketPath}` +
+            `?pageId=${secondPage.config.pageId}&redwebVersion=${secondPage.config.version}`;
+        const halfOpen = new WebSocket(url, { headers: { Origin: `http://127.0.0.1:${secondPage.port}` } });
+        rawSockets.add(halfOpen);
+        await waitForOpen(halfOpen);
+        halfOpen.send(JSON.stringify({
+            v: secondPage.config.version,
+            type: 'redweb:html',
+            requestId: 'join-half-open',
+            payload: { kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Sleeper' }] },
+        }));
+        await waitForCondition(
+            () => updates.some(update => update.name === 'presence' && update.value.includes('Online · 2')),
+            'half-open participant join'
+        );
+
+        halfOpen._socket.pause();
+        await waitForCondition(
+            () => updates.at(-1)?.name === 'presence' && updates.at(-1).value.includes('Online · 1'),
+            'heartbeat-driven presence removal',
+            1000
+        );
+        expect(server.manager.active.get(secondPage.config.pageId)?.socket).toBeNull();
+        halfOpen._socket.resume();
+    });
+
     test('the shipped card collection persists across renders and replaces its safe server-rendered items', async () => {
         const server = await start(createCardsServer);
         const page = await getPage(server);

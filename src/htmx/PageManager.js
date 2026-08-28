@@ -10,6 +10,7 @@ const { isHtml, renderValue } = require('./Html');
 const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
 
 const PROTOCOL_VERSION = '1';
+const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
 const DEFAULT_PATHS = Object.freeze({
     socket: '/__redweb/live',
     client: '/__redweb/client.js',
@@ -60,7 +61,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, authenticate, origins, logger = console }) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -94,6 +95,7 @@ class PageManager {
         this.maxSessions = maxSessions;
         this.maxConcurrentRenders = maxConcurrentRenders;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
+        this.heartbeat = heartbeat;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.authenticateRequest = authenticate;
         this.origins = origins;
@@ -367,6 +369,7 @@ class PageManager {
                     allowDuplicateConnections: true,
                     orderedMessages: true,
                     drainHandlers: true,
+                    heartbeat: manager.heartbeat,
                     shutdownTimeoutMs: manager.shutdownTimeoutMs,
                     limits: { maxPendingMessages: 64, maxBufferedBytes: 256 * 1024 },
                     websocketOptions: { maxPayload: 64 * 1024 },
