@@ -68,9 +68,19 @@ card(item: { title: string }) {
 
 Place the collection in the template with `<section rw-each="cards"></section>`. Redweb server-renders every item, escapes interpolated values, and replaces the collection contents when the array is reassigned. View methods are synchronous and must return an `HtmlFragment`. Arrays of fragments also compose naturally inside `html`, such as ``html`<div>${items.map(renderItem)}</div>` ``.
 
-For a small, auditable safety model, ordinary `html` interpolations are allowed only in element text. Dynamic attributes and URLs require the explicit wrappers below. Interpolation in event handlers, inline styles, `srcdoc`, `srcset`, `<script>`, and `<style>` remains prohibited.
+For a small, auditable safety model, primitive values may be interpolated into quoted attributes. URL-bearing attributes additionally pass through Redweb's safe-URL policy. The explicit `attribute()` and `url()` wrappers remain supported when they improve intent. Interpolation in event handlers, inline styles, `srcdoc`, `srcset`, `<script>`, and `<style>` remains prohibited.
 
 ## Reusable components
+
+For stateless snippets, pass a render function directly to `component()`:
+
+```ts
+const Badge = component((properties: { label: string }) =>
+  html`<strong class="badge">${properties.label}</strong>`
+);
+```
+
+Function components are synchronous and must return `html`. Use a decorated class when a component needs state, actions, or lifecycle hooks.
 
 Decorate a plain class with `@component()` to give a reusable HTML snippet its own server state, actions, and lifecycle. Store component instances in page fields and interpolate them like any other safe HTML fragment:
 
@@ -134,7 +144,7 @@ const markup = html`
 `;
 ```
 
-`attribute()` accepts primitive values and is valid only inside a quoted non-URL attribute. `url()` is required for URL-bearing attributes such as `href`, `src`, and `action`; it permits relative URLs plus HTTP, HTTPS, mail, and telephone URLs, while rejecting control characters, protocol-relative URLs, and executable schemes. Both wrappers are escaped when rendered and are rejected in element text.
+`attribute()` accepts primitive values and is valid only inside a quoted non-URL attribute. `url()` explicitly brands URL-bearing attributes such as `href`, `src`, and `action`; direct string values receive the same validation. Redweb permits relative URLs plus HTTP, HTTPS, mail, and telephone URLs, while rejecting control characters, protocol-relative URLs, and executable schemes. Both wrappers are escaped when rendered and are rejected in element text.
 
 ### Nested components and code
 
@@ -159,7 +169,7 @@ const reference = each(apiSections, section => html`
 `);
 ```
 
-`codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
+`codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, or a `highlight(source, language)` callback that returns one, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
 
 An `HtmlFragment` returned from `render()` is already fully composed and is never reparsed for `{{ bindings }}` or directives. This keeps code samples literal and prevents escaped documentation text from becoming executable template syntax. Return a string or use `template` when Redweb should process declarative bindings.
 
@@ -271,5 +281,33 @@ await exportStatic(DocsPage, { outDir: 'dist' });
 Non-live pages contain no page token or browser runtime. When served by `start()`, Redweb skips its WebSocket route, emits an ETag, honors `If-None-Match`, and applies the declared public cache policy. Interactive pages are always sent with `private, no-store`.
 
 `exportStatic()` accepts one decorated class or an array. It requires `live: false`, maps `/` to `index.html` and `/docs` to `docs/index.html`, emits content-addressed CSS beside the pages, and returns frozen lists of written files. It never deletes or cleans the output directory.
+
+For several pages, define shared defaults once:
+
+```ts
+import { defineSite, html } from 'redweb';
+
+const docs = defineSite({
+  origin: 'https://example.com',
+  css: 'site.css',
+  head: { description: 'Redweb documentation' },
+  cache: { maxAge: 300 },
+  layout: (content, context) => html`
+    <body data-path="${context.request.path}">
+      <nav>Redweb</nav>
+      <main>${content}</main>
+    </body>
+  `,
+});
+
+@docs.page('/docs', { head: { title: 'Documentation' } })
+class DocsPage {
+  render() { return html`<h1>Documentation</h1>`; }
+}
+
+await docs.export(DocsPage, { outDir: 'dist', publicDir: 'public' });
+```
+
+`defineSite()` creates runtime-free page decorators, merges and deduplicates shared CSS, inherits head/cache/layout defaults, and derives canonical URLs from `origin`. Layouts receive a trusted page fragment plus the normal render context, run synchronously, and must return `html`. `site.export()` optionally copies `publicDir` before writing pages and never cleans the destination.
 
 The request exposed to `loading()` and `render()` is deliberately the portable `LivePageRequest` surface: `path`, `url`, `method`, `headers`, `params`, `query`, `body`, and `get(name)`. HTTP rendering supplies these from Express; static export supplies deterministic empty headers, parameters, query, and body values. Framework-specific Express request methods are not part of the page contract.

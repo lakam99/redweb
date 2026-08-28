@@ -69,12 +69,16 @@ describe('decorator-first Live HTML units', () => {
         expect(html`<p>${strong}</p>`.toString()).toBe('<p><strong>&lt;Redweb&gt;</strong></p>');
         expect(html`<article id="${attribute('api<one')}" data-index='${attribute(1)}'>safe</article>`.toString())
             .toBe('<article id="api&lt;one" data-index=\'1\'>safe</article>');
+        expect(html`<article id="${'api<two'}" data-index='${2}'>safe</article>`.toString())
+            .toBe('<article id="api&lt;two" data-index=\'2\'>safe</article>');
         expect(html`<article title="1 > 0" id="${attribute('angles')}">safe</article>`.toString())
             .toContain('id="angles"');
         expect(html`<article title="1 < 2" id="${attribute('less')}">safe</article>`.toString())
             .toContain('id="less"');
         expect(html`<a href="${url('#api')}" cite='${url('https://example.test/docs')}'>docs</a>`.toString())
             .toContain('href="#api" cite=\'https://example.test/docs\'');
+        expect(html`<a href="${'#direct'}" cite='${'https://example.test/direct'}'>direct</a>`.toString())
+            .toContain('href="#direct" cite=\'https://example.test/direct\'');
         expect(html`<a href="${url('mailto:docs@example.test')}">mail</a>`.toString()).toContain('mailto:');
         expect(html`<a href="${url('tel:+15551234')}">call</a>`.toString()).toContain('tel:');
         expect(html`<a href="${url('/docs?tab=api')}">relative</a>`.toString()).toContain('/docs?tab=api');
@@ -105,14 +109,21 @@ describe('decorator-first Live HTML units', () => {
             .toContain('<figcaption>TypeScript</figcaption><pre><code class="language-ts">&lt;script&gt;</code>');
         expect(codeBlock(html`<span class="token">const</span>`, { language: 'js' }).toString())
             .toContain('<code class="language-js"><span class="token">const</span></code>');
+        expect(codeBlock('const ready = true', {
+            language: 'js',
+            highlight: (source, language) => html`<span class="${`token-${language}`}">${source}</span>`,
+        }).toString()).toContain('<span class="token-js">const ready = true</span>');
         expect(codeBlock(null, { label: '' }).toString()).not.toContain('figcaption');
         expect(codeBlock('plain').toString()).toContain('language-text');
         expect(() => codeBlock('x', null)).toThrow('options');
         expect(() => codeBlock('x', { language: 'not valid' })).toThrow('safe name');
         expect(() => codeBlock('x', { label: null })).toThrow('label');
+        expect(() => codeBlock('x', { highlight: true })).toThrow('highlight must be a function');
+        expect(() => codeBlock(html`<b>x</b>`, { highlight: () => html`` })).toThrow('cannot highlight');
+        expect(() => codeBlock('x', { highlight: source => source })).toThrow('must return an HtmlFragment');
         expect(() => html(['not', 'tagged'], 'value')).toThrow('tagged template');
-        expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('requires url');
-        expect(() => html`<a title="> ${html`<b>unsafe</b>`}">link</a>`).toThrow('requires attribute');
+        expect(() => html`<a href="${'javascript:alert(1)'}">link</a>`).toThrow('does not allow');
+        expect(() => html`<a title="> ${html`<b>unsafe</b>`}">link</a>`).toThrow('requires a primitive');
         expect(() => html`<script>${'</script><b>unsafe</b>'}</script>`).toThrow('element text');
         expect(() => html`<script>safe()</script><style>${'unsafe'}</style>`).toThrow('element text');
         expect(() => html`<textarea>${'unsafe'}</textarea>`).toThrow('element text');
@@ -122,6 +133,13 @@ describe('decorator-first Live HTML units', () => {
         expect(html`<!-- finished -->${'safe'}`.toString()).toBe('<!-- finished -->safe');
         expect(() => html`<plaintext>${'unsafe'}`).toThrow('element text');
         expect(html`<p>1 < 2 ${'safe'}</p>`.toString()).toBe('<p>1 < 2 safe</p>');
+        const Badge = component(properties => html`<strong>${properties.label}</strong>`);
+        expect(Badge({ label: '<Ready>' }).toString()).toBe('<strong>&lt;Ready&gt;</strong>');
+        const AsyncBadge = component(async () => html`async`);
+        expect(() => AsyncBadge()).toThrow('synchronously');
+        const UnsafeBadge = component(() => '<strong>unsafe</strong>');
+        expect(() => UnsafeBadge()).toThrow('return html');
+        expect(() => component(null)).toThrow('render function');
     });
 
     test('validates and records page, state, and action decorator metadata', async () => {
@@ -135,6 +153,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => page('/', { scope: 'shared', shared: false })).toThrow('conflict');
         expect(() => page('/', { scope: 'request' })).toThrow('scope');
         expect(() => page('/', { live: 'no' })).toThrow('live');
+        expect(() => page('/', { layout: true })).toThrow('layout');
         expect(() => page('/', { head: null })).toThrow('head');
         expect(() => page('/', { head: { unknown: true } })).toThrow('Unknown page head');
         expect(() => page('/', { head: { title: '' } })).toThrow('head title');
@@ -171,10 +190,11 @@ describe('decorator-first Live HTML units', () => {
         decorateAction(MetadataPage, 'run');
         state({ writable: true })(MetadataPage.prototype, 'name');
         decorateAction(MetadataPage, 'run');
-        page('/metadata', { template: 'page.html', css: ['page.css', 'page.css'], scope: 'shared' })(MetadataPage);
+        const layout = content => html`<main>${content}</main>`;
+        page('/metadata', { template: 'page.html', css: ['page.css', 'page.css'], scope: 'shared', layout })(MetadataPage);
 
         expect(getPageMetadata(MetadataPage)).toEqual({
-            path: '/metadata', template: 'page.html', css: ['page.css'], scope: 'shared',
+            path: '/metadata', template: 'page.html', css: ['page.css'], scope: 'shared', layout,
         });
         expect(Object.isFrozen(getPageMetadata(MetadataPage).css)).toBe(true);
         class StaticMetadataPage {}

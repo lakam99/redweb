@@ -157,7 +157,7 @@ function page(routePath, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('Page options must be an object.');
     }
-    const { template, css, shared, scope = shared ? 'shared' : 'connection', live = true } = options;
+    const { template, css, shared, scope = shared ? 'shared' : 'connection', live = true, layout } = options;
     if (template !== undefined && (typeof template !== 'string' || !template)) {
         throw new TypeError('Page template must be a non-empty path.');
     }
@@ -175,6 +175,7 @@ function page(routePath, options = {}) {
         throw new TypeError('Page scope must be "connection" or "shared".');
     }
     if (typeof live !== 'boolean') throw new TypeError('Page live must be a boolean.');
+    if (layout !== undefined && typeof layout !== 'function') throw new TypeError('Page layout must be a function.');
     const head = pageHead(options.head);
     const cache = pageCache(options.cache, live);
     return PageClass => {
@@ -187,13 +188,24 @@ function page(routePath, options = {}) {
             ...(head && { head }),
             ...(cache && { cache }),
             ...(stylesheets && { css: Object.freeze(stylesheets) }),
+            ...(layout && { layout }),
         }));
         PAGE_ROOTS.set(PageClass, templateRoot);
         return PageClass;
     };
 }
 
-function component() {
+function component(render) {
+    if (render !== undefined) {
+        if (typeof render !== 'function') throw new TypeError('component() requires a render function.');
+        return function FunctionalComponent(properties) {
+            const result = render(properties);
+            if (result?.then) throw new TypeError('Function components must render synchronously.');
+            const { isHtml } = require('./Html');
+            if (!isHtml(result)) throw new TypeError('Function components must return html.');
+            return result;
+        };
+    }
     return ComponentClass => {
         if (typeof ComponentClass !== 'function') throw new TypeError('component() must decorate a class.');
         COMPONENT_CLASSES.add(ComponentClass);

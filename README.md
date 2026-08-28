@@ -118,7 +118,7 @@ const sections = each(apiSections, section => html`
 `);
 ```
 
-Plain interpolations remain restricted to element text. Dynamic non-URL attributes require `attribute()`, and URL-bearing attributes require `url()`, which rejects unsafe and protocol-relative schemes. `codeBlock()` escapes ordinary code and also accepts an explicit `HtmlFragment` from a server-side syntax highlighter.
+Primitive values may be interpolated directly into quoted attributes and safe URL attributes. Redweb escapes attributes and rejects unsafe or protocol-relative URL schemes; `attribute()` and `url()` remain available when explicit intent helps readability. Event handlers, inline styles, `srcdoc`, and `srcset` remain prohibited. `codeBlock()` escapes ordinary code and can call a server-side `highlight` function that returns an `HtmlFragment`.
 
 For React-free documentation or marketing pages, set `live: false`. Redweb omits page tokens, browser JavaScript, and WebSockets; adds document metadata; and serves the result with an ETag:
 
@@ -139,6 +139,24 @@ class DocsPage {}
 ```
 
 Export the same decorated page to CDN-ready files with `await exportStatic(DocsPage, { outDir: 'dist' })`. Route paths become `index.html` files, colocated stylesheets are emitted under their content-addressed URLs, and no Live HTML runtime is included. Static export requires `live: false`.
+
+For a multi-page site, `defineSite()` removes repeated static-page configuration. It shares CSS, metadata, caching, and a safe layout; generates canonical URLs; and can copy a public asset directory during export:
+
+```ts
+const docs = defineSite({
+  origin: 'https://redweb.example',
+  css: 'site.css',
+  head: { description: 'Redweb documentation' },
+  layout: content => html`<body><nav>Redweb</nav><main>${content}</main></body>`,
+});
+
+@docs.page('/docs', { head: { title: 'Documentation' } })
+class DocsPage {
+  render() { return html`<h1>Documentation</h1>`; }
+}
+
+await docs.export(DocsPage, { outDir: 'dist', publicDir: 'public' });
+```
 
 An `html` fragment returned by `render()` is final safe markup, so documentation examples containing literal `{{ bindings }}` are never parsed a second time. Return a string or use a template file when Redweb should resolve template bindings and directives.
 

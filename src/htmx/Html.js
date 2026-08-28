@@ -25,6 +25,12 @@ function markHtml(value, toString) {
     return value;
 }
 
+function trustedHtml(value) {
+    const fragment = {};
+    markHtml(fragment, () => String(value));
+    return Object.freeze(fragment);
+}
+
 function trustedValue(brand, value) {
     return Object.freeze({ [brand]: true, value: String(value) });
 }
@@ -65,9 +71,14 @@ function renderInterpolation(source, value) {
             throw new TypeError(`Dynamic ${name} attributes are not allowed.`);
         }
         if (URL_ATTRIBUTES.has(name)) {
-            if (!value?.[HTML_URL]) throw new TypeError(`The ${name} attribute requires url().`);
+            if (!value?.[HTML_URL]) {
+                if (value?.[HTML_ATTRIBUTE]) throw new TypeError(`The ${name} attribute requires url().`);
+                value = safeUrl(value);
+            }
         } else if (!value?.[HTML_ATTRIBUTE]) {
-            throw new TypeError(`The ${name} attribute requires attribute().`);
+            if (value?.[HTML_URL]) throw new TypeError(`The ${name} attribute requires attribute().`);
+            if (isHtml(value)) throw new TypeError(`The ${name} attribute requires a primitive value.`);
+            value = attribute(value);
         }
         return escapeHtml(value.value);
     }
@@ -102,14 +113,20 @@ function codeBlock(code, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('codeBlock() options must be an object.');
     }
-    const { language = 'text', label = language } = options;
+    const { language = 'text', label = language, highlight } = options;
     if (typeof language !== 'string' || !/^[A-Za-z0-9_+-]{1,32}$/.test(language)) {
         throw new TypeError('codeBlock() language must be a safe name of at most 32 characters.');
     }
     if (typeof label !== 'string') throw new TypeError('codeBlock() label must be a string.');
+    if (highlight !== undefined && typeof highlight !== 'function') throw new TypeError('codeBlock() highlight must be a function.');
     const caption = label ? html`<figcaption>${label}</figcaption>` : html``;
-    const content = isHtml(code) ? code : String(code ?? '');
+    let content = isHtml(code) ? code : String(code ?? '');
+    if (highlight) {
+        if (isHtml(code)) throw new TypeError('codeBlock() cannot highlight an HtmlFragment.');
+        content = highlight(content, language);
+        if (!isHtml(content)) throw new TypeError('codeBlock() highlight must return an HtmlFragment.');
+    }
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;
 }
 
-module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderValue, safeUrl };
+module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderValue, safeUrl, trustedHtml };

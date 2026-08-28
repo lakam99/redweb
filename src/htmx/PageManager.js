@@ -6,7 +6,7 @@ const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
-const { isHtml, renderValue } = require('./Html');
+const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
 
 const PROTOCOL_VERSION = '1';
@@ -223,7 +223,12 @@ class PageManager {
                 const source = record.template ?? await page.render?.(context);
                 if (this.closing) throw new Error('Live HTML server is shutting down.');
                 if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-                return isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
+                const content = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
+                if (!record.metadata.layout) return content;
+                const result = record.metadata.layout(trustedHtml(content), context);
+                if (result?.then) throw new TypeError('Page layouts must render synchronously.');
+                if (!isHtml(result)) throw new TypeError('Page layouts must return html.');
+                return renderValue(result);
             });
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
