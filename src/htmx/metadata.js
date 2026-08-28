@@ -8,8 +8,10 @@ const VIEW_METADATA = new WeakMap();
 const RESOLVED_VIEW = new WeakMap();
 const STANDARD_VIEWS = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
+const PAGE_STYLESHEET_ROOTS = new WeakMap();
 const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
+const synchronous = require('./synchronous');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -157,7 +159,7 @@ function page(routePath, options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('Page options must be an object.');
     }
-    const { template, css, shared, scope = shared ? 'shared' : 'connection', live = true } = options;
+    const { template, css, shared, scope = shared ? 'shared' : 'connection', live = true, layout } = options;
     if (template !== undefined && (typeof template !== 'string' || !template)) {
         throw new TypeError('Page template must be a non-empty path.');
     }
@@ -175,6 +177,7 @@ function page(routePath, options = {}) {
         throw new TypeError('Page scope must be "connection" or "shared".');
     }
     if (typeof live !== 'boolean') throw new TypeError('Page live must be a boolean.');
+    if (layout !== undefined && typeof layout !== 'function') throw new TypeError('Page layout must be a function.');
     const head = pageHead(options.head);
     const cache = pageCache(options.cache, live);
     return PageClass => {
@@ -187,13 +190,23 @@ function page(routePath, options = {}) {
             ...(head && { head }),
             ...(cache && { cache }),
             ...(stylesheets && { css: Object.freeze(stylesheets) }),
+            ...(layout && { layout }),
         }));
         PAGE_ROOTS.set(PageClass, templateRoot);
         return PageClass;
     };
 }
 
-function component() {
+function component(render) {
+    if (render !== undefined) {
+        if (typeof render !== 'function') throw new TypeError('component() requires a render function.');
+        return function FunctionalComponent(properties) {
+            const result = synchronous(render(properties), 'Function components must render synchronously.');
+            const { isHtml } = require('./Html');
+            if (!isHtml(result)) throw new TypeError('Function components must return html.');
+            return result;
+        };
+    }
     return ComponentClass => {
         if (typeof ComponentClass !== 'function') throw new TypeError('component() must decorate a class.');
         COMPONENT_CLASSES.add(ComponentClass);
@@ -277,6 +290,14 @@ function getPageTemplateRoot(PageClass) {
     return PAGE_ROOTS.get(PageClass);
 }
 
+function getPageStylesheetRoots(PageClass) {
+    return PAGE_STYLESHEET_ROOTS.get(PageClass);
+}
+
+function setPageStylesheetRoots(PageClass, roots) {
+    PAGE_STYLESHEET_ROOTS.set(PageClass, Object.freeze([...roots]));
+}
+
 function getStateMetadata(PageClass) {
     return new Map(resolvedState(PageClass));
 }
@@ -312,6 +333,7 @@ module.exports = {
     getActionImplementation,
     getActionMetadata,
     getPageMetadata,
+    getPageStylesheetRoots,
     getPageTemplateRoot,
     getStateConfig,
     getStateMetadata,
@@ -319,6 +341,9 @@ module.exports = {
     getViewMetadata,
     isComponentClass,
     page,
+    pageCache,
+    pageHead,
+    setPageStylesheetRoots,
     state,
     view,
 };

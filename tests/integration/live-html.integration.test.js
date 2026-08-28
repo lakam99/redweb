@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, codeBlock, component, html, page, start: startPages } = require('../..');
+const { LiveHtmlServer, LivePage, codeBlock, component, defineSite, html, page, start: startPages } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { createChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
@@ -28,6 +28,15 @@ class MutableStaticPage {
 }
 page('/mutable-reference', { live: false, cache: { maxAge: 60 } })(MutableStaticPage);
 const createStaticReferenceServer = options => startPages([StaticReferencePage, DefaultStaticPage, MutableStaticPage], options);
+const referenceSite = defineSite({
+    origin: 'https://docs.example.test',
+    layout: (content, context) => html`<body><nav>${context.request.path}</nav><main>${content}</main></body>`,
+});
+class SiteReferencePage {
+    render() { return html`<h1>${'Site reference'}</h1>`; }
+}
+referenceSite.page('/site-reference', { head: { title: 'Site Reference' } })(SiteReferencePage);
+const createSiteReferenceServer = options => startPages(SiteReferencePage, options);
 class AuthenticatedStaticPage {
     name = '';
     loading({ principal }) { this.name = String(principal); }
@@ -126,6 +135,17 @@ describe('Live HTML integration without mocks', () => {
         await client.connect();
         return client;
     }
+
+    test('serves a site layout and generated metadata through a real HTTP listener', async () => {
+        const server = await start(createSiteReferenceServer);
+        const port = server.server.address().port;
+        const response = await request({ port, path: '/site-reference' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('<body><nav>/site-reference</nav><main><h1>Site reference</h1></main></body>');
+        expect(response.body).toContain('<title>Site Reference</title>');
+        expect(response.body).toContain('<link rel="canonical" href="https://docs.example.test/site-reference">');
+        expect(response.body).not.toContain('__redweb_page');
+    });
 
     test('the shipped counter SSRs and emits isolated server-owned increments over the official client', async () => {
         const server = await start(createCounterServer);

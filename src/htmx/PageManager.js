@@ -6,8 +6,9 @@ const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
 const browserRuntime = require('./browserRuntime');
-const { isHtml, renderValue } = require('./Html');
-const { getPageMetadata, getPageTemplateRoot } = require('./metadata');
+const { isHtml, renderValue, trustedHtml } = require('./Html');
+const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
+const synchronous = require('./synchronous');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
@@ -128,7 +129,10 @@ class PageManager {
             PageClass,
             metadata,
             template: metadata.template ? this.assets.load(metadata.template, root, 'template').content : null,
-            stylesheets: [...new Set((metadata.css || []).map(file => this.registerStylesheet(file, root)))],
+            stylesheets: [...new Set((metadata.css || []).map((file, index) => this.registerStylesheet(
+                file,
+                (this.hasExplicitTemplateRoot ? undefined : getPageStylesheetRoots(PageClass)?.[index]) || root,
+            )))],
             shared: null,
         };
         if (metadata.scope === 'shared') {
@@ -223,7 +227,11 @@ class PageManager {
                 const source = record.template ?? await page.render?.(context);
                 if (this.closing) throw new Error('Live HTML server is shutting down.');
                 if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
-                return isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
+                const content = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
+                if (!record.metadata.layout) return content;
+                const result = synchronous(record.metadata.layout(trustedHtml(content), context), 'Page layouts must render synchronously.');
+                if (!isHtml(result)) throw new TypeError('Page layouts must return html.');
+                return renderValue(result);
             });
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);

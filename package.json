@@ -1,6 +1,6 @@
 {
   "name": "redweb",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "A way to quickly set up an express server",
   "main": "index.js",
   "types": "index.d.ts",

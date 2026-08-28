@@ -1,17 +1,15 @@
 # Changelog
 
+## 0.10.0
+
+- Added `defineSite()` for shared static-site CSS, metadata, caching, layouts, canonical URLs, public asset copying, and concise page decorators.
+- Added synchronous function components, readonly collection typings, direct safe primitive attribute/URL interpolation, and a `codeBlock()` highlighter hook.
 - Enabled a bounded heartbeat for Live HTML so chat presence and component disconnect hooks detect half-open browser connections instead of waiting for operating-system TCP timeouts.
 - Rebuilt the Live HTML chatroom as a reusable component with a one-time join flow, reserved display names, online presence, bounded shared history, reconnect recovery, and a dedicated message composer.
-
-## Unreleased
-
 - Added reusable `@component()` Live HTML classes with nested composition, isolated state/actions, shared request and connection lifecycle hooks, and deterministic cascading cleanup.
 - Added explicit safe attribute and URL interpolation for Live HTML.
 - Added nested fragment composition and reusable safe code blocks.
 - Added page head metadata, non-live ETag/cache handling, and runtime-free static export with content-addressed CSS.
-
-## Unreleased
-
 - Replaced the executable `.htmx` sandbox with decorator-first, declarative Live HTML pages.
 - Added context-restricted safe server rendering, shallow reactive state, explicit browser actions and bindings, connection/shared page scopes, expiring page sessions, same-origin admission, optional identity binding, HTTPS/WSS, reconnect snapshots, and awaited deterministic cleanup.
 - Integrated the browser runtime with `redweb-client` rather than maintaining a second WebSocket client.

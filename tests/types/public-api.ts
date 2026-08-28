@@ -15,6 +15,7 @@ import {
     attribute,
     codeBlock,
     component,
+    defineSite,
     each,
     exportStatic,
     html,
@@ -65,9 +66,21 @@ const renderedCards: string = HtmlRenderer.collection(new CardView(), 'cards', n
 void renderedCards;
 const navigation = html`<a id="${attribute('api')}" href="${url('#api')}">${'API'}</a>`;
 const nested = each([{ name: 'one' }], item => html`<span>${item.name}</span>`);
-const sample = codeBlock('const ready = true', { language: 'ts', label: 'TypeScript' });
+const readonlyItems = [{ name: 'one' }] as const;
+const readonlyNested = each(readonlyItems, item => html`<span>${item.name}</span>`);
+const Badge = component((properties: { label: string }) => html`<strong>${properties.label}</strong>`);
+const badge = Badge({ label: 'Ready' });
+const directAttributes = html`<a id="${'api'}" href="${'#api'}">API</a>`;
+const sample = codeBlock('const ready = true', {
+    language: 'ts',
+    label: 'TypeScript',
+    highlight: source => html`<span class="token">${source}</span>`,
+});
 void navigation;
 void nested;
+void readonlyNested;
+void badge;
+void directAttributes;
 void sample;
 
 @page('/docs', {
@@ -85,6 +98,18 @@ class DocsPage {
     render() { return html`<h1>Docs</h1>`; }
 }
 void exportStatic(DocsPage, { outDir: 'dist' });
+
+const site = defineSite({
+    origin: 'https://example.test',
+    css: ['base.css'] as const,
+    head: { description: 'Redweb documentation' },
+    layout: (content, context) => html`<body data-path="${context.request.path}">${content}</body>`,
+});
+@site.page('/site', { css: 'site.css', head: { title: 'Site' } })
+class SitePage {
+    render() { return html`<h1>Site</h1>`; }
+}
+void site.export([SitePage] as const, { outDir: 'dist', publicDir: 'public' });
 
 const live = new LiveHtmlServer({ pages: [CounterPage], listen: false });
 void live.shutdown();
