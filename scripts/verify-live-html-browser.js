@@ -374,6 +374,10 @@ async function main() {
             document.body.textContent.includes('{{ value }}')
         `);
         if (!plaintextSafety) throw new Error('Plaintext content became active browser DOM.');
+        let jsxPlaintextRejected = false;
+        try { jsx('plaintext', { children: 'terminal' }); }
+        catch (error) { jsxPlaintextRejected = error instanceof TypeError; }
+        if (!jsxPlaintextRejected) throw new Error('JSX allowed a terminal plaintext element.');
 
         const sections = [{ id: 'http', name: 'HTTP' }, { id: 'sockets', name: 'Sockets' }];
         const composedMarkup = html`<main>${each(sections, section => html`

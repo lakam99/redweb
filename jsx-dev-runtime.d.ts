@@ -1,12 +1,12 @@
 export { Fragment } from './jsx-runtime';
-export type { Child, IntrinsicAttributes, IntrinsicProperties, JSX } from './jsx-runtime';
+export type { Child, ElementType, IntrinsicAttributes, IntrinsicProperties, JSX } from './jsx-runtime';
 import type { HtmlFragment } from 'redweb';
-import type { IntrinsicProperties } from './jsx-runtime';
+import type { ElementType, IntrinsicProperties } from './jsx-runtime';
 
 export function jsxDEV(
-    type: string | ((properties: any) => HtmlFragment),
+    type: ElementType,
     properties: IntrinsicProperties | null,
-    key?: string,
+    key?: string | number,
     isStaticChildren?: boolean,
     source?: unknown,
     self?: unknown,

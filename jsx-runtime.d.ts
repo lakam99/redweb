@@ -23,5 +23,6 @@ export namespace JSX {
 }
 
 export const Fragment: unique symbol;
-export function jsx(type: string | ((properties: any) => HtmlFragment), properties: IntrinsicProperties | null): HtmlFragment;
+export type ElementType = string | typeof Fragment | ((properties: any) => HtmlFragment | readonly HtmlFragment[]);
+export function jsx(type: ElementType, properties: IntrinsicProperties | null, key?: string | number): HtmlFragment;
 export const jsxs: typeof jsx;

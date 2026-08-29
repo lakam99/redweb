@@ -66,6 +66,7 @@ async function main() {
         const consumerRoot = path.join(workspace, 'tsx-consumer');
         fs.mkdirSync(path.join(consumerRoot, 'node_modules'), { recursive: true });
         fs.symlinkSync(packageRoot, path.join(consumerRoot, 'node_modules', 'redweb'), 'junction');
+        fs.writeFileSync(path.join(consumerRoot, 'package.json'), JSON.stringify({ type: 'module' }));
         fs.writeFileSync(path.join(consumerRoot, 'tsconfig.json'), JSON.stringify({
             compilerOptions: {
                 target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,

@@ -35,13 +35,16 @@ describe('dependency-free JSX rendering', () => {
             title: null,
             role: undefined,
             'data-ready': true,
+            'data-visible': false,
+            'aria-busy': false,
             'aria-label': 'A&B',
             viewBox: '0 0 10 10',
         });
         expect(jsx('x-card', properties).toString()).toBe(
-            '<x-card class="card&lt;&amp;" for="field" disabled data-ready="true" aria-label="A&amp;B" viewBox="0 0 10 10"></x-card>'
+            '<x-card class="card&lt;&amp;" for="field" disabled data-ready="true" data-visible="false" aria-busy="false" aria-label="A&amp;B" viewBox="0 0 10 10"></x-card>'
         );
         expect(() => jsx('div', { class: 'one', className: 'two' })).toThrow('Duplicate JSX attribute');
+        expect(() => jsx('div', { TITLE: 'one', title: 'two' })).toThrow('Duplicate JSX attribute');
         expect(() => jsx('div', { 'bad name': 'value' })).toThrow('Invalid JSX attribute');
     });
 
@@ -67,12 +70,15 @@ describe('dependency-free JSX rendering', () => {
         expect(jsx('style', { children: '' }).toString()).toBe('<style></style>');
         expect(() => jsx('script', { children: 'alert(1)' })).toThrow('external asset');
         expect(() => jsx('style', { children: 'body{}' })).toThrow('external asset');
+        expect(() => jsx('plaintext', {})).toThrow('prevents subsequent HTML');
     });
 
     test('renders synchronous function components through production and development runtimes', async () => {
         const Badge = properties => jsx('strong', { children: properties.label });
         expect(jsx(Badge, { label: '<Ready>' }).toString()).toBe('<strong>&lt;Ready&gt;</strong>');
         expect(jsxDEV(Badge, { label: 'Dev' }, 'key', false, {}, null).toString()).toBe('<strong>Dev</strong>');
+        expect(jsx(() => [jsx('i', { children: 'one' }), jsx('i', { children: 'two' })], {}).toString())
+            .toBe('<i>one</i><i>two</i>');
         expect(() => jsx(() => 'unsafe', {})).toThrow('HtmlFragment');
         expect(() => jsx(async () => { throw new Error('expected'); }, {})).toThrow('synchronously');
         await new Promise(resolve => setImmediate(resolve));

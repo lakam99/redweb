@@ -10,6 +10,7 @@ const VOID_ELEMENTS = new Set([
     'meta', 'param', 'source', 'track', 'wbr',
 ]);
 const RAW_TEXT_ELEMENTS = new Set(['script', 'style']);
+const TERMINAL_ELEMENTS = new Set(['plaintext']);
 const BOOLEAN_ATTRIBUTES = new Set([
     'allowfullscreen', 'async', 'autofocus', 'autoplay', 'checked', 'controls',
     'default', 'defer', 'disabled', 'formnovalidate', 'hidden', 'inert', 'ismap',
@@ -33,15 +34,16 @@ function renderAttributes(properties) {
         if (originalName === 'children' || originalName === 'key') continue;
         const name = ATTRIBUTE_ALIASES[originalName] || originalName;
         if (!NAME.test(name)) throw new TypeError(`Invalid JSX attribute name: ${name}.`);
-        if (renderedNames.has(name)) throw new TypeError(`Duplicate JSX attribute: ${name}.`);
-        renderedNames.add(name);
+        const normalizedName = name.toLowerCase();
+        if (renderedNames.has(normalizedName)) throw new TypeError(`Duplicate JSX attribute: ${name}.`);
+        renderedNames.add(normalizedName);
         const value = properties[originalName];
-        if (value === null || value === undefined || value === false) continue;
-        if (value === true && BOOLEAN_ATTRIBUTES.has(name.toLowerCase())) {
+        if (value === null || value === undefined || (value === false && BOOLEAN_ATTRIBUTES.has(normalizedName))) continue;
+        if (value === true && BOOLEAN_ATTRIBUTES.has(normalizedName)) {
             attributes.push(name);
             continue;
         }
-        attributes.push(`${name}="${renderAttributeValue(name.toLowerCase(), value)}"`);
+        attributes.push(`${name}="${renderAttributeValue(normalizedName, value)}"`);
     }
     return attributes.length ? ` ${attributes.join(' ')}` : '';
 }
@@ -49,6 +51,7 @@ function renderAttributes(properties) {
 function renderIntrinsic(name, properties) {
     if (!NAME.test(name)) throw new TypeError(`Invalid JSX element name: ${name}.`);
     const normalizedName = name.toLowerCase();
+    if (TERMINAL_ELEMENTS.has(normalizedName)) throw new TypeError(`JSX <${name}> is not supported because it prevents subsequent HTML from rendering.`);
     const attributes = renderAttributes(properties);
     const children = properties.children;
     const renderedChildren = renderChild(children);
@@ -67,7 +70,7 @@ function renderIntrinsic(name, properties) {
 function renderComponent(Component, properties) {
     const result = synchronous(Component(properties), 'JSX components must render synchronously.');
     if (!isHtml(result)) throw new TypeError('JSX components must return an HtmlFragment.');
-    return result;
+    return Array.isArray(result) ? trustedHtml(renderValue(result)) : result;
 }
 
 function createElement(type, properties) {
