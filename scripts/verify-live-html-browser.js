@@ -397,8 +397,11 @@ async function main() {
         const payload = '<script>window.__redwebJsxInjected = true</script>';
         const jsxMarkup = jsxs('main', { children: [
             jsx('h1', { children: payload }),
-            jsx('video', { disablePictureInPicture: false, disableRemotePlayback: false }),
-            jsx('div', { 'aria-hidden': false, 'data-ready': false }),
+            jsx('video', { id: 'video-off', disablePictureInPicture: false, disableRemotePlayback: false }),
+            jsx('video', { id: 'video-on', disablePictureInPicture: true, disableRemotePlayback: true }),
+            jsx('div', { id: 'flags', 'aria-hidden': false, 'data-ready': false, writingsuggestions: false }),
+            jsx('div', { id: 'translate-off', translate: false }),
+            jsx('div', { id: 'translate-on', translate: true }),
             html`<p>mixed fragment</p>`,
         ] });
         const jsxSafetyPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(HtmlRenderer.document(jsxMarkup.toString()))}`);
@@ -406,10 +409,15 @@ async function main() {
         const jsxSafety = await jsxSafetyPage.evaluate(`
             window.__redwebJsxInjected !== true &&
             document.querySelector('h1').textContent === ${JSON.stringify(payload)} &&
-            !document.querySelector('video').hasAttribute('disablepictureinpicture') &&
-            !document.querySelector('video').hasAttribute('disableremoteplayback') &&
-            document.querySelector('div').getAttribute('aria-hidden') === 'false' &&
-            document.querySelector('div').getAttribute('data-ready') === 'false' &&
+            !document.querySelector('#video-off').hasAttribute('disablepictureinpicture') &&
+            !document.querySelector('#video-off').hasAttribute('disableremoteplayback') &&
+            document.querySelector('#video-on').hasAttribute('disablepictureinpicture') &&
+            document.querySelector('#video-on').hasAttribute('disableremoteplayback') &&
+            document.querySelector('#flags').getAttribute('aria-hidden') === 'false' &&
+            document.querySelector('#flags').getAttribute('data-ready') === 'false' &&
+            document.querySelector('#flags').getAttribute('writingsuggestions') === 'false' &&
+            document.querySelector('#translate-off').translate === false &&
+            document.querySelector('#translate-on').translate === true &&
             document.querySelector('p').textContent === 'mixed fragment'
         `);
         if (!jsxSafety) throw new Error('Escaped JSX content executed or composed incorrectly in the browser.');

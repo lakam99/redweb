@@ -49,19 +49,30 @@ describe('dependency-free JSX rendering', () => {
         expect(() => jsx('div', { TITLE: 'one', title: 'two' })).toThrow('Duplicate JSX attribute');
         expect(() => jsx('div', { 'bad name': 'value' })).toThrow('Invalid JSX attribute');
         expect(jsx('video', {
-            disablePictureInPicture: false,
-            disableRemotePlayback: false,
+            disablePictureInPicture: true,
+            disableRemotePlayback: true,
             webkitdirectory: false,
             title: false,
-        }).toString()).toBe('<video></video>');
+        }).toString()).toBe('<video disablePictureInPicture disableRemotePlayback></video>');
+        expect(jsx('template', {
+            shadowrootclonable: true,
+            shadowrootcustomelementregistry: true,
+            shadowrootdelegatesfocus: true,
+            shadowrootserializable: true,
+        }).toString()).toBe(
+            '<template shadowrootclonable shadowrootcustomelementregistry shadowrootdelegatesfocus shadowrootserializable></template>'
+        );
         expect(jsx('div', {
             contenteditable: false,
             draggable: false,
             spellcheck: false,
-            translate: false,
+            writingsuggestions: false,
         }).toString()).toBe(
-            '<div contenteditable="false" draggable="false" spellcheck="false" translate="false"></div>'
+            '<div contenteditable="false" draggable="false" spellcheck="false" writingsuggestions="false"></div>'
         );
+        expect(jsx('div', { translate: false }).toString()).toBe('<div translate="no"></div>');
+        expect(jsx('div', { translate: true }).toString()).toBe('<div translate="yes"></div>');
+        expect(jsx('div', { translate: 'no' }).toString()).toBe('<div translate="no"></div>');
     });
 
     test('uses the shared URL and dangerous-attribute policy', () => {

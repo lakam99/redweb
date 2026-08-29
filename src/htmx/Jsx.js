@@ -11,13 +11,7 @@ const VOID_ELEMENTS = new Set([
 ]);
 const RAW_TEXT_ELEMENTS = new Set(['script', 'style']);
 const TERMINAL_ELEMENTS = new Set(['plaintext']);
-const BOOLEAN_ATTRIBUTES = new Set([
-    'allowfullscreen', 'async', 'autofocus', 'autoplay', 'checked', 'controls',
-    'default', 'defer', 'disabled', 'formnovalidate', 'hidden', 'inert', 'ismap',
-    'itemscope', 'loop', 'multiple', 'muted', 'nomodule', 'novalidate', 'open',
-    'playsinline', 'readonly', 'required', 'reversed', 'selected',
-]);
-const FALSE_VALUE_ATTRIBUTES = new Set(['contenteditable', 'draggable', 'spellcheck', 'translate']);
+const BOOLEAN_VALUE_ATTRIBUTES = new Set(['contenteditable', 'draggable', 'spellcheck', 'writingsuggestions']);
 const ATTRIBUTE_ALIASES = Object.freeze({ className: 'class', htmlFor: 'for' });
 
 function renderChild(value) {
@@ -38,11 +32,13 @@ function renderAttributes(properties) {
         const normalizedName = name.toLowerCase();
         if (renderedNames.has(normalizedName)) throw new TypeError(`Duplicate JSX attribute: ${name}.`);
         renderedNames.add(normalizedName);
-        const value = properties[originalName];
+        let value = properties[originalName];
+        if (normalizedName === 'translate' && typeof value === 'boolean') value = value ? 'yes' : 'no';
         const preservesFalse = normalizedName.startsWith('aria-') || normalizedName.startsWith('data-') ||
-            FALSE_VALUE_ATTRIBUTES.has(normalizedName);
+            BOOLEAN_VALUE_ATTRIBUTES.has(normalizedName);
         if (value === null || value === undefined || (value === false && !preservesFalse)) continue;
-        if (value === true && BOOLEAN_ATTRIBUTES.has(normalizedName)) {
+        if (value === true && !preservesFalse) {
+            renderAttributeValue(normalizedName, value);
             attributes.push(name);
             continue;
         }
