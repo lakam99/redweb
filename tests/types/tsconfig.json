@@ -10,8 +10,11 @@
     "skipLibCheck": false,
     "baseUrl": "../..",
     "paths": {
-      "redweb": ["."]
-    }
+      "redweb": ["."],
+      "redweb/*": ["*"]
+    },
+    "jsx": "react-jsx",
+    "jsxImportSource": "redweb"
   },
-  "files": ["public-api.ts"]
+  "files": ["public-api.ts", "jsx-api.tsx"]
 }

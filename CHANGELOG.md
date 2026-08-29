@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added dependency-free server-side TSX rendering through `redweb/jsx-runtime` and `redweb/jsx-dev-runtime`, with fragments, function components, automatic text and attribute escaping, safe URL validation, boolean attributes, and direct interoperability with existing `HtmlFragment` values.
+- Added a compiled TSX Live HTML example plus real HTTP, WebSocket, type-checking, and packed-consumer verification.
+
 ## 0.10.0
 
 - Added `defineSite()` for shared static-site CSS, metadata, caching, layouts, canonical URLs, public asset copying, and concise page decorators.

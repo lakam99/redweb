@@ -12,6 +12,8 @@ const { CounterPage } = require('../examples/live-html/counter');
 const { createChatroomPage } = require('../examples/live-html/chatroom');
 const { CardsPage } = require('../examples/live-html/cards');
 const { ComponentsPage } = require('../examples/live-html/components');
+const { JsxPage } = require('../examples/live-html/jsx-page');
+const { jsx, jsxs } = require('../jsx-runtime');
 
 class TableComponent {
     count = 0;
@@ -216,6 +218,7 @@ async function main() {
     const chat = start(createChatroomPage(), { port: 0, bind: '127.0.0.1', logger });
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
+    const jsxServer = start(JsxPage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
@@ -226,6 +229,7 @@ async function main() {
             waitForListening(chat.server),
             waitForListening(cards.server),
             waitForListening(components.server),
+            waitForListening(jsxServer.server),
             waitForListening(componentBoundaries.server),
         ]);
         const launched = await launchBrowserWithRetry(executable, profile);
@@ -312,6 +316,16 @@ async function main() {
         );
         if (!componentIsolation) throw new Error('A component action updated a sibling component instance.');
 
+        const jsxPage = await openPage(debugPort, `http://127.0.0.1:${jsxServer.server.address().port}/jsx`);
+        pages.push(jsxPage);
+        await jsxPage.evaluate(`document.querySelector('[rw-click="increment"]').click()`);
+        await jsxPage.evaluate(eventual(
+            `document.querySelector('output[data-rw-state="count"]').textContent === '1'`,
+            'the TSX server action DOM update'
+        ));
+        const jsxCardColor = await jsxPage.evaluate("getComputedStyle(document.querySelector('.counter-card')).backgroundColor");
+        if (jsxCardColor !== 'rgb(17, 24, 39)') throw new Error(`TSX page CSS was not applied: ${jsxCardColor}`);
+
         const boundaryPage = await openPage(debugPort, `http://127.0.0.1:${componentBoundaries.server.address().port}/`);
         pages.push(boundaryPage);
         const validBoundaries = await boundaryPage.evaluate(`
@@ -376,14 +390,24 @@ async function main() {
             document.querySelector('#http code').textContent.includes("section = 'HTTP'")
         `);
         if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
-        console.log('Live HTML browser gate passed: CSS, collections, components, counter, chat, raw-text safety, and documentation composition.');
+        const payload = '<script>window.__redwebJsxInjected = true</script>';
+        const jsxMarkup = jsxs('main', { children: [jsx('h1', { children: payload }), html`<p>mixed fragment</p>`] });
+        const jsxSafetyPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(HtmlRenderer.document(jsxMarkup.toString()))}`);
+        pages.push(jsxSafetyPage);
+        const jsxSafety = await jsxSafetyPage.evaluate(`
+            window.__redwebJsxInjected !== true &&
+            document.querySelector('h1').textContent === ${JSON.stringify(payload)} &&
+            document.querySelector('p').textContent === 'mixed fragment'
+        `);
+        if (!jsxSafety) throw new Error('Escaped JSX content executed or composed incorrectly in the browser.');
+        console.log('Live HTML browser gate passed: CSS, JSX, collections, components, counter, chat, raw-text safety, and documentation composition.');
     } catch (error) {
         failure = error;
     } finally {
         pages.forEach(page => page.socket.close());
         await stopBrowser(browser?.child);
         await Promise.allSettled([
-            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), componentBoundaries.shutdown(),
+            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), componentBoundaries.shutdown(),
         ]);
         try {
             await removeTemporaryDirectory(profile);

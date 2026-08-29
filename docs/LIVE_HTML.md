@@ -2,6 +2,44 @@
 
 Live HTML is Redweb's decorator-first server-rendering layer. It uses the existing `HttpServer`, `SocketRoute`, admission, protocol, ordering, backpressure, and shutdown implementations rather than maintaining a second network stack.
 
+## TSX rendering
+
+New pages can return TSX directly. Configure TypeScript with `"jsx": "react-jsx"` and `"jsxImportSource": "redweb"`; Redweb supplies its own dependency-free JSX runtimes and renders immediately to `HtmlFragment` values:
+
+```tsx
+import { LivePage, action, component, page, state } from 'redweb';
+import type { Child } from 'redweb/jsx-runtime';
+
+const Panel = component((props: { title: string; children?: Child }) => (
+  <section class="panel">
+    <h2>{props.title}</h2>
+    {props.children}
+  </section>
+));
+
+@page('/counter', { css: 'counter.css' })
+class CounterPage extends LivePage {
+  @state() count = 0;
+
+  @action()
+  increment() { this.count += 1; }
+
+  render() {
+    return (
+      <Panel title="Server counter">
+        <button rw-click="increment">
+          Count <output data-rw-state="count">{this.count}</output>
+        </button>
+      </Panel>
+    );
+  }
+}
+```
+
+Intrinsic elements, fragments (`<>...</>`), nested readonly arrays, and synchronous function components are supported. Strings, numbers, and attributes are escaped once; null, undefined, and boolean children render nothing. Safe existing `html` fragments compose in either direction.
+
+JSX intentionally remains a server serializer rather than a React compatibility layer. It retains no tree and provides no hooks, refs, hydration, client event functions, or object-style API. Use `rw-click`, `rw-submit`, `rw-bind`, and the other Redweb directives for server actions, and use `@page({ css })` or external assets for styling and scripts. Unsafe URL protocols, `on*`, dynamic `style`, `srcdoc`, `srcset`, children on void elements, and executable `<script>` or `<style>` children are rejected.
+
 This layer deliberately owns page concerns only: `@page`, `@state`, `@view`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
 
 ## Page model
@@ -250,8 +288,9 @@ The internal paths and application page paths must be unique.
 - `examples/live-html/chatroom.ts` uses a connection-scoped `@component()` backed by a room service created by `createChatroomPage()`, so separate server instances cannot leak history or names. Visitors join once, receive a stable dedicated composer, see a capped presence list with the total online count, share bounded history, and recover their identity and missed messages after reconnect.
 - `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
 - `examples/live-html/components.ts` uses two instances of one `@component()` class to prove reusable markup, isolated server state, scoped actions, and component CSS composition.
+- `examples/live-html/jsx-page.tsx` uses Redweb's automatic JSX runtime, a function component, decorated state, and a server action without HTML template strings.
 
-Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, `npm run example:cards`, and `npm run example:components`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, `npm run example:cards`, `npm run example:components`, and `npm run example:jsx`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript or TSX sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
 
 ## Static pages and documentation export
 

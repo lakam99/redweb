@@ -29,18 +29,21 @@ async function main() {
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||
             manifest.scripts['example:chatroom'] !== 'node examples/live-html/chatroom.js' ||
             manifest.scripts['example:cards'] !== 'node examples/live-html/cards.js' ||
-            manifest.scripts['example:components'] !== 'node examples/live-html/components.js') {
+            manifest.scripts['example:components'] !== 'node examples/live-html/components.js' ||
+            manifest.scripts['example:jsx'] !== 'node examples/live-html/jsx-page.js') {
             throw new Error('Packed example commands must run precompiled artifacts without development tooling.');
         }
         const { CounterPage } = require(path.join(packageRoot, 'examples', 'live-html', 'counter.js'));
         const { createChatroomPage } = require(path.join(packageRoot, 'examples', 'live-html', 'chatroom.js'));
         const { CardsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'cards.js'));
         const { ComponentsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'components.js'));
+        const { JsxPage } = require(path.join(packageRoot, 'examples', 'live-html', 'jsx-page.js'));
         const examples = [
             installed.start(CounterPage, { listen: false }),
             installed.start(createChatroomPage(), { listen: false }),
             installed.start(CardsPage, { listen: false }),
             installed.start(ComponentsPage, { listen: false }),
+            installed.start(JsxPage, { listen: false }),
         ];
         const packedCards = examples[2].manager.records.get('/');
         const renderedCards = await examples[2].manager.render(packedCards, { params: {}, query: {}, body: undefined });
@@ -54,6 +57,40 @@ async function main() {
             throw new Error('Packed reusable components did not render isolated instances.');
         }
         await Promise.all(examples.map(server => server.shutdown()));
+        const jsxRuntime = require(path.join(packageRoot, 'jsx-runtime.js'));
+        const jsxDevRuntime = require(path.join(packageRoot, 'jsx-dev-runtime.js'));
+        if (typeof jsxRuntime.jsx !== 'function' || typeof jsxRuntime.jsxs !== 'function' ||
+            typeof jsxDevRuntime.jsxDEV !== 'function') {
+            throw new Error('Packed JSX runtimes are missing.');
+        }
+        const consumerRoot = path.join(workspace, 'tsx-consumer');
+        fs.mkdirSync(path.join(consumerRoot, 'node_modules'), { recursive: true });
+        fs.symlinkSync(packageRoot, path.join(consumerRoot, 'node_modules', 'redweb'), 'junction');
+        fs.writeFileSync(path.join(consumerRoot, 'tsconfig.json'), JSON.stringify({
+            compilerOptions: {
+                target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,
+                jsx: 'react-jsx', jsxImportSource: 'redweb', skipLibCheck: false,
+            },
+            files: ['consumer.tsx'],
+        }));
+        fs.writeFileSync(path.join(consumerRoot, 'consumer.tsx'), [
+            "import * as fs from 'fs';",
+            "import * as path from 'path';",
+            "import { component, defineSite, html } from 'redweb';",
+            "const Badge = component((props: { label: string }) => <strong>{props.label}</strong>);",
+            "const page = <main><Badge label='<Packed>' />{html`<i>HTML</i>`}</main>;",
+            "if (page.toString() !== '<main><strong>&lt;Packed&gt;</strong><i>HTML</i></main>') throw new Error('TSX output mismatch');",
+            "const site = defineSite({ layout: content => <body><nav>Packed</nav>{content}</body> });",
+            "@site.page('/', { head: { title: 'Packed TSX' } })",
+            "class Page { render() { return <main><Badge label='Static' /></main>; } }",
+            "void (async () => {",
+            "  const result = await site.export(Page, { outDir: path.resolve('dist') });",
+            "  const document = fs.readFileSync(result.pages[0], 'utf8');",
+            "  if (!document.includes('<title>Packed TSX</title>') || !document.includes('<strong>Static</strong>')) throw new Error('TSX static export mismatch');",
+            "})().catch(error => { console.error(error); process.exitCode = 1; });",
+        ].join('\n'));
+        run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', consumerRoot], { cwd: consumerRoot, shell: false });
+        run(process.execPath, [path.join(consumerRoot, 'consumer.js')], { cwd: consumerRoot, shell: false });
         class SmokePage extends installed.LivePage {
             constructor() {
                 super();

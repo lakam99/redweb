@@ -41,7 +41,56 @@ const {
 
 ## Live HTML
 
-`start(PageClass)` combines server-rendered `.html` templates and Redweb WebSockets on one listener. Decorated plain classes hold the behavior; templates remain declarative HTML. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+`start(PageClass)` combines server-rendered TSX or `.html` templates and Redweb WebSockets on one listener. Decorated plain classes hold the behavior. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+
+TSX is the concise default for new pages. It renders straight to Redweb's existing `HtmlFragment`; there is no React dependency, virtual DOM, hydration pass, or client component runtime:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "redweb"
+  }
+}
+```
+
+```tsx
+import { LivePage, action, component, page, start, state } from 'redweb';
+import type { Child } from 'redweb/jsx-runtime';
+
+const Card = component((props: { title: string; children?: Child }) => (
+  <article class="card">
+    <h2>{props.title}</h2>
+    {props.children}
+  </article>
+));
+
+@page('/', { css: 'counter.css' })
+class CounterPage extends LivePage {
+  @state() count = 0;
+
+  @action()
+  increment() { this.count += 1; }
+
+  render() {
+    return (
+      <main>
+        <Card title="Server counter">
+          <button rw-click="increment">
+            Count <output data-rw-state="count">{this.count}</output>
+          </button>
+        </Card>
+      </main>
+    );
+  }
+}
+
+start(CounterPage, { port: 8181 });
+```
+
+Text and attribute values are escaped automatically. URL attributes use Redweb's existing safe-protocol policy. `on*`, inline `style`, `srcdoc`, `srcset`, and executable `<script>` or `<style>` children are rejected; use `rw-*` server directives and external CSS or JavaScript assets. Existing `html` fragments can be nested in TSX, and TSX fragments can be nested in `html`, so migration can be incremental.
+
+Ordinary declarative `.html` templates remain available when separating markup into a standalone file is preferable:
 
 ```ts
 import { page, start, state } from 'redweb';
@@ -162,7 +211,7 @@ An `html` fragment returned by `render()` is final safe markup, so documentation
 
 The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
 
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable TypeScript [server counter](examples/live-html/counter.ts), component-based [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The chatroom separates joining from its stable message composer, tracks online members, preserves bounded history, restores identity and missed messages after reconnect, and creates an isolated room for every server. The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
+See the [Live HTML guide](docs/LIVE_HTML.md), runnable [TSX page](examples/live-html/jsx-page.tsx), TypeScript [server counter](examples/live-html/counter.ts), component-based [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The chatroom separates joining from its stable message composer, tracks online members, preserves bounded history, restores identity and missed messages after reconnect, and creates an isolated room for every server. The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:jsx`, `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
 
 Reusable snippets can own server behavior without page-level forwarding methods. Decorate a class with `@component()`, put instances in page fields, and interpolate them directly: `` html`<main>${this.primary}${this.secondary}</main>` ``. Each instance gets isolated `@state()`, scoped `@action()` methods, nested-component support, and page-owned lifecycle cleanup. See the runnable [component counters](examples/live-html/components.ts) or run `npm run example:components`.
 
