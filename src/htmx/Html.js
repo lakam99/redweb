@@ -27,8 +27,9 @@ function markHtml(value, toString) {
 }
 
 function trustedHtml(value) {
-    const fragment = {};
-    markHtml(fragment, () => String(value));
+    const rendered = String(value);
+    const fragment = { toString: () => rendered };
+    markHtml(fragment, fragment.toString);
     return Object.freeze(fragment);
 }
 
@@ -67,27 +68,30 @@ function renderValue(value) {
 function renderInterpolation(source, value) {
     const context = interpolationContext(source);
     if (context.kind === 'attribute') {
-        const name = context.name;
-        if (name.startsWith('on') || FORBIDDEN_ATTRIBUTES.has(name)) {
-            throw new TypeError(`Dynamic ${name} attributes are not allowed.`);
-        }
-        if (URL_ATTRIBUTES.has(name)) {
-            if (!value?.[HTML_URL]) {
-                if (value?.[HTML_ATTRIBUTE]) throw new TypeError(`The ${name} attribute requires url().`);
-                value = safeUrl(value);
-            }
-        } else if (!value?.[HTML_ATTRIBUTE]) {
-            if (value?.[HTML_URL]) throw new TypeError(`The ${name} attribute requires attribute().`);
-            if (isHtml(value)) throw new TypeError(`The ${name} attribute requires a primitive value.`);
-            value = attribute(value);
-        }
-        return escapeHtml(value.value);
+        return renderAttributeValue(context.name, value);
     }
     if (context.kind !== 'text') throw new TypeError('html interpolations are only allowed in element text.');
     if (value?.[HTML_ATTRIBUTE] || value?.[HTML_URL]) {
         throw new TypeError('attribute() and url() values may only be used in matching quoted attributes.');
     }
     return renderValue(value);
+}
+
+function renderAttributeValue(name, value) {
+    if (name.startsWith('on') || FORBIDDEN_ATTRIBUTES.has(name)) {
+        throw new TypeError(`Dynamic ${name} attributes are not allowed.`);
+    }
+    if (URL_ATTRIBUTES.has(name)) {
+        if (!value?.[HTML_URL]) {
+            if (value?.[HTML_ATTRIBUTE]) throw new TypeError(`The ${name} attribute requires url().`);
+            value = safeUrl(value);
+        }
+    } else if (!value?.[HTML_ATTRIBUTE]) {
+        if (value?.[HTML_URL]) throw new TypeError(`The ${name} attribute requires attribute().`);
+        if (isHtml(value)) throw new TypeError(`The ${name} attribute requires a primitive value.`);
+        value = attribute(value);
+    }
+    return escapeHtml(value.value);
 }
 
 function html(strings, ...values) {
@@ -130,4 +134,4 @@ function codeBlock(code, options = {}) {
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;
 }
 
-module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderValue, safeUrl, trustedHtml };
+module.exports = { attribute, codeBlock, each, escapeHtml, html, isHtml, markHtml, renderAttributeValue, renderValue, safeUrl, trustedHtml };

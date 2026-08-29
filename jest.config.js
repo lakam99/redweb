@@ -23,6 +23,7 @@ const config = {
   collectCoverageFrom: [
     "index.js",
     "client.js",
+    "jsx-*.js",
     "src/**/*.js",
   ],
 

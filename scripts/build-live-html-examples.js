@@ -17,7 +17,10 @@ if (emitted.emitSkipped) throw new Error(ts.formatDiagnostics(emitted.diagnostic
 
 const stale = [];
 outputs.forEach((content, output) => {
-    const compiled = content.replaceAll('require("redweb")', "require('../..')");
+    const compiled = content
+        .replaceAll('require("redweb")', "require('../..')")
+        .replaceAll('require("redweb/jsx-runtime")', "require('../../jsx-runtime')")
+        .replaceAll('require("redweb/jsx-dev-runtime")', "require('../../jsx-dev-runtime')");
     if (process.argv.includes('--check')) {
         const current = fs.existsSync(output) ? fs.readFileSync(output, 'utf8') : '';
         if (normalizeNewlines(current) !== normalizeNewlines(compiled)) stale.push(path.relative(process.cwd(), output));

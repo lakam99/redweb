@@ -6,10 +6,12 @@ const { CounterPage } = require('../../examples/live-html/counter');
 const { createChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
 const { ComponentsPage } = require('../../examples/live-html/components');
+const { JsxPage } = require('../../examples/live-html/jsx-page');
 const createCounterServer = options => startPages(CounterPage, options);
 const createChatroomServer = options => startPages(createChatroomPage(), options);
 const createCardsServer = options => startPages(CardsPage, options);
 const createComponentsServer = options => startPages(ComponentsPage, options);
+const createJsxServer = options => startPages(JsxPage, options);
 class StaticReferencePage {
     render() { return '<html><body><h1>Static reference</h1></body></html>'; }
 }
@@ -128,6 +130,27 @@ describe('Live HTML integration without mocks', () => {
         expect(response.headers['content-type']).toContain('text/html');
         return { port, response, config: pageConfig(response.body) };
     }
+
+    test('serves compiled TSX and routes its server action over real HTTP and WebSocket connections', async () => {
+        const server = await start(createJsxServer);
+        const port = server.server.address().port;
+        const response = await request({ port, path: '/jsx' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('<h1>Redweb JSX</h1>');
+        expect(response.body).toContain('<article class="counter-card">');
+        expect(response.body).toContain('data-rw-state="count">0</output>');
+        const config = pageConfig(response.body);
+        const updates = [];
+        const client = liveClient(port, config);
+        client.on('redweb:state', message => updates.push(message.payload));
+        clients.add(client);
+        await client.connect();
+        await waitForCondition(() => updates.length === 1, 'JSX state snapshot');
+        expect(updates[0]).toEqual({ name: 'count', value: '0', html: false });
+        await client.request('redweb:html', { kind: 'action', name: 'increment', args: [] });
+        await waitForCondition(() => updates.length === 2, 'JSX action state update');
+        expect(updates[1]).toEqual({ name: 'count', value: '1', html: false });
+    });
 
     async function connectClient(port, config) {
         const client = liveClient(port, config);

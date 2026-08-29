@@ -38,6 +38,7 @@ jobs:
       - run: npm run verify:memory
       - run: npm run verify:live-html:browser
       - run: npm run verify:live-html:load
+      - run: npm run verify:jsx:performance
       - run: npm run verify:live-html:package
       - run: npm run verify:soak
         env:
