@@ -48,6 +48,20 @@ describe('dependency-free JSX rendering', () => {
         expect(() => jsx('div', { class: 'one', className: 'two' })).toThrow('Duplicate JSX attribute');
         expect(() => jsx('div', { TITLE: 'one', title: 'two' })).toThrow('Duplicate JSX attribute');
         expect(() => jsx('div', { 'bad name': 'value' })).toThrow('Invalid JSX attribute');
+        expect(jsx('video', {
+            disablePictureInPicture: false,
+            disableRemotePlayback: false,
+            webkitdirectory: false,
+            title: false,
+        }).toString()).toBe('<video></video>');
+        expect(jsx('div', {
+            contenteditable: false,
+            draggable: false,
+            spellcheck: false,
+            translate: false,
+        }).toString()).toBe(
+            '<div contenteditable="false" draggable="false" spellcheck="false" translate="false"></div>'
+        );
     });
 
     test('uses the shared URL and dangerous-attribute policy', () => {

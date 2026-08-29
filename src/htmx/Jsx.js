@@ -17,6 +17,7 @@ const BOOLEAN_ATTRIBUTES = new Set([
     'itemscope', 'loop', 'multiple', 'muted', 'nomodule', 'novalidate', 'open',
     'playsinline', 'readonly', 'required', 'reversed', 'selected',
 ]);
+const FALSE_VALUE_ATTRIBUTES = new Set(['contenteditable', 'draggable', 'spellcheck', 'translate']);
 const ATTRIBUTE_ALIASES = Object.freeze({ className: 'class', htmlFor: 'for' });
 
 function renderChild(value) {
@@ -38,7 +39,9 @@ function renderAttributes(properties) {
         if (renderedNames.has(normalizedName)) throw new TypeError(`Duplicate JSX attribute: ${name}.`);
         renderedNames.add(normalizedName);
         const value = properties[originalName];
-        if (value === null || value === undefined || (value === false && BOOLEAN_ATTRIBUTES.has(normalizedName))) continue;
+        const preservesFalse = normalizedName.startsWith('aria-') || normalizedName.startsWith('data-') ||
+            FALSE_VALUE_ATTRIBUTES.has(normalizedName);
+        if (value === null || value === undefined || (value === false && !preservesFalse)) continue;
         if (value === true && BOOLEAN_ATTRIBUTES.has(normalizedName)) {
             attributes.push(name);
             continue;

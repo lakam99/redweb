@@ -395,12 +395,21 @@ async function main() {
         `);
         if (!compositionReady) throw new Error('Documentation composition helpers produced incorrect browser DOM.');
         const payload = '<script>window.__redwebJsxInjected = true</script>';
-        const jsxMarkup = jsxs('main', { children: [jsx('h1', { children: payload }), html`<p>mixed fragment</p>`] });
+        const jsxMarkup = jsxs('main', { children: [
+            jsx('h1', { children: payload }),
+            jsx('video', { disablePictureInPicture: false, disableRemotePlayback: false }),
+            jsx('div', { 'aria-hidden': false, 'data-ready': false }),
+            html`<p>mixed fragment</p>`,
+        ] });
         const jsxSafetyPage = await openPage(debugPort, `data:text/html;charset=utf-8,${encodeURIComponent(HtmlRenderer.document(jsxMarkup.toString()))}`);
         pages.push(jsxSafetyPage);
         const jsxSafety = await jsxSafetyPage.evaluate(`
             window.__redwebJsxInjected !== true &&
             document.querySelector('h1').textContent === ${JSON.stringify(payload)} &&
+            !document.querySelector('video').hasAttribute('disablepictureinpicture') &&
+            !document.querySelector('video').hasAttribute('disableremoteplayback') &&
+            document.querySelector('div').getAttribute('aria-hidden') === 'false' &&
+            document.querySelector('div').getAttribute('data-ready') === 'false' &&
             document.querySelector('p').textContent === 'mixed fragment'
         `);
         if (!jsxSafety) throw new Error('Escaped JSX content executed or composed incorrectly in the browser.');
