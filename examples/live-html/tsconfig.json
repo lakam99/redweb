@@ -1,14 +1,8 @@
 {
+  "extends": "../../config/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "jsx": "react-jsx",
-    "jsxImportSource": "redweb",
-    "strict": true,
-    "experimentalDecorators": false,
-    "useDefineForClassFields": true,
-    "skipLibCheck": false,
     "baseUrl": "../..",
     "paths": {
       "redweb": ["."],

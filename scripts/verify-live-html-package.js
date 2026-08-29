@@ -26,6 +26,16 @@ async function main() {
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
+        if (manifest.bin.redweb !== 'bin/redweb.js' ||
+            !fs.existsSync(path.join(packageRoot, 'bin', 'redweb.js')) ||
+            !fs.existsSync(path.join(packageRoot, 'config', 'tsconfig.json'))) {
+            throw new Error('Packed initializer or TypeScript preset is missing.');
+        }
+        const initializedRoot = path.join(workspace, 'initialized-app');
+        run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'init', initializedRoot], { cwd: workspace, shell: false });
+        fs.mkdirSync(path.join(initializedRoot, 'node_modules'), { recursive: true });
+        fs.symlinkSync(packageRoot, path.join(initializedRoot, 'node_modules', 'redweb'), 'junction');
+        run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot, shell: false });
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||
             manifest.scripts['example:chatroom'] !== 'node examples/live-html/chatroom.js' ||
             manifest.scripts['example:cards'] !== 'node examples/live-html/cards.js' ||
@@ -68,10 +78,7 @@ async function main() {
         fs.symlinkSync(packageRoot, path.join(consumerRoot, 'node_modules', 'redweb'), 'junction');
         fs.writeFileSync(path.join(consumerRoot, 'package.json'), JSON.stringify({ type: 'module' }));
         fs.writeFileSync(path.join(consumerRoot, 'tsconfig.json'), JSON.stringify({
-            compilerOptions: {
-                target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,
-                jsx: 'react-jsx', jsxImportSource: 'redweb', skipLibCheck: false,
-            },
+            extends: 'redweb/tsconfig.json',
             files: ['consumer.tsx'],
         }));
         fs.writeFileSync(path.join(consumerRoot, 'consumer.tsx'), [

@@ -4,7 +4,20 @@ Live HTML is Redweb's decorator-first server-rendering layer. It uses the existi
 
 ## TSX rendering
 
-New pages can return TSX directly. Configure TypeScript with `"jsx": "react-jsx"` and `"jsxImportSource": "redweb"`; Redweb supplies its own dependency-free JSX runtimes and renders immediately to `HtmlFragment` values:
+New pages can return TSX directly. Run `npx redweb init` for a starter project, or extend `redweb/tsconfig.json` from an existing project's root `tsconfig.json`. The preset makes builds and editors use Redweb's dependency-free JSX runtime consistently:
+
+```json
+{
+  "extends": "redweb/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
+```
+
+Redweb renders TSX immediately to `HtmlFragment` values:
 
 ```tsx
 import { LivePage, action, component, page, state } from 'redweb';

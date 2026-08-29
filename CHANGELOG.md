@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- Added `npx redweb init [directory]` to create a minimal TypeScript + TSX application without overwriting existing files.
+- Added the reusable `redweb/tsconfig.json` preset so TypeScript builds and editors resolve Redweb's JSX runtime consistently.
+- Updated the Live HTML examples to inherit the shared preset and added real-filesystem CLI, generated-project compilation, and packed-package verification.
+
 ## 0.11.0
 
 - Added dependency-free server-side TSX rendering through `redweb/jsx-runtime` and `redweb/jsx-dev-runtime`, with fragments, function components, automatic text and attribute escaping, safe URL validation, boolean attributes, and direct interoperability with existing `HtmlFragment` values.

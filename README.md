@@ -10,6 +10,16 @@ Version 0.9 adds production-minded multiplayer building blocks while preserving 
 npm install redweb
 ```
 
+Start a TypeScript + TSX project with Redweb's compiler preset and a small server-rendered page:
+
+```bash
+npx redweb init
+npm install
+npm run dev
+```
+
+Pass a directory to create a new project there: `npx redweb init my-app`. Existing files are never overwritten, so rerunning the command is safe.
+
 ## Exports
 
 ```js
@@ -45,12 +55,16 @@ const {
 
 TSX is the concise default for new pages. It renders straight to Redweb's existing `HtmlFragment`; there is no React dependency, virtual DOM, hydration pass, or client component runtime:
 
+Extend Redweb's TypeScript preset so builds and editors use the dependency-free JSX runtime consistently:
+
 ```json
 {
+  "extends": "redweb/tsconfig.json",
   "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "redweb"
-  }
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
 ```
 
