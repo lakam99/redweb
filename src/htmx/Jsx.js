@@ -32,7 +32,7 @@ function renderAttributes(properties) {
     const renderedNames = new Set();
     for (const originalName of Object.keys(properties)) {
         if (originalName === 'children' || originalName === 'key') continue;
-        const name = ATTRIBUTE_ALIASES[originalName] || originalName;
+        const name = Object.hasOwn(ATTRIBUTE_ALIASES, originalName) ? ATTRIBUTE_ALIASES[originalName] : originalName;
         if (!NAME.test(name)) throw new TypeError(`Invalid JSX attribute name: ${name}.`);
         const normalizedName = name.toLowerCase();
         if (renderedNames.has(normalizedName)) throw new TypeError(`Duplicate JSX attribute: ${name}.`);

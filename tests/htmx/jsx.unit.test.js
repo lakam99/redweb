@@ -39,9 +39,11 @@ describe('dependency-free JSX rendering', () => {
             'aria-busy': false,
             'aria-label': 'A&B',
             viewBox: '0 0 10 10',
+            toString: 'text-value',
+            constructor: 'constructor-value',
         });
         expect(jsx('x-card', properties).toString()).toBe(
-            '<x-card class="card&lt;&amp;" for="field" disabled data-ready="true" data-visible="false" aria-busy="false" aria-label="A&amp;B" viewBox="0 0 10 10"></x-card>'
+            '<x-card class="card&lt;&amp;" for="field" disabled data-ready="true" data-visible="false" aria-busy="false" aria-label="A&amp;B" viewBox="0 0 10 10" toString="text-value" constructor="constructor-value"></x-card>'
         );
         expect(() => jsx('div', { class: 'one', className: 'two' })).toThrow('Duplicate JSX attribute');
         expect(() => jsx('div', { TITLE: 'one', title: 'two' })).toThrow('Duplicate JSX attribute');
