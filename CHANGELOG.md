@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Unified owned-listener cleanup for Live HTML and socket servers. Incomplete HTTP bodies, headers, and TLS handshakes can no longer hold shutdown open indefinitely, including after native listener close has already begun. Borrowed HTTP listeners remain application-owned. Live HTML's final HTTP cleanup has its own bounded phase; forced transport closure is not an application persistence guarantee.
+- Added release verification and compatibility guidance distinguishing maintained Node runtimes, configured CI, recorded test evidence, registry signatures, and build provenance. Added Node 24 to the CI matrix without claiming an unexecuted job has passed.
+
 - Added loopback-only development browser refresh to generated HTML starters. Explicit Live HTML `development.refresh` or the development command's environment flag enables same-origin revision polling; clean pages reload after restart while detected edits require confirmation. Reactive root patches retain the shadow-root notice, failed builds/outages do not trigger reload, and drafts are never copied into browser storage or restored after explicit reload. Production construction rejects enabling refresh; raw socket servers and static exports do not enable it.
 
 - Added opt-in in-process development inspection for Live HTML and socket servers: bounded immutable registration/connection snapshots and reactive invalidation/flush history without state values, identities, request contents or exception messages. Inspection is rejected during production construction and adds no debugging endpoint. Disabled servers use the original reactive renderer. Standard action resolution now excludes accessor replacements without invoking their getters.

@@ -658,7 +658,7 @@ Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
 - No migration is required when the new multiplayer options are disabled.
 - Production controls are route-local and opt-in; enable and size them from measured capacity rather than copying example limits.
 - `ProtocolClient` is available from `redweb/client` for negotiated protocol routes without adding runtime dependencies.
-- The minimum supported Node.js version is 18.
+- The installation/legacy-compatibility floor is Node.js 18, not a recommendation to deploy an end-of-life runtime. Use a maintained LTS release with current security patches; see [runtime compatibility and release verification](docs/RELEASE_TRUST.md).
 
 ## Live HTML migration
 
@@ -666,4 +666,4 @@ The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have bee
 
 ## Developing
 
-- Run tests with `npm test` (Jest). The suite includes mock-free HTTP, HTTPS, WebSocket, and secure WebSocket integration tests plus unit tests, with 100% coverage enforced for statements, branches, functions, and lines.
+- Run tests with `npm test` (Jest). The suite includes mock-free HTTP, HTTPS, WebSocket, and secure WebSocket integration tests plus unit tests, with 100% instrumented-library coverage enforced for statements, branches, functions, and lines. Generated browser code and repository tools have additional gates and explicit remaining coverage work; see the [acceptance checklist](docs/AGENT_READY_ACCEPTANCE.md).

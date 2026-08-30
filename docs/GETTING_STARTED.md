@@ -18,6 +18,8 @@ Each generated recipe page contains its exact files, commands, limitations, and 
 
 Requirements: Node.js satisfying the package's `engines` field and npm. Use a supported Node.js release in production. TypeScript and the development watcher are installed by the starter. No React, frontend bundler or broker is required. Only the dashboard starter uses a database; its native SQLite requirement is recipe-local.
 
+The installation floor is not a security-support promise for old Node releases. See [runtime compatibility, release verification and provenance](RELEASE_TRUST.md) before choosing a production version.
+
 ## One development loop
 
 After initialization and installation, `npm test` compiles the project, copies assets, and runs the shipped network tests. `npm run dev` watches source/configuration files, rebuilds, and restarts. Served HTML pages on direct localhost access refresh when the replacement server is ready; detected edits instead produce a confirmation notice that keeps the current document until explicit reload. This is not autosave or browser hot-module replacement; in-memory state and old socket sessions reset on restart. See [development refresh and its guarantees](DEVELOPMENT.md#browser-refresh).

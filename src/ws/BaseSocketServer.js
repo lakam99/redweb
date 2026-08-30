@@ -11,6 +11,7 @@ const { createInspection } = require('../development/Inspection');
 const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
 const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
+const OwnedServerLifecycle = require('../OwnedServerLifecycle');
 const {
   listenServer,
   closeServer,
@@ -50,12 +51,9 @@ class BaseSocketServer {
     this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
     this.draining = false;
     this.pendingUpgrades = new Map();
-    this.rawConnections = this.closeServerOnShutdown ? new Set() : null;
-    this._connectionHandler = this.rawConnections ? socket => {
-      this.rawConnections.add(socket);
-      socket.once('close', () => this.rawConnections.delete(socket));
-    } : null;
-    if (this._connectionHandler) this.server.on('connection', this._connectionHandler);
+    this._ownedServer = this.closeServerOnShutdown ? new OwnedServerLifecycle(server) : null;
+    this.rawConnections = this._ownedServer?.connections ?? null;
+    this._connectionHandler = this._ownedServer?.onConnection ?? null;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
     const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
@@ -70,6 +68,7 @@ class BaseSocketServer {
         this.routes.push(route);
       }
     } catch (error) {
+      this._ownedServer?.dispose();
       this.disposeRoutes(this.routes);
       throw error;
     }
@@ -78,14 +77,21 @@ class BaseSocketServer {
     this.server.on('upgrade', this._upgradeHandler);
 
     const shouldListen = (ownsServer && this.listen !== false) || (!ownsServer && options.listen === true);
-    if (shouldListen) {
-      listenServer(this.server, {
-        port: this.port,
-        bind: this.bind,
-        callback: this.listenCallback,
-        logger: this.logger,
-        name,
-      });
+    try {
+      if (shouldListen) {
+        listenServer(this.server, {
+          port: this.port,
+          bind: this.bind,
+          callback: this.listenCallback,
+          logger: this.logger,
+          name,
+        });
+      }
+    } catch (error) {
+      this.server.off('upgrade', this._upgradeHandler);
+      this._ownedServer?.dispose();
+      this.disposeRoutes(this.routes);
+      throw error;
     }
   }
 
@@ -236,28 +242,18 @@ class BaseSocketServer {
     this.server.off?.('upgrade', this._upgradeHandler);
     const deadline = Date.now() + Math.max(0, ...this.routes.map(route => route.shutdownTimeoutMs));
     const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
-    if (this.closeServerOnShutdown && this.server.listening) {
+    if (this.closeServerOnShutdown) {
       try {
         await this.closeOwnedServer(Math.max(0, deadline - Date.now()));
       } catch (error) {
         errors.push(error);
       }
     }
-    if (this._connectionHandler) this.server.off?.('connection', this._connectionHandler);
     throwCleanupErrors(errors, 'One or more WebSocket server cleanup operations failed.');
   }
 
   closeOwnedServer(timeoutMs) {
-    let timer;
-    const closing = closeServer(this.server);
-    const timeout = new Promise(resolve => {
-      timer = setTimeout(() => {
-        this.rawConnections?.forEach(socket => socket.destroy?.());
-        resolve();
-      }, timeoutMs);
-      timer.unref?.();
-    });
-    return Promise.race([closing, timeout]).finally(() => clearTimeout(timer));
+    return this._ownedServer.close(timeoutMs, () => closeServer(this.server));
   }
 }
 

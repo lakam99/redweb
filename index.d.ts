@@ -665,6 +665,7 @@ declare module 'redweb' {
         sessionTtlMs?: number;
         maxSessions?: number;
         maxConcurrentRenders?: number;
+        /** Phase-local render/route and final owned-HTTP cleanup bound; defaults to 1000ms, not a total application deadline. */
         shutdownTimeoutMs?: number;
         heartbeat?: HeartbeatOptions;
         origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);

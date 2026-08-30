@@ -289,6 +289,8 @@ Timers and subscriptions created by a page should be owned by that page and stop
 
 Shutdown aborts the render signal and waits up to `shutdownTimeoutMs` (one second by default) for active `loading()` and `render()` hooks. If a hook ignores cancellation, Redweb disposes its page, force-closes the affected HTTP connection, completes the remaining cleanup phases, and then reports the timeout.
 
+Live HTML shuts down sockets, page resources, and its owned HTTP listener in successive phases. `shutdownTimeoutMs` bounds phases rather than imposing one total wall-clock deadline. The final HTTP phase also waits up to this duration before destroying remaining TCP peers, including incomplete HTTP requests and unfinished TLS handshakes. This applies to both static and live pages, even when native listener close has already started. Successful forced transport closure does not prove that application work completed, data was persisted, or a response reached its client. Cleanup failures remain reported after the other phases are attempted. Applications must separately close their database handles, workers, and other resources; arbitrary synchronous work cannot be preempted by a JavaScript timer.
+
 HTTP rendering produces an unpredictable page ID. The browser presents it during a same-origin, versioned WebSocket upgrade. Pending and disconnected sessions expire, the registry is bounded by `maxSessions`, and a page ID cannot own two active sockets simultaneously.
 
 For authenticated pages, provide `authenticate(request)`. It runs for both the HTTP render and WebSocket upgrade and must return the same stable primitive identity (commonly a user ID) for both requests. A missing, rejected, changed, or object identity is denied, preventing a copied page token from crossing authentication boundaries. The identity is available as `context.principal` in page hooks and actions.
@@ -429,7 +431,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `maxConcurrentRenders`: maximum simultaneous HTTP page renders, independent of live session occupancy; defaults to `maxSessions`.
-- `shutdownTimeoutMs`: maximum render/route drain time before forced cleanup; defaults to one second.
+- `shutdownTimeoutMs`: phase-local render/route drain and final owned-HTTP cleanup timeout, not a total application shutdown deadline; defaults to one second.
 - `heartbeat`: optional `{ intervalMs, timeoutMs }` WebSocket liveness policy. Live HTML defaults to a 15-second ping interval and 10-second pong timeout so half-open browsers are disconnected and component `disconnected()` hooks update presence promptly.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
 - `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
