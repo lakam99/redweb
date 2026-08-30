@@ -18,7 +18,7 @@ describe('single-source documentation', () => {
         expect(builder.build()).toEqual(docs);
         expect(docs.channel).toBe('unreleased');
         expect(docs.packageVersion).toBe(version);
-        expect(docs.pages).toHaveLength(13 + docs.api.length + docs.examples.length);
+        expect(docs.pages).toHaveLength(require('../../docs/topics.json').length + TEMPLATES.length + 1 + docs.api.length + docs.examples.length);
         expect(new Set(docs.pages.map(page => page.id)).size).toBe(docs.pages.length);
         for (const page of docs.pages) {
             expect(docs.llms).toContain(`](${page.url})`);

@@ -6,6 +6,8 @@ Use only the pieces you need: runtime-free static pages, interactive server-rend
 
 Development status: this branch includes unreleased improvements. Follow the matching packed artifact when trying its new starters, reactive rendering, contracts, or diagnostics; do not assume the published package has them. The [documentation catalogue](docs/generated.json) labels the channel explicitly and contains complete, tested recipe files. See [documentation maintenance and verification](docs/DOCUMENTATION.md).
 
+For coding agents, the same catalogue can be searched through an [optional read-only MCP adapter](docs/AGENT_ACCESS.md). It runs separately from this checkout, requires no changes to your application, and adds no SDK dependency to the normal Redweb package. The adapter is currently private/unpublished; plain Markdown documentation remains usable without it.
+
 **Good fit:** Node-hosted sites with live dashboards, chat, collaboration, or multiplayer socket endpoints; static documentation sites that reuse the same TSX authoring model.
 
 **Choose something else when:** you need React compatibility or browser-side component execution, an edge-only runtime without Node, or a managed database/authentication/matchmaking service. Redweb does not supply those capabilities or promise transport delivery guarantees beyond its documented protocol.

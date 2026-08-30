@@ -26,6 +26,8 @@ Complete recipe pages are executable programs. Topic/API snippets remain explana
 
 Website export, published-version availability, read-only MCP access, and fresh-agent benchmarks have separate acceptance gates. Generating this catalogue alone does not complete those requirements or guarantee agent discovery.
 
+The optional MCP integration reads this same catalogue rather than regenerating or duplicating documentation. See [agent access setup and limits](AGENT_ACCESS.md); its dependencies and tests are separate from the normal library runtime.
+
 ## Website consumer
 
 The separate Redweb site imports this catalogue through `npm run sync:docs -- /absolute/path/to/redweb`; after a matching release is installed, `npm run sync:docs` reads that package by default. It does not import application runtime code from the development checkout. Its committed generated content allows independent clean-checkout builds.

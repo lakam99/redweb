@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a separate, optional read-only documentation MCP adapter with bounded search, exact-ID Markdown/recipe reads, explicit version labels, and current/legacy stdio support. It is private/unpublished and excluded from the normal Redweb package; real subprocess and packed production-only tests verify that separation.
+
 - Unified website API articles, capability examples, and homepage code with the canonical documentation catalogue. Added individual API/example Markdown pages and a standalone, real-network-tested shared HTTP/WebSocket example. The separate site's importer validates and retains historical release snapshots; human pages, raw recipes, and per-version agent indexes are generated together without a browser framework.
 
 - Added a deterministic documentation catalogue built from canonical Markdown, public declarations, and the initializer's exact recipe files. Complete Markdown applications are extracted, compiled, and exercised with real HTTP/WebSocket tests, including the packed-package and source-free deployment gates. Unreleased content is labelled explicitly; release snapshots are version-pinned and immutable.
