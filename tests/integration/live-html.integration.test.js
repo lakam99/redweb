@@ -188,9 +188,10 @@ describe('Live HTML integration without mocks', () => {
         const runtime = await request({ port: firstPage.port, path: firstPage.config.runtimePath });
         const browserClient = await request({ port: firstPage.port, path: '/__redweb/client.js' });
         expect(runtime.status).toBe(200);
-        expect(runtime.body).toContain("new RedwebClient");
+        expect(runtime.body).toBe('import { mountLivePage } from "/__redweb/client.js";\nmountLivePage();\n');
         expect(browserClient.status).toBe(200);
         expect(browserClient.body).toContain('RedwebClient = class');
+        expect(browserClient.body).toContain('mountLivePage');
 
         const firstUpdates = [];
         const first = liveClient(firstPage.port, firstPage.config);

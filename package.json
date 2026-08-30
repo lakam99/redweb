@@ -62,7 +62,7 @@
     "verify:recovery:diagnostics": "c8 --all --include=scripts/diagnostics/recovery-heap-graph.cjs --include=scripts/diagnostics/recovery-heap-summary.cjs --reporter=text --reporter=json --reports-dir=coverage/recovery-native-exact --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node --test tests/unit/recovery-heap-graph.unit.test.js",
     "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
     "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",
-    "verify:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-coverage.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/BrowserCoverage.js --coverageDirectory=coverage/browser-collector && node scripts/verify-browser-coverage.js && node scripts/verify-browser-coverage.js runtime && node scripts/verify-browser-coverage.js refresh",
+    "verify:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-coverage.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/BrowserCoverage.js --coverageDirectory=coverage/browser-collector && node scripts/verify-browser-coverage.js runtime && node scripts/verify-browser-coverage.js refresh",
     "measure:browser:client": "node scripts/verify-browser-coverage.js client",
     "verify:development:browser": "node scripts/verify-development-refresh-browser.js",
     "verify:starters:lifecycle": "node scripts/verify-starter-lifecycle.js",

@@ -172,7 +172,7 @@ class PageManager {
 
     mount(app) {
         if (this.hasLivePages) {
-            const clientFile = path.join(path.dirname(require.resolve('redweb-client')), 'index.js');
+            const clientFile = path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js');
             app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
             app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
         }

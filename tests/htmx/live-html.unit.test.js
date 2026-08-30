@@ -865,10 +865,7 @@ describe('decorator-first Live HTML units', () => {
     test('generates a small delegated browser runtime around redweb-client', () => {
         const source = browserRuntime('/internal/client.js');
         expect(source).toContain("from \"/internal/client.js\"");
-        expect(source).toContain("client.send('redweb:html'");
-        expect(source).toContain("document.addEventListener('click'");
-        expect(source).toContain("document.addEventListener('submit'");
-        expect(source).toContain("document.addEventListener('input'");
+        expect(source).toBe('import { mountLivePage } from "/internal/client.js";\nmountLivePage();\n');
     });
 
     test('exports non-live decorated pages and content-addressed CSS as static files', async () => {
