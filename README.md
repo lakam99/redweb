@@ -1,8 +1,12 @@
 # RedWeb
 
-RedWeb is a small Node.js transport foundation that wires together Express HTTP/HTTPS servers and `ws` WebSocket servers with simple defaults. Use it for ordinary web apps or opt into bounded multiplayer controls without adopting a broker, identity system, or game-state framework.
+Build server-rendered TypeScript sites with realtime components and WebSocket endpoints, without wiring together separate frontend and backend frameworks. Redweb combines readable TSX, server-owned state/actions, Express HTTP/HTTPS, and `ws` WebSockets on ordinary Node.js listeners.
 
-Version 0.9 adds production-minded multiplayer building blocks while preserving the 0.8 API and wire behavior when they are disabled. Redweb owns transport boundaries and lifecycle; your game remains responsible for authoritative state, rules, matchmaking, persistence, and identity.
+Use only the pieces you need: runtime-free static pages, interactive server-rendered applications, or bounded socket services. Redweb owns transport boundaries and lifecycle; your application remains responsible for authoritative rules, persistence, and identity.
+
+**Good fit:** Node-hosted sites with live dashboards, chat, collaboration, or multiplayer socket endpoints; static documentation sites that reuse the same TSX authoring model.
+
+**Choose something else when:** you need React compatibility or browser-side component execution, an edge-only runtime without Node, or a managed database/authentication/matchmaking service. Redweb does not supply those capabilities or promise transport delivery guarantees beyond its documented protocol.
 
 ## Install
 
@@ -19,6 +23,10 @@ npm run dev
 ```
 
 Pass a directory to create a new project there: `npx redweb init my-app`. Existing files are never overwritten, so rerunning the command is safe.
+
+For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
+
+`npx redweb doctor --json` checks the project's installed Redweb and TypeScript packages, effective JSX settings (including inherited configuration), and Node compatibility without running application code. Add `--port 8181` to probe loopback port availability. It reports suggested fixes and exits unsuccessfully for errors; it never silently repairs the project. See [CLI behavior and limitations](docs/CLI.md).
 
 ## Exports
 

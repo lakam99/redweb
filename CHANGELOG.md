@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added explicit existing-project initialization, read-only dry-run plans, structured CLI output, and preflight checks that refuse conflicting paths and linked subdirectories.
+- Added read-only `redweb doctor` configuration/version diagnostics and optional real TCP port checks, with stable finding codes and machine-readable results.
+- Added package discovery metadata and current capability/fit guidance. The full developer/agent experience release remains in progress; see `docs/AGENT_READY_ACCEPTANCE.md`.
+
 ## 0.12.0
 
 - Added `npx redweb init [directory]` to create a minimal TypeScript + TSX application without overwriting existing files.

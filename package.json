@@ -71,7 +71,15 @@
     "docs",
     "examples/live-html"
   ],
-  "keywords": [],
+  "homepage": "https://redweb.magnisolution.com/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lakam99/redweb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lakam99/redweb/issues"
+  },
+  "keywords": ["typescript", "jsx", "server-rendering", "websocket", "realtime", "multiplayer", "express", "ssr", "static-site"],
   "author": "",
   "license": "ISC",
   "engines": {

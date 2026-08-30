@@ -35,7 +35,12 @@ async function main() {
         run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'init', initializedRoot], { cwd: workspace, shell: false });
         fs.mkdirSync(path.join(initializedRoot, 'node_modules'), { recursive: true });
         fs.symlinkSync(packageRoot, path.join(initializedRoot, 'node_modules', 'redweb'), 'junction');
+        fs.symlinkSync(path.dirname(require.resolve('typescript/package.json')), path.join(initializedRoot, 'node_modules', 'typescript'), 'junction');
         run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot, shell: false });
+        const diagnosis = JSON.parse(run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'doctor', '--json', '--port', '0'], { cwd: initializedRoot, shell: false }));
+        if (!diagnosis.ok || diagnosis.issues.length || diagnosis.installedVersion !== manifest.version) {
+            throw new Error('Packed doctor did not validate the initialized consumer.');
+        }
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||
             manifest.scripts['example:chatroom'] !== 'node examples/live-html/chatroom.js' ||
             manifest.scripts['example:cards'] !== 'node examples/live-html/cards.js' ||
