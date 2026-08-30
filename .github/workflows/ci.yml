@@ -25,6 +25,18 @@ jobs:
       - run: npm test -- --runInBand --silent
       - run: npm run verify:load
       - run: npm run verify:recovery
+        id: recovery
+      - name: Diagnose Node 20 recovery failure (not acceptance)
+        if: ${{ failure() && matrix.node == 20 && steps.recovery.outcome == 'failure' && github.event_name == 'pull_request' }}
+        timeout-minutes: 2
+        run: |
+          node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
+          git rev-parse HEAD
+          set +e
+          node --expose-gc --trace-gc-nvp --trace-opt --trace-deopt scripts/verify-recovery.js
+          diagnostic_status=$?
+          echo "Diagnostic exit status: $diagnostic_status (the original recovery failure remains a failed gate)"
+          exit "$diagnostic_status"
       - run: npm audit --omit=dev
 
   lifecycle-smoke:
