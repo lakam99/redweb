@@ -3,6 +3,8 @@
 const path = require('path');
 const ProjectInitializer = require('./ProjectInitializer');
 const { ProjectDoctor } = require('./ProjectDoctor');
+const { ProjectAddition } = require('./ProjectAddition');
+const formatCommand = require('./formatCommand');
 const { parseArguments, USAGE } = require('./arguments');
 
 async function run(args, cwd, version) {
@@ -18,6 +20,20 @@ async function run(args, cwd, version) {
                 ...report.issues.map(value => `${value.severity} ${value.code}${value.file ? ` (${value.file}${value.line ? `:${value.line}:${value.column}` : ''})` : ''}: ${value.message}\n  ${value.suggestion}`),
             ].join('\n');
             return { exitCode: report.ok ? 0 : 1, stdout: `${output}\n`, stderr: '' };
+        }
+        if (options.command === 'add') {
+            const result = new ProjectAddition().add(root, options);
+            const report = { schemaVersion: 1, operation: 'add', dryRun: options.dryRun, ...result };
+            const output = options.json ? JSON.stringify(report) : [
+                `${options.dryRun ? 'Planned addition' : 'Files created'} in ${result.root}`,
+                `Files: ${result.planned.join(', ')}`,
+                `Registration pending: ${result.registration.instruction}`,
+                `Import (adjust relative path from your entry point): ${result.registration.importFromProjectRoot}`,
+                `Build: ${formatCommand(result.verification.build)}`,
+                `Test: ${formatCommand(result.verification.test)}`,
+                result.verification.note,
+            ].join('\n');
+            return { exitCode: 0, stdout: `${output}\n`, stderr: '' };
         }
         const result = new ProjectInitializer(version).initialize(root, options);
         const report = { schemaVersion: 1, operation: 'init', dryRun: options.dryRun, ...result };

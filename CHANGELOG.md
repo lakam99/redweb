@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `redweb add page`, `redweb add component`, and `redweb add socket-route` with canonical source/test templates, effective TypeScript layout checks and in-memory emission, dry-run/JSON reports, explicit registration instructions, and exclusive creation without rewriting existing application files. Generated artifact-only tests exercise actual HTTP/WebSocket behavior; socket additions keep URL routing separate from validated message handlers.
+
 - Added fixed HTTP upgrade diagnostics through `Redweb-Error` and no-store responses, separating rejected credentials (401), origin/permission/placement denial (403), callback bugs (500), and timeout/cancellation/capacity (503). Clients that previously treated every admission failure as 401 must use the new categories. Protocol negotiation remains 426 with a specific code; safe placement remains 307. Raw authentication still rejects only literal `false`.
 - Admission now shares the bounded-operation primitive and checks deadlines between stages, preventing late identity/origin results from starting placement or further authentication after cancellation. Actual evaluation work retains its admission reservation until settlement. Public and protected page failures are sanitized, capacity is distinguished from application failure, and malformed exceptions/partial responses/throwing upgrade loggers are contained. The new runtime guide states browser visibility, nested page-lifetime cancellation limits and retry/side-effect boundaries.
 

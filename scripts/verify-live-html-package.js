@@ -27,9 +27,12 @@ async function main() {
     try {
         const pack = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
-        const dependencyChecks = verifyExampleDependencies(archive, workspace, require('../package.json').devDependencies.zod);
+        const metadata = require('../package.json');
+        const dependencyChecks = verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
+            { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws });
         console.log(dependencyChecks.withoutValidator.trim());
         console.log(dependencyChecks.withValidator.trim());
+        console.log(dependencyChecks.additions);
         run('tar', ['-xf', archive, '-C', workspace]);
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');

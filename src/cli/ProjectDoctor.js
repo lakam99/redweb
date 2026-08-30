@@ -3,8 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
-const { createRequire } = require('module');
 const SourceInspector = require('./SourceInspector');
+const { resolveDependency, readConfig } = require('./ProjectConfig');
 
 function issue(code, file, message, suggestion, severity = 'error') {
     return { code, severity, file, message, suggestion };
@@ -26,18 +26,6 @@ function projectNodeIssue(version, requirement) {
     return issue('PROJECT_NODE_UNSUPPORTED', 'package.json', `Node ${version} does not meet this project's ${requirement} requirement.`, `Install Node ${required.join('.')} or newer before running this application.`);
 }
 
-function resolveDependency(root, name) {
-    const requireFromProject = createRequire(path.join(root, 'package.json'));
-    let current = root;
-    while (true) {
-        const candidate = path.join(current, 'node_modules', name);
-        if (fs.existsSync(candidate)) return requireFromProject.resolve(candidate);
-        const parent = path.dirname(current);
-        if (parent === current) return null;
-        current = parent;
-    }
-}
-
 function inspectTypeScript(root, issues) {
     // TypeScript's diagnostic attachment expects normalized separators on Windows.
     const configPath = path.join(root, 'tsconfig.json').replaceAll('\\', '/');
@@ -53,12 +41,11 @@ function inspectTypeScript(root, issues) {
         issues.push(issue('TYPESCRIPT_UNSUPPORTED', 'package.json', `TypeScript ${ts.version} is not supported by these diagnostics.`, 'Install TypeScript 5 or newer; Redweb standard decorators and contract types require it.'));
         return;
     }
-    const read = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (read.error) {
-        issues.push(issue('CONFIG_INVALID', 'tsconfig.json', ts.flattenDiagnosticMessageText(read.error.messageText, '\n'), 'Correct the configuration syntax and run doctor again.'));
+    const { config, syntaxError } = readConfig(ts, root);
+    if (syntaxError) {
+        issues.push(issue('CONFIG_INVALID', 'tsconfig.json', ts.flattenDiagnosticMessageText(syntaxError.messageText, '\n'), 'Correct the configuration syntax and run doctor again.'));
         return;
     }
-    const config = ts.parseJsonConfigFileContent(read.config, ts.sys, root);
     if (config.errors.length) {
         for (const error of config.errors) issues.push(issue('CONFIG_INVALID', 'tsconfig.json', ts.flattenDiagnosticMessageText(error.messageText, '\n'), 'Resolve the TypeScript configuration diagnostic, including missing extends targets or source files.'));
         return;

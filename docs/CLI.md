@@ -2,6 +2,33 @@
 
 Use the version installed in your project (`npx --no-install redweb`) when troubleshooting an existing app. The tool reports a warning if its version differs from the project's installed Redweb version.
 
+## Add pages, components, and socket routes
+
+This command is currently **unreleased**, like the other branch-specific capabilities in the README.
+
+```sh
+npx redweb add page dashboard
+npx redweb add component notifications
+npx redweb add socket-route match
+npx redweb add page account-settings --dry-run --json
+```
+
+Each addition writes a named-export TypeScript module and a `.test.cjs` file. Pages and owned components demonstrate server state plus an exposed increment action. The socket route demonstrates a validated `ping` handler returning `pong`, without an inner action dispatcher; extend its contract and register additional handlers as needed. For complete join/move/resume behavior, use the existing socket starter instead.
+
+Run these commands in an existing project with Redweb declared as an installed runtime dependency and TypeScript installed. Declare/install `ws` explicitly (normally as a development dependency) for the generated network tests. Socket additions also require application-installed Zod as a runtime dependency. The generator reports missing prerequisites; it never installs dependencies or changes your manifest.
+
+The default source location is the effective TypeScript `rootDir`, with `pages/`, `components/`, or `socket-routes/` beneath it. The default test directory is `test/`. An optional project directory follows the kind/name. Use `--config build.json`, `--source-dir features`, or `--test-dir checks` to select paths relative to that project. Names must be lowercase kebab-case, start with a letter, and contain at most 64 characters.
+
+The command supports a single emitting TypeScript project using CommonJS, Node16 or NodeNext module settings and standard or legacy decorators. HTML additions require Redweb's automatic JSX runtime. Effective inherited configuration controls inclusion and emission; `--source-dir` chooses placement, **not** the compiler's `rootDir`. Ambiguous placement requires that option or an explicit `rootDir`. Project-reference roots, bundler-only pipelines, bundled output, disabled JavaScript emission, output outside the project, mismatched source/output package module types, and compiled test locations are rejected with guidance. Select the appropriate child project/configuration yourself rather than allowing the command to rewrite a monorepo.
+
+The planner parses source and performs an in-memory TypeScript emit, without importing the application or writing build output. It checks the prospective module, its actual emitted path (including imported source dependencies), and whether an inferred root would relocate existing output. It rejects a test directory that TypeScript would compile when `allowJs` is enabled. This is not a replacement for a whole-project build or its existing tests. The virtual-file matcher uses a feature-checked TypeScript runtime API; unsupported compiler shapes fail explicitly rather than guessing glob behavior.
+
+`--dry-run` writes nothing; `--json` returns a versioned report with planned/created paths, source/output/test paths, a named import, `registration.status: "pending"`, and explicit build/test argument arrays. Human commands are quoted for PowerShell on Windows and a POSIX shell elsewhere. Run the reported build and then its test from the project root. The test imports **only the generated artifact**, starts an isolated loopback server on a temporary port, and exercises a real HTTP/WebSocket action or message exchange. It never imports the existing application entry point.
+
+Registration is intentionally your next step. Add a page to the existing `start([...])` list; add a socket route to the server's route list. For components, create an owned field (`widget = new NotificationsComponent()`) and render `{this.widget}`. Adjust the report's project-root-relative named import to the file where you use it; Node-compatible imports use the emitted `.js` extension. No imports, registration lists, package scripts, manifests, or configuration files are rewritten. Add the new test to your project's normal test command yourself; a generated test is not claimed to be automatically registered.
+
+The shared writer rejects any destination conflict before writing and creates files exclusively. It rejects path escapes, unsafe portable names, case aliases and symbolic-link ancestors. Concurrent failures report which files were completed and which path was attempted; writing is not transactional and does not lock the filesystem tree. Existing application files are never overwritten.
+
 ## Initialize a project
 
 ```sh
