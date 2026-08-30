@@ -10,10 +10,28 @@ const { MAX_BYTES } = require('./ClientHeapCapture.cjs');
 // Fixed labels only. Function names and arbitrary properties are never emitted.
 const codeNames = new Set(['system / Code', 'system / InstructionStream', 'system / FeedbackVector',
     'system / FeedbackCell', 'system / BytecodeArray', 'system / SharedFunctionInfo',
-    'system / UncompiledDataWithoutPreparseData', 'system / UncompiledDataWithPreparseData']);
+    'system / UncompiledDataWithoutPreparseData', 'system / UncompiledDataWithPreparseData',
+    '(code)', '(code deopt data)', '(code relocation info)', '(source position table)',
+    '(bytecode offset table)', '(constant pool)', '(handler table)', '(feedback)', '(dependent code)']);
 const rootNames = new Set(['(GC roots)', '(Stack roots)', '(Handle scope)', '(Global handles)',
     '(Strong roots)', '(Builtins)', '(Compilation cache)', '(Weak collections)']);
 const LIMITS = { nodes: 250000, edges: 1500000, pathDepth: 32 };
+
+function summarizePaths(rows, maximum = 128) {
+    assert(Number.isSafeInteger(maximum) && maximum > 0 && maximum <= 128);
+    const totals = new Map();
+    for (const row of rows) {
+        const key = JSON.stringify([row.category, row.cohort, row.status]);
+        if (!totals.has(key)) totals.set(key, { category: row.category, cohort: row.cohort, status: row.status, count: 0, selfBytes: 0 });
+        const total = totals.get(key);
+        total.count += row.count; total.selfBytes += row.selfBytes;
+    }
+    // Keep all numeric totals, but only bounded detailed examples. Prefer added
+    // code and then larger shallow-size groups; omitted paths are never hidden.
+    const ordered = [...rows].sort((a, b) => a.cohort.localeCompare(b.cohort) || b.selfBytes - a.selfBytes);
+    return { codePathTotals: [...totals.values()], pathGroupCount: rows.length,
+        omittedPathGroups: Math.max(0, rows.length - maximum), codePaths: ordered.slice(0, maximum) };
+}
 
 function category(node) {
     if (node.type === 'code' && codeNames.has(node.name)) return node.name;
@@ -92,7 +110,7 @@ class HeapCodeComparison extends HeapSnapshotGraph {
         }
         return { diagnosticOnly: true, retainedSizeProven: false, shortestFilteredPathsOnly: true,
             categories: [...buckets.values()].sort((a, b) => a.category.localeCompare(b.category)),
-            codePaths: [...paths.values()] };
+            ...summarizePaths([...paths.values()]) };
     }
 }
 
@@ -116,4 +134,31 @@ function compareFiles(directory, captures) {
     return graphs[1].compare(graphs[0]);
 }
 
-module.exports = { HeapCodeComparison, category, compareFiles };
+function analyzeReport(reportFile, directory) {
+    assert(fs.statSync(reportFile).size <= 2 * 1024 * 1024);
+    const bytes = fs.readFileSync(reportFile);
+    const original = JSON.parse(bytes.toString('utf8'));
+    const comparison = compareFiles(directory, original.heapCaptures);
+    const analyzerHashes = Object.fromEntries(['HeapCodeComparison.cjs', 'HeapSnapshotGraph.cjs',
+        'ClientHeapCapture.cjs', 'recovery-heap-summary.cjs'].map(filename => [filename,
+        createHash('sha256').update(fs.readFileSync(path.join(__dirname, filename))).digest('hex')]));
+    const report = { diagnosticOnly: true, offlineReanalysis: true,
+        originalRunReportedSuccess: original.deliveryAndCleanupPassed === true,
+        originalReportSHA256: createHash('sha256').update(bytes).digest('hex'), analyzerHashes, comparison };
+    assert(Buffer.byteLength(JSON.stringify(report)) <= 1024 * 1024);
+    return report;
+}
+
+if (require.main === module) {
+    try {
+        assert.equal(process.argv.length, 5);
+        const result = analyzeReport(process.argv[2], process.argv[3]);
+        fs.writeFileSync(process.argv[4], `${JSON.stringify(result)}\n`, { flag: 'wx' });
+        console.log('Private heap reanalysis saved; original evidence unchanged.');
+    } catch {
+        console.error('Private heap reanalysis failed; raw details withheld.');
+        process.exitCode = 1;
+    }
+}
+
+module.exports = { HeapCodeComparison, category, compareFiles, summarizePaths, analyzeReport };

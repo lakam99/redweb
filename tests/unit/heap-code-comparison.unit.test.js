@@ -3,7 +3,7 @@
 const test = globalThis.test ?? require('node:test').test;
 const expect = globalThis.expect ?? require('expect').expect;
 
-const { HeapCodeComparison, category, compareFiles } = require('../../scripts/diagnostics/HeapCodeComparison.cjs');
+const { HeapCodeComparison, category, compareFiles, summarizePaths } = require('../../scripts/diagnostics/HeapCodeComparison.cjs');
 const { ClientHeapCapture } = require('../../scripts/diagnostics/ClientHeapCapture.cjs');
 
 function snapshot(records) {
@@ -70,4 +70,21 @@ test('capture configuration, sequence and comparison identity fail closed', asyn
     await expect(new ClientHeapCapture(root).capture('storm-5')).rejects.toThrow('Invalid heap capture sequence');
     expect(() => compareFiles(root, [])).toThrow();
     expect(() => compareFiles(root, [{ identity: 'private' }, {}])).toThrow();
+});
+
+test('large path summaries keep complete numeric totals and explicitly bounded detailed examples', () => {
+    const rows = Array.from({ length: 3000 }, (_, index) => ({ category: '(code deopt data)',
+        cohort: index === 0 ? 'surviving' : 'added', status: 'root-path', count: 1, selfBytes: index,
+        path: Array.from({ length: 32 }, () => ({ category: 'type:code', edge: 'internal' })) }));
+    const report = summarizePaths(rows);
+    expect(report.codePaths).toHaveLength(128);
+    expect(report.pathGroupCount).toBe(3000);
+    expect(report.omittedPathGroups).toBe(2872);
+    expect(report.codePaths[0].selfBytes).toBe(2999);
+    expect(report.codePathTotals.reduce((sum, row) => sum + row.count, 0)).toBe(3000);
+    expect(report.codePathTotals.reduce((sum, row) => sum + row.selfBytes, 0)).toBe(2999 * 3000 / 2);
+    expect(Buffer.byteLength(JSON.stringify(report))).toBeLessThan(1024 * 1024);
+    expect(summarizePaths(rows, 1).omittedPathGroups).toBe(2999);
+    expect(() => summarizePaths(rows, 0)).toThrow();
+    expect(category({ type: 'code', name: '(code deopt data)' })).toBe('(code deopt data)');
 });

@@ -62,6 +62,23 @@ test('real client snapshots bracket exact network delivery and verify identity, 
             { bytes: captures[1].bytes + 1 }, { sha256: '0'.repeat(64) }]) {
             expect(() => compareFiles(workspace.directory, [captures[0], { ...captures[1], ...change }])).toThrow();
         }
+        const original = path.join(workspace.directory, 'original.json');
+        const result = path.join(workspace.directory, 'summary.json');
+        const cli = path.resolve(__dirname, '../../scripts/diagnostics/HeapCodeComparison.cjs');
+        const input = JSON.stringify({ deliveryAndCleanupPassed: false, heapCaptures: captures, privateField: 'PRIVATE-SENTINEL' });
+        fs.writeFileSync(original, input);
+        expect(await workspace.command([cli, original, workspace.directory, result])).toContain('original evidence unchanged');
+        const saved = fs.readFileSync(result, 'utf8');
+        const summary = JSON.parse(saved);
+        expect(summary.originalRunReportedSuccess).toBe(false);
+        expect(summary.originalReportSHA256).toBe(require('node:crypto').createHash('sha256').update(input).digest('hex'));
+        expect(saved).not.toContain('PRIVATE-SENTINEL');
+        await expect(workspace.command([cli, original, workspace.directory, result])).rejects.toThrow('raw details withheld');
+        expect(fs.readFileSync(result, 'utf8')).toBe(saved);
+        expect(fs.readFileSync(original, 'utf8')).toBe(input);
+        fs.writeFileSync(original, 'PRIVATE-SENTINEL');
+        await expect(workspace.command([cli, original, workspace.directory, result])).rejects.toThrow('raw details withheld');
+        await expect(workspace.command([cli])).rejects.toThrow('raw details withheld');
     }), 300000);
 
 test('actual capture enforces disk limit, poisons failed sessions and never overwrites evidence', () =>
