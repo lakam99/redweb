@@ -114,10 +114,10 @@ class HeapCodeComparison extends HeapSnapshotGraph {
     }
 }
 
-function compareFiles(directory, captures) {
+function loadGraphs(directory, captures) {
     assert.equal(captures.length, 2);
     assert.match(captures[0].identity, /^\d+:[a-f0-9-]{36}$/);
-    const graphs = captures.map((capture, index) => {
+    return captures.map((capture, index) => {
         assert.equal(capture.identity, captures[0].identity);
         assert.equal(capture.pid, captures[0].pid);
         assert(capture.identity.startsWith(`${capture.pid}:`));
@@ -131,28 +131,38 @@ function compareFiles(directory, captures) {
         assert.equal(createHash('sha256').update(bytes).digest('hex'), capture.sha256);
         return new HeapCodeComparison(JSON.parse(bytes.toString('utf8')));
     });
+}
+
+function compareFiles(directory, captures) {
+    const graphs = loadGraphs(directory, captures);
     return graphs[1].compare(graphs[0]);
 }
 
-function analyzeReport(reportFile, directory) {
+function analyzeReport(reportFile, directory, mode = 'comparison') {
+    assert(['comparison', 'attribution'].includes(mode));
     assert(fs.statSync(reportFile).size <= 2 * 1024 * 1024);
     const bytes = fs.readFileSync(reportFile);
     const original = JSON.parse(bytes.toString('utf8'));
-    const comparison = compareFiles(directory, original.heapCaptures);
+    const graphs = loadGraphs(directory, original.heapCaptures);
+    const analyze = () => {
+        if (mode === 'comparison') return graphs[1].compare(graphs[0]);
+        const { CodeAttribution } = require('./CodeAttribution.cjs');
+        return new CodeAttribution(graphs[1]).compare(new CodeAttribution(graphs[0]));
+    };
     const analyzerHashes = Object.fromEntries(['HeapCodeComparison.cjs', 'HeapSnapshotGraph.cjs',
-        'ClientHeapCapture.cjs', 'recovery-heap-summary.cjs'].map(filename => [filename,
+        'ClientHeapCapture.cjs', 'recovery-heap-summary.cjs', ...(mode === 'attribution' ? ['CodeAttribution.cjs'] : [])].map(filename => [filename,
         createHash('sha256').update(fs.readFileSync(path.join(__dirname, filename))).digest('hex')]));
     const report = { diagnosticOnly: true, offlineReanalysis: true,
         originalRunReportedSuccess: original.deliveryAndCleanupPassed === true,
-        originalReportSHA256: createHash('sha256').update(bytes).digest('hex'), analyzerHashes, comparison };
+        originalReportSHA256: createHash('sha256').update(bytes).digest('hex'), analyzerHashes, [mode]: analyze() };
     assert(Buffer.byteLength(JSON.stringify(report)) <= 1024 * 1024);
     return report;
 }
 
 if (require.main === module) {
     try {
-        assert.equal(process.argv.length, 5);
-        const result = analyzeReport(process.argv[2], process.argv[3]);
+        assert(process.argv.length === 5 || process.argv.length === 6);
+        const result = analyzeReport(process.argv[2], process.argv[3], process.argv[5]);
         fs.writeFileSync(process.argv[4], `${JSON.stringify(result)}\n`, { flag: 'wx' });
         console.log('Private heap reanalysis saved; original evidence unchanged.');
     } catch {
@@ -161,4 +171,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { HeapCodeComparison, category, compareFiles, summarizePaths, analyzeReport };
+module.exports = { HeapCodeComparison, category, compareFiles, summarizePaths, analyzeReport, loadGraphs };

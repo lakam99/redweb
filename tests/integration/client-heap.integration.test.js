@@ -76,6 +76,14 @@ test('real client snapshots bracket exact network delivery and verify identity, 
         await expect(workspace.command([cli, original, workspace.directory, result])).rejects.toThrow('raw details withheld');
         expect(fs.readFileSync(result, 'utf8')).toBe(saved);
         expect(fs.readFileSync(original, 'utf8')).toBe(input);
+        const attributed = path.join(workspace.directory, 'attribution.json');
+        await workspace.command([cli, original, workspace.directory, attributed, 'attribution']);
+        const attribution = JSON.parse(fs.readFileSync(attributed, 'utf8'));
+        expect(attribution.originalReportSHA256).toBe(summary.originalReportSHA256);
+        expect(attribution.attribution.after.statuses.associated).toBeGreaterThan(0);
+        expect(attribution.attribution.invalidationStatusKnown).toBe(false);
+        expect(attribution.attribution.currentMeansClosureCodeField).toBe(true);
+        expect(attribution.analyzerHashes['CodeAttribution.cjs']).toMatch(/^[a-f0-9]{64}$/);
         fs.writeFileSync(original, 'PRIVATE-SENTINEL');
         await expect(workspace.command([cli, original, workspace.directory, result])).rejects.toThrow('raw details withheld');
         await expect(workspace.command([cli])).rejects.toThrow('raw details withheld');
