@@ -1,10 +1,9 @@
 'use strict';
 
 const assert = require('assert/strict');
-const fs = require('fs');
 const path = require('path');
 const { once } = require('events');
-const { spawnSync } = require('child_process');
+const { compileConsumer } = require('./compile-consumer');
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
 const { websocketUpgradeStatus } = require('../../tests/helpers/network');
@@ -13,19 +12,8 @@ const { websocketUpgradeStatus } = require('../../tests/helpers/network');
 async function verifyActionInput(packageRoot, workspace) {
     for (const experimentalDecorators of [false, true]) {
         const target = path.join(workspace, `action-${experimentalDecorators ? 'legacy' : 'standard'}`);
-        fs.mkdirSync(path.join(target, 'node_modules'), { recursive: true });
-        fs.symlinkSync(packageRoot, path.join(target, 'node_modules/redweb'), 'junction');
-        fs.symlinkSync(path.dirname(require.resolve('zod/package.json')), path.join(target, 'node_modules/zod'), 'junction');
-        fs.copyFileSync(path.resolve(__dirname, '../../tests/fixtures/action-consumer.ts'), path.join(target, 'consumer.ts'));
-        fs.writeFileSync(path.join(target, 'tsconfig.json'), JSON.stringify({
-            extends: 'redweb/tsconfig.json',
-            compilerOptions: { experimentalDecorators, esModuleInterop: true, outDir: 'dist' },
-            files: ['consumer.ts'],
-        }));
-        const compilation = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', target], { encoding: 'utf8', timeout: 30000, windowsHide: true });
-        assert.equal(compilation.status, 0, compilation.stdout || compilation.stderr);
-        fs.unlinkSync(path.join(target, 'consumer.ts'));
-        const { ValidatedPage } = require(path.join(target, 'dist/consumer.js'));
+        const compiled = compileConsumer(packageRoot, target, path.resolve(__dirname, '../../tests/fixtures/action-consumer.ts'), { experimentalDecorators, dependencies: ['zod'] });
+        const { ValidatedPage } = require(compiled);
         const { start } = require(packageRoot);
         const server = start(ValidatedPage, { port: 0, bind: '127.0.0.1', authenticate: () => 'trusted-owner' });
         let client;

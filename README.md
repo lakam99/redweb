@@ -477,6 +477,8 @@ Rate and backpressure actions are `"drop"` or `"disconnect"`. Slow-consumer chec
 
 Set `rooms: true` to add bounded route-local rooms, or pass limits such as `{ maxRooms, maxMembersPerRoom, maxRoomsPerConnection, maxRoomIdLength }`. Connected sockets receive `joinRoom`, `leaveRoom`, and `roomBroadcast`. Joins and leaves are idempotent, disconnect removes every membership, and empty rooms are reclaimed.
 
+For private rooms, supply `rooms.authorize(context, roomId)` and use `await socket.enterRoom(roomId)`. It shares bounded authorization and the request-context shape used by pages/actions. Existing synchronous joins cannot bypass a protected room, and protected socket broadcasts require membership. Leave/disconnect cancel pending entry; grants are revoked explicitly, not automatically when an application policy changes. See [private rooms and shared identity](docs/ROOM_AUTHORIZATION.md) for the complete runnable example, capacity limits, safe failure codes, and revocation boundaries.
+
 Set `sessions: true` or provide `{ ttlMs, maxSessions, maxSessionIdLength, sweepIntervalMs }`. Applications supply opaque session IDs; Redweb does not create credentials. Sockets receive `createSession` and `resumeSession`. A successful takeover closes the former owner, and a stale close cannot release the replacement. Disconnected sessions expire through one route scheduler.
 
 The optional `metrics` sink is vendor-neutral and supports `increment`, `gauge`, and `observe`. Framework attributes contain only the static route path—never player IDs, room IDs, tokens, payloads, or exception text.

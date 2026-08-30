@@ -118,6 +118,9 @@ class BaseSocketServer {
     if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
     if (route.isReady?.() === false) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
 
+    try { route.runtime.prepareRequest(req); }
+    catch { return this.rejectUpgrade(sock, 400, 'Bad Request'); }
+
     if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
       let reservation;
       try {

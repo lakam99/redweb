@@ -12,10 +12,10 @@ const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
 const synchronous = require('./synchronous');
 const { ActionInputError } = require('./ActionDefinition');
-const { AccessDenied } = require('./AccessPolicy');
+const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
 const PageLifetime = require('./PageLifetime');
-const requestSnapshot = require('./RequestSnapshot');
+const requestSnapshot = require('../context/RequestSnapshot');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });

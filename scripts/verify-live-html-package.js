@@ -8,6 +8,7 @@ const { verifyStarter } = require('./lib/verify-starter');
 const { verifyDocumentation } = require('./lib/verify-documentation');
 const { verifySharedServer } = require('./lib/verify-shared-server');
 const { verifyActionInput } = require('./lib/verify-action-input');
+const { verifyRoomExample } = require('./lib/verify-room-example');
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
@@ -36,6 +37,7 @@ async function main() {
         verifyDocumentation(packageRoot, workspace);
         await verifySharedServer(packageRoot);
         await verifyActionInput(packageRoot, workspace);
+        await verifyRoomExample(packageRoot, workspace);
         if (manifest.bin.redweb !== 'bin/redweb.js' ||
             !fs.existsSync(path.join(packageRoot, 'bin', 'redweb.js')) ||
             !fs.existsSync(path.join(packageRoot, 'config', 'tsconfig.json'))) {

@@ -23,9 +23,14 @@ function requestSnapshot(request) {
         }
         return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [copy(key, depth + 1), copy(item, depth + 1)])));
     };
+    const url = new URL(request.url || '/', 'http://redweb.invalid');
+    const query = Object.create(null);
+    for (const [key, value] of url.searchParams) {
+        query[key] = Object.hasOwn(query, key) ? [].concat(query[key], value) : value;
+    }
     const data = copy({
-        path: request.path || '/', url: request.url || '/', method: request.method || 'GET',
-        headers: request.headers || {}, params: request.params || {}, query: request.query || {}, body: request.body,
+        path: request.path || url.pathname, url: request.url || '/', method: request.method || 'GET',
+        headers: request.headers || {}, params: request.params || {}, query: request.query || query, body: request.body,
     });
     return Object.freeze({ ...data, get(name) {
         const value = Object.hasOwn(data.headers, name.toLowerCase()) ? data.headers[name.toLowerCase()] : undefined;

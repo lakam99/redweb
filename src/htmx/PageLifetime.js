@@ -1,5 +1,5 @@
 'use strict';
-const { AccessDenied } = require('./AccessPolicy');
+const { AccessDenied } = require('../access/AccessPolicy');
 
 /** Cancellation shared by HTTP work, reconnectable sessions, and individual connections. */
 class PageLifetime {

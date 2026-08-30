@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added explicit asynchronous `enterRoom`/`rooms.enter` authorization with shared page/action policy machinery, bounded pending work, safe recoverable diagnostics and atomic membership commits. Synchronous joins fail closed on guarded rooms; guarded socket publication requires a live member. Leave/leaveAll/clear, disconnect, replacement and drain cancel pending entry without reentrant membership resurrection. Timed-out policy work remains charged until its underlying promise settles.
+- Added shared request-context types and immutable selected raw-upgrade snapshots, with per-connection cancellation and protected identity/request references. Mutable application metadata/session fields and existing raw admission object identities remain supported. A complete TSX page/private-room example verifies shared authentication and explicit revocation in standard/legacy and packed source-free consumers.
+
 - Added read-only action-reference checks to doctor: literal TSX/HTML bindings are compared with exposed page/component methods, including inherited renderers, imported constants and callable render fields. Dynamic output, custom scopes/decorators, instance mutation and JSX spreads receive unresolved warnings instead of guessed results. The scanner shares the runtime's HTML tag traversal. A real CLI repair/compile/HTTP/WebSocket regression verifies the workflow without mocks.
 - Dashboard recipe coverage now includes real expiration of the one-minute login admission window and default configuration paths. Its separate source-mapped report reaches 100% statements/branches/lines; TypeScript-generated decorator accessor functions remain visible in the function denominator.
 

@@ -207,6 +207,32 @@ route.clients.forEach(socket => {
     void socket.sendBinaryEvent?.({ ready: true });
 });
 const standaloneRooms = new RoomRegistry({ maxRooms: 2 });
+const protectedRooms = new RoomRegistry({
+    authorize: async (context, roomId) => {
+        void context.request.get('cookie');
+        void context.signal.aborted;
+        return context.principal === 'alice' && roomId === 'private';
+    },
+    authorizationTimeoutMs: 500,
+    maxPendingAuthorizations: 16,
+    maxPendingPerConnection: 2,
+});
+route.clients.forEach(async socket => {
+    const joined: boolean = await socket.enterRoom!('private');
+    const entered: boolean = await protectedRooms.enter('private', socket);
+    protectedRooms.broadcastFrom(socket, 'private', { update: true });
+    if (socket.context) {
+        // @ts-expect-error Authenticated context identity is read-only.
+        socket.context.principal = 'forged';
+        // @ts-expect-error Captured request data is read-only.
+        socket.context.request.headers.authorization = 'forged';
+    }
+    void joined; void entered;
+});
+// @ts-expect-error Authorization deadline requires a policy.
+new RoomRegistry({ authorizationTimeoutMs: 100 });
+// @ts-expect-error A policy must return a boolean, not a truthy credential.
+new RoomRegistry({ authorize: () => 'allowed' });
 const standaloneSessions = new SessionRegistry<{ score: number }>({ maxSessions: 2 });
 void standaloneRooms;
 void standaloneSessions;

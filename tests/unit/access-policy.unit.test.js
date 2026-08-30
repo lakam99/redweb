@@ -1,4 +1,4 @@
-const { AccessPolicy } = require('../../src/htmx/AccessPolicy');
+const { AccessPolicy } = require('../../src/access/AccessPolicy');
 const { action, LivePage } = require('../..');
 const { z } = require('zod');
 const decorate = (Page, options) => action(options)(Page.prototype, 'run', Object.getOwnPropertyDescriptor(Page.prototype, 'run'));

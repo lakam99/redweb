@@ -12,10 +12,11 @@ Choose one of these complete applications:
 - [Chatroom](../recipes/chat/README.md): reusable stateful components, messages, and live presence.
 - [Site](../recipes/site/README.md): non-live pages with a shared layout and stylesheet.
 - [Socket service](../recipes/socket/README.md): a typed `/match` route with separate join/move/resume handlers.
+- [Private dashboard](../recipes/dashboard/README.md): persistent SQLite cards, account sessions and private live updates (Node 22.13+).
 
 Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.
 
-Requirements: Node.js satisfying the package's `engines` field and npm. Use a supported Node.js release in production. TypeScript and the development watcher are installed by the starter. No React, frontend bundler, broker, or database is required by the starters.
+Requirements: Node.js satisfying the package's `engines` field and npm. Use a supported Node.js release in production. TypeScript and the development watcher are installed by the starter. No React, frontend bundler or broker is required. Only the dashboard starter uses a database; its native SQLite requirement is recipe-local.
 
 ## One development loop
 
@@ -36,6 +37,8 @@ When setup fails, run `npx --no-install redweb doctor --json` from the applicati
 - Socket URLs select routes; message `type` selects a handler. Do not add a second `message.action` dispatcher inside a catch-all handler.
 
 See [rendering and lifecycle](LIVE_HTML.md) and [shared socket contracts](SOCKET_CONTRACTS.md) for exact semantics.
+
+For private raw socket subscriptions, see [room authorization and shared request identity](ROOM_AUTHORIZATION.md). Keep authentication, subscription permission, and application-specific write permission explicit.
 
 ## Deploy deliberately
 

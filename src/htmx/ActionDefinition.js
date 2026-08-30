@@ -1,5 +1,5 @@
 const { SchemaValidator } = require('../validation/SchemaValidator');
-const { AccessPolicy } = require('./AccessPolicy');
+const { AccessPolicy } = require('../access/AccessPolicy');
 
 class ActionInputError extends Error {
     constructor(code = 'ACTION_INVALID_INPUT') {

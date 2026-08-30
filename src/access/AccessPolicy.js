@@ -6,6 +6,7 @@ class AccessDenied extends Error {
             ACCESS_DENIED: 'This operation is not permitted.',
             ACCESS_TIMEOUT: 'Authorization timed out. The operation was not run.',
             ACCESS_CANCELLED: 'Authorization was cancelled. The operation was not run.',
+            ACCESS_CAPACITY: 'Authorization capacity reached. The operation was not run.',
         }[code]);
         this.code = code;
         this.status = code === 'ACCESS_DENIED' ? 403 : 503;

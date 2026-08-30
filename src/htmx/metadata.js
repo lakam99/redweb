@@ -13,7 +13,7 @@ const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
 const synchronous = require('./synchronous');
 const { ActionDefinition } = require('./ActionDefinition');
-const { AccessPolicy } = require('./AccessPolicy');
+const { AccessPolicy } = require('../access/AccessPolicy');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {

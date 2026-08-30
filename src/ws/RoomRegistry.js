@@ -1,7 +1,8 @@
-const { broadcast } = require('./util');
+const { broadcast, sendPayload } = require('./util');
+const RoomAccess = require('./RoomAccess');
 
 class RoomRegistry {
-    constructor(options = {}, { hasConnection, policy, onChange } = {}) {
+    constructor(options = {}, { hasConnection, policy, onChange, contextFor = socket => socket.context } = {}) {
         if (!options || typeof options !== 'object' || Array.isArray(options)) {
             throw new TypeError('`rooms` must be an object or true.');
         }
@@ -27,6 +28,12 @@ class RoomRegistry {
         this.rooms = new Map();
         this.memberships = new WeakMap();
         this.closed = false;
+        this.clearing = false;
+        if (typeof contextFor !== 'function') throw new TypeError('contextFor must be a function.');
+        if (options.authorize === undefined && ['authorizationTimeoutMs', 'maxPendingAuthorizations', 'maxPendingPerConnection'].some(name => options[name] !== undefined)) {
+            throw new TypeError('Room authorization options require authorize.');
+        }
+        this.access = options.authorize === undefined ? null : new RoomAccess(options, contextFor);
     }
 
     validateRoomId(roomId) {
@@ -37,7 +44,18 @@ class RoomRegistry {
 
     join(roomId, socket) {
         this.validateRoomId(roomId);
-        if (this.closed) return false;
+        if (this.access) throw new TypeError('Protected rooms require await enterRoom(roomId) or rooms.enter(roomId, socket).');
+        return this.#commit(roomId, socket);
+    }
+
+    enter(roomId, socket) {
+        this.validateRoomId(roomId);
+        if (this.closed || this.clearing || !socket || !this.hasConnection(socket)) return Promise.resolve(false);
+        return this.access ? this.access.enter(roomId, socket, () => this.#commit(roomId, socket)) : Promise.resolve(this.#commit(roomId, socket));
+    }
+
+    #commit(roomId, socket) {
+        if (this.closed || this.clearing) return false;
         if (!socket || !this.hasConnection(socket)) return false;
         let members = this.rooms.get(roomId);
         if (members?.has(socket)) return true;
@@ -58,21 +76,29 @@ class RoomRegistry {
 
     leave(roomId, socket) {
         this.validateRoomId(roomId);
+        const removed = this.#remove(roomId, socket);
+        this.access?.cancel(socket, roomId);
+        if (removed) this.onChange('leave', roomId, socket);
+        return removed;
+    }
+
+    #remove(roomId, socket) {
         const members = this.rooms.get(roomId);
         if (!members?.delete(socket)) return false;
         const memberships = this.memberships.get(socket);
         memberships?.delete(roomId);
         if (!memberships?.size) this.memberships.delete(socket);
         if (!members.size) this.rooms.delete(roomId);
-        this.onChange('leave', roomId, socket);
         return true;
     }
 
     leaveAll(socket) {
         const memberships = this.memberships.get(socket);
-        if (!memberships) return 0;
+        if (!memberships) { this.access?.cancel(socket); return 0; }
         const roomIds = [...memberships];
-        roomIds.forEach(roomId => this.leave(roomId, socket));
+        roomIds.forEach(roomId => this.#remove(roomId, socket));
+        this.access?.cancel(socket);
+        roomIds.forEach(roomId => this.onChange('leave', roomId, socket));
         return roomIds.length;
     }
 
@@ -87,10 +113,30 @@ class RoomRegistry {
     }
 
     broadcast(roomId, data, { except } = {}) {
+        return this.#broadcast(roomId, data, except);
+    }
+
+    broadcastFrom(socket, roomId, data, { except } = {}) {
+        if (!socket) return 0;
+        return this.#broadcast(roomId, data, except, socket);
+    }
+
+    #broadcast(roomId, data, except, sender) {
         this.validateRoomId(roomId);
         if (this.closed) return 0;
         const members = this.rooms.get(roomId);
         if (!members) return 0;
+        if (this.access) {
+            const eligible = socket => members.has(socket) && this.hasConnection(socket);
+            if (sender && !eligible(sender)) return 0;
+            const payload = JSON.stringify(data);
+            if (this.closed || this.rooms.get(roomId) !== members || (sender && !eligible(sender))) return 0;
+            let sent = 0;
+            for (const socket of members) {
+                if (socket !== except && eligible(socket) && sendPayload(socket, payload, this.policy)) sent++;
+            }
+            return sent;
+        }
         const recipients = except === undefined
             ? members
             : [...members].filter(socket => socket !== except);
@@ -100,6 +146,10 @@ class RoomRegistry {
     clear() {
         this.rooms.clear();
         this.memberships = new WeakMap();
+        const nested = this.clearing;
+        this.clearing = true;
+        try { this.access?.clear(); }
+        finally { if (!nested) this.clearing = false; }
     }
 
     close() {

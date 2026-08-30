@@ -1060,6 +1060,19 @@
   ],
   "examples": [
     {
+      "id": "room-access",
+      "label": "Private rooms",
+      "language": "tsx",
+      "title": "One identity for a page and a protected room",
+      "summary": "A complete local demonstration of shared authentication, decorator-first server HTML and explicitly authorized raw socket room entry.",
+      "notes": [
+        "Save this as src/app.tsx in an initialized realtime starter, build and start it. The printed token is a fresh local-demo credential; do not publish it or treat this as a production identity service.",
+        "Supply the Authorization header for GET / and the /team WebSocket, then send {\"type\":\"join\"}. Browser products should use a secure session/cookie integration; native browser WebSockets cannot set this header.",
+        "Both decorator modes and source-free production execution are checked with real HTTP/WebSockets. The example explicitly revokes raw room memberships as well as Live HTML page sessions."
+      ],
+      "codeSource": "docs/snippets/room-access.tsx"
+    },
+    {
       "id": "shared-server",
       "label": "Start here",
       "title": "HTTP and WebSockets on one listener",

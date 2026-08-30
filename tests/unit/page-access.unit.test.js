@@ -1,7 +1,7 @@
 'use strict';
 const { PageIdentity, isPrincipal } = require('../../src/htmx/PageIdentity');
 const PageLifetime = require('../../src/htmx/PageLifetime');
-const snapshot = require('../../src/htmx/RequestSnapshot');
+const snapshot = require('../../src/context/RequestSnapshot');
 const { PageManager } = require('../../src/htmx/PageManager');
 const { page, component, action, LivePage } = require('../..');
 

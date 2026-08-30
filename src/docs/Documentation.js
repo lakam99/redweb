@@ -33,7 +33,11 @@ class Documentation {
         this.channel = channel;
         this.basePath = `/docs/reference/${channel}`;
         this.topics = JSON.parse(this.read('docs/topics.json'));
+        this.reference = JSON.parse(this.read('docs/reference.json'));
         this.sourceLinks = new Map(this.topics.map(topic => [topic.source, `${this.basePath}/${topic.id}.md`]));
+        for (const example of this.reference.examples) {
+            if (example.codeSource) this.sourceLinks.set(example.codeSource, `${this.basePath}/examples/${example.id}.md`);
+        }
         for (const template of TEMPLATES) {
             for (const file of projectFiles(this.manifest.version, template, this.root)) {
                 const source = file.path === 'test/app.test.cjs' ? 'app.test.cjs' : file.path.replace(/^src\//, '');
@@ -100,7 +104,7 @@ class Documentation {
             markdown: `${this.notice()}\n\n${this.links(this.read(topic.source), topic.source)}`,
         }));
         pages.push(...TEMPLATES.map(template => this.recipe(template)));
-        const reference = JSON.parse(this.read('docs/reference.json'));
+        const reference = this.reference;
         const recipeCode = entry => {
             const files = projectFiles(this.manifest.version, entry.template, this.root);
             const file = files.find(file => file.path === entry.file);

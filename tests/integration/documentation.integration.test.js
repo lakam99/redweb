@@ -6,12 +6,18 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyDocumentation } = require('../../scripts/lib/verify-documentation');
 const { verifySharedServer } = require('../../scripts/lib/verify-shared-server');
+const { verifyRoomExample } = require('../../scripts/lib/verify-room-example');
 const { copyDocumentationSource } = require('../helpers/documentation');
 const { TEMPLATES } = require('../../src/cli/templates');
 
 const root = path.resolve(__dirname, '../..');
 
 describe('documented applications without mocks', () => {
+    test('shared page/room identity compiles in both decorator modes and survives source-free deployment', async () => {
+        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-room-example-'));
+        try { await verifyRoomExample(root, workspace); }
+        finally { fs.rmSync(workspace, { recursive: true, force: true }); }
+    }, 30000);
     test('the homepage shared-listener example answers real HTTP and typed socket messages', async () => {
         await verifySharedServer(root);
     }, 10000);

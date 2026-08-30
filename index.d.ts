@@ -37,6 +37,8 @@ declare module 'redweb' {
         broadcast(data: unknown): number;
         context?: RedWebConnectionContext;
         joinRoom?(roomId: string): boolean;
+        /** Bounded permission check followed by atomic membership insertion. */
+        enterRoom?(roomId: string): Promise<boolean>;
         leaveRoom?(roomId: string): boolean;
         roomBroadcast?(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         createSession?(sessionId: string, data: unknown): boolean;
@@ -47,13 +49,12 @@ declare module 'redweb' {
         sendBinaryEvent?(value: unknown): Promise<boolean>;
     };
 
-    export interface RedWebConnectionContext {
-        connectionId: string;
-        principal: unknown;
+    export interface RedWebConnectionContext extends RequestContext {
+        readonly connectionId: string;
+        readonly principal: unknown;
         session: unknown | null;
         metadata: Record<string, unknown>;
-        signal?: AbortSignal;
-        protocol?: Readonly<{ version: string }>;
+        readonly protocol?: Readonly<{ version: string }>;
     }
 
     export interface AdmissionContext {
@@ -100,12 +101,18 @@ declare module 'redweb' {
         timeoutMs: number;
     }
 
-    export interface RoomOptions {
+    export type RoomOptions = {
         maxRooms?: number;
         maxMembersPerRoom?: number;
         maxRoomsPerConnection?: number;
         maxRoomIdLength?: number;
-    }
+    } & ({ authorize?: undefined; authorizationTimeoutMs?: never; maxPendingAuthorizations?: never; maxPendingPerConnection?: never } | {
+        /** Grants subscription until explicit leave/disconnect; not per-message receive authorization. */
+        authorize: (context: Readonly<RedWebConnectionContext>, roomId: string) => boolean | Promise<boolean>;
+        authorizationTimeoutMs?: number;
+        maxPendingAuthorizations?: number;
+        maxPendingPerConnection?: number;
+    });
 
     export interface SessionOptions {
         ttlMs?: number;
@@ -319,11 +326,13 @@ declare module 'redweb' {
     export class RoomRegistry {
         constructor(options?: RoomOptions);
         join(roomId: string, socket: RedWebSocket): boolean;
+        enter(roomId: string, socket: RedWebSocket): Promise<boolean>;
         leave(roomId: string, socket: RedWebSocket): boolean;
         leaveAll(socket: RedWebSocket): number;
         members(roomId: string): RedWebSocket[];
         has(roomId: string, socket: RedWebSocket): boolean;
         broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        broadcastFrom(socket: RedWebSocket, roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         clear(): void;
         close(): boolean;
         readonly size: number;
@@ -423,7 +432,7 @@ declare module 'redweb' {
         readonly [htmlUrlBrand]: true;
     }
 
-    export interface LivePageRequest {
+    export interface RedWebRequest {
         readonly path: string;
         readonly url: string;
         readonly method: string;
@@ -434,14 +443,18 @@ declare module 'redweb' {
         get(name: string): string | undefined;
     }
 
-    export interface LivePageRequestContext {
-        readonly request: LivePageRequest;
+    export interface LivePageRequest extends RedWebRequest {}
+
+    export interface RequestContext<Principal = unknown> {
+        readonly request: RedWebRequest;
         readonly params: Readonly<Record<string, string>>;
         readonly query: Readonly<Record<string, unknown>>;
         readonly body: unknown;
-        readonly principal?: string | number | bigint | boolean;
+        readonly principal?: Principal;
         readonly signal: AbortSignal;
     }
+
+    export interface LivePageRequestContext extends RequestContext<string | number | bigint | boolean> {}
 
     /** The original page request/identity is retained across normal reconnects. */
     export interface LivePageConnectionContext extends LivePageRequestContext {

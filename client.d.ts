@@ -8,7 +8,11 @@ export type RedWebProtocolErrorCode =
     | 'RATE_LIMITED'
     | 'QUEUE_FULL'
     | 'CAPACITY_REACHED'
-    | 'INITIALIZATION_FAILED';
+    | 'INITIALIZATION_FAILED'
+    | 'ACCESS_DENIED'
+    | 'ACCESS_TIMEOUT'
+    | 'ACCESS_CANCELLED'
+    | 'ACCESS_CAPACITY';
 
 export interface ProtocolMetadata {
     requestId?: string;
