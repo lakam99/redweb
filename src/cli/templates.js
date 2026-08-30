@@ -16,7 +16,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             build: 'tsc && node scripts/copy-assets.cjs',
             start: 'node dist/app.js',
             dev: 'nodemon',
-            test: 'npm run build && node --test test/app.test.cjs',
+            test: 'npm run build && node --test test/app.test.cjs test/run-app.test.cjs',
         },
         dependencies: {
             redweb: `^${version}`,
@@ -41,7 +41,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
     if (template === 'dashboard') {
         manifest.engines = { node: '>=22.13.0' };
         manifest.scripts['add-user'] = 'npm run build && node dist/admin.js';
-        manifest.scripts['test:coverage'] = 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs test/rate-window.test.cjs';
+        manifest.scripts['test:coverage'] = 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs test/run-app.test.cjs test/rate-window.test.cjs';
     }
     const files = [
         { path: 'package.json', content: json(manifest) },
@@ -51,10 +51,12 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             include: ['src/**/*.ts', 'src/**/*.tsx'],
         }) },
         { path: 'src/app.tsx', content: read(`${template}/app.tsx`) },
+        { path: 'src/run-app.ts', content: read('shared/run-app.ts') },
         { path: 'src/app.css', content: read(`${template === 'dashboard' ? template : 'shared'}/app.css`) },
         { path: 'scripts/copy-assets.cjs', content: read('shared/copy-assets.cjs') },
         { path: 'test/network.cjs', content: read('shared/network.cjs') },
         { path: 'test/app.test.cjs', content: read(`${template}/app.test.cjs`) },
+        { path: 'test/run-app.test.cjs', content: read('shared/run-app.test.cjs') },
         { path: 'README.md', content: `${read('shared/README.md')}\n${read(`${template}/README.md`)}` },
         { path: '.gitignore', content: 'node_modules/\ndist/\n.env\ndata/\n*.sqlite\n*.sqlite-wal\n*.sqlite-shm\n' },
     ];

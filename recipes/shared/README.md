@@ -26,6 +26,10 @@ custom hostnames, tunnels and proxy-forwarded origins are not supported by this 
 Run `npm start` to serve the compiled app. For deployment, build first, ship `dist/`, `package.json`, and the lockfile,
 then install runtime dependencies with `npm ci --omit=dev`. The application does not require TypeScript or `src/` at runtime.
 
+The standalone entrypoint calls the shared `runApp(createApp)` helper. Importing either module starts no listener and installs no process handlers. On SIGINT/SIGTERM, a listener error, or native listener closure, the helper calls application shutdown once. Repeated signals do not bypass cleanup. The five-second outer deadline covers the whole application, including database/worker cleanup after HTTP closes; customize it with the helper's second argument if necessary. Cleanup must resolve only after resources are released. A failed cleanup sets a failure exit status and retains a deadline for any surviving handles; the helper never resets an existing failure status. If cleanup does not finish in time, the entrypoint terminates the process with a failure status. This cannot preempt synchronous code blocking Node's event loop and does not make in-memory state durable. Factory functions remain responsible for releasing partially constructed resources before throwing.
+
+The shipped lifecycle tests exercise actual processes, HTTP/TCP/WebSocket peers and timers. Linux uses actual OS signals; Windows tests explicitly emit signal events inside the process because killing a Windows child does not exercise graceful POSIX signal delivery. This is not a claim that Windows console/service managers forward the same signals. Deploy with a supervisor that forwards the supported termination signal and allows longer than the configured cleanup deadline.
+
 For public deployment, configure HTTPS/WSS at your Node server or reverse proxy, authentication, trusted origins,
 and application-specific rate limits. These starters are demonstrations, not a hosted identity or database service.
 Never commit secrets; `.env` is ignored but is not loaded automatically.

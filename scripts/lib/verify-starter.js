@@ -48,7 +48,7 @@ function verifyApplication(packageRoot, target, template) {
     if (tests.status !== 0) throw new Error(`Generated npm test failed:\n${tests.error || ''}${tests.stdout}${tests.stderr}`);
     // Deployment must use compiled output/assets, not accidentally depend on the source tree.
     fs.renameSync(path.join(target, 'src'), path.join(target, 'source-not-deployed'));
-    return node(['--test', 'test/app.test.cjs'], target);
+    return node(['--test', 'test/app.test.cjs', 'test/run-app.test.cjs'], target);
 }
 
 module.exports = { verifyStarter, verifyApplication };

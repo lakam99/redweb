@@ -1,6 +1,7 @@
 import { SocketRoute, SocketServer, type SocketServerOptions } from 'redweb';
 import { match } from './contract';
 import { Join, Move, Resume } from './handlers';
+import { runApp } from './run-app';
 
 export class MatchRoute extends SocketRoute {
     constructor() {
@@ -26,4 +27,4 @@ export function createApp(options: SocketServerOptions = {}) {
     });
 }
 
-if (require.main === module) createApp();
+if (require.main === module) runApp(createApp);

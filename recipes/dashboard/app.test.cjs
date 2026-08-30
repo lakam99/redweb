@@ -347,7 +347,7 @@ test('real administrator and standalone startup commands expose errors and persi
     await once(app.server, 'listening');
     const unavailable = run('dist/app.js', [], { PORT: String(app.server.address().port) });
     assert.equal(unavailable.status, 1);
-    assert.match(unavailable.stderr, /startup failed/);
+    assert.match(unavailable.stderr, /Application listener failed/);
     child = spawn(process.execPath, ['dist/app.js'], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let output = '';
     child.stdout.on('data', chunk => { output += chunk; });

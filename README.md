@@ -113,6 +113,7 @@ The initializer supplies the CSS, compiler setup, and real-network tests alongsi
 <!-- redweb:realtime:start -->
 ```tsx
 import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
+import { runApp } from './run-app';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -138,7 +139,7 @@ export function createApp(options: LiveHtmlStartOptions = {}) {
     return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
 }
 
-if (require.main === module) createApp();
+if (require.main === module) runApp(createApp);
 ```
 <!-- redweb:realtime:end -->
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- All generated starters now share an import-safe application entrypoint helper for idempotent signal/listener-error shutdown, preserved failure exit status and a whole-application cleanup deadline. The dashboard retains database/auth cleanup without a competing HTTP timer. Generated and source-free tests exercise real processes/transports; a separate shared-helper coverage gate runs in CI.
+
 - Unified owned-listener cleanup for Live HTML and socket servers. Incomplete HTTP bodies, headers, and TLS handshakes can no longer hold shutdown open indefinitely, including after native listener close has already begun. Borrowed HTTP listeners remain application-owned. Live HTML's final HTTP cleanup has its own bounded phase; forced transport closure is not an application persistence guarantee.
 - Added release verification and compatibility guidance distinguishing maintained Node runtimes, configured CI, recorded test evidence, registry signatures, and build provenance. Added Node 24 to the CI matrix without claiming an unexecuted job has passed.
 

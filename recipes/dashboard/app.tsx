@@ -5,6 +5,7 @@ import { page, start, type LivePageRequestContext } from 'redweb';
 import { DashboardAuth, sessionToken } from './auth';
 import { Cards, PrivateCards } from './cards';
 import { DashboardStore } from './store';
+import { runApp } from './run-app';
 
 export interface DashboardOptions { port?: number; database?: string; origin?: string; sessionLifetimeMs?: number; }
 
@@ -67,9 +68,7 @@ export function createApp(options: DashboardOptions = {}) {
     const shutdown = () => {
         auth.close();
         if (!closing) {
-            const deadline = setTimeout(() => server.server.closeAllConnections(), 1000);
-            deadline.unref();
-            closing = server.shutdown().finally(() => { clearTimeout(deadline); store.close(); });
+            closing = server.shutdown().finally(() => store.close());
         }
         return closing;
     };
@@ -82,8 +81,6 @@ export function createApp(options: DashboardOptions = {}) {
 }
 
 if (require.main === module) {
-    const app = createApp();
-    app.server.once('error', error => { console.error(`Dashboard startup failed: ${error.message}`); process.exitCode = 1; });
-    app.server.once('listening', () => console.log(`Dashboard: ${process.env.DASHBOARD_ORIGIN ?? `http://127.0.0.1:${(app.server.address() as { port: number }).port}`}/login`));
-    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void app.shutdown().catch(() => { process.exitCode = 1; }); });
+    const app = runApp(createApp);
+    app?.server.once('listening', () => console.log(`Dashboard: ${process.env.DASHBOARD_ORIGIN ?? `http://127.0.0.1:${(app.server.address() as { port: number }).port}`}/login`));
 }

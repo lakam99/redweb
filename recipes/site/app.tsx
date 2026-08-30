@@ -1,4 +1,5 @@
 import { defineSite, start, type LiveHtmlStartOptions } from 'redweb';
+import { runApp } from './run-app';
 
 const site = defineSite({
     css: 'app.css',
@@ -21,4 +22,4 @@ export function createApp(options: LiveHtmlStartOptions = {}) {
     return start([HomePage, AboutPage], { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
 }
 
-if (require.main === module) createApp();
+if (require.main === module) runApp(createApp);
