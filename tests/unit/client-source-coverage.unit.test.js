@@ -39,6 +39,37 @@ function outcome(root) {
     ] }] };
 }
 
+test('client checkout preflight validates arguments and canonical linkage without reading source', () =>
+    new VerificationWorkspace().run(execution => {
+        const root = execution.directory;
+        const linked = path.join(root, 'alias');
+        const checkout = path.join(root, 'client');
+        fs.mkdirSync(checkout);
+        fs.symlinkSync(checkout, linked, 'junction');
+        expect(ClientSourceCoverage.validateCheckout(checkout, [])).toBe(false);
+        expect(ClientSourceCoverage.validateCheckout(checkout, ['--client', linked])).toBe(false);
+        expect(ClientSourceCoverage.validateCheckout(linked, ['--check-client', checkout])).toBe(true);
+        expect(() => ClientSourceCoverage.validateCheckout(checkout, ['--client', root])).toThrow('differs');
+        expect(() => ClientSourceCoverage.validateCheckout(checkout, ['--client', path.join(root, 'missing')])).toThrow();
+        for (const args of [['--client'], ['--unknown', checkout], ['--client', checkout, 'extra']]) {
+            expect(() => ClientSourceCoverage.validateCheckout(checkout, args)).toThrow('Usage:');
+        }
+    }));
+
+test('checkout discovery follows Node search order and links without requiring built exports', () =>
+    new VerificationWorkspace().run(execution => {
+        const root = execution.directory;
+        const checkout = path.join(root, 'checkout');
+        const modules = path.join(root, 'node_modules');
+        fs.mkdirSync(checkout); fs.mkdirSync(modules);
+        fs.writeFileSync(path.join(checkout, 'package.json'), JSON.stringify({ name: 'redweb-client', main: './dist/index.cjs' }));
+        fs.symlinkSync(checkout, path.join(modules, 'redweb-client'), 'junction');
+        expect(ClientSourceCoverage.resolveCheckout([path.join(root, 'absent'), modules])).toBe(fs.realpathSync(checkout));
+        expect(() => ClientSourceCoverage.resolveCheckout([])).toThrow('npm link');
+        fs.writeFileSync(path.join(checkout, 'package.json'), JSON.stringify({ name: 'other-package' }));
+        expect(() => ClientSourceCoverage.resolveCheckout([modules])).toThrow('redweb-client package');
+    }));
+
 test('inventories all modules and inputs, classifies only erased/linkage files, and collects actual VM executions', () => fixture(root => {
     const source = new ClientSourceCoverage(root);
     expect(Object.keys(source.coverage.sources)).toEqual(['src/feature.ts']);

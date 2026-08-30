@@ -10,10 +10,16 @@ const { ClientSourceCoverage, hash, slash } = require('./lib/ClientSourceCoverag
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
 const { reportCommand } = require('./lib/reportCommand');
-const { runBrowserChecks } = require('./verify-browser-coverage');
 
 async function main() {
-    const clientRoot = fs.realpathSync(path.join(path.dirname(require.resolve('redweb-client')), '..'));
+    const clientRoot = ClientSourceCoverage.resolveCheckout(require.resolve.paths('redweb-client'));
+    if (ClientSourceCoverage.validateCheckout(clientRoot, process.argv.slice(2))) {
+        console.log('Matching linked client checkout verified.');
+        return;
+    }
+    assert.equal(fs.realpathSync(path.join(path.dirname(require.resolve('redweb-client')), '..')), clientRoot,
+        'Client export must resolve inside the checked checkout dist directory.');
+    const { runBrowserChecks } = require('./verify-browser-coverage');
     const clientRequire = createRequire(path.join(clientRoot, 'package.json'));
     const source = new ClientSourceCoverage(clientRoot);
     const coverage = source.coverage;

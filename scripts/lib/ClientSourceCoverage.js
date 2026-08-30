@@ -12,6 +12,27 @@ const slash = value => value.replaceAll('\\', '/');
 
 /** One original-source map shared by the Node and native-browser adapters. */
 class ClientSourceCoverage {
+    static resolveCheckout(searchPaths) {
+        for (const directory of searchPaths) {
+            const installed = path.join(directory, 'redweb-client');
+            if (!fs.existsSync(installed)) continue;
+            const root = fs.realpathSync(installed);
+            assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).name,
+                'redweb-client', 'Resolved checkout must be the redweb-client package.');
+            return root;
+        }
+        throw new Error('Install or npm link the matching redweb-client checkout before verification.');
+    }
+
+    static validateCheckout(root, args) {
+        assert.ok(args.length === 0 || (args.length === 2 && ['--client', '--check-client'].includes(args[0])),
+            'Usage: verify-client-source-coverage.js [--client|--check-client <checkout>]');
+        if (args.length === 0) return false;
+        assert.equal(fs.realpathSync(path.resolve(args[1])), fs.realpathSync(root),
+            'Expected client checkout differs from Redweb\'s resolved client; link the matching checkout before verification.');
+        return args[0] === '--check-client';
+    }
+
     constructor(root) {
         this.root = root;
         this.inputs = {};
