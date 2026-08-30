@@ -63,6 +63,7 @@
     "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
     "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",
     "verify:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-coverage.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/BrowserCoverage.js --coverageDirectory=coverage/browser-collector && node scripts/verify-browser-coverage.js && node scripts/verify-browser-coverage.js runtime && node scripts/verify-browser-coverage.js refresh",
+    "measure:browser:client": "node scripts/verify-browser-coverage.js client",
     "verify:development:browser": "node scripts/verify-development-refresh-browser.js",
     "verify:starters:lifecycle": "node scripts/verify-starter-lifecycle.js",
     "measure:starters:coverage": "node scripts/measure-starter-coverage.js",

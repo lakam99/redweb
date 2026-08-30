@@ -59,9 +59,12 @@ async function verifyLiveSelection(tab) {
 async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, mode }) {
     const app = express();
     const runtime = browserRuntime('/__redweb/client.js');
-    assert.equal(runtime.split(coverage.source).length, 2, 'Covered source must occur exactly once in the shipped runtime');
+    if (mode === 'client') {
+        app.get('/__redweb/client.js', (_request, response) => response.type('text/javascript').send(
+            instrumented ? coverage.instrumented : coverage.source));
+    } else assert.equal(runtime.split(coverage.source).length, 2, 'Covered source must occur exactly once in the shipped runtime');
     app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
-        runtime.replace(coverage.source, () => instrumented ? coverage.instrumented : coverage.source) +
+        (mode === 'client' ? runtime : runtime.replace(coverage.source, () => instrumented ? coverage.instrumented : coverage.source)) +
         '\nwindow.feedbackTest = { feedback, showFeedback, refreshFeedback, indexSlots, slotOwners, feedbackNodes, revisions, performAction, client };' +
         '\nwindow.morph = { units, marker, rangeNodes, morphNode, morphContent, preserveFocus, applyPatch, clientNodes };' +
         '\nwindow.runtimeTest = { applyState, indexState, formValues, send, client };'));
@@ -78,7 +81,7 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
                 catch (error) { return { ok: false, error: error.stack }; }
             })()`);
             assert.ok(result.ok, result.error);
-            if (mode === 'runtime') {
+            if (mode === 'runtime' || mode === 'client') {
                 result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
                 result.cases.morph = await runCases(tab);
             }
@@ -91,9 +94,10 @@ async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     const mode = process.argv[2] || 'morph';
-    const sources = { morph: browserMorph, feedback: browserFeedback, runtime: () => browserRuntime('/__redweb/client.js'), refresh: refreshBrowser };
-    assert.ok(Object.hasOwn(sources, mode), 'Expected morph, feedback, runtime or refresh coverage mode');
-    const coverage = new BrowserCoverage(`browser${mode[0].toUpperCase() + mode.slice(1)}.generated.js`, sources[mode]());
+    const sources = { morph: browserMorph, feedback: browserFeedback, runtime: () => browserRuntime('/__redweb/client.js'), refresh: refreshBrowser,
+        client: () => fs.readFileSync(path.join(path.dirname(require.resolve('redweb-client')), 'index.js'), 'utf8') };
+    assert.ok(Object.hasOwn(sources, mode), 'Expected morph, feedback, runtime, refresh or client coverage mode');
+    const coverage = new BrowserCoverage(mode === 'client' ? 'redweb-client.imported.js' : `browser${mode[0].toUpperCase() + mode.slice(1)}.generated.js`, sources[mode]());
     const run = { id: randomUUID(), startedAt: new Date().toISOString() };
     const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
         let browser, coveredTab, application, refreshPeer, failure, launchAttempted = false;
