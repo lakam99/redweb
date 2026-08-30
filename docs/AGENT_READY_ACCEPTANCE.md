@@ -57,6 +57,13 @@ This is the full implementation checklist for the requested improvements. Unchec
 - [ ] Fresh-agent evaluations separately measure successful use when assigned Redweb and discovery/selection when not instructed to choose it; record first-pass success, repair attempts, time, and independent correctness checks.
 - [ ] Package provenance and release support/compatibility guidance are documented and verified where available; no claim of provenance as proof of security.
 
+## Additional developer-experience follow-through
+
+- [ ] Safe incremental `redweb add page`, `redweb add component`, and `redweb add socket-route` workflows reuse canonical templates, respect existing projects, preview changes, reject overwrites, and include working tests.
+- [ ] Optional development inspection shows registered pages/components/actions/socket handlers, connection state, and update causes without exposing a production debugging endpoint or adding hot-path overhead when disabled.
+- [ ] Development rebuilds refresh the browser with explicit, tested draft-preservation/reconnection behavior; no implied preservation across server restarts without evidence.
+- [ ] Searchable task-oriented landing guides demonstrate the published realtime dashboard, server-rendered JSX, chat, and shared validated socket contracts; runnable files/tests and honest fit/non-fit guidance stay generated from canonical sources.
+
 ## Work log
 
 - Runtime-diagnostics increment: one maintained failure catalogue supplies fixed HTTP/upgrade and typed action/access messages. Upgrade rejection now distinguishes bad credentials (401), denied origin/permission/placement (403), protocol negotiation (426), application/unsafe-placement failures (500), and deadline/cancellation/capacity/readiness failures (503), with `Redweb-Error` and no-store caching. Raw identity semantics and boolean admission results are unchanged; safe placement redirects remain 307. This intentionally replaces the earlier catch-all 401 behavior and is documented as unreleased.

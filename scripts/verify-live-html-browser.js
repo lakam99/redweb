@@ -544,4 +544,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { combineFailures, stopBrowser };
+module.exports = { combineFailures, stopBrowser, browserCandidates, launchBrowserWithRetry, openPage, eventual, removeTemporaryDirectory };
