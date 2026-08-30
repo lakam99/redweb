@@ -222,3 +222,8 @@ by this result. The original recovery failure, client/application coverage gaps
 and release requirements remain open. No original acceptance gate was rerun or
 waived, and no production code, dependency, threshold, publication or deployment
 changed in this milestone.
+
+Research-led follow-up: [runtime/JIT controls](RECOVERY_RUNTIME_CONTROLS.md) records
+the subsequent same-source baseline, complete trace and client-only JIT-disabled
+control. It narrows the client growth to a JIT-dependent effect without waiving
+the original recovery failure.
