@@ -317,6 +317,36 @@ test('production origin/cookies and malformed forms use real HTTP', async t => {
     assert.equal((await post(origin, '/login', {})).status, 403);
 });
 
+test('unit: listener-error cleanup observes rejection without hiding it from the application owner', async t => {
+    const directory = mkdtempSync(join(tmpdir(), 'redweb-dashboard-cleanup-'));
+    const database = join(directory, 'cards.sqlite');
+    const app = createApp({ port: 0, database });
+    t.after(async () => {
+        // This test deliberately makes the returned cleanup promise reject.
+        // Await settlement before removing files, including on assertion failure.
+        await Promise.allSettled([app.shutdown()]);
+        rmSync(directory, { recursive: true, force: true });
+    });
+    await once(app.server, 'listening');
+    const failure = new Error('Injected database cleanup failure');
+    const close = DashboardStore.prototype.close;
+    // Unit-only fault injection, not a claim of a naturally occurring SQLite
+    // failure. Real database/socket cleanup still runs; network ITs use no mocks.
+    const injected = t.mock.method(DashboardStore.prototype, 'close', function () {
+        close.call(this);
+        throw failure;
+    });
+    app.server.emit('error', new Error('Injected listener failure'));
+    const closing = app.shutdown();
+    assert.equal(app.shutdown(), closing);
+    await assert.rejects(closing, error => error === failure);
+    assert.equal(injected.mock.callCount(), 1);
+    assert.equal(app.server.listening, false);
+    injected.mock.restore();
+    const reopened = new DashboardStore(database);
+    reopened.close();
+});
+
 test('invalid-form middleware leaves an already destroyed native HTTP response untouched', async t => {
     const { origin, app } = await fixture(t);
     const handled = new Promise(resolve => app.server.once('request', (request, response) => resolve({ request, response })));
