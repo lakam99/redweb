@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added connection-scoped page authorization before construction/loading and before socket operations, immutable original HTTP context across reconnects/actions, bounded identity lookup, and explicit process-local `server.revoke(principal)`. Revocation invalidates all targets before application abort callbacks and fences late asynchronous work. Protected runtime pages are private/no-store and cannot be statically exported. New `LiveHtmlStartOptions` shortens starter wrappers while preserving identity-option constraints. HTTP abandonment/shutdown now cancels stalled render lifetimes; external application work still requires cooperative cancellation.
+
 - Added explicit action authorization after input validation, with inferred transformed policy inputs, trusted identity context, recoverable permission denials, bounded deadlines, and cancellation signals. Authorization-only actions keep input/context in fixed positions. Validation and authorization share one lifetime primitive; action guards do not imply page protection, passive-subscription revocation, or private shared state.
 
 - Added automatic pending/success/error feedback for browser actions, optional component-scoped `rw-status` slots, per-control duplicate suppression, and a 32-request client cap. Successful forms reset only when the original node/binding/draft remains unchanged. Generated feedback follows surviving keyed nodes and is removed with its control. Disconnected actions/state writes are not queued or replayed; ambiguous failures never claim the action had no side effects.

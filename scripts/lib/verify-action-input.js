@@ -7,6 +7,7 @@ const { once } = require('events');
 const { spawnSync } = require('child_process');
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
+const { websocketUpgradeStatus } = require('../../tests/helpers/network');
 
 /** Compile both decorator ABIs against the nominated package and exercise real listeners. */
 async function verifyActionInput(packageRoot, workspace) {
@@ -50,9 +51,11 @@ async function verifyActionInput(packageRoot, workspace) {
             assert.deepEqual((await invoke([{ amount: '3' }])).payload, { total: 3, principal: 'trusted-owner' });
             assert.deepEqual((await invoke([{ amount: '2' }])).payload, { total: 5, principal: 'trusted-owner' });
             for (const args of [[], [{ principal: 'forged' }]]) {
-                assert.equal((await client.request('redweb:html', { kind: 'action', name: 'who', args })).payload, 'trusted-owner');
+                assert.deepEqual((await client.request('redweb:html', { kind: 'action', name: 'who', args })).payload, { principal: 'trusted-owner', path: '/' });
             }
             await assert.rejects(client.request('redweb:html', { kind: 'action', name: 'who', args: [null, { principal: 'forged' }] }), { code: 'ACTION_INVALID_INPUT' });
+            assert.equal(await server.revoke('trusted-owner'), 1);
+            assert.equal(await websocketUpgradeStatus(`${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=1`, { headers: { Origin: origin } }), 401);
         } finally {
             client?.close();
             await server.shutdown();

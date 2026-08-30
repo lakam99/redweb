@@ -19,6 +19,7 @@ class LiveHtmlServer {
             shutdownTimeoutMs = 1000,
             heartbeat,
             authenticate,
+            authenticationTimeoutMs,
             origins,
             server: suppliedApp,
             ...httpOptions
@@ -37,6 +38,7 @@ class LiveHtmlServer {
             shutdownTimeoutMs,
             heartbeat,
             authenticate,
+            authenticationTimeoutMs,
             origins,
             logger: httpOptions.logger,
         });
@@ -63,6 +65,8 @@ class LiveHtmlServer {
         this.server = this.http.server;
         this._shutdownPromise = null;
     }
+
+    revoke(principal) { return this.manager.revoke(principal); }
 
     shutdown() {
         if (!this._shutdownPromise) {

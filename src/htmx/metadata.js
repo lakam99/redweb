@@ -13,6 +13,7 @@ const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
 const synchronous = require('./synchronous');
 const { ActionDefinition } = require('./ActionDefinition');
+const { AccessPolicy } = require('./AccessPolicy');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -180,6 +181,8 @@ function page(routePath, options = {}) {
     if (layout !== undefined && typeof layout !== 'function') throw new TypeError('Page layout must be a function.');
     const head = pageHead(options.head);
     const cache = pageCache(options.cache, live);
+    const policy = new AccessPolicy(options.authorize, options.authorizationTimeoutMs);
+    if (policy.authorize && scope === 'shared') throw new TypeError('Authorized pages require connection scope; shared state is not private.');
     return PageClass => {
         if (typeof PageClass !== 'function') throw new TypeError('page() must decorate a class.');
         PAGE_METADATA.set(PageClass, Object.freeze({
@@ -191,6 +194,7 @@ function page(routePath, options = {}) {
             ...(cache && { cache }),
             ...(stylesheets && { css: Object.freeze(stylesheets) }),
             ...(layout && { layout }),
+            ...(policy.authorize && { policy }),
         }));
         PAGE_ROOTS.set(PageClass, templateRoot);
         return PageClass;

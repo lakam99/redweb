@@ -1,4 +1,4 @@
-import { action, page, start, state, type LiveHtmlServerOptions } from 'redweb';
+import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -20,7 +20,7 @@ export class CounterPage {
     }
 }
 
-export function createApp(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
+export function createApp(options: LiveHtmlStartOptions = {}) {
     return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
 }
 

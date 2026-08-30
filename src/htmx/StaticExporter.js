@@ -36,6 +36,7 @@ async function exportStatic(pageOrPages, options = {}) {
         const metadata = getPageMetadata(PageClass);
         if (!metadata) throw new TypeError(`${PageClass.name || 'Page'} is missing @page metadata.`);
         if (metadata.live !== false) throw new Error(`Static export requires live: false on ${PageClass.name}.`);
+        if (metadata.policy) throw new Error(`Authorized pages cannot be exported: ${PageClass.name}.`);
         const file = pageFile(root, metadata.path);
         const key = path.relative(root, file).replaceAll('\\', '/').toLowerCase();
         if (pageFiles.has(key)) throw new Error(`Static page paths resolve to the same output file: ${file}`);
@@ -60,7 +61,6 @@ async function exportStatic(pageOrPages, options = {}) {
                 params: Object.freeze({}),
                 query: Object.freeze({}),
                 body: undefined,
-                get: () => undefined,
             });
             renderedPages.push({ file, content: await manager.render(record, request) });
         }

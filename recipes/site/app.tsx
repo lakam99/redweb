@@ -1,4 +1,4 @@
-import { defineSite, start, type LiveHtmlServerOptions } from 'redweb';
+import { defineSite, start, type LiveHtmlStartOptions } from 'redweb';
 
 const site = defineSite({
     css: 'app.css',
@@ -17,7 +17,7 @@ export class AboutPage {
     render() { return <main class="home"><h1>About</h1><p>Shared layout, separate pages, no browser JavaScript.</p></main>; }
 }
 
-export function createApp(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
+export function createApp(options: LiveHtmlStartOptions = {}) {
     return start([HomePage, AboutPage], { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
 }
 

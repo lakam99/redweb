@@ -69,7 +69,7 @@ class LivePage {
     static attach(page, socket, context) { return LivePage.prototype._attach.call(page, socket, context); }
     static detach(page, socket, context) { return LivePage.prototype._detach.call(page, socket, context); }
     static dispose(page) { return LivePage.prototype.dispose.call(page); }
-    static invoke(page, name, args, context) { return LivePage.prototype._invoke.call(page, name, args, context); }
+    static invoke(page, name, args, context, beforeInvoke) { return LivePage.prototype._invoke.call(page, name, args, context, beforeInvoke); }
     static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
     static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
 
@@ -169,6 +169,7 @@ class LivePage {
 
     async _loadComponents(context) {
         for (const component of runtime(this).children.values()) {
+            if (runtime(this).disposed || context?.signal?.aborted) return;
             await component.loading?.(context);
             await LivePage.loadComponents(component, context);
         }
@@ -177,6 +178,7 @@ class LivePage {
     _attach(socket, context) {
         const internal = runtime(this);
         if (internal.disposed) throw new Error('Cannot connect a disposed page.');
+        if (context?.signal?.aborted) throw new ActionInputError('ACTION_CANCELLED');
         internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
             if (socket.__redwebPageSession?.renderer) return;
@@ -186,6 +188,7 @@ class LivePage {
         const connected = this.connected?.(context);
         return Promise.resolve(connected).then(async result => {
             for (const component of internal.children.values()) {
+                if (internal.disposed || context?.signal?.aborted || !internal.connections.has(socket)) return false;
                 await LivePage.attach(component, socket, context);
             }
             return result;
@@ -207,7 +210,9 @@ class LivePage {
         if (!getStateConfig(this.constructor, name)) return false;
         const payload = LivePage.statePayload(this, name, value);
         runtime(this).connections.forEach(socket => {
-            const renderer = socket.__redwebPageSession?.renderer;
+            const session = socket.__redwebPageSession;
+            if (session?.lifetime?.revoked) return;
+            const renderer = session?.renderer;
             if (renderer) renderer.invalidate(this, name, payload);
             else socket.sendEvent?.('redweb:state', payload);
         });
@@ -220,13 +225,14 @@ class LivePage {
         this[name] = value;
     }
 
-    async _invoke(name, args, context) {
+    async _invoke(name, args, context, beforeInvoke) {
         const implementation = getActionImplementation(this.constructor, name);
         if (!implementation || this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
         if (!Array.isArray(args)) throw new TypeError('Action arguments must be an array.');
         const definition = getActionDefinition(this.constructor, name);
         const validated = await definition.arguments(args, context);
-        if ((definition.validator || definition.authorization.authorize) && (runtime(this).disposed || context?.signal?.aborted || (context?.socket && context.socket.readyState !== 1))) {
+        if (beforeInvoke) await beforeInvoke();
+        if (runtime(this).disposed || context?.signal?.aborted || (context?.socket?.readyState !== undefined && context.socket.readyState !== 1)) {
             throw new ActionInputError('ACTION_CANCELLED');
         }
         if (this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);

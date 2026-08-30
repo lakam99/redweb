@@ -802,10 +802,10 @@ describe('Live HTML integration without mocks', () => {
         await started;
         servers.delete(server);
         const began = Date.now();
-        await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        await expect(server.shutdown()).resolves.toBeUndefined();
         expect(Date.now() - began).toBeLessThan(1000);
         expect(renderSignal.aborted).toBe(true);
         expect(server.server.listening).toBe(false);
-        expect(await hangingRequest).toHaveProperty('message');
+        expect((await hangingRequest).status).toBe(500);
     });
 });

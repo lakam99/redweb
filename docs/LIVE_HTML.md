@@ -357,7 +357,41 @@ Policies may be asynchronous. `authorizationTimeoutMs` defaults to 5,000 ms and 
 
 Denial returns recoverable `ACCESS_DENIED`; timeout returns `ACCESS_TIMEOUT`; connection cancellation returns `ACCESS_CANCELLED` when a response can still be delivered. None invokes the action. Built-in feedback shows safe text and retains the draft. A thrown/rejected policy is a sanitized `HANDLER_FAILED` application failure, not a permission denial, and must be investigated rather than blindly retried. Authentication/permission secrets and submitted values are never included in these protocol errors.
 
-**This protects action invocation only.** It does not protect HTTP rendering, loading hooks, writable state, room publication, or passive subscriptions; it does not revoke existing sockets. Shared page state is shared across identities, not private per user. Do not use an action guard as a substitute for page/resource isolation or session revocation. The unified protected-page/revocation and durable dashboard recipes remain pending on the acceptance checklist.
+**An action policy protects action invocation only.** It does not protect HTTP rendering, loading hooks, writable state, room publication, or passive subscriptions. Use the page policy and explicit session revocation below for page access. Shared page state is shared across identities, not private per user. Durable dashboard and room-policy recipes remain separate acceptance items.
+
+## Protected pages and shared request identity
+
+On this unreleased branch, a page can declare `authorize(context)` alongside its route. This is an API pattern for an application that already supplies the server's `authenticate(request)` hook, not a standalone login system:
+
+```tsx
+@page('/account/:id', {
+  authorize: ({ principal, params }) => principal === params.id,
+  authorizationTimeoutMs: 500,
+})
+class AccountPage {
+  render(context: LivePageRequestContext) {
+    return <h1>Account {context.params.id}</h1>;
+  }
+}
+```
+
+Redweb reserves render capacity, captures the request, resolves identity, and checks permission **before constructing this page or running its loading hooks**. Only `true` allows access. Protected pages require connection scope; `shared: true`/`scope: 'shared'` are rejected because a shared mutable instance is not private per identity. Keep public shared counters/chat state separate from private account state. Page policies are checked again on socket admission/reconnect, immediately before actions (after input validation and action authorization), and before browser-writable state changes. Returning false denies that operation; it does not automatically disconnect idle viewers.
+
+`authenticate(request)` still receives the real HTTP/upgrade request, so it can use the application's existing cookie/session/token implementation. It must verify credentials and return a primitive identity: string, finite number, bigint, or `true`. False/null/undefined and objects/functions/symbols/non-finite numbers are rejected. An upgrade must authenticate as the same identity that rendered its page token. `authenticationTimeoutMs` defaults to 5,000 ms and requires an authentication hook. A timeout prevents later admission, but cannot stop external work inside that hook. Redweb does not provide credential storage, login endpoints, or distributed session invalidation.
+
+Loading/rendering, connected/disconnected hooks, and actions share the original HTTP page's `request`, `params`, `query`, `body`, and `principal`. `LivePageConnectionContext` extends `LivePageRequestContext` and adds `socket`; its signal belongs to the current connection. The request does not become the upgrade URL when reconnecting. It is a deep-frozen copy of supported fields, not an Express request: path, URL, method, headers, params, query, JSON-compatible body, and a case-insensitive header `get()`. It never retains an Express response/socket graph or freezes application-owned objects. Nested data has a depth limit of 16 and a conservative 64 KiB aggregate budget, including per-value overhead; arrays are additionally limited to 8,192 entries. Dates, functions, and other unsupported body values must be normalized by application middleware. Header values, including credentials, remain private server-side data; do not render or log them unnecessarily.
+
+Denied HTTP authentication returns `AUTHENTICATION_REQUIRED` (401); authentication timeout/cancellation return `AUTHENTICATION_TIMEOUT`/`AUTHENTICATION_CANCELLED` (503); authentication hook failures return sanitized `AUTHENTICATION_FAILED` (500). Page permission denial is `ACCESS_DENIED` (403), with bounded policy timeout/cancellation at 503. Broken policies or protected-page application errors return sanitized `PAGE_FAILED` (500). Protected responses, including errors and non-live pages, are `private, no-store` and never use conditional 304 responses. `exportStatic()` and `defineSite().export()` reject authorized pages before construction or final output writes.
+
+## Explicit session revocation
+
+After invalidating a credential or changing permissions in your own authority, call `await server.revoke(principal)` before publishing further private updates. `server` is the object returned by `start()`. This revokes matching rendered page tokens, live connections, and unfinished renders in this process. It is not a permanent identity denylist: a later HTTP request may establish a new session only if your authentication and page policy still allow it. Coordinate revocation across every application instance yourself.
+
+All affected lifetimes are marked unavailable and their transports stopped synchronously, before application-visible abort listeners or cleanup hooks run. Therefore an abort listener cannot publish a final framework state update to another affected connection. Old page tokens cannot reconnect, and late authentication, policy, loading, connection-hook, validation, or render completions cannot restore them. In-flight identity lookups whose principal is not yet known are conservatively cancelled too; an unrelated in-progress login may need retrying. The returned number counts affected page sessions/render operations, including those unresolved lookups, not unique people or sockets.
+
+Application disconnect/disposal cleanup is awaited up to `shutdownTimeoutMs`. `REVOCATION_CLEANUP_FAILED` means access has already been revoked but cleanup rejected or exceeded the deadline; it never restores access. Revocation cannot retract data already sent/buffered, roll back application side effects that already started, or cancel external work that ignores its signal. Ordinary network disconnect cancels connection work but preserves eligible session state for reconnect; explicit revocation permanently invalidates that page token. Abandoned HTTP requests cancel their render lifetime and release framework capacity even if a loading hook ignores cancellation.
+
+Use `LiveHtmlStartOptions` for wrappers around `start()`; it preserves the authentication/timeout constraints without writing `Omit<LiveHtmlServerOptions, 'pages'>`. The starter recipes use this shorter public type.
 
 ## Automatic action feedback
 

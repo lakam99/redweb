@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { action, type ActionInput, type LivePageConnectionContext } from 'redweb';
+import { action, page, start, defineSite, type ActionInput, type LivePageConnectionContext } from 'redweb';
 
 const schema = z.object({ amount: z.string().transform(Number) });
 class ValidatedPage {
@@ -32,7 +32,13 @@ class ValidatedPage {
     }
 
     @action({ authorize: context => context.principal === 'owner' })
-    button(_input: unknown, context: LivePageConnectionContext) { return context.principal; }
+    button(_input: unknown, context: LivePageConnectionContext) {
+        const resource: string = context.params.resource;
+        const path: string = context.request.path;
+        // @ts-expect-error Framework request identity cannot be reassigned.
+        context.principal = 'forged';
+        return `${resource}:${path}`;
+    }
 
     // @ts-expect-error Without a schema the submitted input is untrusted unknown, not context.
     @action({ authorize: context => context.principal === 'owner' })
@@ -47,3 +53,17 @@ class ValidatedPage {
     orphanTimeout(input: ActionInput<typeof schema>) { return input; }
 }
 void ValidatedPage;
+
+page('/private/:resource', { authorize: context => context.params.resource === '42', authorizationTimeoutMs: 500 });
+// @ts-expect-error Protected pages cannot share mutable state across identities.
+page('/', { shared: true, authorize: () => true });
+// @ts-expect-error A page permission deadline requires a policy.
+page('/', { authorizationTimeoutMs: 5 });
+// @ts-expect-error The site wrapper preserves page policy constraints.
+defineSite().page('/', { scope: 'shared', authorize: () => true });
+// @ts-expect-error An identity deadline requires an identity hook.
+start(ValidatedPage, { authenticationTimeoutMs: 5 });
+const authenticated = start(ValidatedPage, { authenticate: () => 'owner', authenticationTimeoutMs: 500 });
+void authenticated.revoke('owner');
+// @ts-expect-error false means an unauthenticated result, not a revocable identity.
+void authenticated.revoke(false);

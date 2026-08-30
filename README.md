@@ -95,7 +95,7 @@ The initializer supplies the CSS, compiler setup, and real-network tests alongsi
 
 <!-- redweb:realtime:start -->
 ```tsx
-import { action, page, start, state, type LiveHtmlServerOptions } from 'redweb';
+import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -117,7 +117,7 @@ export class CounterPage {
     }
 }
 
-export function createApp(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
+export function createApp(options: LiveHtmlStartOptions = {}) {
     return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
 }
 
@@ -169,6 +169,8 @@ Browser events can call only explicitly exposed `@action()` methods. Reusable cl
 For forms, use `@action({ input: schema })` with a Standard Schema v1 validator such as Zod. Redweb validates and transforms the submitted object before invoking the method; `ActionInput<typeof schema>` supplies the resulting TypeScript type. Invalid input leaves the connection open and preserves the form for correction. See [validated action inputs](docs/LIVE_HTML.md#validated-action-inputs) for deadlines, error codes, and cancellation limits. This overload is part of the unreleased branch described above.
 
 The unreleased `@action({ input: schema, authorize: (context, input) => ... })` checks permission using the server-established identity and transformed input before invocation. Policies have a bounded deadline and receive a cancellation signal; denials preserve the form for correction. See [action authorization](docs/LIVE_HTML.md#action-authorization). This guards actions only, not HTTP pages or passive subscriptions, and does not make shared state private.
+
+For private pages, the unreleased `@page('/account/:id', { authorize: context => ... })` guards construction/loading, reconnects, actions, and writable state using the original request and authenticated identity. `server.revoke(principal)` stops matching in-process page sessions before further private updates. Protected pages cannot use shared mutable scope or static export. See [protected pages](docs/LIVE_HTML.md#protected-pages-and-shared-request-identity) and [revocation boundaries](docs/LIVE_HTML.md#explicit-session-revocation); applications still own credentials, durable data, and cross-process coordination.
 
 Action buttons and forms automatically show loading, success, and safe error messages. An optional `<output rw-status="save" />` controls placement without browser glue. Pending duplicate submissions are suppressed, and a late response never resets a newer draft or replacement form. See [action feedback and retry limits](docs/LIVE_HTML.md#automatic-action-feedback).
 

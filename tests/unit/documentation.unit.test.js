@@ -36,7 +36,7 @@ describe('single-source documentation', () => {
             expect(recipe.markdown).toContain('No mocks');
         }
         const api = docs.pages.find(page => page.id === 'api-types').markdown;
-        expect(api).toContain('interface LiveHtmlServerOptions');
+        expect(api).toMatch(/export (?:interface|type) LiveHtmlServerOptions\b/);
         expect(api).toContain('SocketContract');
         const contract = docs.pages.find(page => page.id === 'socket-contracts').markdown;
         expect(contract).toContain('](/docs/reference/unreleased/recipes/socket.md)');

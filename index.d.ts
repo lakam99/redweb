@@ -427,7 +427,7 @@ declare module 'redweb' {
         readonly path: string;
         readonly url: string;
         readonly method: string;
-        readonly headers: import('http').IncomingHttpHeaders;
+        readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
         readonly params: Readonly<Record<string, string>>;
         readonly query: Readonly<Record<string, unknown>>;
         readonly body: unknown;
@@ -435,18 +435,17 @@ declare module 'redweb' {
     }
 
     export interface LivePageRequestContext {
-        request: LivePageRequest;
-        params: Readonly<Record<string, string>>;
-        query: Readonly<Record<string, unknown>>;
-        body: unknown;
-        principal?: string | number | bigint | boolean;
-        signal: AbortSignal;
+        readonly request: LivePageRequest;
+        readonly params: Readonly<Record<string, string>>;
+        readonly query: Readonly<Record<string, unknown>>;
+        readonly body: unknown;
+        readonly principal?: string | number | bigint | boolean;
+        readonly signal: AbortSignal;
     }
 
-    export interface LivePageConnectionContext {
+    /** The original page request/identity is retained across normal reconnects. */
+    export interface LivePageConnectionContext extends LivePageRequestContext {
         socket: RedWebSocket;
-        signal?: AbortSignal;
-        principal?: string | number | bigint | boolean;
     }
 
     export abstract class LivePage {
@@ -454,21 +453,27 @@ declare module 'redweb' {
         loading?(context: LivePageRequestContext): void | Promise<void>;
         render?(context: LivePageRequestContext): string | HtmlFragment | Promise<string | HtmlFragment>;
         connected?(context: LivePageConnectionContext): void | Promise<void>;
-        disconnected?(context: { socket: RedWebSocket }): void | Promise<void>;
+        disconnected?(context: LivePageConnectionContext): void | Promise<void>;
         disposed?(): void | Promise<void>;
         dispose(): Promise<boolean>;
     }
 
-    export interface PageOptions {
+    export type PageOptions = {
         template?: string;
         css?: string | readonly string[];
-        scope?: 'connection' | 'shared';
-        shared?: boolean;
         live?: boolean;
         head?: PageHead;
         cache?: PageCache;
         layout?: PageLayout;
-    }
+    } & ({
+        scope?: 'connection' | 'shared'; shared?: boolean;
+        authorize?: undefined; authorizationTimeoutMs?: never;
+    } | {
+        scope?: 'connection'; shared?: false;
+        /** Checked before construction/loading, on connection, and before actions/state writes. */
+        authorize: (context: LivePageRequestContext) => boolean | Promise<boolean>;
+        authorizationTimeoutMs?: number;
+    });
 
     export type PageLayout = (content: HtmlFragment, context: LivePageRequestContext) => HtmlFragment;
 
@@ -554,7 +559,7 @@ declare module 'redweb' {
 
     export type LivePageClass = new () => object;
 
-    export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+    export interface LiveHtmlServerBaseOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
         pages: readonly LivePageClass[];
         templateRoot?: string;
         livePaths?: {
@@ -568,11 +573,18 @@ declare module 'redweb' {
         maxConcurrentRenders?: number;
         shutdownTimeoutMs?: number;
         heartbeat?: HeartbeatOptions;
-        authenticate?(request: import('http').IncomingMessage | import('express').Request):
-            string | number | bigint | boolean | false | null | undefined |
-            Promise<string | number | bigint | boolean | false | null | undefined>;
         origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
     }
+
+    export type LiveHtmlAuthentication = {
+        authenticate(request: import('http').IncomingMessage | import('express').Request):
+            string | number | bigint | boolean | null | undefined |
+            Promise<string | number | bigint | boolean | null | undefined>;
+        /** Bounds identity lookup, not external application work; defaults to 5000ms. */
+        authenticationTimeoutMs?: number;
+    } | { authenticate?: undefined; authenticationTimeoutMs?: never };
+    export type LiveHtmlServerOptions = LiveHtmlServerBaseOptions & LiveHtmlAuthentication;
+    export type LiveHtmlStartOptions = Omit<LiveHtmlServerBaseOptions, 'pages'> & LiveHtmlAuthentication;
 
     export class LiveHtmlServer {
         app: Application;
@@ -580,12 +592,14 @@ declare module 'redweb' {
         http: HttpServer | HttpsServer;
         sockets: SocketServer | null;
         constructor(options: LiveHtmlServerOptions);
+        /** Revoke matching in-process sessions/renders; credential invalidation remains application-owned. */
+        revoke(principal: string | number | bigint | true): Promise<number>;
         shutdown(): Promise<void>;
     }
 
     export function start(
         pageOrPages: LivePageClass | readonly LivePageClass[],
-        options?: Omit<LiveHtmlServerOptions, 'pages'>
+        options?: LiveHtmlStartOptions
     ): LiveHtmlServer;
 
     export interface StaticExportOptions {
@@ -612,9 +626,7 @@ declare module 'redweb' {
         layout?: PageLayout;
     }
 
-    export interface SitePageOptions extends Omit<PageOptions, 'live'> {
-        live?: false;
-    }
+    export type SitePageOptions = PageOptions & { live?: false };
 
     export interface SiteExportOptions extends StaticExportOptions {
         publicDir?: string;

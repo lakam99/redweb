@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 const input = z.object({ amount: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(1000)) }).strict();
 
-@page('/', { shared: true })
+@page('/', { authorize: context => context.principal === 'trusted-owner' })
 export class ValidatedPage {
     @state() total = 0;
 
@@ -14,7 +14,7 @@ export class ValidatedPage {
     }
 
     @action({ authorize: context => context.principal === 'trusted-owner' })
-    who(_input: unknown, context: LivePageConnectionContext) { return context.principal; }
+    who(_input: unknown, context: LivePageConnectionContext) { return { principal: context.principal, path: context.request.path }; }
 
     render() { return '<p>Validated TypeScript consumer</p>'; }
 }

@@ -13,6 +13,9 @@ const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require
 const synchronous = require('./synchronous');
 const { ActionInputError } = require('./ActionDefinition');
 const { AccessDenied } = require('./AccessPolicy');
+const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
+const PageLifetime = require('./PageLifetime');
+const requestSnapshot = require('./RequestSnapshot');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
@@ -66,7 +69,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, origins, logger = console }) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, logger = console }) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -76,7 +79,6 @@ class PageManager {
         }
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
-        if (authenticate !== undefined && typeof authenticate !== 'function') throw new TypeError('`authenticate` must be a function.');
         if (origins !== undefined && typeof origins !== 'function' &&
             (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
             throw new TypeError('`origins` must be a function or an array of non-empty origins.');
@@ -103,6 +105,8 @@ class PageManager {
         this.heartbeat = heartbeat;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.authenticateRequest = authenticate;
+        this.identity = new PageIdentity(authenticate, authenticationTimeoutMs);
+        this.lifetimes = new Set();
         this.origins = origins;
         this.pending = new Map();
         this.active = new Map();
@@ -176,13 +180,15 @@ class PageManager {
             response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
         }));
         this.records.forEach(record => app.get(record.metadata.path, (request, response, next) => {
-            Promise.resolve(this.render(record, request)).then(markup => {
-                if (record.metadata.live !== false) {
-                    response.set('Cache-Control', 'private, no-store').type('html').send(markup);
-                    return;
-                }
-                if (this.authenticateRequest) {
-                    response.set('Cache-Control', 'private, no-store').type('html').send(markup);
+            const controller = new AbortController();
+            const closed = () => controller.abort();
+            const finished = () => { response.off('close', closed); response.off('finish', finished); };
+            response.once('close', closed);
+            response.once('finish', finished);
+            this.render(record, request, controller.signal, markup => {
+                if (record.metadata.live !== false || this.authenticateRequest || record.metadata.policy) {
+                    // end() deliberately bypasses Express's automatic conditional-GET/ETag handling.
+                    response.set('Cache-Control', 'private, no-store').type('html').end(markup);
                     return;
                 }
                 const etag = `"${createHash('sha256').update(markup).digest('base64url')}"`;
@@ -192,11 +198,26 @@ class PageManager {
                     return;
                 }
                 response.type('html').send(markup);
-            }, next);
+            }).catch(error => {
+                if (this.closing) response.set('Connection', 'close');
+                const known = error instanceof AccessDenied || error instanceof AuthenticationFailure;
+                if (known || record.metadata.policy) {
+                    response.set('Cache-Control', 'private, no-store').status(known ? error.status : 500).json({ error: {
+                        code: known ? error.code : 'PAGE_FAILED', message: known ? error.message : 'Page request failed.',
+                    } });
+                } else next(error);
+            }).finally(finished);
         }));
     }
 
-    async render(record, request) {
+    createLifetime(principal) {
+        const lifetime = new PageLifetime(this.renderAbortController.signal);
+        lifetime.principal = principal;
+        this.lifetimes.add(lifetime);
+        return lifetime;
+    }
+
+    async render(record, request, signal, onReady) {
         const live = record.metadata.live !== false;
         const sessionsFull = live && this.pending.size + this.active.size + this.liveRendering >= this.maxSessions;
         if (this.closing || this.rendering >= this.maxConcurrentRenders || sessionsFull) {
@@ -209,30 +230,28 @@ class PageManager {
         const ownsPage = record.metadata.scope === 'connection';
         let page;
         let renderer;
+        let session;
+        const lifetime = this.createLifetime();
+        const deliver = markup => { lifetime.check(); onReady?.(markup); return markup; };
+        signal?.addEventListener('abort', lifetime.abort, { once: true });
+        if (signal?.aborted) lifetime.abort();
         try {
+            const snapshot = requestSnapshot(request);
+            const principal = await this.identity.resolve(request, lifetime.signal);
+            lifetime.principal = principal;
+            lifetime.check();
+            const context = Object.freeze({ request: snapshot, params: snapshot.params, query: snapshot.query, body: snapshot.body, principal, signal: lifetime.signal });
+            await record.metadata.policy?.check(context);
+            lifetime.check();
             page = ownsPage ? this.instantiate(record) : record.shared;
+            lifetime.page = ownsPage ? page : null;
             this.renderPages.add(page);
-            const principal = this.authenticateRequest ? await this.authenticateRequest(request) : undefined;
-            if (this.authenticateRequest && (principal === false || principal === null || principal === undefined || typeof principal === 'object')) {
-                const error = new Error('Live HTML authentication failed.');
-                error.status = 401;
-                throw error;
-            }
-            if (live) renderer = new ReactiveRenderer(page, this.renderAbortController.signal);
-            const context = Object.freeze({
-                request,
-                params: request.params,
-                query: request.query,
-                body: request.body,
-                principal,
-                signal: renderer ? renderer.controller.signal : this.renderAbortController.signal,
-            });
-            await page.loading?.(context);
-            await page._loadComponents(context);
-            if (this.closing) throw new Error('Live HTML server is shutting down.');
+            if (live) renderer = new ReactiveRenderer(page, lifetime.signal);
+            await lifetime.wait(() => page.loading?.(context));
+            await lifetime.wait(() => page._loadComponents(context));
             const render = async () => {
                 const source = record.template ?? await page.render?.(context);
-                if (this.closing) throw new Error('Live HTML server is shutting down.');
+                lifetime.check();
                 if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
                 const content = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), page, { live });
                 if (!record.metadata.layout) return content;
@@ -241,13 +260,13 @@ class PageManager {
                 return renderValue(result);
             };
             const withContext = callback => LivePage.withRenderContext(context, callback);
-            const markup = renderer ? await renderer.initialize(render, withContext) : await withContext(render);
+            const markup = await lifetime.wait(() => renderer ? renderer.initialize(render, withContext) : withContext(render));
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
-                if (ownsPage) await page.dispose();
-                return document;
+                if (ownsPage) await lifetime.wait(() => page.dispose());
+                return deliver(document);
             }
-            const session = this.createSession(page, ownsPage, principal);
+            session = this.createSession(page, ownsPage, principal, context, record, lifetime);
             session.renderLifetime = renderer;
             const config = {
                 pageId: session.id,
@@ -260,12 +279,18 @@ class PageManager {
                 renderer.document = value => HtmlRenderer.document(value, config, record.stylesheets, record.metadata.head);
                 renderer.onError = error => this.logger.error?.('Live HTML reactive render failed.', error);
             } else renderer.nodes.clear();
-            return HtmlRenderer.document(markup, config, record.stylesheets, record.metadata.head);
+            return deliver(HtmlRenderer.document(markup, config, record.stylesheets, record.metadata.head));
         } catch (error) {
             renderer?.dispose();
-            if (ownsPage && page) await page.dispose();
+            if (ownsPage && page) {
+                if (lifetime.signal.aborted) await withinDeadline(Promise.allSettled([page.dispose()]), Date.now() + this.shutdownTimeoutMs);
+                else await page.dispose();
+            }
+            if (this.closing) throw new Error('Live HTML server is shutting down.');
             throw error;
         } finally {
+            signal?.removeEventListener('abort', lifetime.abort);
+            if (!session) { lifetime.abort(); this.lifetimes.delete(lifetime); }
             if (page) this.renderPages.delete(page);
             this.rendering -= 1;
             if (live) this.liveRendering -= 1;
@@ -273,9 +298,10 @@ class PageManager {
         }
     }
 
-    createSession(page, ownsPage, principal) {
+    createSession(page, ownsPage, principal, context = {}, record, lifetime = this.createLifetime(principal)) {
         const id = randomUUID();
-        const session = { id, page, ownsPage, principal, socket: null, timer: null, detaching: null };
+        const session = { id, page, ownsPage, principal, context, record, lifetime, socket: null, timer: null, detaching: null };
+        lifetime.session = session;
         this.pending.set(id, session);
         this.expire(session);
         return session;
@@ -299,11 +325,12 @@ class PageManager {
         if (typeof id !== 'string' || id.length > 128) return false;
         const session = this.pending.get(id) || this.active.get(id);
         if (!session || session.socket || session.detaching) return false;
-        if (this.authenticateRequest) {
-            const principal = await this.authenticateRequest(request);
+        try {
+            const principal = await this.identity.resolve(request, session.lifetime.signal);
             if (!Object.is(principal, session.principal)) return false;
-        }
-        return !session.socket && !session.detaching && !LivePage.isDisposed(session.page) ? session : false;
+            await session.record?.metadata.policy?.check(session.context);
+            return this.available(session) && !session.socket && !session.detaching ? session : false;
+        } catch { return false; }
     }
 
     acceptsOrigin(origin, request) {
@@ -320,7 +347,7 @@ class PageManager {
     }
 
     connect(session, socket) {
-        if (!session || session.socket || session.detaching || LivePage.isDisposed(session.page)) {
+        if (!session || !this.available(session) || session.socket || session.detaching) {
             throw new Error('Page session is unavailable.');
         }
         clearTimeout(session.timer);
@@ -328,36 +355,100 @@ class PageManager {
         this.active.set(session.id, session);
         session.socket = socket;
         socket.__redwebPageSession = session;
+        session.connection = new PageLifetime(session.lifetime.signal);
+        socket.once?.('close', session.connection.abort);
+        socket.context?.signal?.addEventListener('abort', session.connection.abort, { once: true });
+        if (socket.context?.signal?.aborted || (socket.readyState !== undefined && socket.readyState !== 1)) session.connection.abort();
         if (socket.context?.signal) setMaxListeners(this.maxSessions + 1, socket.context.signal);
-        return session.page._attach(socket, Object.freeze({ socket, signal: socket.context?.signal, principal: session.principal }))
-            .then(result => session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page)) : result);
+        return session.connection.wait(() => session.page._attach(socket, this.connectionContext(session, socket)))
+            .then(result => {
+                this.checkConnected(session, socket);
+                return session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page)) : result;
+            });
+    }
+
+    available(session) {
+        return !session.lifetime.revoked && !LivePage.isDisposed(session.page) && (this.pending.get(session.id) === session || this.active.get(session.id) === session);
+    }
+
+    connectionContext(session, socket) { return Object.freeze({ ...session.context, socket, signal: session.connection.signal, principal: session.principal }); }
+
+    checkConnected(session, socket) {
+        if (!this.available(session) || session.socket !== socket) throw new AccessDenied('ACCESS_CANCELLED');
+        session.connection.check();
+    }
+
+    async authorize(session, socket) {
+        this.checkConnected(session, socket);
+        await session.record?.metadata.policy?.check(this.connectionContext(session, socket));
+        this.checkConnected(session, socket);
     }
 
     async disconnect(socket) {
         const session = socket.__redwebPageSession;
         if (!session || session.socket !== socket) return false;
+        session.connection.abort();
+        socket.off?.('close', session.connection.abort);
+        socket.context?.signal?.removeEventListener('abort', session.connection.abort);
         session.renderer?.detach();
-        const detaching = Promise.resolve(session.page._detach(socket, Object.freeze({ socket })))
+        const detaching = Promise.resolve(session.page._detach(socket, this.connectionContext(session, socket)))
             .finally(() => { session.detaching = null; });
         session.detaching = detaching;
         session.socket = null;
-        this.expire(session);
+        if (this.available(session)) this.expire(session);
         await detaching;
         return true;
     }
 
     async release(session) {
+        session.lifetime.revoked = true;
+        const cleanup = [];
+        if (session.socket) {
+            session.socket.terminate?.();
+            cleanup.push(this.disconnect(session.socket));
+        } else if (session.detaching) cleanup.push(session.detaching);
+        session.lifetime.abort();
+        this.lifetimes.delete(session.lifetime);
         session.renderLifetime?.dispose();
         clearTimeout(session.timer);
         this.pending.delete(session.id);
         this.active.delete(session.id);
-        if (session.ownsPage) await session.page.dispose();
+        if (session.ownsPage) cleanup.push(session.page.dispose());
+        LivePage._throwLifecycleFailures(await Promise.allSettled(cleanup), 'Page session cleanup failed.');
         return true;
+    }
+
+    async revoke(principal) {
+        if (!isPrincipal(principal)) throw new TypeError('revoke() requires an authenticated primitive identity.');
+        const affected = [...this.lifetimes].filter(lifetime => Object.is(lifetime.principal, principal) || (this.authenticateRequest && lifetime.principal === undefined));
+        // Invalidate every publication target before dispatching any application abort listener.
+        affected.forEach(lifetime => { lifetime.revoked = true; });
+        affected.forEach(lifetime => lifetime.session?.socket?.terminate?.());
+        const cleanup = [];
+        for (const lifetime of affected) {
+            const session = lifetime.session;
+            if (session) {
+                cleanup.push(this.release(session));
+            } else {
+                lifetime.abort();
+                this.lifetimes.delete(lifetime);
+                if (lifetime.page) cleanup.push(lifetime.page.dispose());
+            }
+        }
+        if (!cleanup.length) return affected.length;
+        const result = await withinDeadline(Promise.allSettled(cleanup), Date.now() + this.shutdownTimeoutMs);
+        if (!result.completed || result.value.some(entry => entry.status === 'rejected')) {
+            const error = new Error('Page access revoked; application cleanup did not complete successfully.');
+            error.code = 'REVOCATION_CLEANUP_FAILED';
+            throw error;
+        }
+        return affected.length;
     }
 
     async receive(socket, message) {
         const session = socket.__redwebPageSession;
         if (!session) throw new Error('Page session is not connected.');
+        this.checkConnected(session, socket);
         const payload = message.payload;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Live HTML payload must be an object.');
         const name = boundedName(payload.name, 'Live HTML member name');
@@ -366,17 +457,16 @@ class PageManager {
             : session.page._component(boundedName(payload.component, 'Live HTML component name'));
         if (!target) throw new Error('Unknown Live HTML component.');
         if (payload.kind === 'action') {
-            const result = await LivePage.invoke(target, name, payload.args, Object.freeze({
-                socket,
-                signal: socket.context?.signal,
-                principal: session.principal,
-            }));
+            const result = await LivePage.invoke(target, name, payload.args, this.connectionContext(session, socket), () => this.authorize(session, socket));
+            this.checkConnected(session, socket);
             if (message.requestId !== undefined) {
                 socket.sendEvent('redweb:result', result ?? null, { requestId: message.requestId });
             }
             return;
         }
         if (payload.kind === 'state') {
+            await this.authorize(session, socket);
+            this.checkConnected(session, socket);
             LivePage.setFromClient(target, name, payload.value);
             return;
         }
