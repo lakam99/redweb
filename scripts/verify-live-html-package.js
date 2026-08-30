@@ -1,7 +1,6 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyStarter } = require('./lib/verify-starter');
@@ -10,6 +9,7 @@ const { verifySharedServer } = require('./lib/verify-shared-server');
 const { verifyActionInput } = require('./lib/verify-action-input');
 const { verifyRoomExample } = require('./lib/verify-room-example');
 const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
+const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
@@ -23,13 +23,13 @@ function run(command, args, options = {}) {
 
 async function main() {
     const root = path.resolve(__dirname, '..');
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-live-package-'));
-    try {
+    await new VerificationWorkspace().run(async execution => {
+        const workspace = execution.directory;
         const pack = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
         const metadata = require('../package.json');
-        const dependencyChecks = verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
-            { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws });
+        const dependencyChecks = await verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
+            { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws }, execution);
         console.log(dependencyChecks.withoutValidator.trim());
         console.log(dependencyChecks.withValidator.trim());
         console.log(dependencyChecks.additions);
@@ -162,9 +162,7 @@ async function main() {
             throw new Error('Packed static exporter did not emit a standalone document.');
         }
         console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation.`);
-    } finally {
-        fs.rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
+    });
 }
 
 main().catch(error => {
