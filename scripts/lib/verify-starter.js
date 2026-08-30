@@ -25,23 +25,7 @@ function verifyApplication(packageRoot, target, template) {
     if (projectNodeIssue(process.versions.node, manifest.engines?.node)?.severity === 'error') {
         return `# SKIP ${template}: requires Node ${manifest.engines.node}; current ${process.versions.node}. CI verifies it on Node 22.\n`;
     }
-    fs.mkdirSync(path.join(target, 'node_modules'));
-    for (const [name, directory] of [
-        ['redweb', packageRoot],
-        ['typescript', path.dirname(require.resolve('typescript/package.json'))],
-        ['ws', path.dirname(require.resolve('ws/package.json'))],
-        ...(manifest.dependencies.zod ? [['zod', path.dirname(require.resolve('zod/package.json'))]] : []),
-        ...(template === 'dashboard' ? [['express', path.dirname(require.resolve('express/package.json'))]] : []),
-        ...(template === 'dashboard' ? [['c8', path.dirname(require.resolve('c8/package.json'))]] : []),
-        ['.bin', path.resolve(path.dirname(require.resolve('typescript/package.json')), '../.bin')],
-    ]) fs.symlinkSync(directory, path.join(target, 'node_modules', name), 'junction');
-    if (template === 'dashboard') {
-        const types = path.join(target, 'node_modules/@types');
-        fs.mkdirSync(types);
-        for (const [name, module] of [['node', 'redweb-dashboard-types'], ['express', '@types/express']]) {
-            fs.symlinkSync(path.dirname(require.resolve(`${module}/package.json`)), path.join(types, name), 'junction');
-        }
-    }
+    linkApplication(packageRoot, target, template, manifest);
     const tests = spawnSync('npm', ['test'], {
         cwd: target, encoding: 'utf8', timeout: 30000, windowsHide: true, shell: process.platform === 'win32',
     });
@@ -51,4 +35,24 @@ function verifyApplication(packageRoot, target, template) {
     return node(['--test', 'test/app.test.cjs', 'test/run-app.test.cjs'], target);
 }
 
-module.exports = { verifyStarter, verifyApplication };
+function linkApplication(packageRoot, target, template, manifest) {
+    fs.mkdirSync(path.join(target, 'node_modules'));
+    for (const [name, directory] of [
+        ['redweb', packageRoot],
+        ['typescript', path.dirname(require.resolve('typescript/package.json'))],
+        ['ws', path.dirname(require.resolve('ws/package.json'))],
+        ...(manifest.dependencies.zod ? [['zod', path.dirname(require.resolve('zod/package.json'))]] : []),
+        ...(template === 'dashboard' ? [['express', path.dirname(require.resolve('express/package.json'))]] : []),
+        ['c8', path.dirname(require.resolve('c8/package.json'))],
+        ['.bin', path.resolve(path.dirname(require.resolve('typescript/package.json')), '../.bin')],
+    ]) fs.symlinkSync(directory, path.join(target, 'node_modules', name), 'junction');
+    if (template === 'dashboard') {
+        const types = path.join(target, 'node_modules/@types');
+        fs.mkdirSync(types);
+        for (const [name, module] of [['node', 'redweb-dashboard-types'], ['express', '@types/express']]) {
+            fs.symlinkSync(path.dirname(require.resolve(`${module}/package.json`)), path.join(types, name), 'junction');
+        }
+    }
+}
+
+module.exports = { verifyStarter, verifyApplication, linkApplication };

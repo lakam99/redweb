@@ -10,6 +10,7 @@ npm run dev
 
 HTTP starters open at http://localhost:8181; the authenticated dashboard uses http://127.0.0.1:8181/login and requires account provisioning described below. Set the `PORT` environment variable to change the listener.
 `npm test` builds and runs real HTTP/WebSocket integration tests on an ephemeral loopback port. No mocks or external service are needed.
+`npm run test:coverage` runs the same tests with application coverage mapped back to TypeScript. Reports are written to the ignored `coverage/` directory; this is separate from Redweb library coverage. TypeScript-generated decorator accessors can appear in function counts even when the framework does not call them. The report exposes remaining gaps; it does not certify complete application coverage. Source maps are generated during the build for diagnostics and coverage, but no coverage collector is loaded by `npm start`.
 
 ## Development and production
 

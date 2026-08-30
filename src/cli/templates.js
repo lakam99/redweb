@@ -17,6 +17,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             start: 'node dist/app.js',
             dev: 'nodemon',
             test: 'npm run build && node --test test/app.test.cjs test/run-app.test.cjs',
+            'test:coverage': 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs test/run-app.test.cjs',
         },
         dependencies: {
             redweb: `^${version}`,
@@ -24,10 +25,10 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             ...(template === 'dashboard' ? { express: dependencies.express } : {}),
         },
         devDependencies: {
-            typescript: devDependencies.typescript, nodemon: devDependencies.nodemon, ws: dependencies.ws,
+            typescript: devDependencies.typescript, nodemon: devDependencies.nodemon, ws: dependencies.ws, c8: devDependencies.c8,
             ...(template === 'dashboard' ? {
                 '@types/node': devDependencies['redweb-dashboard-types'].replace('npm:@types/node@', ''),
-                '@types/express': dependencies['@types/express'], c8: devDependencies.c8,
+                '@types/express': dependencies['@types/express'],
             } : {}),
         },
         nodemonConfig: {
@@ -41,13 +42,13 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
     if (template === 'dashboard') {
         manifest.engines = { node: '>=22.13.0' };
         manifest.scripts['add-user'] = 'npm run build && node dist/admin.js';
-        manifest.scripts['test:coverage'] = 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs test/run-app.test.cjs test/rate-window.test.cjs';
+        manifest.scripts['test:coverage'] += ' test/rate-window.test.cjs';
     }
     const files = [
         { path: 'package.json', content: json(manifest) },
         { path: 'tsconfig.json', content: json({
             extends: 'redweb/tsconfig.json',
-            compilerOptions: { rootDir: 'src', outDir: 'dist', ...(template === 'dashboard' ? { sourceMap: true } : {}) },
+            compilerOptions: { rootDir: 'src', outDir: 'dist', sourceMap: true },
             include: ['src/**/*.ts', 'src/**/*.tsx'],
         }) },
         { path: 'src/app.tsx', content: read(`${template}/app.tsx`) },
@@ -58,7 +59,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
         { path: 'test/app.test.cjs', content: read(`${template}/app.test.cjs`) },
         { path: 'test/run-app.test.cjs', content: read('shared/run-app.test.cjs') },
         { path: 'README.md', content: `${read('shared/README.md')}\n${read(`${template}/README.md`)}` },
-        { path: '.gitignore', content: 'node_modules/\ndist/\n.env\ndata/\n*.sqlite\n*.sqlite-wal\n*.sqlite-shm\n' },
+        { path: '.gitignore', content: 'node_modules/\ndist/\ncoverage/\n.env\ndata/\n*.sqlite\n*.sqlite-wal\n*.sqlite-shm\n' },
     ];
     if (template === 'chat') {
         // The canonical component example is also the starter: one implementation to maintain.

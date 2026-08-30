@@ -60,6 +60,11 @@ describe('ProjectInitializer', () => {
             expect(result.created).toContain('test/app.test.cjs');
             expect(result.created).toContain('README.md');
             expect(fs.readFileSync(path.join(result.root, 'README.md'), 'utf8')).toContain('npm test');
+            const manifest = JSON.parse(fs.readFileSync(path.join(result.root, 'package.json'), 'utf8'));
+            expect(manifest.devDependencies.c8).toBeDefined();
+            expect(manifest.scripts['test:coverage']).toContain('c8 --all --src=dist --include=dist/**');
+            expect(JSON.parse(fs.readFileSync(path.join(result.root, 'tsconfig.json'), 'utf8')).compilerOptions.sourceMap).toBe(true);
+            expect(fs.readFileSync(path.join(result.root, '.gitignore'), 'utf8')).toContain('coverage/');
         }
         expect(fs.readFileSync(path.join(workspace, 'chat/src/chatroom.tsx'), 'utf8')).toBe(fs.readFileSync(path.resolve(__dirname, '../../examples/live-html/chatroom.tsx'), 'utf8'));
         expect(JSON.parse(fs.readFileSync(path.join(workspace, 'chat/package.json'), 'utf8')).dependencies.zod).toBeDefined();

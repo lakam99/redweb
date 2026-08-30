@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give every starter a source-mapped `test:coverage` command with development-only c8. Expand chat domain/reconnect/identity tests and socket duplicate-join/unknown-session/capacity tests. Exercise actual application entrypoint failures using owned listeners; record all-starter coverage as run-specific measurement evidence, not a claim of complete application coverage.
+
 - Extend real-browser coverage to development refresh under its self-only script policy; instrumentation no longer requires dynamic evaluation. Remove a redundant stopped-state check only where the unchanged generation already proves it. Harden verification uploads and pending native listener cleanup, with real HTTP/TCP regressions.
 
 - Measure 100% of the complete emitted Live HTML browser runtime with the existing real-browser coverage collector. Reuse canonical morph/action cases and add actual protocol/state/input/reconnect checks; this does not instrument the imported client package or change production behavior.

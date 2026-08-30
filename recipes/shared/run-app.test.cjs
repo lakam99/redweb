@@ -85,9 +85,9 @@ if (mode === 'invalid') {
 }
 `;
 
-function execute(mode, t) {
+function execute(mode, t, args = ['-e', fixture, mode], env = process.env) {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, ['-e', fixture, mode], { cwd: process.cwd(), windowsHide: true });
+        const child = spawn(process.execPath, args, { cwd: process.cwd(), env, windowsHide: true });
         let stdout = '', stderr = '';
         let timedOut = false, finished = false;
         const closed = new Promise(resolve => child.once('close', () => { finished = true; resolve(); }));
@@ -106,6 +106,39 @@ function execute(mode, t) {
         });
     });
 }
+
+test('the actual application entrypoint exits cleanly when its port is occupied', { timeout: 7000 }, async t => {
+    const net = require('node:net');
+    const { once } = require('node:events');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'redweb-entrypoint-'));
+    const occupied = net.createServer(socket => socket.destroy());
+    const loopback = net.createServer(socket => socket.destroy());
+    let failure;
+    try {
+        occupied.listen(0, '0.0.0.0');
+        await once(occupied, 'listening');
+        // Windows permits distinct wildcard/loopback binds on the same port.
+        // Hold both addresses; Unix may already reject the second bind.
+        loopback.listen(occupied.address().port, '127.0.0.1');
+        try { await once(loopback, 'listening'); }
+        catch (error) { assert.equal(error.code, 'EADDRINUSE'); }
+        const env = { ...process.env, PORT: String(occupied.address().port), NODE_ENV: 'test', DASHBOARD_DATABASE: path.join(directory, 'test.sqlite') };
+        delete env.DASHBOARD_ORIGIN;
+        const result = await execute('actual-entrypoint', t, ['dist/app.js'], env);
+        assert.equal(result.code, 1, `${result.stdout}\n${result.stderr}`);
+        assert.equal(result.signal, null);
+        assert.match(result.stderr, /Application listener failed/);
+    } catch (error) { failure = error; }
+    const cleanup = await Promise.allSettled([
+        ...[occupied, loopback].map(server => new Promise((resolve, reject) => server.close(error =>
+            error && error.code !== 'ERR_SERVER_NOT_RUNNING' ? reject(error) : resolve()))),
+        fs.promises.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+    ]);
+    const failures = [...(failure ? [failure] : []), ...cleanup.filter(result => result.status === 'rejected').map(result => result.reason)];
+    if (failures.length) throw new AggregateError(failures, 'Entrypoint verification or cleanup failed');
+});
 
 for (const mode of ['normal', 'interrupt', 'native-close', 'invalid', 'factory', 'throw', 'reject', 'reject-open', 'hung', 'occupied', 'repeat', 'preserve']) {
     test(`entrypoint cleanup: ${mode}`, { timeout: 7000 }, async t => {
