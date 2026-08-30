@@ -5,16 +5,16 @@ const { action, page, start } = require('../..');
 const { createActionPage } = require('../fixtures/action-page');
 const { waitForListening, request, silentLogger, waitForCondition } = require('../helpers/network');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { verifyActionInput } = require('../../scripts/lib/verify-action-input');
+const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 
 describe('action input validation over real HTTP and WebSockets', () => {
     test('compiled standard and legacy decorators preserve typed validation in source-free consumers', async () => {
-        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-action-consumer-'));
-        try { await verifyActionInput(path.resolve(__dirname, '../..'), workspace); }
-        finally { fs.rmSync(workspace, { recursive: true, force: true }); }
-    }, 30000);
+        const execution = new VerificationWorkspace();
+        await execution.run(owner => verifyActionInput(path.resolve(__dirname, '../..'), owner));
+        expect(fs.existsSync(execution.directory)).toBe(false);
+    }, 120000);
 
     const servers = [];
     const clients = [];

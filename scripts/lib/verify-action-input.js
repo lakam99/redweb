@@ -9,10 +9,10 @@ const { RedwebClient } = require('redweb-client');
 const { websocketUpgradeStatus } = require('../../tests/helpers/network');
 
 /** Compile both decorator ABIs against the nominated package and exercise real listeners. */
-async function verifyActionInput(packageRoot, workspace) {
+async function verifyActionInput(packageRoot, execution) {
     for (const experimentalDecorators of [false, true]) {
-        const target = path.join(workspace, `action-${experimentalDecorators ? 'legacy' : 'standard'}`);
-        const compiled = compileConsumer(packageRoot, target, path.resolve(__dirname, '../../tests/fixtures/action-consumer.ts'), { experimentalDecorators, dependencies: ['zod'] });
+        const target = path.join(execution.directory, `action-${experimentalDecorators ? 'legacy' : 'standard'}`);
+        const compiled = await compileConsumer(packageRoot, execution, target, path.resolve(__dirname, '../../tests/fixtures/action-consumer.ts'), { experimentalDecorators, dependencies: ['zod'] });
         const { ValidatedPage } = require(compiled);
         const { start } = require(packageRoot);
         const server = start(ValidatedPage, { port: 0, bind: '127.0.0.1', authenticate: () => 'trusted-owner' });

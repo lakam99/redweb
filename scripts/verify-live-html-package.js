@@ -31,8 +31,8 @@ async function main() {
             await verifyStarter(packageRoot, execution, template);
         }
         await verifyDocumentation(packageRoot, execution);
-        await verifyActionInput(packageRoot, workspace);
-        await verifyRoomExample(packageRoot, workspace);
+        await verifyActionInput(packageRoot, execution);
+        await verifyRoomExample(packageRoot, execution);
         if (manifest.bin.redweb !== 'bin/redweb.js' ||
             !fs.existsSync(path.join(packageRoot, 'bin', 'redweb.js')) ||
             !fs.existsSync(path.join(packageRoot, 'config', 'tsconfig.json'))) {

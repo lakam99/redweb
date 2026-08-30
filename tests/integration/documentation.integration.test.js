@@ -14,10 +14,10 @@ const root = path.resolve(__dirname, '../..');
 
 describe('documented applications without mocks', () => {
     test('shared page/room identity compiles in both decorator modes and survives source-free deployment', async () => {
-        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-room-example-'));
-        try { await verifyRoomExample(root, workspace); }
-        finally { fs.rmSync(workspace, { recursive: true, force: true }); }
-    }, 30000);
+        const execution = new VerificationWorkspace();
+        await execution.run(owner => verifyRoomExample(root, owner));
+        expect(fs.existsSync(execution.directory)).toBe(false);
+    }, 120000);
     test('the printed Markdown applications compile and pass HTTP/socket tests without source at runtime', async () => {
         await new VerificationWorkspace().run(async execution => {
             const reports = await verifyDocumentation(root, execution);

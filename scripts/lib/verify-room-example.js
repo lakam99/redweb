@@ -6,10 +6,10 @@ const WebSocket = require('ws');
 const { compileConsumer } = require('./compile-consumer');
 const { waitForListening, waitForOpen, closeWebSocket, websocketUpgradeStatus } = require('../../tests/helpers/network');
 
-async function verifyRoomExample(packageRoot, workspace) {
+async function verifyRoomExample(packageRoot, execution) {
     for (const experimentalDecorators of [false, true]) {
-        const target = path.join(workspace, `room-${experimentalDecorators ? 'legacy' : 'standard'}`);
-        const compiled = compileConsumer(packageRoot, target, path.join(packageRoot, 'docs/snippets/room-access.tsx'), { experimentalDecorators });
+        const target = path.join(execution.directory, `room-${experimentalDecorators ? 'legacy' : 'standard'}`);
+        const compiled = await compileConsumer(packageRoot, execution, target, path.join(packageRoot, 'docs/snippets/room-access.tsx'), { experimentalDecorators });
         const { createApp } = require(compiled);
         const demo = createApp(0);
         let peer;
