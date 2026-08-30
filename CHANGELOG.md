@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplified the canonical chatroom to ordinary data state and reactive TSX, with stable message/member keys and no HTML-valued screen state. Added TSX child typings for synchronous owned class components; async component renders remain rejected.
+
 - Added automatic live TSX owner rendering: tracked state reads, batched component-scoped patches, derived expressions/conditionals, keyed element and fragment reconciliation, per-visitor shared-page contexts, reconnect snapshots, cancellation, and bounded retained snapshots. Explicit bindings remain supported without a second conflicting state frame. The TSX counter and realtime starter now use plain expressions without duplicate binding names.
 - Fixed development watching after TypeScript exits with code 2; the watcher remains active for subsequent repairs.
 

@@ -9,5 +9,5 @@
       "redweb/*": ["*"]
     }
   },
-  "files": ["counter.ts", "chatroom.ts", "cards.ts", "components.ts", "jsx-page.tsx"]
+  "files": ["counter.ts", "chatroom.tsx", "cards.ts", "components.ts", "jsx-page.tsx"]
 }

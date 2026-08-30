@@ -8,12 +8,12 @@ test('members join once, exchange messages, and leave presence on disconnect', {
     const bob = await live(t, origin);
     alice.action('join', [{ name: 'Alice' }], 'chat');
     bob.action('join', [{ name: 'Bob' }], 'chat');
-    await alice.state('presence', value => value.includes('Alice') && value.includes('Bob'), 'chat');
-    await bob.state('presence', value => value.includes('Alice') && value.includes('Bob'), 'chat');
+    await alice.patch(patch => patch.html.includes('Online · 2'));
+    await bob.patch(patch => patch.html.includes('Online · 2'));
     alice.action('send', [{ message: 'Hello <friends>' }], 'chat');
-    await bob.state('messages', value => value.includes('Hello &lt;friends&gt;'), 'chat');
+    await bob.patch(patch => patch.html.includes('Hello &lt;friends&gt;'));
     const closed = once(alice.socket, 'close');
     alice.socket.close();
     await closed;
-    await bob.state('presence', value => !value.includes('Alice') && value.includes('Bob'), 'chat');
+    await bob.patch(patch => patch.html.includes('Online · 1'));
 });

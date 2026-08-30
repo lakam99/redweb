@@ -61,7 +61,7 @@ describe('ProjectInitializer', () => {
             expect(result.created).toContain('README.md');
             expect(fs.readFileSync(path.join(result.root, 'README.md'), 'utf8')).toContain('npm test');
         }
-        expect(fs.readFileSync(path.join(workspace, 'chat/src/chatroom.ts'), 'utf8')).toBe(fs.readFileSync(path.resolve(__dirname, '../../examples/live-html/chatroom.ts'), 'utf8'));
+        expect(fs.readFileSync(path.join(workspace, 'chat/src/chatroom.tsx'), 'utf8')).toBe(fs.readFileSync(path.resolve(__dirname, '../../examples/live-html/chatroom.tsx'), 'utf8'));
         expect(() => projectFiles('1.2.3', '../outside')).toThrow('Unknown starter');
     });
 });

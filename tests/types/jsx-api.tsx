@@ -32,3 +32,17 @@ void JsxPage;
 // @ts-expect-error Missing required title.
 const missingProperty = <Card />;
 void missingProperty;
+
+@component()
+class StatefulComponent {
+    render() { return <p>Owned component</p>; }
+}
+class ComponentPage {
+    panel = new StatefulComponent();
+    render() { return <main>{this.panel}</main>; }
+}
+void ComponentPage;
+class AsyncComponent { async render() { return <p>Async is not supported</p>; } }
+// @ts-expect-error Class components must render synchronously.
+const asyncChild = <main>{new AsyncComponent()}</main>;
+void asyncChild;

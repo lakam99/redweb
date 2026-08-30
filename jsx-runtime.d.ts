@@ -1,6 +1,11 @@
-import type { HtmlFragment } from 'redweb';
+import type { HtmlFragment, LivePageRequestContext } from 'redweb';
 
-export type Child = HtmlFragment | string | number | bigint | boolean | null | undefined | readonly Child[];
+/** A synchronous @component() instance owned by a page/component field. Ownership is checked at runtime. */
+export interface ServerComponent {
+    render(context: LivePageRequestContext): string | HtmlFragment | readonly HtmlFragment[];
+}
+
+export type Child = HtmlFragment | ServerComponent | string | number | bigint | boolean | null | undefined | readonly Child[];
 
 export interface IntrinsicAttributes {
     key?: string | number;

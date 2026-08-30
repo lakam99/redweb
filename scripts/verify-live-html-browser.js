@@ -257,7 +257,7 @@ async function main() {
         const second = await openPage(debugPort, chatUrl);
         pages.push(first, second);
         await Promise.all([first, second].map(page => page.evaluate(eventual(
-            `document.querySelector('form[rw-submit="join"][data-rw-component="chat"]') && document.querySelector('[data-rw-state="screen"]')`,
+            `document.querySelector('form[rw-submit="join"][data-rw-component="chat"]') && document.querySelector('.chatroom')`,
             'chat join readiness'
         ))));
         await first.evaluate(`(() => {

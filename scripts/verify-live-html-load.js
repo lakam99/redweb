@@ -37,7 +37,7 @@ function createClient(port, config, updates) {
         version: config.version,
         webSocketFactory: url => new WebSocket(url, { headers: { Origin: `http://127.0.0.1:${port}` } }),
     });
-    client.on('redweb:state', message => updates.push(message.payload));
+    client.on('redweb:patch', message => updates.push(...message.payload.patches));
     return client;
 }
 
@@ -84,10 +84,10 @@ async function main() {
             args: [{ name: `load-${index}` }],
         })));
         await waitFor(
-            () => updates.every(messages => messages.at(-1)?.value.includes(`Online · ${liveClients}`)),
+            () => updates.every(messages => messages.at(-1)?.html.includes(`Online · ${liveClients}`)),
             `${liveClients}-client room presence`
         );
-        if (!updates[0].at(-1)?.value.includes('+10 more')) throw new Error('Visible presence list was not capped.');
+        if (!updates[0].at(-1)?.html.includes('+10 more')) throw new Error('Visible presence list was not capped.');
         clients[0].send('redweb:html', {
             kind: 'action',
             component: 'chat',
@@ -95,7 +95,7 @@ async function main() {
             args: [{ message: 'ordered-broadcast' }],
         });
         await waitFor(
-            () => updates.every(messages => messages.at(-1)?.value.includes('ordered-broadcast')),
+            () => updates.every(messages => messages.at(-1)?.html.includes('ordered-broadcast')),
             `${liveClients}-client ordered broadcast`
         );
 

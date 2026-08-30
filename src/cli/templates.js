@@ -46,7 +46,7 @@ function projectFiles(version, template = 'realtime') {
     if (template === 'chat') {
         // The canonical component example is also the starter: one implementation to maintain.
         const examples = path.resolve(__dirname, '../../examples/live-html');
-        for (const name of ['chatroom.ts', 'chatroom.css']) {
+        for (const name of ['chatroom.tsx', 'chatroom.css']) {
             files.push({ path: `src/${name}`, content: fs.readFileSync(path.join(examples, name), 'utf8') });
         }
     }
