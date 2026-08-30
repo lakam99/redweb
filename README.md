@@ -9,17 +9,28 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Unreleased development documentation. Package metadata is 0.12.0, but these features are not claimed to be published in that npm version. Use the matching packed artifact; do not install latest and assume compatibility.
+> Unreleased development documentation. Package metadata is 0.12.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball and linked redweb-client checkout described in the recipe setup; do not install latest and assume compatibility.
 
-These instructions require an absolute path to the matching tarball, produced by `npm pack` from this checkout. Replace `TARBALL` below with that path (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball.
+These prerelease instructions require both matching Redweb and redweb-client checkouts. The published redweb-client does not yet contain this renderer. From the matching redweb-client checkout, prepare its build and register the local link once:
+
+```sh
+npm ci
+npm run build
+npm link --ignore-scripts
+```
+
+Then return to the directory where you want to create the application. Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. Link the prepared client into the new application after installation:
 
 ```sh
 npx --yes --package TARBALL redweb init my-realtime --template realtime
 cd my-realtime
 npm install --save-exact TARBALL
+npm link redweb-client --no-save --ignore-scripts
 npm test
 npm run dev
 ```
+
+Rebuild redweb-client after editing it. Later `npm install` or `npm ci` can replace the local link with the registry dependency; repeat the link command afterward. This linked setup is development-only, not deployable registry-release evidence. Without both matching checkouts, use an available versioned release guide instead.
 <!-- redweb:setup:end -->
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.

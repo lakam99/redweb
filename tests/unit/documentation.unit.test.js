@@ -32,6 +32,9 @@ describe('single-source documentation', () => {
             for (const file of files) expect(recipe.markdown).toContain(file.content.trimEnd());
             expect(recipe.markdown).toContain(`--template ${template}`);
             expect(recipe.markdown).toContain('npm install --save-exact TARBALL');
+            expect(recipe.markdown).toContain('npm ci\nnpm run build\nnpm link --ignore-scripts');
+            expect(recipe.markdown).toContain('npm install --save-exact TARBALL\nnpm link redweb-client --no-save --ignore-scripts');
+            expect(recipe.markdown).toContain('development-only');
             expect(recipe.markdown).toContain('npm test');
             expect(recipe.markdown).toContain('No mocks');
             expect(recipe.markdown).toContain(builder.setup(template));
@@ -59,7 +62,7 @@ describe('single-source documentation', () => {
             expect(guide.markdown).toContain("## Explain it like I'm five");
             expect(guide.markdown).toContain('## Check that it works');
         }
-        expect(builder.setup('dashboard')).toContain('npm install --save-exact TARBALL\nnpm run add-user -- alice\nnpm test\nnpm run dev');
+        expect(builder.setup('dashboard')).toContain('npm link redweb-client --no-save --ignore-scripts\nnpm run add-user -- alice\nnpm test\nnpm run dev');
     });
 
     test('resolves source-relative links without rewriting code examples', () => {
@@ -98,6 +101,7 @@ describe('single-source documentation', () => {
             for (const template of TEMPLATES) {
                 expect(builder.setup(template)).toContain(`npx --yes redweb@${version} init my-${template} --template ${template}`);
                 expect(builder.setup(template)).toContain(`cd my-${template}\nnpm install --save-exact redweb@${version}`);
+                expect(builder.setup(template)).not.toContain('npm link');
                 expect(docs.pages.find(page => page.id === `recipes/${template}`).markdown).toContain(builder.setup(template));
             }
             for (const guide of docs.pages.filter(page => page.id.startsWith('guides/'))) {

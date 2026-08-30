@@ -25,6 +25,18 @@ installation is needed. The link is local development configuration, not a saved
 dependency or a change to either lockfile. Running `npm ci` in Redweb replaces it
 with the locked registry dependency; repeat the link command afterward.
 
+The unreleased README and recipe setup also link the prepared client after
+installing the matching Redweb tarball. To check that printed setup independently,
+set `REDWEB_CLIENT_CHECKOUT` to the absolute path of the matching client checkout
+and run `npm run verify:client:link` from Redweb. It copies the client's build
+inputs, uses an isolated npm global prefix, executes the documented initialization,
+installation and linking commands, then runs the realtime starter's real HTTP,
+WebSocket and process tests. No client override is installed. Resolution is checked
+from the installed Redweb package, and all four rebuilt client bundles must match
+the checkout's existing build. Developer inputs and the existing link are checked
+afterward. The interactive `npm run dev` is covered by the separate watcher gate,
+not this check. This verifies local development, not a deployable registry pair.
+
 Verify the resolved entry from Redweb:
 
 ```sh

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Correct unreleased quickstarts to build and link the matching `redweb-client` checkout after installing Redweb's tarball. Add an isolated real-npm acceptance check for those printed commands; versioned release instructions remain unchanged. Local links are not production-install or publication evidence.
+
 - Extend explicit packed client/server verification to reuse the unchanged full browser acceptance suite and frontend/refresh coverage drivers. Keep runtime dependencies inside the isolated consumer, fingerprint copied test inputs and original package files, and retain reports after workspace cleanup. External test tools are linked individually; this does not change ordinary registry installation or claim full original-client-source coverage.
 
 - Generated network-test cleanup now terminates its owned sockets instead of waiting for an uncooperative peer's closing handshake. Graceful-disconnect assertions still explicitly close and await their sockets. A real paused-peer regression checks this boundary; the earlier intermittent documented-chat timeout remains unexplained.
