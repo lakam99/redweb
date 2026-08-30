@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve exact selected option identities when values are duplicated, including keyed moves and server-authored default changes. Add 100% generated DOM-morph coverage in real Chromium plus a live HTTP/WebSocket selection regression; no browser API mocks or runtime instrumentation is shipped.
+
 - Add a separate 100% CLI entrypoint coverage gate using real initializer, doctor and incremental-generation integrations; bound initializer test subprocess execution.
 
 - Added task-oriented guides for private realtime dashboards, JSX without React, chat presence, typed WebSocket contracts and shared HTTP/WebSocket listeners. Their setup and selected source come from the same canonical recipes; dashboard setup now provisions an explicit account after installation. Versioned Markdown remains usable without an agent-specific service.

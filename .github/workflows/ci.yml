@@ -42,6 +42,8 @@ jobs:
       - run: npm run verify:starters:lifecycle
         timeout-minutes: 5
       - run: npm run verify:live-html:browser
+      - run: npm run verify:browser:coverage
+        timeout-minutes: 5
       - run: npm run verify:development:browser
         timeout-minutes: 10
       - run: npm run verify:live-html:load

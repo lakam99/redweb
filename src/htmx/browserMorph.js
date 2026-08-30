@@ -31,7 +31,54 @@ const rangeNodes = unit => {
     }
     return nodes;
 };
-const selectedDefaults = node => [...node.options].filter(option => option.defaultSelected).map(option => option.value).join('\\0');
+const optionDefaults = node => {
+    const seen = new Map();
+    return [...node.options].map(option => {
+        const occurrence = seen.get(option.value) || 0;
+        seen.set(option.value, occurrence + 1);
+        return { option, value: option.value, selected: option.defaultSelected, key: JSON.stringify([option.value, option.id || occurrence]) };
+    });
+};
+const defaultsChanged = (previous, node) => {
+    const original = new Map(previous.map(entry => [entry.option, entry]));
+    const pending = new Map();
+    const count = (key, change) => pending.set(key, (pending.get(key) || 0) + change);
+    for (const entry of previous) if (entry.selected) count(entry.key, 1);
+    for (const entry of optionDefaults(node)) {
+        const before = original.get(entry.option);
+        if (before && before.value === entry.value) {
+            if (before.selected !== entry.selected) return true;
+            if (entry.selected) count(before.key, -1);
+        } else if (entry.selected) count(entry.key, -1);
+    }
+    return [...pending.values()].some(value => value !== 0);
+};
+const restoreSelection = (node, incoming, previous, resetToDefaults) => {
+    const options = [...node.options];
+    const selected = new Set();
+    if (resetToDefaults) {
+        [...incoming.options].forEach((option, index) => { if (option.selected) selected.add(options[index]); });
+    } else {
+        const available = new Set(options);
+        const missing = new Map();
+        for (const entry of previous) {
+            if (available.has(entry.option) && entry.option.value === entry.value) selected.add(entry.option);
+            else missing.set(entry.value, (missing.get(entry.value) || 0) + 1);
+        }
+        // Retained identities win; only replaced options need value matching.
+        // Consume each missing value once, even when option values are repeated.
+        for (const option of options) {
+            const count = missing.get(option.value) || 0;
+            if (count && !selected.has(option)) {
+                selected.add(option);
+                missing.set(option.value, count - 1);
+            }
+        }
+    }
+    if (resetToDefaults || selected.size || !previous.length) {
+        for (const option of options) option.selected = selected.has(option);
+    }
+};
 const morphNode = (node, incoming) => {
     if (node.nodeType !== 1) {
         if (node.nodeValue !== incoming.nodeValue) node.nodeValue = incoming.nodeValue;
@@ -45,17 +92,14 @@ const morphNode = (node, incoming) => {
     const valueChanged = input ? node.getAttribute('value') !== incoming.getAttribute('value') :
         textarea && node.defaultValue !== incoming.defaultValue;
     const checkedChanged = input && node.hasAttribute('checked') !== incoming.hasAttribute('checked');
-    const selections = select ? [...node.selectedOptions].map(option => option.value) : [];
-    const defaultsChanged = select && selectedDefaults(node) !== selectedDefaults(incoming);
+    const selections = select ? [...node.selectedOptions].map(option => ({ option, value: option.value })) : [];
+    const defaults = select ? optionDefaults(node) : null;
     for (const attribute of [...node.attributes]) if (!incoming.hasAttribute(attribute.name)) node.removeAttribute(attribute.name);
     for (const attribute of incoming.attributes) if (node.getAttribute(attribute.name) !== attribute.value) node.setAttribute(attribute.name, attribute.value);
     reconcile(node, incoming);
     if ((input && node.type !== 'file') || textarea) node.value = valueChanged ? incoming.value : previousValue;
     if (input) node.checked = checkedChanged ? incoming.checked : previousChecked;
-    const desiredSelections = select && defaultsChanged ? [...incoming.selectedOptions].map(option => option.value) : selections;
-    if (select && desiredSelections.some(value => [...node.options].some(option => option.value === value))) {
-        for (const option of node.options) option.selected = desiredSelections.includes(option.value);
-    }
+    if (select) restoreSelection(node, incoming, selections, defaultsChanged(defaults, node));
 };
 const reconcile = (parent, incoming, start = null, end = null, incomingStart = null, incomingEnd = null) => {
     const previous = units(parent, start, end);
@@ -69,15 +113,16 @@ const reconcile = (parent, incoming, start = null, end = null, incomingStart = n
         candidates.set(key, matches);
     }
     let cursor = start ? start.nextSibling : parent.firstChild;
+    // A bounded cursor cannot pass its retained end marker; unbounded null appends.
     for (const wanted of desired) {
         const matches = candidates.get(matchKey(wanted));
         const found = matches?.units[matches.next++];
         if (!found) {
-            for (const node of rangeNodes(wanted)) parent.insertBefore(node.cloneNode(true), cursor || end);
+            for (const node of rangeNodes(wanted)) parent.insertBefore(node.cloneNode(true), cursor);
             continue;
         }
         remaining.delete(found);
-        if (found.first !== cursor) for (const node of rangeNodes(found)) parent.insertBefore(node, cursor || end);
+        if (found.first !== cursor) for (const node of rangeNodes(found)) parent.insertBefore(node, cursor);
         if (found.key) reconcile(parent, incoming, found.first, found.last, wanted.first, wanted.last);
         else morphNode(found.first, wanted.first);
         cursor = found.last.nextSibling;
