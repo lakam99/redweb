@@ -25,6 +25,13 @@ if (!Number.isSafeInteger(preconditioningConnections + warmConnections + stormCo
 if (!Number.isSafeInteger(batchSize * 2)) throw new RangeError('Recovery connection capacity must be a safe integer.');
 const diagnostics = process.env.REDWEB_RECOVERY_DIAGNOSTICS === '1';
 const v8 = diagnostics ? require('node:v8') : undefined;
+// Materialize a flat string so native snapshots retain the marker value rather
+// than a concatenation node whose contents would require arbitrary string walks.
+const diagnosticRun = diagnostics ? Buffer.from(`${process.pid}:${require('node:crypto').randomUUID()}`).toString('utf8') : undefined;
+function diagnosticRecord(value) {
+    if (diagnostics) Object.defineProperty(value, '__redwebRecoveryDiagnostic', { value: diagnosticRun });
+    return value;
+}
 const snapshotDirectory = process.env.REDWEB_RECOVERY_HEAP_DIRECTORY;
 if (snapshotDirectory !== undefined && (!diagnostics || !require('node:path').isAbsolute(snapshotDirectory))) {
     throw new TypeError('Heap snapshots require diagnostics and an absolute REDWEB_RECOVERY_HEAP_DIRECTORY.');
@@ -34,10 +41,11 @@ if (typeof global.gc !== 'function') throw new Error('Run with node --expose-gc 
 // Opt-in observation only: these allocations can perturb the diagnostic run.
 // Never subtract code bytes from the acceptance measurement or budget.
 function diagnosticSnapshot(stage, capture = true) {
-    const sample = { spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() };
+    const sample = diagnosticRecord({ spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() });
     // Raw snapshots may contain secrets. Use only in an isolated diagnostic process;
     // never publish the files. Capturing one adds GC/work, so this is not acceptance.
     if (snapshotDirectory !== undefined && capture) {
+        Object.defineProperty(sample, '__redwebRecoveryCapture', { value: stage });
         const filename = require('node:path').join(snapshotDirectory, `${stage}.heapsnapshot`);
         const descriptor = require('node:fs').openSync(filename, 'wx', 0o600);
         require('node:fs').closeSync(descriptor);
@@ -109,11 +117,11 @@ async function main() {
         const settle = async phase => {
             await new Promise(resolve => setTimeout(resolve, 400));
             const heap = await collectHeap();
-            const registries = { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size };
+            const registries = diagnosticRecord({ clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size });
             if (Object.values(registries).some(value => value !== 0)) {
                 throw new Error(`Recovery registries did not empty after ${phase}: ${JSON.stringify(registries)}`);
             }
-            return { phase, heap, registries };
+            return diagnosticRecord({ phase, heap, registries });
         };
         let preconditioning;
         if (preconditioningConnections) {
@@ -124,12 +132,12 @@ async function main() {
         const warm = await settle('warm');
         const warmedHeap = warm.heap;
         const warmDiagnostics = diagnostics ? diagnosticSnapshot('warm') : undefined;
-        const cycleDiagnostics = {};
-        const cycles = [];
+        const cycleDiagnostics = diagnosticRecord({});
+        const cycles = diagnosticRecord([]);
         for (let round = 0; round < stormRounds; round++) {
             await runConnections(route, url, preconditioningConnections + warmConnections + round * stormConnections, stormConnections);
             const cycle = await settle(`storm-${round + 1}`);
-            cycles.push({ ...cycle, recoveredHeapPercentOfWarm: cycle.heap / warmedHeap * 100 });
+            cycles.push(diagnosticRecord({ ...cycle, recoveredHeapPercentOfWarm: cycle.heap / warmedHeap * 100 }));
             // Observe the known third-storm peak without adding snapshot GC to
             // storms 1/2/4 or duplicating the final snapshot. Never acceptance.
             if (diagnostics) cycleDiagnostics[cycle.phase] = diagnosticSnapshot(cycle.phase, round === 2 && round < stormRounds - 1);

@@ -17,6 +17,11 @@ const objectNames = new Set([
 const nodeTypes = new Set(['hidden', 'array', 'string', 'object', 'code', 'closure', 'regexp',
     'number', 'native', 'synthetic', 'concatenated string', 'sliced string', 'symbol', 'bigint', 'object shape']);
 
+function nodeGroup(type, name) {
+    return type === 'object' && objectNames.has(name) ? `object:${name}`
+        : nodeTypes.has(type) ? `type:${type}` : 'type:other';
+}
+
 function summarize(snapshot) {
     const { node_fields: fields, node_types: types } = snapshot.snapshot.meta;
     assert.ok(Array.isArray(fields) && Array.isArray(types)
@@ -36,8 +41,7 @@ function summarize(snapshot) {
         const type = types[typeOffset][typeIndex];
         const name = snapshot.strings[nameIndex];
         assert.ok(typeof type === 'string' && typeof name === 'string');
-        const label = type === 'object' && objectNames.has(name) ? `object:${name}`
-            : nodeTypes.has(type) ? `type:${type}` : 'type:other';
+        const label = nodeGroup(type, name);
         const size = snapshot.nodes[offset + sizeOffset];
         assert.ok(Number.isSafeInteger(size) && size >= 0);
         const group = groups[label] ??= { count: 0, selfBytes: 0 };
@@ -70,4 +74,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { summarize, compare };
+module.exports = { summarize, compare, nodeGroup };

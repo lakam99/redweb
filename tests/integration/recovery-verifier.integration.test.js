@@ -76,6 +76,16 @@ test('private native heap snapshots produce only fixed-label aggregates and neve
             warm, path.join(owner.directory, 'storm-3.heapsnapshot')]));
         expect(peak.diagnosticOnly).toBe(true);
         expect(peak.groups.find(group => group.group === 'type:code').warm.count).toBeGreaterThan(0);
+        const graphScript = path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-graph.cjs');
+        const ownership = JSON.parse(await owner.command([graphScript, warm, path.join(owner.directory, 'storm-3.heapsnapshot')]));
+        expect(ownership).toMatchObject({ diagnosticOnly: true, sameRunMarkerVerified: true, exclusiveOwnershipProven: false,
+            fromPhase: 'warm', toPhase: 'storm-3' });
+        expect(ownership.markedRecords).toBeGreaterThan(0);
+        expect(ownership.diagnosticDataNodes).toBeGreaterThan(ownership.markedRecords);
+        expect(JSON.stringify(ownership)).not.toContain(owner.directory);
+        expect(JSON.stringify(ownership)).not.toContain('__redwebRecoveryDiagnostic');
+        const decay = JSON.parse(await owner.command([graphScript, path.join(owner.directory, 'storm-3.heapsnapshot'), recovered]));
+        expect(decay).toMatchObject({ fromPhase: 'storm-3', toPhase: 'recovered', exclusiveOwnershipProven: false });
         await expect(owner.command(['--expose-gc', script], { environment, timeoutMs: 10000 })).rejects.toThrow('EEXIST');
         expect(fs.readFileSync(warm).equals(before)).toBe(true);
     });
@@ -100,9 +110,10 @@ test('recovery refuses to measure retained heap without explicit garbage collect
     });
 }, 15000);
 
-test('private summary CLI failures never echo input contents or paths', async () => {
+test.each(['summary', 'graph'])('private %s CLI failures never echo input contents or paths', async kind => {
     await new VerificationWorkspace().run(async owner => {
-        const summary = path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-summary.cjs');
+        const summary = path.resolve(__dirname, `../../scripts/diagnostics/recovery-heap-${kind}.cjs`);
+        const message = `Private heap-${kind} diagnostic failed.`;
         const filename = path.join(owner.directory, 'private-input.json');
         const secret = 'test-only-sensitive-snapshot-value';
         for (const input of [`{ "${secret}":`, JSON.stringify({ private: secret })]) {
@@ -111,16 +122,52 @@ test('private summary CLI failures never echo input contents or paths', async ()
                 await owner.command([summary, filename, filename], { timeoutMs: 10000 });
                 throw new Error('Malformed snapshot unexpectedly accepted');
             } catch (error) {
-                expect(error.message).toContain('Private heap-summary diagnostic failed.');
+                expect(error.message).toContain(message);
                 expect(error.message).not.toContain(secret);
                 expect(error.message).not.toContain(owner.directory);
-                expect(error.message).toBe('Package verification command failed (1): \nPrivate heap-summary diagnostic failed.\n');
+                expect(error.message).toBe(`Package verification command failed (1): \n${message}\n`);
             }
         }
         await expect(owner.command([summary], { timeoutMs: 10000 }))
-            .rejects.toThrow('Private heap-summary diagnostic failed.');
+            .rejects.toThrow(message);
     });
 }, 35000);
+
+test('native snapshot graph finds an actual server-held probe and retains shared-reference uncertainty', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        await owner.command(['--expose-gc', '-e', `
+            const { once } = require('node:events');
+            const { join } = require('node:path');
+            const v8 = require('node:v8');
+            const redweb = require(process.argv[2]);
+            const { marker, captureMarker } = require(process.argv[3]);
+            (async () => {
+                const server = new redweb.SocketServer({ port: 0, bind: '127.0.0.1', logger: null });
+                try {
+                    if (!server.server.listening) await once(server.server, 'listening');
+                    const records = {};
+                    Object.defineProperty(records, marker, { value: Buffer.from(process.pid + ':' + require('node:crypto').randomUUID()).toString('utf8') });
+                    Object.defineProperty(records, captureMarker, { value: 'warm', writable: true });
+                    v8.writeHeapSnapshot(join(process.argv[1], 'warm.heapsnapshot'));
+                    server.heapProbe = { privateValue: 'test-only-private-retained-probe' };
+                    records[captureMarker] = 'storm-3';
+                    v8.writeHeapSnapshot(join(process.argv[1], 'storm-3.heapsnapshot'));
+                    records.shared = server.heapProbe;
+                    records[captureMarker] = 'recovered';
+                    v8.writeHeapSnapshot(join(process.argv[1], 'recovered.heapsnapshot'));
+                } finally { await server.shutdown(); }
+            })().catch(() => { console.error('Native probe fixture failed'); process.exitCode = 1; });
+        `, owner.directory, path.resolve(__dirname, '../..'), path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-graph.cjs')]);
+        const graph = path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-graph.cjs');
+        const report = JSON.parse(await owner.command([graph, path.join(owner.directory, 'warm.heapsnapshot'), path.join(owner.directory, 'storm-3.heapsnapshot')]));
+        const outside = report.buckets.find(bucket => bucket.category === 'outside-diagnostic-data' && bucket.group === 'object:Object');
+        expect(outside.addedRetainerHints['object:SocketServer:property']).toBeGreaterThanOrEqual(1);
+        expect(JSON.stringify(report)).not.toContain('test-only-private-retained-probe');
+        const shared = JSON.parse(await owner.command([graph, path.join(owner.directory, 'storm-3.heapsnapshot'), path.join(owner.directory, 'recovered.heapsnapshot')]));
+        expect(shared.exclusiveOwnershipProven).toBe(false);
+        expect(shared.buckets.find(bucket => bucket.category === 'diagnostic-data-reachable' && bucket.group === 'object:Object').movedInCount).toBeGreaterThanOrEqual(1);
+    });
+}, 25000);
 
 test('aggregate unit cases redact arbitrary labels and reject malformed metadata', () => {
     const fixture = { snapshot: { meta: { node_fields: ['type', 'name', 'self_size'], node_types: [['object', 'unrecognized']] } },

@@ -28,6 +28,44 @@ jobs:
         id: recovery
       - run: npm audit --omit=dev
 
+  recovery-ownership-diagnostic:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 16 && github.head_ref == 'codex/agent-ready' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Trace marked diagnostic data and candidate retainers (not acceptance)
+        timeout-minutes: 2
+        run: |
+          node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
+          git rev-parse HEAD
+          umask 077
+          diagnostic_dir="$(mktemp -d "${RUNNER_TEMP}/redweb-ownership.XXXXXX")"
+          cleanup() {
+            rm -f -- "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot" "$diagnostic_dir/storm-3.heapsnapshot"
+            rmdir -- "$diagnostic_dir"
+          }
+          trap cleanup EXIT
+          set +e
+          env -i PATH="$PATH" REDWEB_RECOVERY_DIAGNOSTICS=1 REDWEB_RECOVERY_HEAP_DIRECTORY="$diagnostic_dir" node --expose-gc scripts/verify-recovery.js
+          diagnostic_status=$?
+          printf '\nDiagnostic status: %s; original failures remain authoritative.\n' "$diagnostic_status"
+          printf '\nWarm to storm 3 (bounded, fixed-label graph report):\n'
+          node scripts/diagnostics/recovery-heap-graph.cjs "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/storm-3.heapsnapshot"
+          peak_graph_status=$?
+          printf '\nStorm 3 to final (bounded, fixed-label graph report):\n'
+          node scripts/diagnostics/recovery-heap-graph.cjs "$diagnostic_dir/storm-3.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot"
+          final_graph_status=$?
+          set -e
+          if [ "$diagnostic_status" -ne 0 ]; then exit "$diagnostic_status"; fi
+          if [ "$peak_graph_status" -ne 0 ]; then exit "$peak_graph_status"; fi
+          exit "$final_graph_status"
+
   lifecycle-smoke:
     runs-on: ubuntu-latest
     steps:
