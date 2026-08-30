@@ -179,3 +179,44 @@ The README and guide's stale current coverage/command claims were corrected
 afterward; the type/generated-documentation preflight was rerun for that prose
 increment. Production dependency audit reported zero vulnerabilities with system
 certificate trust enabled, without disabling TLS verification.
+
+## Current package and performance checkpoint
+
+Redweb `28f9c62` and client `a8b6a9f` passed the complete isolated candidate
+package gate on Windows/Node 22.21.0/Chrome 152.0.7977.64. This includes the
+server-driven counter, two-user chat, disconnect/reconnect presence, dashboard,
+full browser acceptance, runtime/refresh coverage, generated applications,
+executable documentation and source-free consumers. The process exited normally
+and completed owned-workspace cleanup. Nothing was published or deployed.
+
+- Redweb archive SHA-256:
+  `f2a8649dfcf83f6fba6351a4bfdf39bb50d85ffde59e09d2b2e62c9b4fd10511`.
+- Client archive: `coverage/client-default-20260830-2259/redweb-client-0.1.0.tgz`,
+  SHA-256 `86ad220edad8a00010659c1c89028de937ea84dfe35b13ac747cac39bf10a440`.
+- Packed browser report:
+  `coverage/packed-browser/9caf08f4-7cc6-4d7b-9ca5-e15b4a229edc/report.json`,
+  SHA-256 `9de780f16203fcde0d1cb3f22fab540978a0a7af64cf6a6b383bc18c842e0857`.
+  It verifies 190 original package files, 23 unchanged harness files and four
+  explicit external development tools. All four client bundles match the built
+  source-verification inputs. Runtime and refresh coverage each remain all-four
+  100%; the refresh check observed actual back/forward-cache restoration.
+
+After the package process terminated, the following gates ran sequentially with
+their default workloads and limits, without diagnostic or coverage overrides.
+Every command exited successfully on its first run in this checkpoint:
+
+| Gate | Observed result |
+| --- | --- |
+| `verify:load` | 32 clients, 3,200 messages, 5,789 messages/second, 6.97 ms p99; slow consumer contained |
+| `verify:memory` | 500 connections, three trials; 1,880.704 bytes/connection incremental metadata against 2,048 maximum |
+| `verify:live-html:load` | 200 expired renders, 110 live clients; 8,052,960-byte heap delta |
+| `verify:jsx:performance` | 10,000 component rows in 49.7 ms; 1.3 MiB retained |
+
+These are bounded Windows checkpoint results, not a recovery, extended-soak,
+cross-runtime or registry-release certificate. The existing Ubuntu/Node 22.23.2
+recovery failure remains unresolved, and the predeclared comparison has not run.
+The local Docker Linux engine is unavailable and WSL lists no Ubuntu environment;
+no alternative platform was substituted. Publication of a newly versioned client,
+Redweb dependency/lockfile integration, final-head CI, website alignment and the
+explicit recovery decision remain open. This evidence-only section was added
+after packing and does not claim its own text was in the tested archive.
