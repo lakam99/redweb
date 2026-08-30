@@ -7,6 +7,8 @@ test.each(['server', 'client'])('diagnostic flags are explicit and isolated for 
     expect(workerFlags(role, 'baseline')).toEqual(['--expose-gc']);
     expect(workerFlags(role, 'trace')).toEqual(['--expose-gc', '--trace-gc', '--trace-flush-code']);
     expect(workerFlags(role, 'client-jitless')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc', '--jitless']);
+    expect(workerFlags(role, 'client-code')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc',
+        '--log-code', '--no-log-source-code', '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-']);
     expect(() => workerFlags(role, '--arbitrary-flag')).toThrow('Unknown diagnostic mode');
 });
 
@@ -25,6 +27,7 @@ test('fingerprints the runtime, reference gate, lockfile and linked client repro
     expect(actual).toEqual(fingerprint());
     expect(actual['scripts/verify-recovery.js']).toMatch(/^[a-f0-9]{64}$/);
     expect(actual['package-lock.json']).toMatch(/^[a-f0-9]{64}$/);
+    expect(actual['scripts/diagnostics/recovery-code-summary.cjs']).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.keys(actual).some(name => name.includes('BaseSocketServer.js'))).toBe(true);
     expect(actual[require.resolve('redweb-client/live-html')]).toMatch(/^[a-f0-9]{64}$/);
 });

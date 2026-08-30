@@ -208,3 +208,44 @@ test('successful worker stop drains queued stdout before process exit', () =>
             await withTimeout(closed, 'queued output cleanup', 5000);
         }
     }), 20000);
+
+test('native client code log brackets real traffic without source text or server instrumentation', () =>
+    new VerificationWorkspace().run(async workspace => {
+        const output = outputRecorder(workspace.directory);
+        const options = { mode: 'client-code', output: output.write, coverageDirectory: process.env.NODE_V8_COVERAGE };
+        const server = new DiagnosticProcess('server', options);
+        const client = new DiagnosticProcess('client', options);
+        let port;
+        try {
+            const { url } = await server.request('start');
+            port = Number(new URL(url).port);
+            for (const [start, phase] of [[0, 'warm'], [50, 'storm-5']]) {
+                expect(await client.request('batch', { url, start, count: 50 })).toEqual({ sent: start + 50, received: start + 50, clients: 0 });
+                expect(await server.request('barrier')).toEqual({ received: start + 50 });
+                for (const [role, child] of [['server', server], ['client', client]]) {
+                    const sample = await child.request('sample', { phase });
+                    expect(sample.execArgv).toEqual(workerFlags(role, 'client-code'));
+                    expect(Object.values(sample.registries).every(value => value === 0)).toBe(true);
+                }
+            }
+            await Promise.all([server.request('stop'), client.request('stop')]);
+        } finally { await Promise.all([disconnect(server), disconnect(client)]); }
+        const bytes = fs.readFileSync(path.join(workspace.directory, 'client.stdout.log'));
+        expect(output.summary()['client.stdout.log']).toEqual({ bytes: bytes.length, complete: true,
+            sha256: createHash('sha256').update(bytes).digest('hex') });
+        expect(bytes.toString()).not.toMatch(/^(script-source|code-source-info|code-disassemble|feedback-vector),/m);
+        const summarize = () => require('../../scripts/diagnostics/recovery-code-summary.cjs').summarize(bytes.toString());
+        if (process.versions.v8 === '12.4.254.21-node.33') {
+            const census = summarize();
+            expect(census.retainedSizeProven).toBe(false);
+            expect(census.totalCreationRecords).toBeGreaterThan(100);
+            expect(census.boundaryTimesUs[1]).toBeGreaterThan(census.boundaryTimesUs[0]);
+        } else {
+            // CI's other supported Node releases still exercise real traffic and
+            // capture, but must not silently decode a different V8 enum/schema.
+            expect(summarize).toThrow('Unsupported V8 code-log version');
+        }
+        expect(fs.readFileSync(path.join(workspace.directory, 'server.stdout.log'), 'utf8')).toBe('');
+        expect(fs.readdirSync(workspace.directory).sort()).toEqual(['client.stderr.log', 'client.stdout.log', 'server.stderr.log', 'server.stdout.log']);
+        await assertPortReusable(port);
+    }), 30000);

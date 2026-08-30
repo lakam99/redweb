@@ -6,11 +6,18 @@ const v8 = require('node:v8');
 const { silentLogger, waitFor, WebSocket, closeClient } = require('../realtime-harness');
 const role = process.argv[2];
 const tracing = process.execArgv.includes('--trace-flush-code');
+const loggingCode = process.execArgv.includes('--log-code');
 let server;
 let stopped = false;
 let sent = 0;
 let received = 0;
 const clients = new Set();
+
+// First invocation compiles each tiny marker through V8's own logger. Unlike
+// mixed JS/native stdout writes, these boundaries share the code-event stream.
+// They follow samples, perturb this diagnostic, and are NOT retention evidence.
+function rwDiagnosticWarmBoundary() { return 0; }
+function rwDiagnosticFinalBoundary() { return 0; }
 
 async function dispatch({ command, url, start, count, phase }) {
     switch (command) {
@@ -96,6 +103,8 @@ async function dispatch({ command, url, start, count, phase }) {
                 : { clients: clients.size };
             assert(Object.values(registries).every(value => value === 0), 'Recovery registries are not empty');
             if (tracing) process.stdout.write(`[rw-phase ${phase} sampled heap=${memory.heapUsed} bytecode=${code.bytecode_and_metadata_size}]\n`);
+            if (loggingCode && phase === 'warm') rwDiagnosticWarmBoundary();
+            if (loggingCode && phase === 'storm-5') rwDiagnosticFinalBoundary();
             return { pid: process.pid, node: process.version, v8: process.versions.v8, execArgv: process.execArgv,
                 memory, spaces, code, registries, sent, received };
         }
