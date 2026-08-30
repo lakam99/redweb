@@ -46,6 +46,7 @@
     "prepack": "node scripts/build-live-html-examples.js --check && node scripts/generate-docs.js --check",
     "generate:docs": "node scripts/generate-docs.js",
     "verify:docs:mcp": "npm --prefix integrations/docs-mcp test",
+    "verify:cli": "c8 --all --src=bin --include=bin/redweb.js --reporter=text --reporter=json --reports-dir=coverage/cli-entrypoint --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node node_modules/jest/bin/jest.js tests/integration/init-cli.integration.test.js tests/integration/add-cli.integration.test.js --testNamePattern=\"redweb init CLI integration|human and subprocess CLI\" --runInBand --coverage=false",
     "verify:agents:controls": "node scripts/evaluation/validate.js",
     "example:counter": "node examples/live-html/counter.js",
     "example:chatroom": "node examples/live-html/chatroom.js",

@@ -37,6 +37,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify:memory
+      - run: npm run verify:cli
+        timeout-minutes: 5
       - run: npm run verify:starters:lifecycle
         timeout-minutes: 5
       - run: npm run verify:live-html:browser

@@ -4,15 +4,16 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
-const { spawn, spawnSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const { request, withTimeout } = require('../helpers/network');
+const { spawnManaged, stopProcessTree } = require('../../scripts/evaluation/process');
 const { USAGE } = require('../../src/cli/arguments');
 
 const root = path.resolve(__dirname, '..', '..');
 const cli = path.join(root, 'bin', 'redweb.js');
 
 function run(args, cwd) {
-    return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', shell: false });
+    return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', shell: false, windowsHide: true, timeout: 30000 });
 }
 
 function availablePort() {
@@ -40,13 +41,16 @@ function waitForOutput(child, text) {
 
 describe('redweb init CLI integration', () => {
     let workspace;
+    let retainWorkspace;
 
     beforeEach(() => {
         workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-init-integration-'));
+        retainWorkspace = false;
     });
 
     afterEach(() => {
-        fs.rmSync(workspace, { recursive: true, force: true });
+        if (retainWorkspace) console.error(`Cleanup uncertain; retained CLI test workspace: ${workspace}`);
+        else fs.rmSync(workspace, { recursive: true, force: true });
     });
 
     test('scaffolds, safely reruns, compiles, and serves through the shipped preset', async () => {
@@ -63,17 +67,25 @@ describe('redweb init CLI integration', () => {
             cwd: target,
             encoding: 'utf8',
             shell: false,
+            windowsHide: true,
+            timeout: 30000,
         });
         expect(compiled.stderr || compiled.stdout).toBe('');
         expect(compiled.status).toBe(0);
-        expect(spawnSync(process.execPath, ['scripts/copy-assets.cjs'], { cwd: target, encoding: 'utf8' }).status).toBe(0);
+        expect(spawnSync(process.execPath, ['scripts/copy-assets.cjs'], { cwd: target, encoding: 'utf8', windowsHide: true, timeout: 10000 }).status).toBe(0);
 
         const port = await availablePort();
-        const app = spawn(process.execPath, ['dist/app.js'], {
+        const app = spawnManaged(['dist/app.js'], {
             cwd: target,
             env: { ...process.env, PORT: String(port) },
             stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: true,
         });
+        // Observe closure before any asynchronous startup work: startup can fail
+        // before cleanup begins. This test verifies serving, not graceful stop.
+        const stopped = new Promise(resolve => app.once('close', resolve));
+        app.stderr.resume();
+        let failure;
         try {
             await waitForOutput(app, `:${port}`);
             const response = await request({ port });
@@ -85,11 +97,19 @@ describe('redweb init CLI integration', () => {
             const styles = await request({ port, path: stylesheet });
             expect(styles.status).toBe(200);
             expect(styles.body).toContain('.home');
-        } finally {
-            const stopped = new Promise(resolve => app.once('exit', resolve));
-            app.kill();
+        } catch (error) { failure = error; }
+        try {
+            await stopProcessTree(app);
             await withTimeout(stopped, 'generated Redweb app to stop');
+        } catch (cleanup) {
+            retainWorkspace = true;
+            // Release this test's handles without claiming the process stopped.
+            app.stdout.destroy();
+            app.stderr.destroy();
+            app.unref();
+            failure = failure ? new AggregateError([failure, cleanup], failure.message, { cause: failure }) : cleanup;
         }
+        if (failure) throw failure;
 
         const source = path.join(target, 'src', 'app.tsx');
         fs.writeFileSync(source, 'user-owned source', 'utf8');

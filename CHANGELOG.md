@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a separate 100% CLI entrypoint coverage gate using real initializer, doctor and incremental-generation integrations; bound initializer test subprocess execution.
+
 - Added task-oriented guides for private realtime dashboards, JSX without React, chat presence, typed WebSocket contracts and shared HTTP/WebSocket listeners. Their setup and selected source come from the same canonical recipes; dashboard setup now provisions an explicit account after installation. Versioned Markdown remains usable without an agent-specific service.
 
 - Simplified the README around the first working counter and a shared HTTP/WebSocket application. Setup commands and both code blocks are generated from the same version-aware recipes; missing, duplicated, reversed or overlapping regions fail before writes. Historical migration guidance remains available in a canonical guide.
