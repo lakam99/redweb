@@ -51,10 +51,11 @@ checked before and after execution.
   SHA-256 `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
 
 This is tracked original-source coverage, not exhaustive optional-chain or
-compiler-generated V8 branch coverage. The separate standalone client `npm run
-check` currently fails its Node-only V8 coverage thresholds because browser
-modules are not exercised there. Its README now states that limitation accurately;
-the failure is not reclassified as a pass by this combined report.
+compiler-generated V8 branch coverage. At the start of this increment, the client's
+`npm run check` failed because it used only the Node-only V8 command, which does
+not exercise browser modules. That underlying command remains `npm test` with
+unchanged thresholds and an unresolved result; the comprehensive command update
+below does not reclassify the earlier failure as a pass.
 
 ## Matching installed artifacts
 
@@ -101,3 +102,44 @@ Instrumented-library coverage is 100% over 5,445 statements, 4,044 branches,
 
 Report: `coverage/client-polish-full-suite.json`; SHA-256
 `bb3c58eadef1aece8c7e761713e6e3da44ad536981e181b4c1d9ddc04d70b004`.
+
+## Canonical client check
+
+Client `ee74017` and Redweb `45a34d5` make `npm run check` use the complete
+original-source Node/browser gate rather than only running Node tests over browser
+code. The existing separate `npm test` V8 command and thresholds remain unchanged;
+its failure is still recorded, not presented as fixed.
+
+Before building, `check:link` compares the expected client's canonical path with
+the package installed into Redweb. It resolves the package/junction independently
+of `dist`, allowing an unbuilt linked checkout to pass preflight. Full verification
+still requires normal built-export resolution to match that checkout. Missing or
+wrong linkage fails without fallback. `test:source` rechecks the expected path and
+delegates directly to the existing runner; no browser harness is duplicated.
+
+Twenty-one focused unit and actual-process tests pass, including a linked fixture
+whose normal export cannot yet resolve but whose preflight succeeds without
+building or creating reports. The two collector/reporting helpers remain all-four
+100% covered. The critic approved after catching and correcting that first-build
+problem. Native `npm run check` then passed build/types, all 77 client tests in
+both modes, native Chromium checks and the same 791/521/125/659 covered counters.
+
+- Final canonical-check source run: `6ae0027f-b078-43ee-8069-be386a984007`,
+  `2026-08-30T22:42:44.784Z`–`2026-08-30T22:42:56.970Z`.
+- Summary: `coverage/client-source/6ae0027f-b078-43ee-8069-be386a984007/summary.json`,
+  SHA-256 `694dadb8082a1430b08c4829e4560d3dc131d324d58bc41ddd9c6ceae27bd4df`.
+- Coverage JSON SHA-256 remains
+  `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
+- Helper coverage: `coverage/client-check-preflight/coverage-final.json`,
+  SHA-256 `7305ad80c8bb09e5dc1d6715889fcfb6fca2836620329da9bf75854bb056b4a2`.
+
+The earlier full regression and packed archives precede these command/preflight
+and README changes; their production source and all four client bundles remain
+unchanged. These later changes are verified by the focused real-process checks
+and the actual canonical command, not claimed as another full package run.
+
+After the final evidence update, generated-documentation and all type/pretest
+checks passed, along with 25 focused documentation/preflight/report tests and two
+real generator/release-immutability cases. The critic independently rechecked the
+final source report hashes and unchanged client bundles. Both development links
+and dependency lockfiles remain unchanged.

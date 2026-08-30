@@ -69,10 +69,14 @@ source/browser run: `cc9aead6-cfbb-44af-aba6-94124ab03419`.
 
 This is distinct from the standalone client's Node-only V8 report, which still
 fails its unchanged thresholds because it does not exercise the browser modules.
-Neither denominator is substituted for the other. Client `npm run check` is not
-currently a passing complete-client gate; use the integrated source/browser check
-above for its stated scope. Making the standalone developer command cover both
-environments remains release-polish work, not a waived coverage result.
+Neither denominator is substituted for the other. Client `npm test` retains that
+separate Node-only V8 command. The canonical client `npm run check` now validates
+the matching link before building, runs build/types, then delegates to the full
+combined original-source Node/browser gate. It requires this matching sibling
+Redweb checkout and Chromium, and passes for the verified development pair.
+The preflight works without built client bundles, so a fresh linked checkout can
+reach its first build. Wrong/missing checkouts fail instead of checking another
+installed client. No duplicate browser harness or production dependency was added.
 
 ## Release boundary
 
