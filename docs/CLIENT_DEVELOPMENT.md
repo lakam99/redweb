@@ -58,10 +58,21 @@ The source-coverage command instruments original client modules once and shares
 their maps between Node and Chromium. It checks every test file reported exactly
 once, compares plain/instrumented results, verifies unchanged inputs and saves
 separate contributions. Plain browser candidates must equal the linked build.
-It currently fails its unchanged 100% threshold at 520/521 branches; every tracked
-statement, function and line is covered. The uncovered branch is a defensive
-empty queue entry, not a demonstrated supported-operation path. This is distinct
-from the whole-client V8 report; neither denominator is substituted for the other.
+The combined gate now passes its unchanged 100% threshold: 791 statements, 521
+branches, 125 functions and 659 lines. The redundant empty-entry queue branch was
+removed because the private queue is dense and its length is checked immediately
+before removal, without an intervening callback. A shared disposed-client guard
+also fixes new sends/requests being accepted into an unusable queue after disposal.
+Unit and real-socket regressions cover that failure, queued ordering, cancellation
+before opening and no replay after reconnect. Verified client commit: `859487b`;
+source/browser run: `cc9aead6-cfbb-44af-aba6-94124ab03419`.
+
+This is distinct from the standalone client's Node-only V8 report, which still
+fails its unchanged thresholds because it does not exercise the browser modules.
+Neither denominator is substituted for the other. Client `npm run check` is not
+currently a passing complete-client gate; use the integrated source/browser check
+above for its stated scope. Making the standalone developer command cover both
+environments remains release-polish work, not a waived coverage result.
 
 ## Release boundary
 
