@@ -17,7 +17,9 @@ async function connect(t, url, origin, headers = {}) {
     t.after(async () => {
         if (socket.readyState === WebSocket.CLOSED) return;
         const closed = once(socket, 'close');
-        socket.close();
+        // Cleanup must not depend on a peer completing the closing handshake.
+        // Tests of graceful disconnect explicitly close and await their sockets.
+        socket.terminate();
         await closed;
     });
     await once(socket, 'open');

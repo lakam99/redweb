@@ -3,10 +3,23 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
-const { verifyStarter, verifyApplication } = require('../../scripts/lib/verify-starter');
+const { verifyStarter, verifyApplication, linkApplication } = require('../../scripts/lib/verify-starter');
 const { waitForCondition } = require('../helpers/network');
 
 const root = path.resolve(__dirname, '../..');
+
+test('generated network cleanup owns its socket even when the real peer stops reading', async () => {
+    await new VerificationWorkspace().run(async execution => {
+        const target = path.join(execution.directory, 'network-cleanup');
+        await execution.command([path.join(root, 'bin/redweb.js'), 'init', target, '--template', 'realtime', '--json'], { timeoutMs: 5000 });
+        linkApplication(root, target, 'realtime', JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8')));
+        await execution.command([require.resolve('typescript/bin/tsc')], { cwd: target, timeoutMs: 10000 });
+        fs.copyFileSync(path.join(root, 'tests/fixtures/recipe-network.test.cjs'), path.join(target, 'test/cleanup.test.cjs'));
+        const output = await execution.command(['--test', '--test-reporter=tap', 'test/cleanup.test.cjs'], { cwd: target, timeoutMs: 8000 });
+        expect(output).toContain('# pass 2');
+        expect(output).toContain('# fail 0');
+    });
+}, 45000); // 23s command budgets + up to 15s managed process cleanup + filesystem cleanup.
 
 function application(execution, script, testSource = "require('node:test')('actual child', () => {});") {
     const target = path.join(execution.directory, 'application with spaces');

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Generated network-test cleanup now terminates its owned sockets instead of waiting for an uncooperative peer's closing handshake. Graceful-disconnect assertions still explicitly close and await their sockets. A real paused-peer regression checks this boundary; the earlier intermittent documented-chat timeout remains unexplained.
+
 - Added explicit local-client tarball selection for isolated package verification without changing the development npm link. Verify npm integrity, export paths and all bundle fingerprints before/after tests; run native packed counter/chat/reconnect/disconnect checks. Ordinary registry installation retains its incompatible-published-client failure until the client release and dependency lockfile are updated.
 
 - Added shared original-source client coverage across Vitest and native Chromium, preserving actual test discovery, per-realm reports, input/tooling hashes and separately auditable Node/browser contributions. Source-built plain bundles must match the linked client build. Coverage still correctly fails at 520/521 branches; no production guard, threshold or input-state invariant was changed to conceal the gap.
