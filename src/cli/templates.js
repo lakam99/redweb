@@ -20,7 +20,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
         },
         dependencies: {
             redweb: `^${version}`,
-            ...(['socket', 'dashboard'].includes(template) ? { zod: devDependencies.zod } : {}),
+            ...(['chat', 'socket', 'dashboard'].includes(template) ? { zod: devDependencies.zod } : {}),
             ...(template === 'dashboard' ? { express: dependencies.express } : {}),
         },
         devDependencies: {

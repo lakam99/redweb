@@ -30,7 +30,7 @@ function verifyApplication(packageRoot, target, template) {
         ['redweb', packageRoot],
         ['typescript', path.dirname(require.resolve('typescript/package.json'))],
         ['ws', path.dirname(require.resolve('ws/package.json'))],
-        ...(['socket', 'dashboard'].includes(template) ? [['zod', path.dirname(require.resolve('zod/package.json'))]] : []),
+        ...(manifest.dependencies.zod ? [['zod', path.dirname(require.resolve('zod/package.json'))]] : []),
         ...(template === 'dashboard' ? [['express', path.dirname(require.resolve('express/package.json'))]] : []),
         ...(template === 'dashboard' ? [['c8', path.dirname(require.resolve('c8/package.json'))]] : []),
         ['.bin', path.resolve(path.dirname(require.resolve('typescript/package.json')), '../.bin')],

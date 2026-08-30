@@ -298,6 +298,12 @@ async function main() {
             'chat join readiness'
         ))));
         await first.evaluate(`(() => {
+            document.querySelector('[name="name"]').value = 'hidden\\u200bname';
+            document.querySelector('form[rw-submit="join"]').requestSubmit();
+        })()`);
+        await first.evaluate(eventual(`document.querySelector('form[rw-submit="join"]')?.getAttribute('data-rw-status') === 'error'`, 'chat schema feedback'));
+        if (!await first.evaluate(`document.querySelector('[name="name"]').value === 'hidden\\u200bname' && Boolean(document.querySelector('[data-rw-feedback]')?.textContent)`)) throw new Error('Invalid chat input lost its draft or automatic feedback.');
+        await first.evaluate(`(() => {
             document.querySelector('[name="name"]').value = '<Admin>';
             document.querySelector('form[rw-submit="join"]').requestSubmit();
             return true;

@@ -440,12 +440,14 @@ The internal paths and application page paths must be unique.
 ## Verification examples
 
 - `examples/live-html/counter.ts` uses `@page()`, colocated CSS, and `@state()` to prove a connection-owned server timer can update browser state and is stopped on disconnect.
-- `examples/live-html/chatroom.tsx` uses a connection-scoped `@component()` backed by a room service created by `createChatroomPage()`, so separate server instances cannot leak history or names. Visitors join once, receive a stable dedicated composer, see a capped presence list with the total online count, share bounded history, and recover their identity and missed messages after reconnect.
+- `examples/live-html/chatroom.tsx` uses a connection-scoped `@component()` backed by a room service created by `createChatroomPage()`, so separate server instances cannot leak history or names. Visitors join once, receive a stable dedicated composer, see a capped presence list with the total online count, share bounded history, and recover their identity and missed messages after reconnect. Join/send use `@action({ input })` with shared Zod text schemas for normalization, bounds and inferred `ActionInput` types; invalid input gets automatic form feedback before the method runs. The chat starter includes Zod as an application dependency, not a new Redweb runtime dependency.
 - `examples/live-html/cards.ts` uses a shared decorated page, `@view()`, and `rw-each` to prove server-rendered collection SSR, realtime replacement, and persistence across reloads and reconnects while the server is running.
 - `examples/live-html/components.ts` uses two instances of one `@component()` class to prove reusable markup, isolated server state, scoped actions, and component CSS composition.
 - `examples/live-html/jsx-page.tsx` uses Redweb's automatic JSX runtime, a function component, decorated state, and a server action without HTML template strings.
 
 Run the examples immediately with `npm run example:counter`, `npm run example:chatroom`, `npm run example:cards`, `npm run example:components`, and `npm run example:jsx`. Their checked-in JavaScript artifacts are generated from the decorated TypeScript or TSX sources, and every test and package build rejects stale output. The artifacts are launched unchanged by `tests/integration/live-html.integration.test.js` over real loopback HTTP and WebSocket connections. Run the focused gate with `npm run verify:live-html`, or the complete 100% coverage suite with `npm test`.
+
+These commands assume the cloned repository's development dependencies are installed. For the packed chat example used directly in another application, install `zod` there first; the generated chat starter already declares it. Core Redweb and the counter example remain usable without a validator library.
 
 ## Static pages and documentation export
 

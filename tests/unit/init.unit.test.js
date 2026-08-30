@@ -62,6 +62,7 @@ describe('ProjectInitializer', () => {
             expect(fs.readFileSync(path.join(result.root, 'README.md'), 'utf8')).toContain('npm test');
         }
         expect(fs.readFileSync(path.join(workspace, 'chat/src/chatroom.tsx'), 'utf8')).toBe(fs.readFileSync(path.resolve(__dirname, '../../examples/live-html/chatroom.tsx'), 'utf8'));
+        expect(JSON.parse(fs.readFileSync(path.join(workspace, 'chat/package.json'), 'utf8')).dependencies.zod).toBeDefined();
         expect(() => projectFiles('1.2.3', '../outside')).toThrow('Unknown starter');
     });
 });

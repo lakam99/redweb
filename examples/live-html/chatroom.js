@@ -34,12 +34,19 @@ var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, 
     done = true;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChatroomComponent = void 0;
+exports.ChatroomComponent = exports.chatInputs = void 0;
 exports.createChatroomPage = createChatroomPage;
 const jsx_runtime_1 = require('../../jsx-runtime');
 const redweb_1 = require('../..');
+const zod_1 = require("zod");
 const MAX_VISIBLE_MEMBERS = 100;
-const UNSAFE_TEXT = /[\p{Cc}\p{Cf}]/u;
+const visibleText = (maximum) => zod_1.z.string()
+    .transform(value => value.normalize('NFKC').trim())
+    .pipe(zod_1.z.string().min(1).max(maximum).regex(/^[^\p{Cc}\p{Cf}]+$/u));
+exports.chatInputs = {
+    join: zod_1.z.object({ name: visibleText(40) }).strict(),
+    send: zod_1.z.object({ message: visibleText(500) }).strict(),
+};
 class ChatRoom {
     history = [];
     nextMessageId = 0;
@@ -107,8 +114,8 @@ let ChatroomComponent = (() => {
             _feedback_decorators = [(0, redweb_1.state)()];
             _messages_decorators = [(0, redweb_1.state)()];
             _members_decorators = [(0, redweb_1.state)()];
-            _join_decorators = [(0, redweb_1.action)()];
-            _send_decorators = [(0, redweb_1.action)()];
+            _join_decorators = [(0, redweb_1.action)({ input: exports.chatInputs.join })];
+            _send_decorators = [(0, redweb_1.action)({ input: exports.chatInputs.send })];
             _leave_decorators = [(0, redweb_1.action)()];
             __esDecorate(this, null, _join_decorators, { kind: "method", name: "join", static: false, private: false, access: { has: obj => "join" in obj, get: obj => obj.join }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _send_decorators, { kind: "method", name: "send", static: false, private: false, access: { has: obj => "send" in obj, get: obj => obj.send }, metadata: _metadata }, null, _instanceExtraInitializers);
@@ -138,16 +145,7 @@ let ChatroomComponent = (() => {
         join({ name }) {
             if (this.displayName)
                 return false;
-            if (typeof name !== 'string') {
-                this.feedback = 'Display name must be text.';
-                return false;
-            }
-            const displayName = name.normalize('NFKC').trim();
-            if (!displayName || displayName.length > 40 || UNSAFE_TEXT.test(displayName)) {
-                this.feedback = 'Choose a visible display name of at most 40 characters.';
-                return false;
-            }
-            this.displayName = displayName;
+            this.displayName = name;
             if (!this.room.join(this)) {
                 this.displayName = '';
                 this.feedback = 'That display name is already in use.';
@@ -157,12 +155,7 @@ let ChatroomComponent = (() => {
             return true;
         }
         send({ message }) {
-            if (typeof message !== 'string')
-                return false;
-            const text = message.normalize('NFKC').trim();
-            if (!text || text.length > 500 || UNSAFE_TEXT.test(text))
-                return false;
-            return this.room.send(this, text);
+            return this.room.send(this, message);
         }
         leave() {
             this.room.leave(this);

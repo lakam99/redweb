@@ -9,6 +9,7 @@ const { verifyDocumentation } = require('./lib/verify-documentation');
 const { verifySharedServer } = require('./lib/verify-shared-server');
 const { verifyActionInput } = require('./lib/verify-action-input');
 const { verifyRoomExample } = require('./lib/verify-room-example');
+const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
@@ -26,6 +27,9 @@ async function main() {
     try {
         const pack = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
+        const dependencyChecks = verifyExampleDependencies(archive, workspace, require('../package.json').devDependencies.zod);
+        console.log(dependencyChecks.withoutValidator.trim());
+        console.log(dependencyChecks.withValidator.trim());
         run('tar', ['-xf', archive, '-C', workspace]);
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');

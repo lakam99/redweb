@@ -1,4 +1,4 @@
-const { createChatroomPage } = require('../../examples/live-html/chatroom');
+const { createChatroomPage, chatInputs } = require('../../examples/live-html/chatroom');
 
 describe('canonical chat component data model without mocks', () => {
     test('normalizes identities, validates input, and keeps bounded messages with stable IDs', () => {
@@ -6,14 +6,14 @@ describe('canonical chat component data model without mocks', () => {
         const alice = new Page().chat;
         const bob = new Page().chat;
         expect(alice.send({ message: 'before joining' })).toBe(false);
-        expect(alice.join({ name: ' Alice ' })).toBe(true);
+        expect(alice.join(chatInputs.join.parse({ name: ' Ａlice ' }))).toBe(true);
         expect(alice.displayName).toBe('Alice');
         expect(bob.join({ name: 'ALICE' })).toBe(false);
         expect(bob.feedback).toContain('already in use');
         expect(bob.join({ name: 'Bob' })).toBe(true);
         expect(alice.members).toEqual(['Alice', 'Bob']);
         for (const message of [undefined, 42, '', ' ', 'x'.repeat(501), 'hidden\u200btext']) {
-            expect(alice.send({ message })).toBe(false);
+            expect(chatInputs.send.safeParse({ message }).success).toBe(false);
         }
         for (let index = 0; index < 101; index++) expect(alice.send({ message: `message-${index}` })).toBe(true);
         expect(alice.messages).toBe(bob.messages);
@@ -27,10 +27,10 @@ describe('canonical chat component data model without mocks', () => {
         const Page = createChatroomPage();
         const alice = new Page().chat;
         const bob = new Page().chat;
-        expect(alice.join({ name: undefined })).toBe(false);
-        expect(alice.feedback).toContain('must be text');
-        expect(alice.join({ name: 'x'.repeat(41) })).toBe(false);
-        expect(alice.join({ name: 'hidden\u200bname' })).toBe(false);
+        for (const input of [null, [], {}, { name: undefined }, { name: 'x'.repeat(41) }, { name: 'hidden\u200bname' }, { name: 'Alice', extra: true }]) {
+            expect(chatInputs.join.safeParse(input).success).toBe(false);
+        }
+        expect(chatInputs.send.parse({ message: ' Ｈello ' })).toEqual({ message: 'Hello' });
         alice.join({ name: 'Alice' });
         bob.join({ name: 'Bob' });
         alice.disconnected();

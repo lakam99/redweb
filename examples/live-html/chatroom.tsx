@@ -1,7 +1,14 @@
-import { action, component, page, start, state } from 'redweb';
+import { action, component, page, start, state, type ActionInput } from 'redweb';
+import { z } from 'zod';
 
 const MAX_VISIBLE_MEMBERS = 100;
-const UNSAFE_TEXT = /[\p{Cc}\p{Cf}]/u;
+const visibleText = (maximum: number) => z.string()
+    .transform(value => value.normalize('NFKC').trim())
+    .pipe(z.string().min(1).max(maximum).regex(/^[^\p{Cc}\p{Cf}]+$/u));
+export const chatInputs = {
+    join: z.object({ name: visibleText(40) }).strict(),
+    send: z.object({ message: visibleText(500) }).strict(),
+};
 
 interface StoredMessage { id: number; sender: string; text: string; }
 interface RoomParticipant {
@@ -61,19 +68,10 @@ export class ChatroomComponent implements RoomParticipant {
     disconnected() { this.room.disconnect(this); }
     disposed() { this.room.leave(this); }
 
-    @action()
-    join({ name }: { name?: string }) {
+    @action({ input: chatInputs.join })
+    join({ name }: ActionInput<typeof chatInputs.join>) {
         if (this.displayName) return false;
-        if (typeof name !== 'string') {
-            this.feedback = 'Display name must be text.';
-            return false;
-        }
-        const displayName = name.normalize('NFKC').trim();
-        if (!displayName || displayName.length > 40 || UNSAFE_TEXT.test(displayName)) {
-            this.feedback = 'Choose a visible display name of at most 40 characters.';
-            return false;
-        }
-        this.displayName = displayName;
+        this.displayName = name;
         if (!this.room.join(this)) {
             this.displayName = '';
             this.feedback = 'That display name is already in use.';
@@ -83,12 +81,9 @@ export class ChatroomComponent implements RoomParticipant {
         return true;
     }
 
-    @action()
-    send({ message }: { message?: string }) {
-        if (typeof message !== 'string') return false;
-        const text = message.normalize('NFKC').trim();
-        if (!text || text.length > 500 || UNSAFE_TEXT.test(text)) return false;
-        return this.room.send(this, text);
+    @action({ input: chatInputs.send })
+    send({ message }: ActionInput<typeof chatInputs.send>) {
+        return this.room.send(this, message);
     }
 
     @action()

@@ -249,13 +249,11 @@ describe('Live HTML integration without mocks', () => {
         expect(await first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: 'too early' }],
         })).toMatchObject({ payload: false });
-        expect(await first.request('redweb:html', {
+        await expect(first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: '   ' }],
-        })).toMatchObject({ payload: false });
-        await feedback(firstUpdates, 'Choose a visible display name');
-        expect(firstUpdates.at(-1).html).toContain('Choose a visible display name');
+        })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
         await first.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: '<Admin>' }],
+            kind: 'action', component: 'chat', name: 'join', args: [{ name: ' ＜Admin＞ ' }],
         });
         await second.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Ada' }],
@@ -283,9 +281,9 @@ describe('Live HTML integration without mocks', () => {
             expect(update.html).not.toContain('<script>');
         }
         const updateCount = firstUpdates.length;
-        await first.request('redweb:html', {
+        await expect(first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: '   ' }],
-        });
+        })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
         expect(firstUpdates).toHaveLength(updateCount);
 
         await closeLiveClient(second);
@@ -327,16 +325,12 @@ describe('Live HTML integration without mocks', () => {
         invalid.on('redweb:patch', message => invalidUpdates.push(...message.payload.patches));
         clients.add(invalid);
         await invalid.connect();
-        expect(await invalid.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: ['array'] }],
-        })).toMatchObject({ payload: false });
-        await feedback(invalidUpdates, 'Display name must be text.');
-        expect(latest(invalidUpdates)?.html).toContain('Display name must be text.');
-        expect(await invalid.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: 'hidden\u200bname' }],
-        })).toMatchObject({ payload: false });
-        await feedback(invalidUpdates, 'Choose a visible display name');
-        expect(latest(invalidUpdates)?.html).toContain('Choose a visible display name');
+        for (const input of [null, {}, { name: ['array'] }, { name: 'hidden\u200bname' }, { name: 'Alice', extra: true }]) {
+            await expect(invalid.request('redweb:html', {
+                kind: 'action', component: 'chat', name: 'join', args: [input],
+            })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
+        }
+        expect(invalid.state).toBe('open');
 
         const duplicatePage = await getPage(server);
         const duplicate = liveClient(duplicatePage.port, duplicatePage.config);
