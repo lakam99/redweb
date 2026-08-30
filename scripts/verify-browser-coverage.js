@@ -59,15 +59,17 @@ async function verifyLiveSelection(tab) {
     return { serverActions: 2, transport: 'live Redweb HTTP/WebSocket page', input: 'native keyboard and pointer events' };
 }
 
-async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, onPeer, mode }) {
+async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, onPeer, mode, frontends }) {
     const app = express();
-    const frontend = fs.readFileSync(path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js'), 'utf8');
-    if (mode === 'client') {
+    const frontend = frontends?.plain || fs.readFileSync(path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js'), 'utf8');
+    if (mode === 'client' || mode === 'source') {
         app.get('/__redweb/test-client.js', (_request, response) => response.type('text/javascript').send(
-            instrumented ? coverage.instrumented : coverage.source));
-    } else assert.equal(frontend.split(coverage.source).length, 2, 'Covered frontend must occur exactly once in the shipped module');
+            mode === 'source' ? frontends.transport[instrumented ? 'instrumented' : 'plain'] :
+                instrumented ? coverage.instrumented : coverage.source));
+    } else if (mode !== 'source') assert.equal(frontend.split(coverage.source).length, 2, 'Covered frontend must occur exactly once in the shipped module');
     app.get('/__redweb/client.js', (_request, response) => response.type('text/javascript').send(
-        mode === 'runtime' && instrumented ? frontend.replace(coverage.source, () => coverage.instrumented) : frontend));
+        mode === 'source' && instrumented ? frontends.instrumented :
+            mode === 'runtime' && instrumented ? frontend.replace(coverage.source, () => coverage.instrumented) : frontend));
     app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
         'import { mountLivePage } from "/__redweb/client.js";\n' +
         'const page = mountLivePage(); window.pageClient = page; window.mountLivePage = mountLivePage;\n' +
@@ -78,6 +80,11 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
         openPage: async (_port, url) => {
             const tab = await visit(url);
             run.browser = await command(tab, 'Browser.getVersion');
+            if (mode === 'source') {
+                const expected = instrumented ? frontends.instrumented : frontends.plain;
+                assert.equal(await evaluate(tab, `fetch('/__redweb/client.js').then(response => response.text())`), expected,
+                    'Browser must receive the selected source-built candidate');
+            }
             return { ...tab, evaluate: expression => evaluate(tab, expression), command: (method, params) => command(tab, method, params) };
         },
         afterChecks: async (tab, context) => {
@@ -86,12 +93,12 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
                 catch (error) { return { ok: false, error: error.stack }; }
             })()`);
             assert.ok(result.ok, result.error);
-            if (mode === 'runtime' || mode === 'client') {
+            if (mode === 'runtime' || mode === 'client' || mode === 'source') {
                 result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
                 result.cases.ownership = await verifyLivePageOwnership(tab, context, eventual);
                 result.cases.morph = await runCases(tab);
             }
-            if (mode === 'client') {
+            if (mode === 'client' || mode === 'source') {
                 const peer = new BrowserClientPeer();
                 onPeer(peer);
                 await peer.run(async () => {
@@ -109,8 +116,6 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
 }
 
 async function main() {
-    const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
-    if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     const mode = process.argv[2] || 'runtime';
     let bundle;
     let frontendOffset;
@@ -136,7 +141,24 @@ async function main() {
     const run = { id: randomUUID(), startedAt: new Date().toISOString(),
         ...(bundle ? { bundleSha256: createHash('sha256').update(bundle).digest('hex'), frontendOffset, frontendEnd,
             scope: 'All bundled Live HTML modules; transport measured separately by client mode' } : {}) };
-    const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
+    const outcome = await coverage.verify(() => runBrowserChecks({ coverage, mode, run }));
+    const report = { ...outcome.report, ...run, endedAt: new Date().toISOString() };
+    const destination = path.resolve(__dirname, '../coverage/browser-' + mode);
+    try {
+        fs.mkdirSync(destination, { recursive: true });
+        fs.writeFileSync(path.join(destination, coverage.filename), coverage.source);
+        fs.writeFileSync(path.join(destination, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+        console.log(JSON.stringify({ ...report, coverage: undefined }, null, 2));
+    } catch (error) {
+        throw outcome.failure ? new AggregateError([outcome.failure, error], outcome.failure.message, { cause: outcome.failure }) : error;
+    }
+    if (outcome.failure) throw outcome.failure;
+}
+
+async function runBrowserChecks({ coverage, mode, run, frontends }) {
+    const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
+    if (!executable) throw new Error('Chromium is required for generated browser coverage.');
+    return new VerificationWorkspace().run(async execution => {
         let browser, coveredTab, application, refreshPeer, clientPeer, failure, launchAttempted = false;
         const tabs = [];
         const recordFailure = error => { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
@@ -156,7 +178,7 @@ async function main() {
             } else {
                 for (const instrumented of [false, true]) {
                     await verifyFeedback({
-                        coverage, debugPort, run, instrumented, mode, onServer: server => { application = server; },
+                        coverage, debugPort, run, instrumented, mode, frontends, onServer: server => { application = server; },
                         onPeer: peer => { clientPeer = peer; },
                         visit: async url => {
                             const tab = await visit(url);
@@ -174,7 +196,7 @@ async function main() {
         } catch (error) { recordFailure(error); }
         finally {
             if (coveredTab) {
-                try { coverage.collect(await evaluate(coveredTab, 'window.__redwebBrowserCoverage__')); }
+                try { coverage.collect(await evaluate(coveredTab, mode === 'source' ? 'window.__redwebApplicationCoverage__' : 'window.__redwebBrowserCoverage__')); }
                 catch (error) { recordFailure(error); }
             }
             for (const tab of tabs) tab.socket.terminate();
@@ -197,19 +219,8 @@ async function main() {
             }
         }
         if (failure) throw failure;
-    }));
-    // Final status includes VerificationWorkspace's filesystem cleanup result.
-    const report = { ...outcome.report, ...run, endedAt: new Date().toISOString() };
-    const destination = path.resolve(__dirname, '../coverage/browser-' + mode);
-    try {
-        fs.mkdirSync(destination, { recursive: true });
-        fs.writeFileSync(path.join(destination, coverage.filename), coverage.source);
-        fs.writeFileSync(path.join(destination, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-        console.log(JSON.stringify({ ...report, coverage: undefined }, null, 2));
-    } catch (error) {
-        throw outcome.failure ? new AggregateError([outcome.failure, error], outcome.failure.message, { cause: outcome.failure }) : error;
-    }
-    if (outcome.failure) throw outcome.failure;
+    });
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { runBrowserChecks };
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -31,6 +31,7 @@ Verify the resolved entry from Redweb:
 node -p "require.resolve('redweb-client/live-html')"
 npm run verify:live-html:browser
 npm run verify:browser:coverage
+npm run verify:client:source-coverage
 ```
 
 The first browser gate checks real server-side counter/chat, dashboard, form and
@@ -40,6 +41,15 @@ APIs. `npm run measure:browser:client` measures the transport separately; its
 remaining native-browser coverage gaps are not waived by the rendering results.
 Client unit tests include isolated transports and an explicitly simulated stale
 timer callback; its integration tests use real connections and timers.
+
+The source-coverage command instruments original client modules once and shares
+their maps between Node and Chromium. It checks every test file reported exactly
+once, compares plain/instrumented results, verifies unchanged inputs and saves
+separate contributions. Plain browser candidates must equal the linked build.
+It currently fails its unchanged 100% threshold at 520/521 branches; every tracked
+statement, function and line is covered. The uncovered branch is a defensive
+empty queue entry, not a demonstrated supported-operation path. This is distinct
+from the whole-client V8 report; neither denominator is substituted for the other.
 
 ## Release boundary
 
