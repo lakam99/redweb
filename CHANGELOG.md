@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an authenticated persistent-dashboard starter with reusable live cards, account-filtered SQLite transactions, asynchronous bounded password checks, hashed sessions, expiry and account-wide sign-out. Native SQLite is recipe-local and requires Node 22.13+; no database dependency was added to Redweb. Doctor now checks simple declared minimum Node engine requirements and reports unsupported range syntax honestly.
+- Reactive state payloads now defer legacy text/HTML serialization until an explicit binding needs it. Plain TSX data, including native SQLite's null-prototype rows, can update and reconnect without an unnecessary text conversion. Explicit bindings retain their existing payload format.
+
 - Added connection-scoped page authorization before construction/loading and before socket operations, immutable original HTTP context across reconnects/actions, bounded identity lookup, and explicit process-local `server.revoke(principal)`. Revocation invalidates all targets before application abort callbacks and fences late asynchronous work. Protected runtime pages are private/no-store and cannot be statically exported. New `LiveHtmlStartOptions` shortens starter wrappers while preserving identity-option constraints. HTTP abandonment/shutdown now cancels stalled render lifetimes; external application work still requires cooperative cancellation.
 
 - Added explicit action authorization after input validation, with inferred transformed policy inputs, trusted identity context, recoverable permission denials, bounded deadlines, and cancellation signals. Authorization-only actions keep input/context in fixed positions. Validation and authorization share one lifetime primitive; action guards do not imply page protection, passive-subscription revocation, or private shared state.

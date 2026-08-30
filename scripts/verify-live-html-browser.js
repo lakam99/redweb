@@ -17,6 +17,7 @@ const { jsx, jsxs } = require('../jsx-runtime');
 const { ReactivePage } = require('../tests/fixtures/reactive-pages');
 const { createActionPage } = require('../tests/fixtures/action-page');
 const { verifyActionFeedback } = require('./lib/verify-action-feedback');
+const { verifyDashboardBrowser } = require('./lib/verify-dashboard-browser');
 
 class TableComponent {
     count = 0;
@@ -249,6 +250,7 @@ async function main() {
         const debugPort = Number(endpoint.port);
 
         await verifyActionFeedback({ openPage, debugPort, pages, eventual });
+        await verifyDashboardBrowser({ openPage, debugPort });
 
         const actionPage = await openPage(debugPort, `http://127.0.0.1:${validatedActions.server.address().port}/`);
         pages.push(actionPage);

@@ -10,8 +10,8 @@ async function listen(t) {
     return `http://127.0.0.1:${app.server.address().port}`;
 }
 
-async function connect(t, url, origin) {
-    const socket = new WebSocket(url, { headers: { Origin: origin } });
+async function connect(t, url, origin, headers = {}) {
+    const socket = new WebSocket(url, { headers: { ...headers, Origin: origin } });
     const messages = [];
     socket.on('message', raw => messages.push(JSON.parse(raw.toString())));
     t.after(async () => {
@@ -36,14 +36,15 @@ async function connect(t, url, origin) {
     };
 }
 
-async function live(t, origin) {
-    const response = await fetch(origin);
+async function live(t, origin, headers = {}) {
+    const response = await fetch(origin, { headers });
     assert.equal(response.status, 200);
     const document = await response.text();
     const config = JSON.parse(document.match(/id="__redweb_page">([^<]+)</)[1]);
-    const connection = await connect(t, `${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, origin);
+    const connection = await connect(t, `${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, origin, headers);
     return {
         ...connection,
+        document, config,
         patch: predicate => connection.receive(message => message.type === 'redweb:patch' && message.payload.patches.some(predicate)),
         action: (name, args = [], component) => connection.send({
             v: config.version, type: 'redweb:html', payload: { kind: 'action', name, args, component },

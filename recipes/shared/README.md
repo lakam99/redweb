@@ -1,6 +1,6 @@
 # Your Redweb application
 
-Requirements: Node.js 18 or newer and npm. Use a currently supported Node.js release in production.
+Requirements: Node.js 18 or newer and npm for the realtime, chat, site and socket templates; the dashboard template requires Node.js 22.13+ for native SQLite. Use a currently supported Node.js release in production.
 
 ```sh
 npm install
@@ -8,7 +8,7 @@ npm test
 npm run dev
 ```
 
-HTTP starters open at http://localhost:8181. Set the `PORT` environment variable to change the listener.
+HTTP starters open at http://localhost:8181; the authenticated dashboard uses http://127.0.0.1:8181/login and requires account provisioning described below. Set the `PORT` environment variable to change the listener.
 `npm test` builds and runs real HTTP/WebSocket integration tests on an ephemeral loopback port. No mocks or external service are needed.
 
 ## Development and production

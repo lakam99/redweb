@@ -15,6 +15,17 @@ function nodeIssue(version) {
     return issue('NODE_UNSUPPORTED', null, `Node ${version} is outside Redweb's supported range.`, 'Use a supported Node.js release (18 or newer).');
 }
 
+function projectNodeIssue(version, requirement) {
+    if (requirement === undefined) return null;
+    const minimum = typeof requirement === 'string' && /^>=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(requirement);
+    if (!minimum) return issue('PROJECT_NODE_UNCHECKED', 'package.json', 'The project Node range could not be checked by doctor.', 'Check engines.node using npm install; doctor understands minimum-version ranges such as >=22.13.0.', 'warning');
+    const current = version.split('.').map(Number);
+    const required = minimum.slice(1).map(value => Number(value || 0));
+    const difference = required.findIndex((value, index) => value !== current[index]);
+    if (difference < 0 || current[difference] > required[difference]) return null;
+    return issue('PROJECT_NODE_UNSUPPORTED', 'package.json', `Node ${version} does not meet this project's ${requirement} requirement.`, `Install Node ${required.join('.')} or newer before running this application.`);
+}
+
 function resolveDependency(root, name) {
     const requireFromProject = createRequire(path.join(root, 'package.json'));
     let current = root;
@@ -77,6 +88,11 @@ class ProjectDoctor {
     async inspect(target, port = null) {
         const root = path.resolve(target);
         const issues = [nodeIssue(process.versions.node)].filter(Boolean);
+        const projectManifest = path.join(root, 'package.json');
+        if (fs.existsSync(projectManifest)) {
+            const finding = projectNodeIssue(process.versions.node, JSON.parse(fs.readFileSync(projectManifest, 'utf8')).engines?.node);
+            if (finding) issues.push(finding);
+        }
         const manifestPath = resolveDependency(root, 'redweb/package.json');
         let installedVersion = null;
         if (!manifestPath) {
@@ -106,4 +122,4 @@ class ProjectDoctor {
     }
 }
 
-module.exports = { ProjectDoctor, nodeIssue };
+module.exports = { ProjectDoctor, nodeIssue, projectNodeIssue };

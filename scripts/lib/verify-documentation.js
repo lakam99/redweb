@@ -26,7 +26,8 @@ function verifyDocumentation(packageRoot, workspace) {
         }
         reports.push({ template, output: verifyApplication(packageRoot, target, template) });
     }
-    assert.equal(reports.length, 4, 'All four documented recipes must run.');
+    const { TEMPLATES } = require(path.join(packageRoot, 'src/cli/templates'));
+    assert.deepEqual(reports.map(report => report.template), TEMPLATES, 'Every documented recipe must run.');
     return reports;
 }
 

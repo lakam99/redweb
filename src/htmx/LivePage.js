@@ -73,8 +73,17 @@ class LivePage {
     static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
     static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
 
-    static statePayload(page, name, value) {
+    static statePayload(page, name, value, lazy = false) {
         const internal = runtime(page);
+        if (lazy) {
+            let payload;
+            const materialize = () => payload ||= LivePage.statePayload(page, name, value);
+            return {
+                name, component: internal.componentId || undefined,
+                get value() { return materialize().value; },
+                get html() { return materialize().html; },
+            };
+        }
         const payload = HtmlRenderer.statePayload(name, value, page);
         if (!internal.componentId) return payload;
         payload.component = internal.componentId;
@@ -82,10 +91,10 @@ class LivePage {
         return payload;
     }
 
-    static snapshots(page) {
+    static snapshots(page, lazy = false) {
         const values = [];
-        forEachState(page.constructor, (_options, name) => values.push(LivePage.statePayload(page, name, page[name])));
-        for (const child of runtime(page).children.values()) values.push(...LivePage.snapshots(child));
+        forEachState(page.constructor, (_options, name) => values.push(LivePage.statePayload(page, name, page[name], lazy)));
+        for (const child of runtime(page).children.values()) values.push(...LivePage.snapshots(child, lazy));
         return values;
     }
 
@@ -208,7 +217,7 @@ class LivePage {
 
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
-        const payload = LivePage.statePayload(this, name, value);
+        const payload = LivePage.statePayload(this, name, value, true);
         runtime(this).connections.forEach(socket => {
             const session = socket.__redwebPageSession;
             if (session?.lifetime?.revoked) return;

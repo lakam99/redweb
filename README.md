@@ -35,9 +35,12 @@ Open two tabs at `http://localhost:8181`: clicking the counter updates both thro
 npx redweb init my-chat --template chat
 npx redweb init my-site --template site
 npx redweb init my-service --template socket
+npx redweb init my-dashboard --template dashboard
 ```
 
 Each includes real HTTP/WebSocket tests, a development watcher, and production instructions. `npm run dev` rebuilds and restarts on source, CSS, HTML, or root TypeScript configuration changes; refresh the browser after a restart. `npm run build` copies runtime assets into `dist/`, so production does not require the source directory. The chat starter reuses the canonical chatroom component, including disconnect presence. The socket starter uses `/match` with separate `join`, `move`, and `resume` handlers, shared payload schemas, and bounded in-memory sessions; it is not an HTML page.
+
+The `dashboard` starter adds account-private live cards backed by native SQLite, explicit credential provisioning, session expiry, and sign-out across tabs. It requires Node 22.13+; Redweb itself retains its existing runtime requirements. See the [complete dashboard recipe](recipes/dashboard/README.md) for setup and single-process deployment boundaries. This starter is part of the unreleased branch, not a claim about the published package.
 
 For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
 

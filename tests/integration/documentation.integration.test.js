@@ -7,6 +7,7 @@ const { spawnSync } = require('child_process');
 const { verifyDocumentation } = require('../../scripts/lib/verify-documentation');
 const { verifySharedServer } = require('../../scripts/lib/verify-shared-server');
 const { copyDocumentationSource } = require('../helpers/documentation');
+const { TEMPLATES } = require('../../src/cli/templates');
 
 const root = path.resolve(__dirname, '../..');
 
@@ -18,10 +19,13 @@ describe('documented applications without mocks', () => {
         const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-documentation-'));
         try {
             const reports = verifyDocumentation(root, workspace);
-            expect(reports.map(report => report.template)).toEqual(['realtime', 'chat', 'site', 'socket']);
+            expect(reports.map(report => report.template)).toEqual(TEMPLATES);
             for (const report of reports) {
-                expect(report.output).toContain('# pass 1');
-                expect(report.output).toContain('# fail 0');
+                if (report.output.startsWith('# SKIP')) expect(report.template).toBe('dashboard');
+                else {
+                    expect(report.output).toMatch(/# pass [1-9]/);
+                    expect(report.output).toContain('# fail 0');
+                }
             }
         } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
     }, 90000);

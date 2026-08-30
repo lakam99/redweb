@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
-const { start, page } = require('../..');
+const { start, page, state, action, view, html } = require('../..');
+const { jsx } = require('../../jsx-runtime');
 const { ReactivePage, SharedReactivePage } = require('../fixtures/reactive-pages');
 const { request, waitForListening, waitForCondition, silentLogger } = require('../helpers/network');
 
@@ -35,13 +36,63 @@ describe('automatic reactive rendering over real HTTP/WebSockets', () => {
         const value = { client, updates, legacy, config, response };
         clients.push(value);
         await client.connect();
-        await waitForCondition(() => updates.length > 0, 'reactive snapshot');
+        await waitForCondition(() => updates.length > 0 || legacy.length > 0, 'page snapshot');
         return value;
     }
 
     async function invoke(visitor, name, component) {
         await visitor.client.request('redweb:html', { kind: 'action', name, component, args: [] });
     }
+
+    test('one explicit collection serialization is reused across all shared legacy recipients', async () => {
+        let views = 0;
+        class CollectionPage {
+            rows = ['original'];
+            replace() { this.rows = ['replacement']; }
+            row(value) { views++; return html`<p>${value}</p>`; }
+            render() { return '<section rw-each="rows"></section>'; }
+        }
+        state()(CollectionPage.prototype, 'rows');
+        action()(CollectionPage.prototype, 'replace', Object.getOwnPropertyDescriptor(CollectionPage.prototype, 'replace'));
+        view('rows')(CollectionPage.prototype, 'row', Object.getOwnPropertyDescriptor(CollectionPage.prototype, 'row'));
+        page('/', { shared: true })(CollectionPage);
+        await boot(CollectionPage);
+        const recipients = await Promise.all([visitor('one'), visitor('two'), visitor('three')]);
+        for (const recipient of recipients) recipient.legacy.length = 0;
+        views = 0;
+        await invoke(recipients[0], 'replace');
+        await waitForCondition(() => recipients.every(recipient => recipient.legacy.some(value => value.value === '<p>replacement</p>')), 'shared collection recipients');
+        expect(views).toBe(1);
+    });
+
+    test('reactive data never needs a text conversion unless explicitly bound, including reconnect snapshots', async () => {
+        let conversions = 0;
+        class DataPage {
+            rows = [Object.assign(Object.create(null), { title: 'first' })];
+            unused = { toString() { conversions++; throw new Error('Must not stringify unused data.'); } };
+            replace() {
+                this.rows = [Object.assign(Object.create(null), { title: 'second' })];
+                this.unused = { toString() { conversions++; throw new Error('Must not stringify unused data.'); } };
+            }
+            render() { return jsx('ul', { children: this.rows.map(row => jsx('li', { children: row.title })) }); }
+        }
+        state()(DataPage.prototype, 'rows');
+        state()(DataPage.prototype, 'unused');
+        action()(DataPage.prototype, 'replace', Object.getOwnPropertyDescriptor(DataPage.prototype, 'replace'));
+        page('/')(DataPage);
+        await boot(DataPage);
+        const first = await visitor('first');
+        first.updates.length = 0;
+        await invoke(first, 'replace');
+        await waitForCondition(() => first.updates.length > 0, 'database-row patch');
+        expect(first.updates[0].patches[0].html).toContain('<li>second</li>');
+        first.client.close();
+        const session = server.manager.active.get(first.config.pageId);
+        await waitForCondition(() => session.socket === null && !session.detaching, 'row disconnect');
+        const reconnected = await visitor('again', first.config);
+        expect(reconnected.updates[0].patches[0].html).toContain('<li>second</li>');
+        expect(conversions).toBe(0);
+    });
 
     test('batches component changes, preserves nested ownership, and suppresses unused state', async () => {
         await boot();

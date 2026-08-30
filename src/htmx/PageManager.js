@@ -363,7 +363,7 @@ class PageManager {
         return session.connection.wait(() => session.page._attach(socket, this.connectionContext(session, socket)))
             .then(result => {
                 this.checkConnected(session, socket);
-                return session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page)) : result;
+                return session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page, true)) : result;
             });
     }
 

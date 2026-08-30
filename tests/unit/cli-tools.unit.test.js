@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const net = require('net');
 const { parseArguments, USAGE } = require('../../src/cli/arguments');
-const { ProjectDoctor, nodeIssue } = require('../../src/cli/ProjectDoctor');
+const { ProjectDoctor, nodeIssue, projectNodeIssue } = require('../../src/cli/ProjectDoctor');
 const ProjectInitializer = require('../../src/cli/ProjectInitializer');
 const { run } = require('../../src/cli/run');
 const { version } = require('../../package.json');
@@ -50,6 +50,17 @@ describe('CLI command arguments', () => {
         expect(nodeIssue('22.21.0')).toBeNull();
         expect(nodeIssue('16.20.0').code).toBe('NODE_UNSUPPORTED');
         expect(nodeIssue('unknown').code).toBe('NODE_UNSUPPORTED');
+        expect(projectNodeIssue('22.13.0', '>=22.13.0')).toBeNull();
+        expect(projectNodeIssue('22.14.0', '>=22.13.0')).toBeNull();
+        expect(projectNodeIssue('24.0.0', '>=22.13.0')).toBeNull();
+        expect(projectNodeIssue('18.0.0', '>=18')).toBeNull();
+        expect(projectNodeIssue('18.0.0', undefined)).toBeNull();
+        expect(projectNodeIssue('22.12.0', '>=22.13.0').code).toBe('PROJECT_NODE_UNSUPPORTED');
+        expect(projectNodeIssue('22.13.0', '>=22.13.1').code).toBe('PROJECT_NODE_UNSUPPORTED');
+        expect(projectNodeIssue('20.20.0', '>=22.13.0').code).toBe('PROJECT_NODE_UNSUPPORTED');
+        expect(projectNodeIssue('unknown', '>=22.13.0').code).toBe('PROJECT_NODE_UNSUPPORTED');
+        expect(projectNodeIssue('22.13.0', '^22').code).toBe('PROJECT_NODE_UNCHECKED');
+        expect(projectNodeIssue('22.13.0', false).code).toBe('PROJECT_NODE_UNCHECKED');
     });
 });
 
@@ -57,6 +68,13 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
     let workspace;
     beforeEach(() => { workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-tools-')); });
     afterEach(() => { fs.rmSync(workspace, { recursive: true, force: true }); });
+
+    test('doctor reports declared application engine constraints without executing the project', async () => {
+        fs.writeFileSync(path.join(workspace, 'package.json'), JSON.stringify({ engines: { node: '>=999.0.0' } }));
+        expect((await new ProjectDoctor(version).inspect(workspace)).issues.map(value => value.code)).toContain('PROJECT_NODE_UNSUPPORTED');
+        fs.writeFileSync(path.join(workspace, 'package.json'), JSON.stringify({ engines: { node: '>=18.0.0' } }));
+        expect((await new ProjectDoctor(version).inspect(workspace)).issues.map(value => value.code)).not.toContain('PROJECT_NODE_UNSUPPORTED');
+    });
 
     test('dry-run creates nothing and existing-project mode creates only configuration', () => {
         const target = path.join(workspace, 'new');

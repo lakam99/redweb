@@ -3,7 +3,7 @@
 const { TEMPLATES } = require('./templates');
 
 const USAGE = [
-    'Usage: redweb init [directory] [--template realtime|chat|site|socket] [--existing] [--dry-run] [--json]',
+    `Usage: redweb init [directory] [--template ${TEMPLATES.join('|')}] [--existing] [--dry-run] [--json]`,
     '       redweb doctor [directory] [--port number] [--json]',
     '       redweb --help | --version',
     '',

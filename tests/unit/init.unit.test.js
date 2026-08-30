@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const ProjectInitializer = require('../../src/cli/ProjectInitializer');
-const { projectFiles } = require('../../src/cli/templates');
+const { projectFiles, TEMPLATES } = require('../../src/cli/templates');
 
 describe('ProjectInitializer', () => {
     let workspace;
@@ -55,7 +55,7 @@ describe('ProjectInitializer', () => {
     });
 
     test('selects complete recipes and rejects unsupported templates before writing', () => {
-        for (const template of ['realtime', 'chat', 'site', 'socket']) {
+        for (const template of TEMPLATES) {
             const result = new ProjectInitializer('1.2.3').initialize(path.join(workspace, template), { template });
             expect(result.created).toContain('test/app.test.cjs');
             expect(result.created).toContain('README.md');

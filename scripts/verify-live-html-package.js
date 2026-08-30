@@ -30,7 +30,7 @@ async function main() {
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
-        for (const template of ['realtime', 'chat', 'site', 'socket']) {
+        for (const template of require('../src/cli/templates').TEMPLATES) {
             verifyStarter(packageRoot, workspace, template);
         }
         verifyDocumentation(packageRoot, workspace);
