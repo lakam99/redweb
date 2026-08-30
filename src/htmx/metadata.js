@@ -12,6 +12,7 @@ const PAGE_STYLESHEET_ROOTS = new WeakMap();
 const COMPONENT_CLASSES = new WeakSet();
 const { decoratorDirectory } = require('./sourceRoot');
 const synchronous = require('./synchronous');
+const { ActionDefinition } = require('./ActionDefinition');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -40,7 +41,6 @@ function registerState(PageClass, property, config) {
 
 function registerAction(PageClass, method, implementation) {
     const methods = new Map(ACTION_METADATA.get(PageClass) || []);
-    if (methods.get(method) === implementation) return;
     methods.set(method, implementation);
     ACTION_METADATA.set(PageClass, methods);
     metadataVersion += 1;
@@ -80,8 +80,8 @@ function resolvedAction(PageClass) {
     const value = new Map();
     hierarchy(PageClass).forEach(CurrentClass => {
         const own = new Map(ACTION_METADATA.get(CurrentClass) || []);
-        STANDARD_ACTIONS.get(CurrentClass)?.forEach((implementation, method) => {
-            if (CurrentClass.prototype[method] === implementation) own.set(method, implementation);
+        STANDARD_ACTIONS.get(CurrentClass)?.forEach((entry, method) => {
+            if (CurrentClass.prototype[method] === entry.implementation) own.set(method, entry);
         });
         value.forEach((_implementation, method) => {
             if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, method) && !own.has(method)) value.delete(method);
@@ -241,14 +241,16 @@ function state(options = {}) {
     };
 }
 
-function action() {
+function action(options) {
+    const definition = new ActionDefinition(options);
     return (target, method, descriptor) => {
         if (method?.kind === 'method') {
             if (method.static || method.private || typeof method.name !== 'string' || !method.name || typeof target !== 'function') {
                 throw new TypeError('action() requires a public instance method with a string name.');
             }
+            const entry = Object.freeze({ implementation: target, definition });
             method.addInitializer(function registerStandardActionInitializer() {
-                if (this[method.name] === target) registerStandardAction(this.constructor, method.name, target);
+                if (this[method.name] === target) registerStandardAction(this.constructor, method.name, entry);
             });
             return target;
         }
@@ -256,7 +258,7 @@ function action() {
         if (typeof method !== 'string' || !method || typeof descriptor?.value !== 'function') {
             throw new TypeError('action() must decorate a method.');
         }
-        registerAction(PageClass, method, descriptor.value);
+        registerAction(PageClass, method, Object.freeze({ implementation: descriptor.value, definition }));
         return descriptor;
     };
 }
@@ -315,7 +317,11 @@ function forEachState(PageClass, callback) {
 }
 
 function getActionImplementation(PageClass, method) {
-    return resolvedAction(PageClass).get(method);
+    return resolvedAction(PageClass).get(method)?.implementation;
+}
+
+function getActionDefinition(PageClass, method) {
+    return resolvedAction(PageClass).get(method).definition;
 }
 
 function getViewImplementation(PageClass, stateName) {
@@ -331,6 +337,7 @@ module.exports = {
     component,
     forEachState,
     getActionImplementation,
+    getActionDefinition,
     getActionMetadata,
     getPageMetadata,
     getPageStylesheetRoots,

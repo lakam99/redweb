@@ -4,6 +4,7 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "strict": true,
+    "esModuleInterop": true,
     "noEmit": true,
     "skipLibCheck": false,
     "experimentalDecorators": false,
@@ -13,5 +14,5 @@
       "redweb/*": ["*"]
     }
   },
-  "files": ["standard-decorators.ts"]
+  "files": ["standard-decorators.ts", "action-input.ts"]
 }

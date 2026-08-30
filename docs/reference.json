@@ -811,8 +811,8 @@
           "detail": "Publishes reassigned values; writable state may also receive bounded browser input."
         },
         {
-          "name": "action()",
-          "detail": "Explicitly exposes one method to rw-click or rw-submit. Undecorated methods stay unreachable."
+          "name": "action({ input? })",
+          "detail": "Explicitly exposes one method to rw-click or rw-submit. An optional Standard Schema input validates and transforms one submitted argument before invocation; ActionInput<typeof schema> describes its output. Invalid input stays recoverable, while validator bugs remain server failures. Undecorated methods stay unreachable."
         },
         {
           "name": "view(stateName)",

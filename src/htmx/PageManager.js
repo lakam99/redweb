@@ -11,6 +11,7 @@ const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
 const synchronous = require('./synchronous');
+const { ActionInputError } = require('./ActionDefinition');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
@@ -326,6 +327,7 @@ class PageManager {
         this.active.set(session.id, session);
         session.socket = socket;
         socket.__redwebPageSession = session;
+        if (socket.context?.signal) setMaxListeners(this.maxSessions + 1, socket.context.signal);
         return session.page._attach(socket, Object.freeze({ socket, signal: socket.context?.signal, principal: session.principal }))
             .then(result => session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page)) : result);
     }
@@ -385,7 +387,13 @@ class PageManager {
         class LiveHtmlHandler extends BaseHandler {
             constructor() { super('redweb:html'); }
             onInitialContact(socket) { return manager.connect(socket.context.principal, socket); }
-            onMessage(socket, message) { return manager.receive(socket, message); }
+            async onMessage(socket, message) {
+                try { return await manager.receive(socket, message); }
+                catch (error) {
+                    if (!(error instanceof ActionInputError)) throw error;
+                    socket.sendProtocolError(error.code, error.message, { requestId: message.requestId });
+                }
+            }
         }
         return class LiveHtmlRoute extends SocketRoute {
             constructor() {

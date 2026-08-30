@@ -15,6 +15,7 @@ const { ComponentsPage } = require('../examples/live-html/components');
 const { JsxPage } = require('../examples/live-html/jsx-page');
 const { jsx, jsxs } = require('../jsx-runtime');
 const { ReactivePage } = require('../tests/fixtures/reactive-pages');
+const { createActionPage } = require('../tests/fixtures/action-page');
 
 class TableComponent {
     count = 0;
@@ -225,6 +226,7 @@ async function main() {
     const jsxServer = start(JsxPage, { port: 0, bind: '127.0.0.1', logger });
     const reactiveServer = start(ReactivePage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
+    const validatedActions = start(createActionPage(), { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     let failure;
@@ -237,11 +239,40 @@ async function main() {
             waitForListening(jsxServer.server),
             waitForListening(reactiveServer.server),
             waitForListening(componentBoundaries.server),
+            waitForListening(validatedActions.server),
         ]);
         const launched = await launchBrowserWithRetry(executable, profile);
         browser = launched.browser;
         const endpoint = new URL(launched.endpoint);
         const debugPort = Number(endpoint.port);
+
+        const actionPage = await openPage(debugPort, `http://127.0.0.1:${validatedActions.server.address().port}/`);
+        pages.push(actionPage);
+        await actionPage.evaluate(eventual(`Boolean(document.querySelector('form[data-rw-component="first"]'))`, 'validated form readiness'));
+        await actionPage.evaluate(`(() => {
+            window.actionErrors = [];
+            document.addEventListener('redweb:error', event => actionErrors.push({ code: event.detail.code, message: event.detail.message }));
+            const form = document.querySelector('form[data-rw-component="first"]');
+            form.elements.amount.value = 'private-invalid';
+            form.requestSubmit();
+        })()`);
+        await actionPage.evaluate(eventual(`actionErrors.length === 1`, 'invalid form response'));
+        if (!await actionPage.evaluate(`actionErrors[0].code === 'ACTION_INVALID_INPUT' && !actionErrors[0].message.includes('private-invalid') && document.querySelector('form[data-rw-component="first"]').elements.amount.value === 'private-invalid'`)) throw new Error('Invalid form input was reset or disclosed by validation.');
+        await actionPage.evaluate(`(() => {
+            const form = document.querySelector('form[data-rw-component="first"]');
+            form.elements.amount.value = '3';
+            const extra = document.createElement('input');
+            extra.name = '__proto__'; extra.value = 'must reach validation'; form.append(extra);
+            form.requestSubmit();
+        })()`);
+        await actionPage.evaluate(eventual(`actionErrors.length === 2`, 'prototype-named field validation'));
+        await actionPage.evaluate(`(() => {
+            const form = document.querySelector('form[data-rw-component="first"]');
+            form.querySelector('[name="__proto__"]').remove();
+            form.requestSubmit();
+        })()`);
+        await actionPage.evaluate(eventual(`document.querySelector('form[data-rw-component="first"] output').textContent === '3'`, 'corrected validated form'));
+        if (!await actionPage.evaluate(`document.querySelector('form[data-rw-component="second"] output').textContent === '0'`)) throw new Error('Validated action escaped its component scope.');
 
         const counterPage = await openPage(debugPort, `http://127.0.0.1:${counter.server.address().port}/`);
         pages.push(counterPage);
@@ -482,14 +513,14 @@ async function main() {
             document.querySelector('p').textContent === 'mixed fragment'
         `);
         if (!jsxSafety) throw new Error('Escaped JSX content executed or composed incorrectly in the browser.');
-        console.log('Live HTML browser gate passed: CSS, JSX, collections, components, counter, chat, raw-text safety, and documentation composition.');
+        console.log('Live HTML browser gate passed: validated actions, CSS, JSX, collections, components, counter, chat, raw-text safety, and documentation composition.');
     } catch (error) {
         failure = error;
     } finally {
         pages.forEach(page => page.socket.close());
         await stopBrowser(browser?.child);
         await Promise.allSettled([
-            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), reactiveServer.shutdown(), componentBoundaries.shutdown(),
+            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), reactiveServer.shutdown(), componentBoundaries.shutdown(), validatedActions.shutdown(),
         ]);
         try {
             await removeTemporaryDirectory(profile);

@@ -2,8 +2,9 @@ const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
 const TemplateRenderer = require('./TemplateRenderer');
 const ReactiveRenderer = require('./ReactiveRenderer');
+const { ActionInputError } = require('./ActionDefinition');
 const { isHtml, markHtml, renderValue } = require('./Html');
-const { forEachState, getActionImplementation, getStateConfig, isComponentClass } = require('./metadata');
+const { forEachState, getActionImplementation, getActionDefinition, getStateConfig, isComponentClass } = require('./metadata');
 
 const RUNTIME = new WeakMap();
 const COMPONENT_RENDER_CONTEXT = new AsyncLocalStorage();
@@ -223,7 +224,13 @@ class LivePage {
         const implementation = getActionImplementation(this.constructor, name);
         if (!implementation || this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
         if (!Array.isArray(args)) throw new TypeError('Action arguments must be an array.');
-        return implementation.call(this, ...args, context);
+        const definition = getActionDefinition(this.constructor, name);
+        const validated = await definition.arguments(args, context);
+        if (definition.validator && (runtime(this).disposed || context?.signal?.aborted || (context?.socket && context.socket.readyState !== 1))) {
+            throw new ActionInputError('ACTION_CANCELLED');
+        }
+        if (this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
+        return implementation.call(this, ...validated, context);
     }
 
     async dispose() {

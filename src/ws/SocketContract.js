@@ -3,6 +3,7 @@
 const { BaseHandler } = require('./BaseHandler');
 const { ProtocolClient } = require('../../client');
 const { ContractValidationError, InboundContractValidationError } = require('./ContractValidationError');
+const { SchemaValidator } = require('../validation/SchemaValidator');
 
 function boundedName(value, label) {
     if (typeof value !== 'string' || !value || value.length > 256) throw new TypeError(`${label} must be a non-empty string of at most 256 characters.`);
@@ -53,15 +54,12 @@ class SocketContract {
         if (!schemas || typeof schemas !== 'object' || Array.isArray(schemas)) throw new TypeError('Contract schemas must be an object.');
         if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Contract options must be an object.');
         const timeout = options.validationTimeoutMs ?? 5000;
-        if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 2147483647) throw new TypeError('validationTimeoutMs must be an integer between 1 and 2147483647.');
         const entries = Object.entries(schemas);
         if (!entries.length || entries.length > 256) throw new TypeError('A socket contract must define between 1 and 256 message types.');
         this.#validators = new Map(entries.map(([type, schema]) => {
             boundedName(type, 'Contract message type');
             if (type === 'error') throw new TypeError('The error message type is reserved by the protocol.');
-            const standard = schema?.['~standard'];
-            if (standard?.version !== 1 || typeof standard.validate !== 'function') throw new TypeError(`Message ${type} requires a Standard Schema v1 validator.`);
-            return [type, standard.validate.bind(standard)];
+            return [type, new SchemaValidator(schema, timeout)];
         }));
         this.version = version;
         this.validationTimeoutMs = timeout;
@@ -73,27 +71,12 @@ class SocketContract {
     async parse(type, payload) {
         const validate = this.#validators.get(type);
         if (!validate) throw new ContractValidationError('UNKNOWN_HANDLER');
-        let timer;
         try {
-            const started = performance.now();
-            const deadline = new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new ContractValidationError()), this.validationTimeoutMs);
-            });
-            const work = Promise.resolve().then(async () => {
-                const result = await validate(payload);
-                if (!result || typeof result !== 'object' || Array.isArray(result) || result.issues !== undefined || !Object.hasOwn(result, 'value')) {
-                    throw new ContractValidationError();
-                }
-                // Output thenables must stay inside both the deadline and the sanitizing catch.
-                const value = await result.value;
-                if (performance.now() - started >= this.validationTimeoutMs) throw new ContractValidationError();
-                return value;
-            });
-            return await Promise.race([work, deadline]);
+            return await validate.parse(payload);
         } catch {
             // Validator details can contain application data. Never expose them as protocol errors.
             throw new ContractValidationError();
-        } finally { clearTimeout(timer); }
+        }
     }
 
     handler(type, callback) {

@@ -293,6 +293,47 @@ HTTP rendering produces an unpredictable page ID. The browser presents it during
 
 For authenticated pages, provide `authenticate(request)`. It runs for both the HTTP render and WebSocket upgrade and must return the same stable primitive identity (commonly a user ID) for both requests. A missing, rejected, changed, or object identity is denied, preventing a copied page token from crossing authentication boundaries. The identity is available as `context.principal` in page hooks and actions.
 
+## Validated action inputs
+
+Use the same Standard Schema v1 validators supported by socket contracts to validate a form once, at the server boundary. Redweb adds no runtime schema-library dependency; install your chosen validator in the application (`npm install zod` for this example).
+
+```tsx
+import { action, page, start, state, type ActionInput } from 'redweb';
+import { z } from 'zod';
+
+const input = z.object({
+  amount: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().min(1).max(1000)),
+}).strict();
+
+@page('/')
+class AmountPage {
+  @state() total = 0;
+
+  @action({ input })
+  save(value: ActionInput<typeof input>) {
+    this.total += value.amount;
+  }
+
+  render() {
+    return <form rw-submit="save">
+      <label>Amount <input name="amount" /></label>
+      <button type="submit">Add</button>
+      <output>{this.total}</output>
+    </form>;
+  }
+}
+
+start(AmountPage);
+```
+
+The browser sends form values as one object (repeated names become arrays). The schema converts `amount` from its submitted string to an integer between 1 and 1,000, rejecting overflow and out-of-range values after conversion. `ActionInput<typeof input>` describes that transformed result; TypeScript cannot infer a method parameter annotation from its decorator. An optional second `LivePageConnectionContext` parameter receives trusted server context, never a caller-supplied replacement. Both standard and legacy TypeScript decorators are supported, including scoped component actions. A validated action accepts exactly one submitted argument; ordinary `@action()` retains its existing argument behavior.
+
+Invalid input produces `ACTION_INVALID_INPUT`, does not invoke the method, and leaves the socket open for correction. The browser reports it through `redweb:error` and does not reset the failed form. Validator exception details, submitted values, and raw schema issues are not returned to the browser. A throwing validator or malformed validator result remains a sanitized `HANDLER_FAILED` server error, not a recoverable user mistake.
+
+Validation has a five-second default deadline; override it with `@action({ input, validationTimeoutMs: 500 })`. A validation deadline produces `ACTION_VALIDATION_TIMEOUT`; an interrupted validation produces `ACTION_CANCELLED` if the connection can still receive a response. Neither invokes the action. Disconnects and disposal prevent an outstanding validation result from starting application code later. These limits apply to validation, not to an action that has already started: Redweb cannot undo its side effects, preempt synchronous JavaScript, or stop external work inside a validator. It does not automatically retry actions. Prefer pure validators, and implement application-specific cancellation/idempotency where needed.
+
+The same bounded validation implementation is shared with socket contracts. Their existing `INVALID_PAYLOAD` contract error behavior is unchanged. Action loading/success/error display is a separate, not-yet-implemented ergonomics improvement; this overload does not promise automatic field-level messages or built-in status UI.
+
 ## Browser transport
 
 The injected module uses the published `redweb-client` package served by the same Redweb listener. It derives `ws:` or `wss:` from the current page, negotiates protocol version `1`, uses one socket per page, delegates DOM events at the document level, and opts into bounded reconnection attempts. Every initial connection and reconnect receives an authoritative state snapshot. Supplying the normal `ssl` option runs both the page and socket over HTTPS/WSS.

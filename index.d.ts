@@ -504,6 +504,17 @@ declare module 'redweb' {
         ): Value;
     }
 
+    /** The validated (possibly transformed) value passed as an action's first argument. */
+    export type ActionInput<Schema extends import('redweb/contract').SocketSchema> = import('redweb/contract').ContractOutput<Schema>;
+
+    export interface ValidatedActionDecorator<Input> {
+        <Value extends (input: Input, context: LivePageConnectionContext) => any>(target: object, propertyKey: string,
+            descriptor: TypedPropertyDescriptor<Value>): void;
+        <This, Value extends (this: This, input: Input, context: LivePageConnectionContext) => any>(
+            value: Value, context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
     export interface LiveViewDecorator {
         (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
         <This, Value extends (this: This, item: any, index: number) => HtmlFragment>(
@@ -518,6 +529,11 @@ declare module 'redweb' {
         (properties: Props) => HtmlFragment;
     export function state(options?: StateOptions): LiveStateDecorator;
     export function action(): LiveActionDecorator;
+    export function action<Schema extends import('redweb/contract').SocketSchema>(options: {
+        input: Schema;
+        /** Bounds input validation, not application execution; defaults to 5000ms. */
+        validationTimeoutMs?: number;
+    }): ValidatedActionDecorator<ActionInput<Schema>>;
     export function view(stateName: string): LiveViewDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
     export function attribute(value: string | number | bigint | boolean): HtmlAttribute;

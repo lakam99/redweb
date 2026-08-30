@@ -64,9 +64,9 @@ const send = payload => {
     catch (error) { report(error); }
 };
 const formValues = form => {
-    const values = {};
+    const values = Object.create(null);
     for (const [name, value] of new FormData(form)) {
-        if (!(name in values)) values[name] = value;
+        if (!Object.hasOwn(values, name)) values[name] = value;
         else values[name] = Array.isArray(values[name]) ? [...values[name], value] : [values[name], value];
     }
     return values;
