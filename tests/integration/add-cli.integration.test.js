@@ -34,7 +34,7 @@ test.each([['commonjs', false], ['module', false], ['commonjs', true], ['module'
             const build = spawnSync(process.execPath, [compiler, '-p', 'tsconfig.json'], { cwd: workspace, encoding: 'utf8', timeout: 30000 });
             expect(build.stdout + build.stderr).toBe('');
             expect(build.status).toBe(0);
-            const test = spawnSync(process.execPath, ['--test', report.test], { cwd: workspace, encoding: 'utf8', timeout: 20000 });
+            const test = spawnSync(process.execPath, ['--test', '--test-reporter=tap', report.test], { cwd: workspace, encoding: 'utf8', timeout: 20000 });
             expect(test.stdout + test.stderr).toContain('# fail 0');
             expect(test.status).toBe(0);
             const repeat = await run(args, workspace, '0.12.0');
