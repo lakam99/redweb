@@ -15,12 +15,25 @@ if (!Number.isSafeInteger(warmConnections + stormConnections)) throw new RangeEr
 if (!Number.isSafeInteger(batchSize * 2)) throw new RangeError('Recovery connection capacity must be a safe integer.');
 const diagnostics = process.env.REDWEB_RECOVERY_DIAGNOSTICS === '1';
 const v8 = diagnostics ? require('node:v8') : undefined;
+const snapshotDirectory = process.env.REDWEB_RECOVERY_HEAP_DIRECTORY;
+if (snapshotDirectory !== undefined && (!diagnostics || !require('node:path').isAbsolute(snapshotDirectory))) {
+    throw new TypeError('Heap snapshots require diagnostics and an absolute REDWEB_RECOVERY_HEAP_DIRECTORY.');
+}
 if (typeof global.gc !== 'function') throw new Error('Run with node --expose-gc scripts/verify-recovery.js.');
 
 // Opt-in observation only: these allocations can perturb the diagnostic run.
 // Never subtract code bytes from the acceptance measurement or budget.
-function diagnosticSnapshot() {
-    return { spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() };
+function diagnosticSnapshot(stage) {
+    const sample = { spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() };
+    // Raw snapshots may contain secrets. Use only in an isolated diagnostic process;
+    // never publish the files. Capturing one adds GC/work, so this is not acceptance.
+    if (snapshotDirectory !== undefined) {
+        const filename = require('node:path').join(snapshotDirectory, `${stage}.heapsnapshot`);
+        const descriptor = require('node:fs').openSync(filename, 'wx', 0o600);
+        require('node:fs').closeSync(descriptor);
+        v8.writeHeapSnapshot(filename);
+    }
+    return sample;
 }
 
 class ReconnectHandler extends redweb.BaseHandler {
@@ -86,11 +99,11 @@ async function main() {
         await runConnections(route, url, 0, warmConnections);
         await new Promise(resolve => setTimeout(resolve, 400));
         const warmedHeap = await collectHeap();
-        const warmDiagnostics = diagnostics ? diagnosticSnapshot() : undefined;
+        const warmDiagnostics = diagnostics ? diagnosticSnapshot('warm') : undefined;
         await runConnections(route, url, warmConnections, stormConnections);
         await new Promise(resolve => setTimeout(resolve, 400));
         const recoveredHeap = await collectHeap();
-        const recoveredDiagnostics = diagnostics ? diagnosticSnapshot() : undefined;
+        const recoveredDiagnostics = diagnostics ? diagnosticSnapshot('recovered') : undefined;
         const result = {
             warmConnections,
             stormConnections,

@@ -8,6 +8,40 @@ permissions:
   contents: read
 
 jobs:
+  recovery-object-diagnostic:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 16 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Compare private heap snapshots (diagnostic only)
+        run: |
+          node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD:src)" = 3750418373f591bebe6fdd9e6d71ad88831cc03d
+          test "$(git rev-parse HEAD:index.js)" = 9a0fbf919463b74c4eafb164e9b21a903d75e76d
+          test "$(git rev-parse HEAD:package-lock.json)" = 1c1cee59e4a6ef709b5cea457cb934bde2bf3f72
+          diagnostic_dir=$(mktemp -d)
+          trap 'rm -f "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot" "$diagnostic_dir/result.json" "$diagnostic_dir/error.log"; rmdir "$diagnostic_dir"' EXIT
+          set +e
+          env -i PATH="$PATH" REDWEB_RECOVERY_DIAGNOSTICS=1 REDWEB_RECOVERY_HEAP_DIRECTORY="$diagnostic_dir" node --expose-gc scripts/verify-recovery.js >"$diagnostic_dir/result.json" 2>"$diagnostic_dir/error.log"
+          diagnostic_status=$?
+          set -e
+          echo "Snapshot-instrumented exit status: $diagnostic_status (not acceptance evidence)"
+          cat "$diagnostic_dir/result.json"
+          set +e
+          env -i PATH="$PATH" node scripts/diagnostics/recovery-heap-summary.cjs "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot"
+          summary_status=$?
+          set -e
+          echo "Sanitized summary exit status: $summary_status"
+          if [ "$diagnostic_status" -ne 0 ]; then exit "$diagnostic_status"; fi
+          exit "$summary_status"
+
   test:
     runs-on: ubuntu-latest
     strategy:

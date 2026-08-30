@@ -1,7 +1,9 @@
 'use strict';
 
 const path = require('node:path');
+const fs = require('node:fs');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
+const { summarize, compare } = require('../../scripts/diagnostics/recovery-heap-summary.cjs');
 
 const script = path.resolve(__dirname, '../../scripts/verify-recovery.js');
 const configured = {
@@ -50,3 +52,49 @@ test.each(['0', '1'])('actual recovery traffic and optional native diagnostics (
         }
     });
 }, 20000);
+
+test('private native heap snapshots produce only fixed-label aggregates and never overwrite files', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        const environment = { ...configured, REDWEB_RECOVERY_DIAGNOSTICS: '1', REDWEB_RECOVERY_HEAP_DIRECTORY: owner.directory };
+        await owner.command(['--expose-gc', script], { environment, timeoutMs: 20000 });
+        const warm = path.join(owner.directory, 'warm.heapsnapshot');
+        const recovered = path.join(owner.directory, 'recovered.heapsnapshot');
+        const before = fs.readFileSync(warm);
+        const output = JSON.parse(await owner.command([path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-summary.cjs'), warm, recovered]));
+        expect(output.diagnosticOnly).toBe(true);
+        expect(output.groups.find(group => group.group === 'type:code').warm.count).toBeGreaterThan(0);
+        expect(output.groups.find(group => group.group === 'object:WebSocket')?.delta.count ?? 0).toBe(0);
+        expect(JSON.stringify(output)).not.toContain(owner.directory);
+        await expect(owner.command(['--expose-gc', script], { environment, timeoutMs: 10000 })).rejects.toThrow('EEXIST');
+        expect(fs.readFileSync(warm).equals(before)).toBe(true);
+    });
+}, 45000);
+
+test('snapshot collection requires explicit diagnostics and an absolute directory', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        for (const override of [
+            { REDWEB_RECOVERY_HEAP_DIRECTORY: owner.directory },
+            { REDWEB_RECOVERY_DIAGNOSTICS: '1', REDWEB_RECOVERY_HEAP_DIRECTORY: 'relative' },
+        ]) {
+            await expect(owner.command(['--expose-gc', script], { environment: { ...configured, ...override }, timeoutMs: 10000 }))
+                .rejects.toThrow('Heap snapshots require diagnostics and an absolute REDWEB_RECOVERY_HEAP_DIRECTORY');
+        }
+    });
+}, 25000);
+
+test('aggregate unit cases redact arbitrary labels and reject malformed metadata', () => {
+    const fixture = { snapshot: { meta: { node_fields: ['type', 'name', 'self_size'], node_types: [['object', 'unrecognized']] } },
+        strings: ['private credential value', 'Socket'], nodes: [0, 0, 16, 0, 1, 32, 1, 0, 8] };
+    const groups = summarize(fixture);
+    expect(groups).toEqual({ 'type:object': { count: 1, selfBytes: 16 }, 'object:Socket': { count: 1, selfBytes: 32 }, 'type:other': { count: 1, selfBytes: 8 } });
+    expect(JSON.stringify(groups)).not.toContain('private credential');
+    expect(compare(groups, {})).toEqual(expect.arrayContaining([{ group: 'object:Socket', warm: { count: 1, selfBytes: 32 }, recovered: { count: 0, selfBytes: 0 }, delta: { count: -1, selfBytes: -32 } }]));
+    expect(compare({}, groups)[0].warm).toEqual({ count: 0, selfBytes: 0 });
+    expect(() => summarize({ ...fixture, nodes: [0] })).toThrow();
+    expect(() => summarize({ ...fixture, nodes: [0, 0, -1] })).toThrow();
+    for (const nodes of [[2, 0, 1], [-1, 0, 1], [0.5, 0, 1], [0, 2, 1], [0, -1, 1], [0, 0.5, 1]]) {
+        expect(() => summarize({ ...fixture, nodes })).toThrow();
+    }
+    expect(() => summarize({ ...fixture, strings: {} })).toThrow();
+    expect(() => summarize({ ...fixture, snapshot: { meta: { node_fields: {}, node_types: [] } } })).toThrow();
+});
