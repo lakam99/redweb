@@ -13,6 +13,11 @@ const browserMorph = require('../src/htmx/browserMorph');
 const runMorphCases = require('../tests/fixtures/browser-morph-cases');
 const SelectionPage = require('../tests/fixtures/selection-page');
 const { start } = require('..');
+const express = require('express');
+const browserFeedback = require('../src/htmx/browserFeedback');
+const browserRuntime = require('../src/htmx/browserRuntime');
+const { verifyActionFeedback } = require('./lib/verify-action-feedback');
+const runFeedbackCases = require('../tests/fixtures/browser-feedback-cases');
 
 const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
@@ -48,16 +53,43 @@ async function verifyLiveSelection(tab) {
     return { serverActions: 2, transport: 'live Redweb HTTP/WebSocket page', input: 'native keyboard and pointer events' };
 }
 
+async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer }) {
+    const app = express();
+    const runtime = browserRuntime('/__redweb/client.js');
+    assert.equal(runtime.split(coverage.source).length, 2, 'Feedback source must occur exactly once in the shipped runtime');
+    app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
+        runtime.replace(coverage.source, () => instrumented ? coverage.instrumented : coverage.source) +
+        '\nwindow.feedbackTest = { feedback, showFeedback, refreshFeedback, indexSlots, slotOwners, feedbackNodes, revisions, performAction, client };'));
+    await verifyActionFeedback({
+        debugPort, pages: [], eventual, serverOptions: { server: app }, onServer,
+        openPage: async (_port, url) => {
+            const tab = await visit(url);
+            run.browser = await command(tab, 'Browser.getVersion');
+            return { ...tab, evaluate: expression => evaluate(tab, expression), command: (method, params) => command(tab, method, params) };
+        },
+        afterChecks: async tab => {
+            const result = await evaluate(tab, `(async () => {
+                try { return { ok: true, cases: await (${runFeedbackCases.toString()})() }; }
+                catch (error) { return { ok: false, error: error.stack }; }
+            })()`);
+            assert.ok(result.ok, result.error);
+            run[instrumented ? 'instrumentedCases' : 'plainCases'] = result.cases;
+        },
+    });
+}
+
 async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
-    const coverage = new BrowserCoverage('browserMorph.generated.js', browserMorph());
+    const mode = process.argv[2] || 'morph';
+    assert.ok(['morph', 'feedback'].includes(mode), 'Expected morph or feedback coverage mode');
+    const coverage = new BrowserCoverage(mode === 'morph' ? 'browserMorph.generated.js' : 'browserFeedback.generated.js', mode === 'morph' ? browserMorph() : browserFeedback());
     const run = { id: randomUUID(), startedAt: new Date().toISOString() };
     const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
         let browser, coveredTab, application, failure, launchAttempted = false;
         const tabs = [];
         const recordFailure = error => { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
-        const server = http.createServer((request, response) => {
+        const server = mode === 'morph' ? http.createServer((request, response) => {
             if (request.url === '/morph.js' || request.url === '/plain.js') {
                 response.setHeader('Content-Type', 'text/javascript');
                 response.end((request.url === '/plain.js' ? coverage.source : coverage.instrumented) + '\nwindow.morph = { units, marker, rangeNodes, morphNode, morphContent, preserveFocus, applyPatch, clientNodes };');
@@ -65,10 +97,12 @@ async function main() {
                 response.setHeader('Content-Type', 'text/html');
                 response.end(`<!doctype html><html><head><title>Native DOM coverage</title><script src="${request.url === '/plain' ? '/plain.js' : '/morph.js'}" defer></script></head><body></body></html>`);
             } else { response.statusCode = 404; response.end(); }
-        });
+        }) : null;
         try {
-            server.listen(0, '127.0.0.1');
-            await waitForListening(server);
+            if (server) {
+                server.listen(0, '127.0.0.1');
+                await waitForListening(server);
+            }
             launchAttempted = true;
             const launched = await launchBrowserWithRetry(executable, execution.directory);
             browser = launched.browser;
@@ -78,15 +112,30 @@ async function main() {
                 tabs.push(tab);
                 return tab;
             };
-            const plainTab = await visit(`http://127.0.0.1:${server.address().port}/plain`);
-            run.browser = await command(plainTab, 'Browser.getVersion');
-            run.plainCases = await runCases(plainTab);
-            coveredTab = await visit(`http://127.0.0.1:${server.address().port}/`);
-            run.instrumentedCases = await runCases(coveredTab);
-            assert.deepEqual(run.instrumentedCases, run.plainCases, 'Plain and instrumented cases must agree');
-            application = start(SelectionPage, { port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
-            await waitForListening(application.server);
-            run.integration = await verifyLiveSelection(await visit(`http://127.0.0.1:${application.server.address().port}/`));
+            if (mode === 'feedback') {
+                for (const instrumented of [false, true]) {
+                    await verifyFeedback({
+                        coverage, debugPort, run, instrumented, onServer: server => { application = server; },
+                        visit: async url => {
+                            const tab = await visit(url);
+                            if (instrumented) coveredTab = tab;
+                            return tab;
+                        },
+                    });
+                }
+                assert.deepEqual(run.instrumentedCases, run.plainCases, 'Plain and instrumented cases must agree');
+                run.integration = { transport: 'actual Redweb HTTP/WebSocket actions', cases: 'existing action feedback acceptance driver, twice' };
+            } else {
+                const plainTab = await visit(`http://127.0.0.1:${server.address().port}/plain`);
+                run.browser = await command(plainTab, 'Browser.getVersion');
+                run.plainCases = await runCases(plainTab);
+                coveredTab = await visit(`http://127.0.0.1:${server.address().port}/`);
+                run.instrumentedCases = await runCases(coveredTab);
+                assert.deepEqual(run.instrumentedCases, run.plainCases, 'Plain and instrumented cases must agree');
+                application = start(SelectionPage, { port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
+                await waitForListening(application.server);
+                run.integration = await verifyLiveSelection(await visit(`http://127.0.0.1:${application.server.address().port}/`));
+            }
         } catch (error) { recordFailure(error); }
         finally {
             if (coveredTab) {
@@ -108,15 +157,17 @@ async function main() {
                 recordFailure(error);
             }
             try {
-                server.closeAllConnections();
-                await bounded(new Promise(resolve => server.close(resolve)), 'HTTP fixture shutdown');
+                if (server) {
+                    server.closeAllConnections();
+                    await bounded(new Promise(resolve => server.close(resolve)), 'HTTP fixture shutdown');
+                }
             } catch (error) { execution.cleanupFailure = error; server.unref(); recordFailure(error); }
         }
         if (failure) throw failure;
     }));
     // Final status includes VerificationWorkspace's filesystem cleanup result.
     const report = { ...outcome.report, ...run, endedAt: new Date().toISOString() };
-    const destination = path.resolve(__dirname, '../coverage/browser-morph');
+    const destination = path.resolve(__dirname, '../coverage/browser-' + mode);
     try {
         fs.mkdirSync(destination, { recursive: true });
         fs.writeFileSync(path.join(destination, coverage.filename), coverage.source);

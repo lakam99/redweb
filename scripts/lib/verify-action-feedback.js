@@ -1,21 +1,23 @@
 const assert = require('assert/strict');
 const { start } = require('../..');
 const { createFeedbackPage } = require('../../tests/fixtures/feedback-page');
-const { waitForCondition, waitForListening, silentLogger } = require('../../tests/helpers/network');
+const { waitForCondition, waitForListening, silentLogger, withTimeout } = require('../../tests/helpers/network');
 
-async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
+async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serverOptions = {}, afterChecks, onServer }) {
     const waits = new Map();
     const control = {
         forms: new Map(),
         wait(message) { return new Promise((resolve, reject) => waits.set(message, { resolve, reject })); },
     };
-    const server = start(createFeedbackPage(control), { port: 0, bind: '127.0.0.1', logger: silentLogger });
+    const server = start(createFeedbackPage(control), { ...serverOptions, port: 0, bind: '127.0.0.1', logger: silentLogger });
     const finish = async message => {
         await waitForCondition(() => waits.has(message), `action ${message} entered`);
         waits.get(message).resolve();
         waits.delete(message);
     };
+    let failure;
     try {
+        if (onServer) onServer(server);
         await waitForListening(server.server);
         const browser = await openPage(debugPort, `http://127.0.0.1:${server.server.address().port}/`);
         pages.push(browser);
@@ -179,10 +181,17 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
         await finish('online again');
         await status('first', 'success');
         assert.equal(waits.has('offline draft'), false, 'Disconnected actions must never replay after reconnect.');
+        if (afterChecks) await afterChecks(browser);
+    } catch (error) {
+        failure = error instanceof Error ? error : new Error(String(error), { cause: error });
     } finally {
         waits.forEach(wait => wait.resolve());
-        await server.shutdown();
+        try { await withTimeout(server.shutdown(), 'action feedback server shutdown', 15000); }
+        catch (cleanup) {
+            failure = failure ? new AggregateError([failure, cleanup], failure.message, { cause: failure }) : cleanup;
+        }
     }
+    if (failure) throw failure;
 }
 
 module.exports = { verifyActionFeedback };
