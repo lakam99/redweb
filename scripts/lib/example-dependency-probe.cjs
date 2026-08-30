@@ -27,6 +27,13 @@ async function main() {
         const response = await fetch(origin, { signal: AbortSignal.timeout(5000) });
         assert.equal(response.status, 200);
         const html = await response.text();
+        const runtime = await fetch(`${origin}/__redweb/runtime.js`, { signal: AbortSignal.timeout(5000) });
+        assert.equal(runtime.status, 200);
+        assert.equal(await runtime.text(), 'import { mountLivePage } from "/__redweb/client.js";\nmountLivePage();\n');
+        const client = await fetch(`${origin}/__redweb/client.js`, { signal: AbortSignal.timeout(5000) });
+        assert.equal(client.status, 200);
+        assert.equal(await client.text(), require('node:fs').readFileSync(path.join(
+            path.dirname(createRequire(packagePath).resolve('redweb-client/live-html')), 'live-html.js'), 'utf8'));
         assert.match(html, chat ? /Join the chatroom/ : /Server-side counter/);
         if (!chat) {
             assert.equal(app.inspect(), null);

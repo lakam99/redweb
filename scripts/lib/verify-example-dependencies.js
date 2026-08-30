@@ -4,16 +4,22 @@ const fs = require('fs');
 const path = require('path');
 const { npmEntrypoint } = require('../evaluation/process');
 
-async function verifyExampleDependencies(archive, workspace, validatorVersion, cliDependencies, execution) {
+async function verifyExampleDependencies(archive, workspace, validatorVersion, cliDependencies, execution, candidate) {
     const consumer = path.join(workspace, 'production-examples');
     fs.mkdirSync(consumer);
-    fs.writeFileSync(path.join(consumer, 'package.json'), JSON.stringify({
-        name: 'redweb-production-example-check', private: true, dependencies: { redweb: `file:${archive.replaceAll('\\', '/')}` },
-    }));
+    const manifest = { name: 'redweb-production-example-check', private: true,
+        dependencies: { redweb: `file:${archive.replaceAll('\\', '/')}` } };
+    if (candidate) {
+        const selected = candidate.manifest();
+        Object.assign(manifest.dependencies, selected.dependencies);
+        manifest.overrides = selected.overrides;
+    }
+    fs.writeFileSync(path.join(consumer, 'package.json'), JSON.stringify(manifest));
     fs.copyFileSync(path.join(__dirname, 'example-dependency-probe.cjs'), path.join(consumer, 'probe.cjs'));
     const command = (args, environment) => execution.command(args, { cwd: consumer, environment });
     const install = args => command([npmEntrypoint(), 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', ...args]);
     await install([]);
+    const candidateEvidence = candidate?.verify(consumer);
     const withoutValidator = await command(['probe.cjs', 'core'], { NODE_ENV: 'production' });
     await install([`zod@${validatorVersion}`]);
     const withValidator = await command(['probe.cjs', 'chat'], { NODE_ENV: 'development' });
@@ -29,7 +35,9 @@ async function verifyExampleDependencies(archive, workspace, validatorVersion, c
     }
     await command(['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json']);
     await command(['--test', ...tests]);
-    return { withoutValidator, withValidator, additions: 'Packed page/component/socket-route additions passed in the clean installed consumer.' };
+    if (candidate) candidate.verify(consumer, candidateEvidence);
+    return { withoutValidator, withValidator, candidateEvidence, consumer,
+        additions: 'Packed page/component/socket-route additions passed in the clean installed consumer.' };
 }
 
 module.exports = { verifyExampleDependencies };

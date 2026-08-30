@@ -53,6 +53,35 @@ from the whole-client V8 report; neither denominator is substituted for the othe
 
 ## Release boundary
 
+For an isolated packed-pair check before publishing, explicitly select a client
+tarball. This does not replace the development link or modify repository lockfiles.
+For example, from Redweb in PowerShell (use a fresh output directory):
+
+```powershell
+npm --prefix ../redweb-client run build
+New-Item -ItemType Directory -Path coverage/client-candidate
+npm pack ../redweb-client --pack-destination coverage/client-candidate
+$env:REDWEB_CLIENT_CANDIDATE = (Resolve-Path coverage/client-candidate/redweb-client-0.1.0.tgz).Path
+npm run verify:live-html:package
+Remove-Item Env:REDWEB_CLIENT_CANDIDATE
+```
+
+Use the actual filename printed by `npm pack` if the client version changes.
+The verifier installs both tarballs in a temporary consumer with an explicit local
+override, checks npm integrity and every browser/CommonJS bundle, and resolves
+the client from the installed Redweb package. It compares fingerprints before and
+after testing. The candidate-only browser phase exercises the server-driven
+counter, two-user chat, escaping, draft preservation, reconnect and disconnect
+presence. The broader package gate verifies generated consumers and source-free
+production execution using the isolated runtime dependencies. Certificate checks
+stay enabled; a machine needing its system trust store can use Node's
+`--use-system-ca` option.
+
+Without `REDWEB_CLIENT_CANDIDATE`, the command keeps the ordinary registry path;
+it does not use or infer the local npm link. A candidate pass is not a registry
+release pass. `npm run verify:package:tools` includes the fingerprint/containment
+unit regressions; its scoped coverage is not coverage of every browser driver.
+
 Published `redweb-client@0.1.0` does **not** export `./live-html`. Its local manifest
 still has that version, so version text alone does not identify this candidate.
 This Redweb development branch therefore requires the link above. It is not ready

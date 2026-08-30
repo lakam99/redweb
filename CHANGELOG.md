@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added explicit local-client tarball selection for isolated package verification without changing the development npm link. Verify npm integrity, export paths and all bundle fingerprints before/after tests; run native packed counter/chat/reconnect/disconnect checks. Ordinary registry installation retains its incompatible-published-client failure until the client release and dependency lockfile are updated.
+
 - Added shared original-source client coverage across Vitest and native Chromium, preserving actual test discovery, per-realm reports, input/tooling hashes and separately auditable Node/browser contributions. Source-built plain bundles must match the linked client build. Coverage still correctly fails at 520/521 branches; no production guard, threshold or input-state invariant was changed to conceal the gap.
 
 - Consolidated browser rendering, keyed DOM updates, action feedback and delegated form behavior in the optional `redweb-client/live-html` entry. Redweb's generated bootstrap now only imports and mounts it. Local development uses `npm link`; the matching client release and dependency-lock update are still required before ordinary installation.

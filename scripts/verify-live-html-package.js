@@ -9,22 +9,41 @@ const { verifyActionInput } = require('./lib/verify-action-input');
 const { verifyRoomExample } = require('./lib/verify-room-example');
 const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
+const { ClientCandidate } = require('./lib/ClientCandidate');
+const { createHash } = require('node:crypto');
+const { verifyPackedBrowser } = require('./lib/verify-packed-browser');
 
 async function main() {
     const root = path.resolve(__dirname, '..');
+    const candidate = process.env.REDWEB_CLIENT_CANDIDATE ? new ClientCandidate(process.env.REDWEB_CLIENT_CANDIDATE) : undefined;
     await new VerificationWorkspace().run(async execution => {
         const workspace = execution.directory;
         const pack = JSON.parse(await execution.command([npmEntrypoint(), 'pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
+        console.log(JSON.stringify({ redwebArchive: pack[0].filename,
+            sha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
+            integrity: pack[0].integrity, candidateOnly: Boolean(candidate) }));
         const metadata = require('../package.json');
         const dependencyChecks = await verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
-            { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws }, execution);
+            { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws }, execution, candidate);
+        if (candidate) {
+            for (const [name, digest] of Object.entries(dependencyChecks.candidateEvidence.bundles)) {
+                const linkedFile = path.join(path.dirname(require.resolve('redweb-client/live-html')), name);
+                if (createHash('sha256').update(fs.readFileSync(linkedFile)).digest('hex') !== digest) {
+                    throw new Error('Installed candidate differs from the locally tested client build.');
+                }
+            }
+            console.log(JSON.stringify(dependencyChecks.candidateEvidence));
+            const browser = await verifyPackedBrowser(path.join(dependencyChecks.consumer, 'node_modules/redweb'), execution);
+            candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+            console.log(JSON.stringify({ candidateOnly: true, packedBrowser: browser }));
+        }
         console.log(dependencyChecks.withoutValidator.trim());
         console.log(dependencyChecks.withValidator.trim());
         console.log(dependencyChecks.additions);
         await execution.command(['-xf', archive, '-C', workspace], { executable: 'tar' });
         const packageRoot = path.join(workspace, 'package');
-        fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
+        fs.symlinkSync(path.join(dependencyChecks.consumer, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
         for (const template of require('../src/cli/templates').TEMPLATES) {
@@ -149,7 +168,8 @@ async function main() {
         if (!staticDocument.includes('<title>Packed docs</title>') || staticDocument.includes('__redweb_page')) {
             throw new Error('Packed static exporter did not emit a standalone document.');
         }
-        console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation.`);
+        if (candidate) candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+        console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation${candidate ? ' (explicit local client candidate; not registry-release evidence)' : ''}.`);
     });
 }
 
