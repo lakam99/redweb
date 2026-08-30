@@ -116,3 +116,109 @@ not subtract code bytes, retain artificial baseline objects, weaken the 110%
 limit, increase warm-up, or treat a later isolated pass as resolution. Publication,
 full original-client/application coverage and final cross-platform checks remain
 separate requirements.
+
+## Split-process milestone
+
+The original verifier measures Redweb, native client sockets and its load driver
+inside one Node heap. To distinguish those owners, the separate diagnostic
+`node scripts/diagnostics/recovery-split.cjs` starts a server worker and a native
+client worker. Only the coordinator retains earlier measurements. The acceptance
+verifier is unchanged; this diagnostic cannot pass or waive its heap gate.
+
+Both workers use Node's existing `--expose-gc` flag, without inherited Node options
+or coverage instrumentation. The server retains the original route, handler,
+room/session limits and timing. Work remains 1,200 preconditioning connections,
+200 warm connections, five 1,200-connection storms and batches of 50. Each batch
+waits for server connection cleanup. Each phase waits 400 ms, collects twice with
+one intervening immediate, and requires all measured registries to be empty.
+
+Differences are deliberate and material: there are separate runtimes, IPC and a
+coordinator between batches; replies are parsed and checked against their exact
+IDs; client operations use settled-result arrays and explicit ownership through
+failure cleanup. V8 statistics are read after the phase's heap measurement. These
+extra allocations and the changed scheduling mean ratios cannot be substituted
+for, added to, or directly compared as equivalents of the original shared heap.
+V8 spaces, code statistics, external memory and array buffers are overlapping views,
+not additive explanations of heap growth. No code-byte subtraction is allowed.
+
+Evidence is written to a new exclusive directory under `coverage/recovery-split-*`:
+complete per-phase JSON lines, a final JSON report, source fingerprints, versions,
+process identities, actual delivery counts, registry sizes and all memory views.
+Source fingerprints are checked again after completion. Output beyond 1 MiB is
+explicitly marked truncated. Each request and process cleanup is bounded; failed
+channels cannot be reused, and uncertain cleanup retains the PID and nested
+failures rather than claiming success. No raw heap snapshots are taken.
+
+### Single split run: observations
+
+Run once after the full suite finished, from 19:05:35.658 to 19:05:48.448 UTC on
+2026-08-30, Windows/Node 22.21.0, V8 `12.4.254.21-node.33`, native `ws` 8.21.3.
+The server PID was 22040; the load-generator PID was 34932. Both workers exited.
+All 7,400 request IDs were acknowledged exactly, and every phase had zero server
+connections/rooms/sessions and zero tracked client connections. Fingerprints were
+unchanged at completion. Neither worker emitted output; no output was truncated.
+
+| Phase | Server heap bytes | Client heap bytes |
+| --- | ---: | ---: |
+| Preconditioning | 10,181,120 | 6,579,816 |
+| Warm | 10,187,232 | 6,540,872 |
+| Storm 1 | 10,466,240 | 6,782,104 |
+| Storm 2 | 10,874,320 | 7,205,968 |
+| Storm 3 | 10,989,184 | 7,312,720 |
+| Storm 4 | 11,037,936 | 7,374,504 |
+| Storm 5 | 9,718,488 | 7,410,304 |
+
+The server peaked at **108.35068839111547%** of its own warm heap and ended at
+**95.39871085688438%**. The client crossed 110% at storm 2 and ended at
+**113.29229497229116%**, its highest measured value. This attributes the sustained
+above-110% ratio **in this split diagnostic** to the native load-generator process,
+which does not load Redweb's runtime or `redweb-client`. It does not establish the
+cause or relative contributions inside the original shared-process CI failure.
+
+The client's warm-to-final heap increase was 869,432 bytes. Its code-and-metadata
+statistic increased 521,972 bytes, while bytecode-and-metadata stayed at 755,952.
+Its old/code/trusted spaces increased 394,608 / 321,216 / 152,360 bytes respectively;
+external memory and array buffers remained unchanged after warm-up. These are
+overlapping views sampled sequentially, not an exact object-retention accounting.
+The data supports investigating client/runtime code and metadata lifetime, but
+does not establish that all growth is compiled code or exclude retained objects.
+
+On the server, bytecode-and-metadata fell from 908,240 bytes at storm 4 to 204,960
+at storm 5 while heap fell by 1,319,448 bytes. This is a correlated observation,
+not proof of a particular garbage-collector or bytecode-flushing cause. Server
+code-and-metadata remained 416,038 bytes above warm at the final measurement.
+
+Complete local evidence: `coverage/recovery-split-RQytod/report.json`, SHA-256
+`fa8b0a070dfb833a8449e4c658190a64778f9e425fed42c93251dda57ed35db7`, alongside
+`samples.ndjson`. The report includes all source fingerprints and memory views;
+the table above preserves every phase's heap measurement in version control.
+
+### Verification and next boundary
+
+The full suite passed **770 tests / 76 suites**, pretest/type checks, and all-four
+100% instrumented-library coverage in 427.392 seconds. Sixteen focused tests cover
+the diagnostic's fixed phase plan, fingerprints, nested errors, real HTTP-upgrade
+and WebSocket delivery, malformed replies, refused connections, timeout/exit,
+graceful and forced cleanup, and command validation. OS-cleanup uncertainty is
+tested separately with mocked units, not presented as real-process integration.
+
+The diagnostic scripts are **not at 100% coverage**. Native child-aware coverage
+reports 74.83% statements/lines, 95.12% branches and 80% functions across both
+scripts. Worker statements/lines are 97.36%; orchestration/CLI and failure paths
+remain uncovered. The earlier Jest-only report did not instrument child code and
+reported 36.72% statements; that was not a behavioral failure. Both coverage gates
+correctly exited nonzero without weakened thresholds; all sixteen behavior tests
+passed. Coverage instrumentation is explicit in behavioral tests and disabled in
+the actual measured workers. Library coverage does not certify diagnostic coverage.
+
+Final pretest/type/generated-documentation checks and 20 focused documentation/
+diagnostic tests also passed after the evidence update. The senior critic approved
+the milestone after independently checking report/source hashes, phase counts,
+registries and calculations; earlier cleanup/evidence findings were addressed.
+The next causal step is client-only retaining-path/code-lifetime
+inspection at warm and late storms, with complete bounded evidence, followed by a
+one-variable control. A speculative Redweb runtime optimization is not justified
+by this result. The original recovery failure, client/application coverage gaps
+and release requirements remain open. No original acceptance gate was rerun or
+waived, and no production code, dependency, threshold, publication or deployment
+changed in this milestone.
