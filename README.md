@@ -37,7 +37,7 @@ Each includes real HTTP/WebSocket tests, a development watcher, and production i
 
 For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
 
-`npx redweb doctor --json` checks the project's installed Redweb and TypeScript packages, effective JSX settings (including inherited configuration), and Node compatibility without running application code. Add `--port 8181` to probe loopback port availability. It reports suggested fixes and exits unsuccessfully for errors; it never silently repairs the project. See [CLI behavior and limitations](docs/CLI.md).
+`npx redweb doctor --json` checks the project's installed Redweb and TypeScript packages, effective JSX settings (including inherited configuration), Node compatibility, declared assets, and statically readable route/handler registrations without running application code. Dynamic configurations produce explicit warnings rather than guessed results. Add `--port 8181` to probe loopback port availability. Findings include suggested fixes and source locations where available; errors produce a nonzero exit status, and the doctor never silently repairs the project. See [CLI behavior and limitations](docs/CLI.md).
 
 ## Exports
 

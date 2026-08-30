@@ -42,7 +42,9 @@ async function main() {
         fs.symlinkSync(path.dirname(require.resolve('typescript/package.json')), path.join(initializedRoot, 'node_modules', 'typescript'), 'junction');
         run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot, shell: false });
         const diagnosis = JSON.parse(run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'doctor', '--json', '--port', '0'], { cwd: initializedRoot, shell: false }));
-        if (!diagnosis.ok || diagnosis.issues.length || diagnosis.installedVersion !== manifest.version) {
+        if (!diagnosis.ok || diagnosis.installedVersion !== manifest.version || diagnosis.source.registrations !== 1 ||
+            diagnosis.issues.length !== 1 || diagnosis.issues[0].code !== 'SOURCE_UNRESOLVED' ||
+            diagnosis.issues[0].message !== 'Asset templateRoot is not statically known.') {
             throw new Error('Packed doctor did not validate the initialized consumer.');
         }
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||

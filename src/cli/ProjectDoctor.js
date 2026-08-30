@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const net = require('net');
 const { createRequire } = require('module');
+const SourceInspector = require('./SourceInspector');
 
 function issue(code, file, message, suggestion, severity = 'error') {
     return { code, severity, file, message, suggestion };
@@ -37,6 +38,10 @@ function inspectTypeScript(root, issues) {
     }
     if (!typescriptPath) return;
     const ts = require(typescriptPath);
+    if (Number(ts.version.split('.')[0]) < 5) {
+        issues.push(issue('TYPESCRIPT_UNSUPPORTED', 'package.json', `TypeScript ${ts.version} is not supported by these diagnostics.`, 'Install TypeScript 5 or newer; Redweb standard decorators and contract types require it.'));
+        return;
+    }
     const read = ts.readConfigFile(configPath, ts.sys.readFile);
     if (read.error) {
         issues.push(issue('CONFIG_INVALID', 'tsconfig.json', ts.flattenDiagnosticMessageText(read.error.messageText, '\n'), 'Correct the configuration syntax and run doctor again.'));
@@ -53,6 +58,7 @@ function inspectTypeScript(root, issues) {
     if (config.options.experimentalDecorators) {
         issues.push(issue('LEGACY_DECORATORS', 'tsconfig.json', 'Legacy decorators are enabled; the starter examples use standard decorators.', 'Set experimentalDecorators to false for standard decorator examples.', 'warning'));
     }
+    return new SourceInspector(ts, root, config).inspect();
 }
 
 function inspectPort(port) {
@@ -81,7 +87,8 @@ class ProjectDoctor {
                 issues.push(issue('CLI_VERSION_MISMATCH', 'package.json', `CLI ${this.cliVersion} is inspecting Redweb ${installedVersion}.`, 'Use the locally installed CLI with npx --no-install redweb doctor.', 'warning'));
             }
         }
-        inspectTypeScript(root, issues);
+        const inspected = inspectTypeScript(root, issues);
+        if (inspected) issues.push(...inspected.issues);
         if (port !== null) {
             const unavailable = await inspectPort(port);
             if (unavailable) issues.push(unavailable);
@@ -91,7 +98,8 @@ class ProjectDoctor {
             operation: 'doctor',
             root,
             installedVersion,
-            checks: ['node', 'redweb-version', 'typescript-config', ...(port === null ? [] : ['loopback-port'])],
+            checks: ['node', 'redweb-version', 'typescript-config', ...(inspected ? ['source-assets', 'source-routes', 'source-handlers'] : []), ...(port === null ? [] : ['loopback-port'])],
+            source: inspected?.source || null,
             ok: !issues.some(value => value.severity === 'error'),
             issues,
         };

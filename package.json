@@ -118,6 +118,7 @@
     "@types/jest": "^29.5.12",
     "jest": "^29.7.0",
     "nodemon": "^3.1.11",
+    "redweb-legacy-compiler-fixture": "file:tests/fixtures/legacy-compiler",
     "supertest": "^7.0.0",
     "typescript": "^5.9.3",
     "zod": "^4.4.3"

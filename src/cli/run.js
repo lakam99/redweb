@@ -15,7 +15,7 @@ async function run(args, cwd, version) {
             const report = await new ProjectDoctor(version).inspect(root, options.port);
             const output = options.json ? JSON.stringify(report) : [
                 `Redweb doctor: ${report.ok ? 'passed selected checks' : 'issues found'}`,
-                ...report.issues.map(value => `${value.severity} ${value.code}: ${value.message}\n  ${value.suggestion}`),
+                ...report.issues.map(value => `${value.severity} ${value.code}${value.file ? ` (${value.file}${value.line ? `:${value.line}:${value.column}` : ''})` : ''}: ${value.message}\n  ${value.suggestion}`),
             ].join('\n');
             return { exitCode: report.ok ? 0 : 1, stdout: `${output}\n`, stderr: '' };
         }

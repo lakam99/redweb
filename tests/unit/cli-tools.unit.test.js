@@ -149,6 +149,7 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
             const report = await new ProjectDoctor(version).inspect(workspace, port);
             expect(report.ok).toBe(false);
             expect(report.issues[0].code).toBe('PORT_UNAVAILABLE');
+            expect((await run(['doctor', '--port', String(port)], workspace, version)).stdout).toContain('PORT_UNAVAILABLE');
         } finally { await new Promise(resolve => server.close(resolve)); }
         expect((await new ProjectDoctor(version).inspect(workspace, port)).ok).toBe(true);
     });
@@ -182,5 +183,30 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
         expect(success.exitCode).toBe(0);
         expect(JSON.parse(success.stdout).issues).toEqual([]);
         expect((await run(['doctor'], workspace, version)).stdout).toContain('passed selected checks');
+    });
+
+    test('unsupported real compiler versions stop before source analysis', async () => {
+        installTools(workspace, ['redweb']);
+        const fixture = path.dirname(require.resolve('redweb-legacy-compiler-fixture/package.json'));
+        const compiler = path.dirname(require.resolve('typescript/package.json', { paths: [fixture] }));
+        fs.symlinkSync(compiler, path.join(workspace, 'node_modules', 'typescript'), 'junction');
+        configure(workspace);
+        const report = await new ProjectDoctor(version).inspect(workspace);
+        expect(report.issues.map(value => value.code)).toEqual(['TYPESCRIPT_UNSUPPORTED']);
+        expect(report.source).toBeNull();
+        expect(report.checks).not.toContain('source-assets');
+    });
+
+    test('human-readable diagnostics include source locations for repair', async () => {
+        installTools(workspace);
+        configure(workspace);
+        fs.writeFileSync(path.join(workspace, 'src', 'app.tsx'), `
+            import { page, start } from 'redweb';
+            @page('/', {css:'missing.css'}) class Page {}
+            start(Page);
+        `);
+        const result = await run(['doctor'], workspace, version);
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toMatch(/ASSET_UNAVAILABLE \(src\/app\.tsx:\d+:\d+\)/);
     });
 });

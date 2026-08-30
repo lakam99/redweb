@@ -14,7 +14,7 @@ This is the full implementation checklist for the requested improvements. Unchec
 - [x] Existing-project initialization does not generate a second application or overwrite user files; conflicts are reported honestly.
 - [x] Explicit noninteractive options, dry-run, machine-readable output, actionable errors, and safe filesystem handling.
 - [x] One development command rebuilds/restarts on changes, one test command verifies behavior, and production startup is documented.
-- [ ] `redweb doctor --json` inspects effective JSX configuration, package/tool versions, assets, duplicate routes/handlers, and an optional port without executing user application code or silently repairing it.
+- [x] `redweb doctor --json` inspects effective JSX configuration, package/tool versions, assets, duplicate routes/handlers, and an optional port without executing user application code or silently repairing it.
 
 ## Automatic reactive rendering
 
@@ -47,6 +47,9 @@ This is the full implementation checklist for the requested improvements. Unchec
 - [ ] README, changelog, examples, website, and evidence agree on shipped behavior; final requirement-by-requirement audit proves every checkbox.
 
 ## Work log
+
+- Source-diagnostic increment (Windows/Node 22.21.0): bounded, read-only TypeScript source inspection now reports declared asset errors, duplicate route/handler registrations, and source locations. Dynamic, mutated, escaped, or unsupported expressions produce explicit unresolved warnings rather than guessed success. The reader does not execute application modules. A real nested TypeScript 4.9 installation verifies the unsupported-compiler diagnostic without replacing the project's TypeScript 5.9 compiler.
+- Source-diagnostic verification: 421 tests/33 suites, all type/pretest gates, and 100% instrumented-library statements/branches/functions/lines passed; all packed starters and production-source-free checks passed. The senior critic approved after alias/mutation, bounded expansion, stylesheet provenance, and superclass-registration findings were fixed with regressions. The preceding audit reported zero vulnerabilities with certificate verification retained. One earlier full run hit an intermittent existing duplicate-client-identity WebSocket timeout; the isolated 30-test socket suite, five repetitions of that case, and subsequent full runs passed without socket runtime changes. Its cause remains unconfirmed and repeat reliability testing remains part of the final release gate.
 
 - Baseline: `6c95093` (0.12.0 initializer), 336 tests and 100% instrumented-source coverage from the preceding release. These are historical results, not evidence for this release.
 - Current implementation branch: `codex/agent-ready`.

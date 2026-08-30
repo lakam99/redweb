@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Expanded read-only `redweb doctor` diagnostics to declared CSS/templates, source syntax, and duplicate page/socket/handler registrations, with source locations and actionable JSON output. Imported constants and shared stylesheet roots are understood; dynamic/mutated configurations and bounded-analysis limits are reported explicitly. Unsupported installed TypeScript versions receive a diagnostic instead of crashing.
+
 - Added shared socket contracts using existing Standard Schema validators: inferred client/server payload types, validated handler factories, sanitized inbound failures, and a browser-bundle-safe `redweb/contract` entry. Sender validation preserves original wire inputs, including mutating validators; asynchronous/thenable validation remains inside a bounded error boundary.
 - Replaced the socket echo starter with a `/match` route and separate `join`, `move`, and `resume` handlers, shared Zod contract, bounded in-memory sessions, and real-network consumer tests. Zod is a dependency of that starter, not the Redweb runtime.
 
