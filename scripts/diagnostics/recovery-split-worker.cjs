@@ -7,6 +7,8 @@ const { silentLogger, waitFor, WebSocket, closeClient } = require('../realtime-h
 const role = process.argv[2];
 const tracing = process.execArgv.includes('--trace-flush-code');
 const loggingCode = process.execArgv.includes('--log-code');
+const heapCapture = role === 'client' && process.argv[3]
+    ? new (require('./ClientHeapCapture.cjs').ClientHeapCapture)(process.argv[3]) : null;
 let server;
 let stopped = false;
 let sent = 0;
@@ -112,6 +114,10 @@ async function dispatch({ command, url, start, count, phase }) {
             if (server) await server.shutdown();
             stopped = true;
             return { stopped: true };
+        case 'snapshot':
+            assert(heapCapture && clients.size === 0 && !stopped, 'Heap capture is not enabled or client is active');
+            // A separate RPC means sample()'s local statistics are no longer live.
+            return heapCapture.capture(phase);
         default: throw new Error(`Unknown diagnostic command: ${command}`);
     }
 }
@@ -121,7 +127,7 @@ process.on('message', async message => {
         const result = await dispatch(message);
         process.send({ result });
     } catch (error) {
-        process.send({ error: error.stack });
+        process.send({ error: message.command === 'snapshot' ? 'Private heap capture failed' : error.stack });
     }
 });
 // Successful shutdown must drain queued output naturally (POSIX pipes are

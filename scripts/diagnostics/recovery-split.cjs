@@ -10,7 +10,7 @@ const { withTimeout } = require('../../tests/helpers/network');
 
 function workerFlags(role, mode = 'baseline') {
     assert(['server', 'client'].includes(role), 'Unknown diagnostic role');
-    assert(['baseline', 'trace', 'client-jitless', 'client-code', 'client-deopt'].includes(mode), 'Unknown diagnostic mode');
+    assert(['baseline', 'trace', 'client-jitless', 'client-code', 'client-deopt', 'client-heap'].includes(mode), 'Unknown diagnostic mode');
     return ['--expose-gc', ...(mode === 'trace' ? ['--trace-gc', '--trace-flush-code'] : []),
         ...(mode === 'client-jitless' && role === 'client' ? ['--jitless'] : []),
         ...(['client-code', 'client-deopt'].includes(mode) && role === 'client' ? ['--log-code', '--no-log-source-code',
@@ -56,8 +56,11 @@ function outputRecorder(directory, maxBytes = 16 * 1024 * 1024) {
 }
 
 class DiagnosticProcess {
-    constructor(role, { coverageDirectory = '', mode = 'baseline', output } = {}) {
-        this.child = spawnManaged([...workerFlags(role, mode), path.join(__dirname, 'recovery-split-worker.cjs'), role], {
+    constructor(role, { coverageDirectory = '', mode = 'baseline', output, snapshotDirectory } = {}) {
+        assert(mode !== 'client-heap' || path.isAbsolute(snapshotDirectory), 'Heap mode requires a private absolute directory');
+        assert(!snapshotDirectory || mode === 'client-heap', 'Snapshots require explicit heap mode');
+        this.child = spawnManaged([...workerFlags(role, mode), path.join(__dirname, 'recovery-split-worker.cjs'), role,
+            ...(mode === 'client-heap' && role === 'client' ? [snapshotDirectory] : [])], {
             // Coverage is explicitly opt-in for behavioral tests, never inherited
             // by measured workers in run().
             stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_OPTIONS: '', NODE_V8_COVERAGE: coverageDirectory },
@@ -148,13 +151,13 @@ const phases = Object.freeze([
     ...Array.from({ length: 5 }, (_, index) => [`storm-${index + 1}`, 1200]),
 ]);
 
-async function run(report, record = () => {}, { mode = 'baseline', output } = {}) {
+async function run(report, record = () => {}, { mode = 'baseline', output, snapshotDirectory } = {}) {
     let server;
     let client;
     let primary;
     try {
-        server = new DiagnosticProcess('server', { mode, output });
-        client = new DiagnosticProcess('client', { mode, output });
+        server = new DiagnosticProcess('server', { mode, output, snapshotDirectory });
+        client = new DiagnosticProcess('client', { mode, output, snapshotDirectory });
         const { url } = await server.request('start');
         let start = 0;
         for (const [phase, count] of phases) {
@@ -170,6 +173,11 @@ async function run(report, record = () => {}, { mode = 'baseline', output } = {}
             const sample = { phase, server: serverSample, client: clientSample };
             report.samples.push(sample);
             record(sample);
+            if (mode === 'client-heap' && ['warm', 'storm-5'].includes(phase)) {
+                const capture = await client.request('snapshot', { phase }, 60000);
+                assert.equal(capture.pid, clientSample.pid);
+                (report.heapCaptures ??= []).push(capture);
+            }
         }
         assert.equal(start, 7400);
         await Promise.all([server.request('stop'), client.request('stop')]);
@@ -196,6 +204,8 @@ function fingerprint() {
         'scripts/diagnostics/recovery-split.cjs', 'scripts/diagnostics/recovery-split-worker.cjs',
         'scripts/diagnostics/recovery-code-summary.cjs',
         'scripts/diagnostics/DeoptimizationCensus.cjs',
+        'scripts/diagnostics/ClientHeapCapture.cjs', 'scripts/diagnostics/HeapSnapshotGraph.cjs',
+        'scripts/diagnostics/HeapCodeComparison.cjs', 'scripts/diagnostics/recovery-heap-summary.cjs',
         'scripts/verify-recovery.js', 'scripts/realtime-harness.js'];
     const walk = directory => {
         for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
@@ -214,18 +224,22 @@ function fingerprint() {
 }
 
 async function main() {
-    assert(process.argv.length <= 3, 'Usage: node recovery-split.cjs [baseline|trace|client-jitless|client-code|client-deopt]');
+    assert(process.argv.length <= 3, 'Usage: node recovery-split.cjs [baseline|trace|client-jitless|client-code|client-deopt|client-heap]');
     const mode = process.argv[2] ?? 'baseline';
     workerFlags('server', mode);
     const base = path.resolve(__dirname, '../../coverage');
     fs.mkdirSync(base, { recursive: true });
     const directory = fs.mkdtempSync(path.join(base, 'recovery-split-'));
+    const snapshotDirectory = mode === 'client-heap'
+        ? fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'redweb-private-client-heap-')) : undefined;
+    if (snapshotDirectory) fs.chmodSync(snapshotDirectory, 0o700);
     const report = { diagnosticOnly: true, mode, protocol: 'split-steady-v2', startedAt: new Date().toISOString(),
         platform: process.platform, architecture: process.arch, coordinatorPid: process.pid,
         workload: { preconditioning: 1200, warm: 200, storms: 5, connectionsPerStorm: 1200, batchSize: 50, settleMs: 400 },
         sourceHashes: fingerprint(), wsVersion: require('ws/package.json').version,
         samples: [], deliveryAndCleanupPassed: false };
     process.stdout.write(`Diagnostic evidence: ${directory}\n`);
+    if (snapshotDirectory) process.stdout.write(`Private snapshots (do not upload): ${snapshotDirectory}\n`);
     let primary;
     let output;
     try {
@@ -233,8 +247,18 @@ async function main() {
         await run(report, sample => {
             fs.appendFileSync(path.join(directory, 'samples.ndjson'), `${JSON.stringify(sample)}\n`);
             process.stdout.write(`${sample.phase}: server ${sample.server.memory.heapUsed}, client ${sample.client.memory.heapUsed}\n`);
-        }, { mode, output: output.write });
+        }, { mode, output: output.write, snapshotDirectory });
         assert.deepEqual(fingerprint(), report.sourceHashes, 'Measured inputs changed during diagnosis');
+        if (snapshotDirectory) {
+            try {
+                const comparison = require('./HeapCodeComparison.cjs').compareFiles(snapshotDirectory, report.heapCaptures);
+                assert(Buffer.byteLength(JSON.stringify(comparison)) <= 1024 * 1024);
+                report.heapComparison = comparison;
+            } catch {
+                // JSON parse/assertion failures may contain private snapshot strings.
+                throw new Error('Private heap comparison failed; raw details withheld');
+            }
+        }
     } catch (error) {
         primary = error;
         report.error = describeFailure(error);

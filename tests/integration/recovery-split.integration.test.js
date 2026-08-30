@@ -8,7 +8,7 @@ const { createHash } = require('node:crypto');
 const { spawnManaged, stopProcessTree } = require('../../scripts/evaluation/process');
 const { WebSocketServer } = require('ws');
 const { waitFor } = require('../../scripts/realtime-harness');
-const net = require('node:net');
+const { assertPortReusable } = require('../helpers/port-reusable');
 const { withTimeout } = require('../helpers/network');
 const worker = role => new DiagnosticProcess(role, { coverageDirectory: process.env.NODE_V8_COVERAGE });
 
@@ -17,13 +17,6 @@ async function disconnect(child) {
         if (child.child.connected) child.child.disconnect();
         await withTimeout(child.closed, 'graceful diagnostic test exit', 5000);
     } finally { await child.close(); }
-}
-
-async function assertPortReusable(port) {
-    const probe = net.createServer();
-    probe.listen(port, '127.0.0.1');
-    await waitFor(probe, 'listening');
-    await new Promise((resolve, reject) => probe.close(error => error ? reject(error) : resolve()));
 }
 
 test('isolated native clients exercise Redweb rooms/sessions and leave no listener', async () => {

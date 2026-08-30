@@ -5,6 +5,7 @@ const { phases, fingerprint, describeFailure, workerFlags } = require('../../scr
 test.each(['server', 'client'])('diagnostic flags are explicit and isolated for %s', role => {
     expect(workerFlags(role)).toEqual(['--expose-gc']);
     expect(workerFlags(role, 'baseline')).toEqual(['--expose-gc']);
+    expect(workerFlags(role, 'client-heap')).toEqual(['--expose-gc']);
     expect(workerFlags(role, 'trace')).toEqual(['--expose-gc', '--trace-gc', '--trace-flush-code']);
     expect(workerFlags(role, 'client-jitless')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc', '--jitless']);
     expect(workerFlags(role, 'client-code')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc',
