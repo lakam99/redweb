@@ -53,6 +53,10 @@ describe('redweb init CLI integration', () => {
         else fs.rmSync(workspace, { recursive: true, force: true });
     });
 
+    // Supervise the complete scenario, not just its first asynchronous operation:
+    // two CLI calls + tsc allow 30s each, assets 10s, and network/startup/cleanup
+    // have their own bounded waits. The default 5s can expire during compilation
+    // and abandon a live child as soon as the event loop resumes under coverage.
     test('scaffolds, safely reruns, compiles, and serves through the shipped preset', async () => {
         const first = run(['init', 'game', '--template', 'site'], workspace);
         expect(first.status).toBe(0);
@@ -117,7 +121,7 @@ describe('redweb init CLI integration', () => {
         expect(second.status).toBe(0);
         expect(second.stdout).toContain('Kept existing: package.json, tsconfig.json, src/app.tsx, src/run-app.ts, src/app.css');
         expect(fs.readFileSync(source, 'utf8')).toBe('user-owned source');
-    });
+    }, 180000);
 
     test('prints help and rejects unknown commands', () => {
         const help = run(['--help'], workspace);
