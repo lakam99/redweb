@@ -60,6 +60,7 @@
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
     "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
     "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",
+    "verify:development:browser": "node scripts/verify-development-refresh-browser.js",
     "verify:live-html:load": "node scripts/build-live-html-examples.js --check && node --expose-gc scripts/verify-live-html-load.js",
     "verify:jsx:performance": "node --expose-gc scripts/verify-jsx-performance.js",
     "verify:live-html:package": "node scripts/verify-live-html-package.js",

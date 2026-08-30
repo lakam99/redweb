@@ -31,6 +31,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             } : {}),
         },
         nodemonConfig: {
+            env: { REDWEB_DEV_REFRESH: '1' },
             watch: ['src', 'tsconfig.json'],
             ext: 'ts,tsx,css,html,json',
             exec: 'npm run build && npm start || exit 1',

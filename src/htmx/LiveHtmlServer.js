@@ -4,6 +4,7 @@ const HttpsServer = require('../http/HttpsServer');
 const SocketServer = require('../ws/SocketServer');
 const { PageManager } = require('./PageManager');
 const { createInspection } = require('../development/Inspection');
+const developmentSettings = require('../development/settings');
 
 class LiveHtmlServer {
     constructor(options = {}) {
@@ -26,12 +27,14 @@ class LiveHtmlServer {
             server: suppliedApp,
             ...httpOptions
         } = options;
-        this._inspection = createInspection(development);
+        const settings = developmentSettings(development, ['inspect', 'refresh'], { refresh: process.env.REDWEB_DEV_REFRESH === '1' });
+        this._inspection = createInspection({ inspect: settings.inspect });
         const app = suppliedApp === undefined ? express() : suppliedApp;
         if (!app || typeof app.get !== 'function' || typeof app.use !== 'function') {
             throw new TypeError('`server` must be an Express-compatible application.');
         }
-        this.manager = new PageManager({
+        const Manager = settings.refresh ? require('../development/DevelopmentPageManager') : PageManager;
+        this.manager = new Manager({
             pages,
             templateRoot,
             paths: livePaths,

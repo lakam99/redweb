@@ -69,7 +69,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, logger = console }) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, logger = console }, reservedPaths = {}) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -83,7 +83,7 @@ class PageManager {
             (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
             throw new TypeError('`origins` must be a function or an array of non-empty origins.');
         }
-        this.paths = { ...DEFAULT_PATHS, ...paths };
+        this.paths = { ...DEFAULT_PATHS, ...paths, ...reservedPaths };
         Object.entries(this.paths).forEach(([name, value]) => {
             internalPath(value, name);
         });
@@ -185,20 +185,7 @@ class PageManager {
             const finished = () => { response.off('close', closed); response.off('finish', finished); };
             response.once('close', closed);
             response.once('finish', finished);
-            this.render(record, request, controller.signal, markup => {
-                if (record.metadata.live !== false || this.authenticateRequest || record.metadata.policy) {
-                    // end() deliberately bypasses Express's automatic conditional-GET/ETag handling.
-                    response.set('Cache-Control', 'private, no-store').type('html').end(markup);
-                    return;
-                }
-                const etag = `"${createHash('sha256').update(markup).digest('base64url')}"`;
-                response.set('Cache-Control', cacheControl(record.metadata.cache)).set('ETag', etag);
-                if (matchesIfNoneMatch(request.headers['if-none-match'], etag)) {
-                    response.status(304).end();
-                    return;
-                }
-                response.type('html').send(markup);
-            }).catch(error => {
+            this.render(record, request, controller.signal, markup => this.respond(record, request, response, markup)).catch(error => {
                 if (response.destroyed || response.writableEnded) return;
                 if (response.headersSent) { response.destroy(); return; }
                 if (this.closing) response.set('Connection', 'close');
@@ -208,6 +195,25 @@ class PageManager {
                 } });
             }).finally(finished);
         }));
+    }
+
+    respond(record, request, response, markup) {
+        if (record.metadata.live !== false || this.authenticateRequest || record.metadata.policy) {
+            // end() deliberately bypasses Express's automatic conditional-GET/ETag handling.
+            response.set('Cache-Control', 'private, no-store').type('html').end(markup);
+            return;
+        }
+        const etag = `"${createHash('sha256').update(markup).digest('base64url')}"`;
+        response.set('Cache-Control', cacheControl(record.metadata.cache)).set('ETag', etag);
+        if (matchesIfNoneMatch(request.headers['if-none-match'], etag)) {
+            response.status(304).end();
+            return;
+        }
+        response.type('html').send(markup);
+    }
+
+    createDocument(record) {
+        return (markup, config) => HtmlRenderer.document(markup, config, record.stylesheets, record.metadata.head);
     }
 
     createLifetime(principal) {
@@ -259,10 +265,11 @@ class PageManager {
             };
             const withContext = callback => LivePage.withRenderContext(context, callback);
             const markup = await lifetime.wait(() => renderer ? renderer.initialize(render, withContext) : withContext(render));
+            const document = this.createDocument(record, request);
             if (record.metadata.live === false) {
-                const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
+                const result = document(markup, null);
                 if (ownsPage) await lifetime.wait(() => page.dispose());
-                return deliver(document);
+                return deliver(result);
             }
             session = this.createSession(page, ownsPage, principal, context, record, lifetime);
             session.renderLifetime = renderer;
@@ -274,10 +281,10 @@ class PageManager {
             };
             if (renderer.enabled) {
                 session.renderer = renderer;
-                renderer.document = value => HtmlRenderer.document(value, config, record.stylesheets, record.metadata.head);
+                renderer.document = value => document(value, config);
                 renderer.onError = error => this.logger.error?.('Live HTML reactive render failed.', error);
             } else renderer.nodes.clear();
-            return deliver(HtmlRenderer.document(markup, config, record.stylesheets, record.metadata.head));
+            return deliver(document(markup, config));
         } catch (error) {
             renderer?.dispose();
             if (ownsPage && page) {

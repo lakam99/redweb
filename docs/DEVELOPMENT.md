@@ -1,6 +1,38 @@
-# Development inspection
+# Development refresh and inspection
 
 This API is **unreleased**. Use the matching packed candidate rather than assuming it exists in the published package.
+
+## Browser refresh
+
+The generated `npm run dev` command enables browser refresh while rebuilding and restarting your application. No extra application code is needed. For an existing Live HTML application, enable it explicitly:
+
+```ts
+const app = start(CounterPage, { development: { refresh: true } });
+```
+
+Alternatively, set `REDWEB_DEV_REFRESH=1` only for your development process. Explicit `development: { refresh: false }` overrides that environment flag. Setting `NODE_ENV=development` alone enables neither refresh nor inspection. Both features are refused at construction under `NODE_ENV=production`; changing environment variables after construction is not a mode switch. `npm start` does not set the refresh flag. Keep it out of production environments.
+
+On direct loopback access, the initial HTML embeds the serving process's revision. The browser polls the same listener sequentially, with a two-second request deadline and one second between completed attempts. Only a valid, different revision triggers refresh. Failed builds, unavailable listeners, malformed responses and redirects do not cause reload loops. A restart before the external script finishes loading is still detected against the revision embedded in the original document.
+
+Clean pages reload automatically after a new revision appears. The edit guard conservatively keeps the current document if it observes input/change events, sees differing form defaults when it starts, encounters an editable element with focus, or finds contenteditable content. A native, keyboard-operable notice offers **Reload and discard drafts**. Ordinary untouched selects are compared against the browser's actual reset defaults, not simply their `selected` attributes. Once confirmation is required, resetting or submitting a form does not silently permit automatic reload.
+
+This is not autosave or a precise unsaved-change detector. False positives are intentional; custom editors or programmatic changes without input/change events may not be detected. The helper does not persist or transmit form contents, write browser storage, replay actions, or restore files/passwords after reload. It keeps the current DOM while waiting for your decision. Manual navigation, browser termination, and confirmed reload can discard drafts.
+
+The notice uses a shadow root so ordinary reactive root updates preserve it and the application controls' existing focus/draft behavior. Its script, stylesheet and revision fetch are same-origin external resources; your CSP must allow those resources. Navigation away stops polling. History restoration resumes it, including back-forward-cache restoration where the browser supports and chooses it.
+
+### Connections and server state
+
+Keeping the old document does **not** make its old page token/session valid on a replacement process. Existing reconnect rules still apply to a temporary connection outage on the same server. A process restart resets in-memory page/chat/counter state; persistent application data remains the application's responsibility. Actions in flight may have uncertain outcomes. Refresh does not retry them, guarantee completion or migrate state. Reload creates a new page session.
+
+### Access and resource boundaries
+
+Refresh is for direct `localhost`, literal `127.x.x.x`, or `[::1]` URLs at the listener's actual port. It verifies the actual loopback peer, Host, any supplied Origin, and Fetch Metadata. It does not trust forwarding headers or support custom hostnames, tunnels or reverse-proxy origins. Rejected requests receive no refresh bootstrap; this restriction does not make the rest of your application private. An application can still bind publicly unless you separately set `bind`.
+
+Enabled refresh reserves `/__redweb/development`, `/__redweb/development.js` and `/__redweb/development.css`. They reveal only a boot revision, fixed client code and styling—not inspection snapshots, application state or compiler output. Responses and decorated HTML are no-store. There is no extra listener or server timer. Served `live: false` pages support refresh without a live socket client; `exportStatic()` output remains script-free and never enables it from the environment. Raw `SocketServer`/`SecureSocketServer` do not accept the HTML `refresh` option.
+
+The injected `rw-dev-refresh` element and `__redweb_dev` ID belong to this helper; do not reuse them in application markup. The repository's `npm run verify:development:browser` gate runs actual generated watchers and Chromium against real HTTP/WebSocket listeners, including edited-document confirmation and failed-build recovery. CI runs it separately from the production browser regression gate.
+
+## Inspection
 
 Enable inspection explicitly when starting a development application:
 
@@ -16,7 +48,7 @@ console.dir(app.inspect(), { depth: null });
 
 `SocketServer` and `SecureSocketServer` accept the same option and expose the same `inspect()` method. Without the option, `inspect()` returns `null`. Merely setting `NODE_ENV=development` does not enable inspection. Explicitly enabling it while `NODE_ENV=production` throws before routes or listeners are attached. The environment check occurs at construction; changing environment variables afterward is not a runtime mode switch.
 
-This is an in-process, read-only API. It does not create an HTTP/debugging route, listener, browser script, background timer, or automatic logger. Do not expose its return value through an application endpoint in production. Your existing `redweb doctor --json` command remains the source/configuration checker; it does not inspect a running process.
+Inspection itself is an in-process, read-only API. It does not create an HTTP/debugging route, listener, browser script, background timer, or automatic logger; browser refresh is a separate option and never exposes inspection data. Do not expose inspection results through an application endpoint in production. Your existing `redweb doctor --json` command remains the source/configuration checker; it does not inspect a running process.
 
 ## What the snapshot means
 

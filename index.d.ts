@@ -187,6 +187,11 @@ declare module 'redweb' {
         inspect?: boolean;
     }
 
+    export interface LiveDevelopmentOptions extends DevelopmentOptions {
+        /** Loopback-only browser refresh. False overrides REDWEB_DEV_REFRESH=1. */
+        refresh?: boolean;
+    }
+
     export interface InspectionList<T> {
         readonly items: readonly T[];
         readonly total: number;
@@ -648,7 +653,7 @@ declare module 'redweb' {
     export type LivePageClass = new () => object;
 
     export interface LiveHtmlServerBaseOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
-        development?: DevelopmentOptions;
+        development?: LiveDevelopmentOptions;
         pages: readonly LivePageClass[];
         templateRoot?: string;
         livePaths?: {

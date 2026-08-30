@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added loopback-only development browser refresh to generated HTML starters. Explicit Live HTML `development.refresh` or the development command's environment flag enables same-origin revision polling; clean pages reload after restart while detected edits require confirmation. Reactive root patches retain the shadow-root notice, failed builds/outages do not trigger reload, and drafts are never copied into browser storage or restored after explicit reload. Production construction rejects enabling refresh; raw socket servers and static exports do not enable it.
+
 - Added opt-in in-process development inspection for Live HTML and socket servers: bounded immutable registration/connection snapshots and reactive invalidation/flush history without state values, identities, request contents or exception messages. Inspection is rejected during production construction and adds no debugging endpoint. Disabled servers use the original reactive renderer. Standard action resolution now excludes accessor replacements without invoking their getters.
 
 - Added `redweb add page`, `redweb add component`, and `redweb add socket-route` with canonical source/test templates, effective TypeScript layout checks and in-memory emission, dry-run/JSON reports, explicit registration instructions, and exclusive creation without rewriting existing application files. Generated artifact-only tests exercise actual HTTP/WebSocket behavior; socket additions keep URL routing separate from validated message handlers.

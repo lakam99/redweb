@@ -253,6 +253,9 @@ if (inspection?.sockets.available) {
 new SocketServer({ development: { inspect: () => true } });
 // @ts-expect-error Inspection belongs to servers, not individual routes.
 route.inspect();
+// @ts-expect-error Raw socket services have no HTML browser refresh.
+new SocketServer({ development: { refresh: true } });
+new LiveHtmlServer({ pages: [CounterPage], listen: false, development: { refresh: true, inspect: true } });
 
 new SocketRoute({
     path: '/invalid',

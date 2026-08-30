@@ -20,7 +20,7 @@ Requirements: Node.js satisfying the package's `engines` field and npm. Use a su
 
 ## One development loop
 
-After initialization and installation, `npm test` compiles the project, copies assets, and runs the shipped network tests. `npm run dev` watches source/configuration files, rebuilds, and restarts. Refresh the browser after a restart. This is not browser hot-module replacement; in-memory state resets on restart.
+After initialization and installation, `npm test` compiles the project, copies assets, and runs the shipped network tests. `npm run dev` watches source/configuration files, rebuilds, and restarts. Served HTML pages on direct localhost access refresh when the replacement server is ready; detected edits instead produce a confirmation notice that keeps the current document until explicit reload. This is not autosave or browser hot-module replacement; in-memory state and old socket sessions reset on restart. See [development refresh and its guarantees](DEVELOPMENT.md#browser-refresh).
 
 Use `.tsx` for markup and extend `redweb/tsconfig.json`. Colocate CSS with the decorated page/component or declare an explicit asset root. `npm run build` prepares `dist/`; `npm start` runs that compiled application.
 

@@ -1,7 +1,7 @@
 [
   { "id": "getting-started", "title": "Choose a starter and build a working app", "summary": "Requirements, fit, development, tests, and production boundaries.", "source": "docs/GETTING_STARTED.md" },
   { "id": "cli", "title": "Initialization and diagnostics", "summary": "Noninteractive setup, safe existing-project adoption, and structured repair guidance.", "source": "docs/CLI.md" },
-  { "id": "development", "title": "Inspect development registrations and reactive updates", "summary": "Opt-in metadata snapshots, connection lifecycle and bounded reactive update history without application values or a debugging endpoint.", "source": "docs/DEVELOPMENT.md" },
+  { "id": "development", "title": "Develop with browser refresh and safe inspection", "summary": "Loopback-only refresh with an explicit edit guard, plus bounded metadata and reactive update inspection without application values.", "source": "docs/DEVELOPMENT.md" },
   { "id": "runtime-diagnostics", "title": "Understand runtime failures before retrying", "summary": "Safe authentication, authorization, validation and application errors, with actual retry and cancellation guarantees.", "source": "docs/RUNTIME_DIAGNOSTICS.md" },
   { "id": "agent-access", "title": "Optional read-only agent documentation access", "summary": "Configure local MCP search and exact recipe retrieval without adding dependencies to Redweb servers.", "source": "docs/AGENT_ACCESS.md" },
   { "id": "live-html", "title": "Pages, components, state, actions, and CSS", "summary": "Server-side TSX, automatic updates, keyed lists, lifecycle, and static export.", "source": "docs/LIVE_HTML.md" },

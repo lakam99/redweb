@@ -4,18 +4,11 @@ const LivePage = require('../htmx/LivePage');
 const { list, text, members, freeze, mapSize } = require('./description');
 const dataProperty = require('../dataProperty');
 const { observedRenderer, rendererRoute } = require('./ObservedRenderer');
+const developmentSettings = require('./settings');
 const HISTORY_LIMIT = 256;
 
 function createInspection(options) {
-    if (options === undefined) return null;
-    if (!options || typeof options !== 'object' || Array.isArray(options) ||
-        Object.keys(options).some(key => key !== 'inspect') ||
-        (options.inspect !== undefined && typeof options.inspect !== 'boolean')) {
-        throw new TypeError('development must be an object containing only an optional boolean inspect.');
-    }
-    if (!options.inspect) return null;
-    if (process.env.NODE_ENV === 'production') throw new Error('Development inspection cannot be enabled in production.');
-    return new Inspection();
+    return developmentSettings(options).inspect ? new Inspection() : null;
 }
 
 class Inspection {

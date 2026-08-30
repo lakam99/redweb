@@ -19,7 +19,7 @@ async function main() {
     }
     const Page = chat ? require(example('chatroom.js')).createChatroomPage() : require(example('counter.js')).CounterPage;
     const app = start(Page, { port: 0, bind: '127.0.0.1', logger: null,
-        ...(chat ? { development: { inspect: true } } : {}) });
+        ...(chat ? { development: { inspect: true, refresh: true } } : {}) });
     let socket;
     try {
         if (!app.server.listening) await once(app.server, 'listening');
@@ -28,8 +28,25 @@ async function main() {
         assert.equal(response.status, 200);
         const html = await response.text();
         assert.match(html, chat ? /Join the chatroom/ : /Server-side counter/);
-        if (!chat) assert.equal(app.inspect(), null);
+        if (!chat) {
+            assert.equal(app.inspect(), null);
+            assert.ok(!html.includes('__redweb_dev'));
+            assert.equal((await fetch(`${origin}/__redweb/development`, { signal: AbortSignal.timeout(5000) })).status, 404);
+        }
         if (chat) {
+            assert.equal(response.headers.get('cache-control'), 'private, no-store');
+            const revisionResponse = await fetch(`${origin}/__redweb/development`, { signal: AbortSignal.timeout(5000) });
+            assert.equal(revisionResponse.status, 200);
+            const revision = await revisionResponse.json();
+            assert.deepEqual(Object.keys(revision), ['revision']);
+            assert.ok(html.includes(`development.js?revision=${revision.revision}`));
+            for (const [extension, type] of [['js', 'text/javascript'], ['css', 'text/css']]) {
+                const asset = await fetch(`${origin}/__redweb/development.${extension}`, { signal: AbortSignal.timeout(5000) });
+                assert.equal(asset.status, 200);
+                assert.ok(asset.headers.get('content-type').startsWith(type));
+                assert.equal(asset.headers.get('cache-control'), 'private, no-store');
+                assert.ok((await asset.text()).length > 0);
+            }
             const config = JSON.parse(html.match(/id="__redweb_page">([^<]+)/)[1]);
             socket = new WebSocket(`${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, { headers: { Origin: origin } });
             await once(socket, 'open');
@@ -57,7 +74,7 @@ async function main() {
             assert.ok(!JSON.stringify(snapshot).includes('Packed visitor'));
             assert.ok(!JSON.stringify(snapshot).includes(config.pageId));
         }
-        console.log(chat ? 'Packed chat and development inspection passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript; inspection disabled.');
+        console.log(chat ? 'Packed chat, development inspection and refresh resources passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript; inspection and refresh disabled.');
     } finally { socket?.close(); await app.shutdown(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

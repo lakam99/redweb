@@ -14,8 +14,14 @@ HTTP starters open at http://localhost:8181; the authenticated dashboard uses ht
 ## Development and production
 
 Edit `src/app.tsx`. `npm run dev` watches TypeScript, TSX, CSS, HTML, and the root TypeScript configuration,
-then rebuilds and restarts the server. A type error stops startup until you fix it. Refresh your browser after a restart;
-development restarts reset in-memory state. This is server watch/restart, not browser hot-module replacement.
+then rebuilds and restarts the server. A type error stops startup until you fix it. On direct localhost access,
+HTML pages refresh automatically when a new server revision is ready. If edits were detected, a keyboard-accessible
+notice keeps the old document until you choose **Reload and discard drafts**. This is a conservative edit guard,
+not autosave or browser hot-module replacement: restarts reset in-memory state and old socket sessions.
+The generated development command sets `REDWEB_DEV_REFRESH=1`; `development: { refresh: false }` overrides it.
+The refresh feature is refused under `NODE_ENV=production`, applies only to served HTML (not raw sockets or static exports),
+and creates no local/session-storage copy of form contents. Use direct `localhost`, `127.x.x.x`, or `[::1]` access;
+custom hostnames, tunnels and proxy-forwarded origins are not supported by this development helper.
 `npm run build` checks types and copies CSS/HTML beside the compiled classes in `dist/`.
 Run `npm start` to serve the compiled app. For deployment, build first, ship `dist/`, `package.json`, and the lockfile,
 then install runtime dependencies with `npm ci --omit=dev`. The application does not require TypeScript or `src/` at runtime.
