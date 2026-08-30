@@ -20,6 +20,12 @@
       "require": "./client.js",
       "default": "./client.js"
     },
+    "./contract": {
+      "types": "./contract.d.ts",
+      "import": "./contract.js",
+      "require": "./contract.js",
+      "default": "./contract.js"
+    },
     "./jsx-runtime": {
       "types": "./jsx-runtime.d.ts",
       "import": "./jsx-runtime.js",
@@ -62,6 +68,8 @@
     "src/*",
     "client.js",
     "client.d.ts",
+    "contract.js",
+    "contract.d.ts",
     "jsx-runtime.js",
     "jsx-runtime.d.ts",
     "jsx-dev-runtime.js",
@@ -111,6 +119,7 @@
     "jest": "^29.7.0",
     "nodemon": "^3.1.11",
     "supertest": "^7.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
   }
 }

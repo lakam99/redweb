@@ -9,7 +9,8 @@
     "experimentalDecorators": false,
     "baseUrl": "../..",
     "paths": {
-      "redweb": ["."]
+      "redweb": ["."],
+      "redweb/*": ["*"]
     }
   },
   "files": ["standard-decorators.ts"]

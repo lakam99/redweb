@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added shared socket contracts using existing Standard Schema validators: inferred client/server payload types, validated handler factories, sanitized inbound failures, and a browser-bundle-safe `redweb/contract` entry. Sender validation preserves original wire inputs, including mutating validators; asynchronous/thenable validation remains inside a bounded error boundary.
+- Replaced the socket echo starter with a `/match` route and separate `join`, `move`, and `resume` handlers, shared Zod contract, bounded in-memory sessions, and real-network consumer tests. Zod is a dependency of that starter, not the Redweb runtime.
+
 - Simplified the canonical chatroom to ordinary data state and reactive TSX, with stable message/member keys and no HTML-valued screen state. Added TSX child typings for synchronous owned class components; async component renders remain rejected.
 
 - Added automatic live TSX owner rendering: tracked state reads, batched component-scoped patches, derived expressions/conditionals, keyed element and fragment reconciliation, per-visitor shared-page contexts, reconnect snapshots, cancellation, and bounded retained snapshots. Explicit bindings remain supported without a second conflicting state frame. The TSX counter and realtime starter now use plain expressions without duplicate binding names.

@@ -19,7 +19,7 @@ function projectFiles(version, template = 'realtime') {
             dev: 'nodemon',
             test: 'npm run build && node --test test/app.test.cjs',
         },
-        dependencies: { redweb: `^${version}` },
+        dependencies: { redweb: `^${version}`, ...(template === 'socket' ? { zod: devDependencies.zod } : {}) },
         devDependencies: { typescript: devDependencies.typescript, nodemon: devDependencies.nodemon, ws: dependencies.ws },
         nodemonConfig: {
             watch: ['src', 'tsconfig.json'],
@@ -48,6 +48,11 @@ function projectFiles(version, template = 'realtime') {
         const examples = path.resolve(__dirname, '../../examples/live-html');
         for (const name of ['chatroom.tsx', 'chatroom.css']) {
             files.push({ path: `src/${name}`, content: fs.readFileSync(path.join(examples, name), 'utf8') });
+        }
+    }
+    if (template === 'socket') {
+        for (const name of ['contract.ts', 'handlers.ts']) {
+            files.push({ path: `src/${name}`, content: read(`socket/${name}`) });
         }
     }
     return Object.freeze(files.map(Object.freeze));

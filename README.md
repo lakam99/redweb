@@ -33,7 +33,7 @@ npx redweb init my-site --template site
 npx redweb init my-service --template socket
 ```
 
-Each includes real HTTP/WebSocket tests, a development watcher, and production instructions. `npm run dev` rebuilds and restarts on source, CSS, HTML, or root TypeScript configuration changes; refresh the browser after a restart. `npm run build` copies runtime assets into `dist/`, so production does not require the source directory. The chat starter reuses the canonical chatroom component, including disconnect presence. The socket starter dispatches `type: "echo"` on `/events` to its own handler; it is not an HTML page.
+Each includes real HTTP/WebSocket tests, a development watcher, and production instructions. `npm run dev` rebuilds and restarts on source, CSS, HTML, or root TypeScript configuration changes; refresh the browser after a restart. `npm run build` copies runtime assets into `dist/`, so production does not require the source directory. The chat starter reuses the canonical chatroom component, including disconnect presence. The socket starter uses `/match` with separate `join`, `move`, and `resume` handlers, shared payload schemas, and bounded in-memory sessions; it is not an HTML page.
 
 For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
 
@@ -160,28 +160,7 @@ State is still shallow and assignment-driven: use `this.items = [...this.items, 
 
 CSS is colocated with the page and needs no static-server setup. Pass one file with `css: 'counter.css'` or compose several with `css: ['base.css', 'counter.css']`. Redweb resolves the files beside the decorated class, injects `<link>` elements during SSR, and serves content-addressed stylesheets with immutable browser caching.
 
-Browser events can call only explicitly exposed actions:
-
-```ts
-@component()
-class Chatroom {
-  @state()
-  screen = html`<form rw-submit="join"><input name="name"><button>Join</button></form>`;
-
-  @action()
-  join({ name }: { name: string }) {
-    this.screen = html`<p>Connected as ${name}</p><form rw-submit="send"><input name="message"><button>Send</button></form>`;
-  }
-}
-```
-
-```ts
-@page('/chat', { css: 'chatroom.css' })
-class ChatroomPage {
-  chat = new Chatroom();
-  render() { return html`<main>${this.chat}</main>`; }
-}
-```
+Browser events can call only explicitly exposed `@action()` methods. Reusable class components use the same decorators and data-driven TSX as pages. Keep messages and members as data in `@state()` fields, and render them with normal conditionals and keyed `.map()` expressions—not cached HTML strings. The [complete chatroom component](examples/live-html/chatroom.tsx) demonstrates joining, server-owned message history, presence, disconnect/reconnect, and nested component actions. Generate it with `npx redweb init my-chat --template chat`.
 
 Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
 
@@ -549,6 +528,8 @@ super({
 The optional binary hooks add no codec dependency. Decoded values pass through the same version/envelope validation and handler dispatch as JSON; `socket.sendBinaryEvent(value)` applies the same slow-consumer policy as other outbound traffic. Without binary hooks, binary frames on a protocol route receive `BINARY_UNSUPPORTED`.
 
 For clients, `require('redweb/client')` exports the dependency-free `ProtocolClient` and the same error codes. Its TypeScript declarations are generated from Redweb's checked-in protocol schema and checked for drift before every test run.
+
+For new typed services, prefer [shared socket contracts](docs/SOCKET_CONTRACTS.md): `defineSocketContract()` accepts Standard Schema validators, infers payload types for the client and individual handlers, and rejects invalid input before application code runs. The [socket starter](recipes/socket/README.md) demonstrates `/match` with `join`, `move`, and `resume`, without a secondary action dispatcher. Its shared schema lives in a browser-bundle-safe module; Zod is a starter dependency, not part of the Redweb runtime.
 
 `BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
 

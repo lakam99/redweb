@@ -6,6 +6,7 @@
     "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "Node",
+    "esModuleInterop": true,
     "experimentalDecorators": true,
     "skipLibCheck": false,
     "baseUrl": "../..",
@@ -16,5 +17,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "redweb"
   },
-  "files": ["public-api.ts", "jsx-api.tsx"]
+  "files": ["public-api.ts", "jsx-api.tsx", "socket-contract.ts"]
 }

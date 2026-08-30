@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "errorCodes": [
     "INVALID_MESSAGE",
+    "INVALID_PAYLOAD",
     "UNKNOWN_HANDLER",
     "HANDLER_FAILED",
     "BINARY_UNSUPPORTED",

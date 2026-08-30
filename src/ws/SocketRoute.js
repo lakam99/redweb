@@ -8,6 +8,7 @@ const TransportPolicy = require('./TransportPolicy');
 const Metrics = require('./Metrics');
 const RouteRuntime = require('./RouteRuntime');
 const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
+const { InboundContractValidationError } = require('./ContractValidationError');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -440,6 +441,11 @@ class SocketRoute {
                 await handler.handleMessage(sock, data);
                 return true;
             } catch (error) {
+                if (error instanceof InboundContractValidationError) {
+                    this.sendFailure(sock, error.code, error.message, { requestId: data.requestId });
+                    sock.close?.(1008, 'Invalid contract payload');
+                    return false;
+                }
                 this.logger.error?.(`Error handling message in handler ${handler.name}:`, error);
                 this.metrics?.increment('redweb.handlers.failed');
                 this.sendFailure(sock, ERROR_CODES.HANDLER_FAILED, this.exposeErrors ? errorMessage(error) : 'Handler failed', { requestId: data.requestId });

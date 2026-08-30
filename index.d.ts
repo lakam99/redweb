@@ -1,4 +1,6 @@
 declare module 'redweb' {
+    export { defineSocketContract } from 'redweb/contract';
+    export type { SocketContract, ContractClient, SocketSchema, ContractInput, ContractOutput, ContractMessage } from 'redweb/contract';
     import { Application } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
@@ -164,7 +166,7 @@ declare module 'redweb' {
     }
 
     export interface ProtocolOptions {
-        versions: string[];
+        versions: readonly string[];
         required?: boolean;
         queryParameter?: string;
         header?: string;
@@ -641,14 +643,5 @@ declare module 'redweb' {
     export const HTTP_OPTIONS: RedWebOptions;
     export const SOCKET_OPTIONS: SocketServerOptions;
 
-    export const ERROR_CODES: Readonly<{
-        INVALID_MESSAGE: 'INVALID_MESSAGE';
-        UNKNOWN_HANDLER: 'UNKNOWN_HANDLER';
-        HANDLER_FAILED: 'HANDLER_FAILED';
-        BINARY_UNSUPPORTED: 'BINARY_UNSUPPORTED';
-        RATE_LIMITED: 'RATE_LIMITED';
-        QUEUE_FULL: 'QUEUE_FULL';
-        CAPACITY_REACHED: 'CAPACITY_REACHED';
-        INITIALIZATION_FAILED: 'INITIALIZATION_FAILED';
-    }>;
+    export const ERROR_CODES: typeof import('redweb/client').ERROR_CODES;
 }

@@ -21,6 +21,7 @@ function verifyStarter(packageRoot, workspace, template) {
         ['redweb', packageRoot],
         ['typescript', path.dirname(require.resolve('typescript/package.json'))],
         ['ws', path.dirname(require.resolve('ws/package.json'))],
+        ...(template === 'socket' ? [['zod', path.dirname(require.resolve('zod/package.json'))]] : []),
         ['.bin', path.resolve(path.dirname(require.resolve('typescript/package.json')), '../.bin')],
     ]) fs.symlinkSync(directory, path.join(target, 'node_modules', name), 'junction');
     const tests = spawnSync('npm', ['test'], {
