@@ -18,7 +18,7 @@ The provisioning command displays a randomly generated password once. Save it se
 
 `npm test` provisions temporary test accounts and a real temporary database, then exercises HTTP, WebSockets, isolation, restart, and session expiry. It never modifies your application database. No mocks are used.
 
-`npm run test:coverage` measures the authored TypeScript application through source maps, separately from Redweb's own instrumented-library coverage. Inspect that report rather than assuming a library coverage figure applies to this recipe. The generated npm configuration enforces this recipe's Node engine requirement before installation.
+`npm run test:coverage` measures the TypeScript application through source maps, separately from Redweb's own instrumented-library coverage. It also waits through the actual one-minute login admission window without mocking the clock. The report includes TypeScript-generated decorator accessor functions; inspect that distinction rather than assuming a library coverage figure applies to this recipe. The generated npm configuration enforces this recipe's Node engine requirement before installation.
 
 ## Where the behavior lives
 

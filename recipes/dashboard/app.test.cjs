@@ -8,7 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { spawn, spawnSync } = require('node:child_process');
 const net = require('node:net');
 const { WebSocketServer, WebSocket } = require('ws');
-const { createApp } = require('../dist/app');
+const { createApp, databasePath } = require('../dist/app');
 const { DashboardStore } = require('../dist/store');
 const { DashboardAuth, credentials, sessionToken } = require('../dist/auth');
 const { PrivateCards } = require('../dist/cards');
@@ -134,6 +134,17 @@ test('session expiry closes idle sockets and rejects later HTTP access', async t
 });
 
 test('store and authentication units use actual SQLite and scrypt, never substitutes', async t => {
+    const previousDatabase = process.env.DASHBOARD_DATABASE;
+    const previousPort = process.env.PORT;
+    try {
+        delete process.env.DASHBOARD_DATABASE;
+        delete process.env.PORT;
+        assert.equal(databasePath(), require('node:path').resolve('data/dashboard.sqlite'));
+        assert.throws(() => createApp({ origin: 'ftp://invalid.example' }), /exact/);
+    } finally {
+        if (previousDatabase === undefined) delete process.env.DASHBOARD_DATABASE; else process.env.DASHBOARD_DATABASE = previousDatabase;
+        if (previousPort === undefined) delete process.env.PORT; else process.env.PORT = previousPort;
+    }
     const directory = mkdtempSync(join(tmpdir(), 'redweb-store-'));
     const database = join(directory, 'unit.sqlite');
     const store = new DashboardStore(database);

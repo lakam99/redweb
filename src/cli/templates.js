@@ -40,7 +40,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
     if (template === 'dashboard') {
         manifest.engines = { node: '>=22.13.0' };
         manifest.scripts['add-user'] = 'npm run build && node dist/admin.js';
-        manifest.scripts['test:coverage'] = 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs';
+        manifest.scripts['test:coverage'] = 'npm run build && c8 --all --src=dist --include=dist/** --reporter=text --reporter=json node --test test/app.test.cjs test/rate-window.test.cjs';
     }
     const files = [
         { path: 'package.json', content: json(manifest) },
@@ -71,6 +71,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
     }
     if (template === 'dashboard') {
         files.push({ path: '.npmrc', content: 'engine-strict=true\n' });
+        files.push({ path: 'test/rate-window.test.cjs', content: read('dashboard/rate-window.test.cjs') });
         for (const name of ['store.ts', 'auth.ts', 'cards.tsx', 'admin.ts']) {
             files.push({ path: `src/${name}`, content: read(`dashboard/${name}`) });
         }

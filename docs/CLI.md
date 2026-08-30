@@ -49,6 +49,7 @@ The current checks are explicit in the result's `checks` array:
 - Installed TypeScript (5 or newer) and a root `tsconfig.json`.
 - Effective inherited JSX runtime configuration, syntax/config errors, and legacy-decorator settings.
 - Declared page CSS/templates and duplicate page/route/handler registrations in statically readable TypeScript source.
+- Literal `rw-click`/`rw-submit` names against the owning page/component's public `@action()` methods.
 - Optional temporary bind to `127.0.0.1` to check a TCP port, immediately released on success.
 
 Each finding includes `code`, `severity`, `file`, `message`, and `suggestion`. Source findings also include one-based `line` and `column` when attached to a specific declaration. Error findings produce exit status 1; warnings do not. JSON diagnostic reports go to stdout. Invalid CLI arguments and filesystem failures go to stderr, with exit status 1. `--help` and `--version` require no project.
@@ -57,7 +58,7 @@ Doctor loads the installed TypeScript compiler to read configuration and parse s
 
 ## Source checks and their boundaries
 
-The `source` JSON object reports inspected file count, registration-group count, `mode: "static-source"`, and the number of unresolved/limited warnings. It is `null` when configuration or compiler problems prevent source inspection. `checks` lists `source-assets`, `source-routes`, and `source-handlers` only when the source reader ran.
+The `source` JSON object reports inspected file count, registration-group count, `mode: "static-source"`, and the number of unresolved/limited warnings. It is `null` when configuration or compiler problems prevent source inspection. `checks` lists `source-assets`, `source-routes`, `source-handlers`, and `source-actions` only when the source reader ran.
 
 Supported syntax includes named/namespace TypeScript imports from Redweb, imported local constants, literal strings, constant arrays/objects, known spreads, and simple handler/route constructors. The reader starts with the configuration's source files and follows relative source imports within the project. Declaration files and dependency implementation code are not inspected; an explicitly configured source outside the project can be read, but additional outside-project imports are not followed automatically.
 
@@ -73,6 +74,17 @@ Page assets are checked for registered pages using their decorator's source dire
 | `ASSET_UNAVAILABLE`, `ASSET_NOT_FILE`, `ASSET_OUTSIDE_ROOT` | A declared asset cannot be loaded from its effective source root. |
 | `SOURCE_UNRESOLVED` | Dynamic, mutated, escaped, or unsupported source cannot be determined safely. |
 | `SOURCE_LIMIT` | Source count/size or expression expansion exceeded the inspection budget. |
+| `ACTION_NOT_EXPOSED` | A literal binding has no matching public decorated instance method on its statically known owner. |
+| `ACTION_REFERENCE_INVALID` | The literal action name is empty, reserved, missing, or longer than 128 characters. |
+| `ACTION_REFERENCE_UNRESOLVED` | Action names, render output, method exposure, or component ownership cannot be established by the supported source checks. |
+
+### Repair an action binding
+
+If a button says `<button rw-click="saev">Save</button>` but the class exposes `@action() save()`, doctor reports `ACTION_NOT_EXPOSED` at the binding. Correct the name, run doctor again, then run `npm test`. Doctor never calls the action or executes the renderer to discover it.
+
+Action inspection recognizes decorator aliases, literal names (including imported string constants), inherited methods and overrides, method/function-field renderers, conditional literal returns, and returned JSX/`html` constants. Literal HTML templates use the runtime's lexical tag scanner, ignoring comments and raw-text bodies. External templates are inspected for registered pages at their source asset root and have a separate 1 MiB limit. Page and component owners are checked separately.
+
+This is deliberately not a JavaScript evaluator or a full template type checker. JSX spreads (including constant objects), custom JSX wrappers, explicit component-scope attributes, HTML entities in action names, interpolated/dynamic HTML, unavailable inherited implementations, custom decorators, and potentially replaced instance methods produce warnings where encountered. Arbitrary function calls, dependency renderers and all runtime-produced nested markup cannot be proved by source inspection. A warning is a request for application/browser verification, not a hidden success. Keep real tests for reusable helpers, scoped components and dynamic output even when doctor exits successfully.
 
 `const` is not treated as proof that an array/object is immutable. Mutated aggregates, aliases that escape into unknown calls, runtime option spreads, custom class decorators, and constructor initialization that can overwrite names/paths produce warnings rather than guessed facts. A normal starter exposes runtime option overrides, so its `templateRoot` may correctly produce an unresolved warning. Green exit status means **no errors among the selected checks**, not that warnings were resolved or the application was proved correct.
 

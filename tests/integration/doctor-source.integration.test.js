@@ -4,6 +4,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const WebSocket = require('ws');
+const { request, waitForOpen, waitForListening, waitForCondition, closeWebSocket } = require('../helpers/network');
 
 const packageRoot = path.resolve(__dirname, '../..');
 
@@ -25,6 +27,45 @@ describe('doctor source repair workflow without executing application code', () 
         expect(result.stderr).toBe('');
         return { status: result.status, report: json ? JSON.parse(result.stdout) : null, stdout: result.stdout };
     }
+
+    test('a literal action typo is repaired through the CLI and the compiled fix works over real HTTP/WebSockets', async () => {
+        const source = `
+            import { page, action, state, start } from 'redweb';
+            @page('/') class Home {
+                @state() count = 0;
+                @action() save() { this.count++; }
+                render() { return <main><output>{this.count}</output><button rw-click="saev">Save</button></main>; }
+            }
+            export function create() { return start(Home, { port: 0, bind: '127.0.0.1', logger: null }); }
+        `;
+        fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ extends: 'redweb/tsconfig.json', compilerOptions: { outDir: 'dist' }, include: ['*.tsx'] }));
+        fs.writeFileSync(path.join(root, 'app.tsx'), source);
+        const failed = doctor();
+        expect(failed.status).toBe(1);
+        expect(failed.report.checks).toContain('source-actions');
+        expect(failed.report.issues).toEqual([expect.objectContaining({ code: 'ACTION_NOT_EXPOSED', file: 'app.tsx', message: expect.stringContaining('saev') })]);
+        expect(fs.existsSync(path.join(root, 'dist'))).toBe(false);
+        fs.writeFileSync(path.join(root, 'app.tsx'), source.replace('rw-click="saev"', 'rw-click="save"'));
+        expect(doctor().report.issues).toEqual([]);
+        const compiled = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', root], { encoding: 'utf8', windowsHide: true });
+        expect(compiled.stdout + compiled.stderr).toBe('');
+        expect(compiled.status).toBe(0);
+        const server = require(path.join(root, 'dist/app.js')).create();
+        let socket;
+        try {
+            await waitForListening(server.server);
+            const port = server.server.address().port;
+            const response = await request({ port });
+            expect(response.status).toBe(200);
+            const config = JSON.parse(response.body.match(/id="__redweb_page">([^<]+)/)[1]);
+            const messages = [];
+            socket = new WebSocket(`ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${config.version}`, { headers: { Origin: `http://127.0.0.1:${port}` } });
+            socket.on('message', data => messages.push(JSON.parse(data.toString())));
+            await waitForOpen(socket);
+            socket.send(JSON.stringify({ v: config.version, type: 'redweb:html', payload: { kind: 'action', name: 'save', args: [] } }));
+            await waitForCondition(() => messages.some(message => message.type === 'redweb:patch' && message.payload.patches.some(patch => patch.html.includes('<output>1</output>'))), 'repaired action patch');
+        } finally { await closeWebSocket(socket); await server.shutdown(); }
+    }, 15000);
 
     test('locates missing CSS and conflicting pages, then passes after real file repairs', () => {
         const source = `

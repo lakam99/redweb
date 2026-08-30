@@ -44,7 +44,7 @@ The `dashboard` starter adds account-private live cards backed by native SQLite,
 
 For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
 
-`npx redweb doctor --json` checks the project's installed Redweb and TypeScript packages, effective JSX settings (including inherited configuration), Node compatibility, declared assets, and statically readable route/handler registrations without running application code. Dynamic configurations produce explicit warnings rather than guessed results. Add `--port 8181` to probe loopback port availability. Findings include suggested fixes and source locations where available; errors produce a nonzero exit status, and the doctor never silently repairs the project. See [CLI behavior and limitations](docs/CLI.md).
+`npx redweb doctor --json` checks the project's installed Redweb and TypeScript packages, effective JSX settings (including inherited configuration), Node compatibility, declared assets, statically readable route/handler registrations, and literal action bindings without running application code. It catches a button calling `saev` when the exposed method is `save`; dynamic bindings/configurations produce explicit warnings rather than guessed results. Add `--port 8181` to probe loopback port availability. Findings include suggested fixes and source locations where available; errors produce a nonzero exit status, and the doctor never silently repairs the project. See [CLI behavior and limitations](docs/CLI.md).
 
 ## Exports
 

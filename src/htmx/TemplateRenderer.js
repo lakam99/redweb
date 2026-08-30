@@ -181,7 +181,8 @@ class TemplateRenderer {
 
 TemplateRenderer.closingTag = closingTag;
 TemplateRenderer.openingTag = openingTag;
-TemplateRenderer.component = (source, id) => {
+// Shared lexical traversal: component scoping and read-only diagnostics see the same tags.
+TemplateRenderer.mapTags = (source, transform) => {
     let output = '';
     let position = 0;
     while (position < source.length) {
@@ -211,11 +212,7 @@ TemplateRenderer.component = (source, id) => {
         const end = tagEnd(source, start + opening[0].length);
         if (end < 0) return output + source.slice(start);
         const tag = source.slice(start, end + 1);
-        const found = attributes(tag, opening[0].length, COMPONENT_DIRECTIVES);
-        const scoped = [...COMPONENT_DIRECTIVES].some(name => name !== 'data-rw-component' && found.has(name));
-        output += scoped && !found.has('data-rw-component')
-            ? tag.replace(/\/?>(?=$)/, ` data-rw-component="${escapeHtml(id)}"$&`)
-            : tag;
+        output += transform(tag, opening[0].length, start);
         position = end + 1;
         const name = opening[1].toLowerCase();
         if (RAW_TEXT.has(name)) {
@@ -227,5 +224,14 @@ TemplateRenderer.component = (source, id) => {
     }
     return output;
 };
+
+TemplateRenderer.attributes = attributes;
+TemplateRenderer.component = (source, id) => TemplateRenderer.mapTags(source, (tag, nameEnd) => {
+    const found = attributes(tag, nameEnd, COMPONENT_DIRECTIVES);
+    const scoped = [...COMPONENT_DIRECTIVES].some(name => name !== 'data-rw-component' && found.has(name));
+    return scoped && !found.has('data-rw-component')
+        ? tag.replace(/\/?>(?=$)/, ` data-rw-component="${escapeHtml(id)}"$&`)
+        : tag;
+});
 
 module.exports = TemplateRenderer;

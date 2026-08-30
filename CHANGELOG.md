@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added read-only action-reference checks to doctor: literal TSX/HTML bindings are compared with exposed page/component methods, including inherited renderers, imported constants and callable render fields. Dynamic output, custom scopes/decorators, instance mutation and JSX spreads receive unresolved warnings instead of guessed results. The scanner shares the runtime's HTML tag traversal. A real CLI repair/compile/HTTP/WebSocket regression verifies the workflow without mocks.
+- Dashboard recipe coverage now includes real expiration of the one-minute login admission window and default configuration paths. Its separate source-mapped report reaches 100% statements/branches/lines; TypeScript-generated decorator accessor functions remain visible in the function denominator.
+
 - Added an authenticated persistent-dashboard starter with reusable live cards, account-filtered SQLite transactions, asynchronous bounded password checks, hashed sessions, expiry and account-wide sign-out. Native SQLite is recipe-local and requires Node 22.13+; no database dependency was added to Redweb. Doctor now checks simple declared minimum Node engine requirements and reports unsupported range syntax honestly.
 - Reactive state payloads now defer legacy text/HTML serialization until an explicit binding needs it. Plain TSX data, including native SQLite's null-prototype rows, can update and reconnect without an unnecessary text conversion. Explicit bindings retain their existing payload format.
 

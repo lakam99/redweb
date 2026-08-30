@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { StaticSource, UNKNOWN } = require('./StaticSource');
+const ActionReferences = require('./ActionReferences');
 
 const MAX_FILES = 256;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -77,6 +78,7 @@ class SourceInspector {
         host.getSourceFile = file => sources.get(path.resolve(file));
         const program = ts.createProgram([...sources.keys()], options, host);
         this.syntax = new StaticSource(ts, program);
+        this.actions = new ActionReferences(this);
         for (const source of sources.values()) {
             const pending = [source];
             while (pending.length) {
@@ -95,6 +97,7 @@ class SourceInspector {
         const ts = this.ts;
         const read = this.syntax;
         if (ts.isClassDeclaration(node)) {
+            this.actions.inspect(node);
             const options = read.constructorArgument(node, 'SocketRoute');
             if (options !== UNKNOWN) this.group(read.property(options, 'handlers'), 'handler', node);
         }
@@ -190,7 +193,9 @@ class SourceInspector {
                         this.finding('ASSET_OUTSIDE_ROOT', declaration, `Page ${field} "${file}" resolves through a link outside its asset root.`, 'Use an asset within the configured root.');
                     } else if (!fs.statSync(resolved).isFile()) {
                         this.finding('ASSET_NOT_FILE', declaration, `Page ${field} "${file}" is not a file.`, 'Point this declaration to a CSS or HTML file.');
-                    }
+                    } else if (field === 'template' && fs.statSync(resolved).size <= 1024 * 1024) {
+                        this.actions.markup(declaration.parent.parent, fs.readFileSync(resolved, 'utf8'), declaration, resolved);
+                    } else if (field === 'template') this.actions.unknown(declaration, 'HTML action inspection exceeds the 1 MiB per-template limit.');
                 } catch (error) {
                     this.finding('ASSET_UNAVAILABLE', declaration, `Page ${field} "${file}" is unavailable (${error.code}).`, 'Create/correct the asset at its source root and include it in the production asset-copy step.');
                 }

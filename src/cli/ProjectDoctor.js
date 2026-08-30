@@ -114,7 +114,7 @@ class ProjectDoctor {
             operation: 'doctor',
             root,
             installedVersion,
-            checks: ['node', 'redweb-version', 'typescript-config', ...(inspected ? ['source-assets', 'source-routes', 'source-handlers'] : []), ...(port === null ? [] : ['loopback-port'])],
+            checks: ['node', 'redweb-version', 'typescript-config', ...(inspected ? ['source-assets', 'source-routes', 'source-handlers', 'source-actions'] : []), ...(port === null ? [] : ['loopback-port'])],
             source: inspected?.source || null,
             ok: !issues.some(value => value.severity === 'error'),
             issues,
