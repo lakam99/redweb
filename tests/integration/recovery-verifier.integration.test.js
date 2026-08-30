@@ -120,3 +120,19 @@ test('fixed candidate uses preconditioning and three storms against one unchange
         })).rejects.toThrow('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2');
     });
 }, 35000);
+
+test('extended candidate preserves its baseline and cannot reduce the declared storm count', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        const environment = { ...configured, REDWEB_RECOVERY_PROTOCOL: 'steady-v2' };
+        for (const value of ['', '0', '2', '3.5', 'invalid', 'Infinity', '9007199254740992']) {
+            await expect(owner.command(['--expose-gc', script], {
+                environment: { ...environment, REDWEB_RECOVERY_STORM_ROUNDS: value }, timeoutMs: 10000,
+            })).rejects.toThrow('REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least 3');
+        }
+        const result = JSON.parse(await owner.command(['--expose-gc', script], {
+            environment: { ...environment, REDWEB_RECOVERY_STORM_ROUNDS: '5' }, timeoutMs: 20000,
+        }));
+        expect(result.cycles).toHaveLength(5);
+        for (const cycle of result.cycles) expect(cycle.recoveredHeapPercentOfWarm).toBe(cycle.heap / result.warmedHeap * 100);
+    });
+}, 95000);

@@ -8,6 +8,29 @@ permissions:
   contents: read
 
 jobs:
+  recovery-extension-diagnostic:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 16 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Five fixed Node 22 storms (diagnostic only)
+        env:
+          REDWEB_RECOVERY_PROTOCOL: steady-v2
+          REDWEB_RECOVERY_STORM_ROUNDS: '5'
+        run: |
+          node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
+          git rev-parse HEAD
+          test "$(git rev-parse HEAD:src)" = 3750418373f591bebe6fdd9e6d71ad88831cc03d
+          test "$(git rev-parse HEAD:index.js)" = 9a0fbf919463b74c4eafb164e9b21a903d75e76d
+          test "$(git rev-parse HEAD:package-lock.json)" = 1c1cee59e4a6ef709b5cea457cb934bde2bf3f72
+          node --expose-gc scripts/verify-recovery.js
+
   test:
     runs-on: ubuntu-latest
     strategy:

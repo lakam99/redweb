@@ -8,7 +8,11 @@ const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE ?? 50);
 // across runtimes. Its warm-up is declared in advance, never adjusted to pass.
 const protocol = process.env.REDWEB_RECOVERY_PROTOCOL ?? 'cold-v1';
 if (!['cold-v1', 'steady-v2'].includes(protocol)) throw new TypeError('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2.');
-const stormRounds = protocol === 'steady-v2' ? 3 : 1;
+const minimumRounds = protocol === 'steady-v2' ? 3 : 1;
+const stormRounds = Number(process.env.REDWEB_RECOVERY_STORM_ROUNDS ?? minimumRounds);
+if (!Number.isSafeInteger(stormRounds) || stormRounds < minimumRounds) {
+    throw new TypeError(`REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least ${minimumRounds}.`);
+}
 const preconditioningConnections = protocol === 'steady-v2' ? stormConnections : 0;
 for (const [name, value] of Object.entries({
     REDWEB_RECOVERY_WARM_CONNECTIONS: warmConnections,
