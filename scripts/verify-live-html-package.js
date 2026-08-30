@@ -10,8 +10,10 @@ const { verifyRoomExample } = require('./lib/verify-room-example');
 const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { ClientCandidate } = require('./lib/ClientCandidate');
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { verifyPackedBrowser } = require('./lib/verify-packed-browser');
+const { PackedBrowserHarness } = require('./lib/PackedBrowserHarness');
+const { preservePackedBrowserReport } = require('./lib/preservePackedBrowserReport');
 
 async function main() {
     const root = path.resolve(__dirname, '..');
@@ -44,6 +46,42 @@ async function main() {
         await execution.command(['-xf', archive, '-C', workspace], { executable: 'tar' });
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(dependencyChecks.consumer, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
+        if (candidate) {
+            const harness = new PackedBrowserHarness(packageRoot, root);
+            const environment = { TEMP: workspace, TMP: workspace, TMPDIR: workspace, NODE_OPTIONS: '' };
+            const reportDirectory = path.join(root, 'coverage/packed-browser', randomUUID());
+            fs.mkdirSync(reportDirectory, { recursive: true });
+            const report = { redwebArchiveSha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
+                client: dependencyChecks.candidateEvidence, phases: [], status: 'failed' };
+            let failure;
+            try {
+                for (const [name, args] of [
+                    ['acceptance', ['scripts/verify-live-html-browser.js']],
+                    ['runtime', ['scripts/verify-browser-coverage.js', 'runtime']],
+                    ['refresh', ['scripts/verify-browser-coverage.js', 'refresh']],
+                ]) {
+                    const output = await execution.command(args, { cwd: packageRoot, environment, timeoutMs: 180000 });
+                    fs.writeFileSync(path.join(reportDirectory, `${name}.log`), output);
+                    console.log(output);
+                    harness.verify();
+                    candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+                    report.phases.push(name);
+                }
+                const runtime = JSON.parse(fs.readFileSync(path.join(packageRoot, 'coverage/browser-runtime/report.json'), 'utf8'));
+                if (runtime.bundleSha256 !== report.client.bundles['live-html.js']) throw new Error('Browser report measured a different client candidate');
+                report.status = 'passed';
+            } catch (error) { failure = error; }
+            try {
+                report.inputs = harness.verify();
+                candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+            } catch (error) { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; }
+            failure = preservePackedBrowserReport(report, reportDirectory, path.join(packageRoot, 'coverage'), failure);
+            console.log(JSON.stringify({ candidateOnly: true, packedRegressions: report, reportDirectory }));
+            if (failure) {
+                failure.reportDirectory = reportDirectory;
+                throw failure;
+            }
+        }
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
         for (const template of require('../src/cli/templates').TEMPLATES) {

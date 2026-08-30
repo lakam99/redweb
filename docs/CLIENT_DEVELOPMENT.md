@@ -77,6 +77,19 @@ production execution using the isolated runtime dependencies. Certificate checks
 stay enabled; a machine needing its system trust store can use Node's
 `--use-system-ca` option.
 
+The candidate path also copies the unchanged browser acceptance/coverage drivers
+and their required fixtures beside the extracted package. It never overwrites
+packed application code. Four individually linked development tools support the
+checks; client, WebSocket, Express and Zod resolution must stay inside the isolated
+consumer. The full browser driver and plain/instrumented frontend and refresh
+checks run through bounded child processes. Their temporary profiles stay inside
+the owning workspace, and reports survive under `coverage/packed-browser/<id>`.
+Original package files, copied test bytes and client fingerprints are checked even
+on failure. The runtime coverage report must identify the selected client bundle.
+This is installed-runtime testing with external test tools, not a production-only
+installation or full original-client-source coverage. The frozen browser driver
+does not itself prove that every individual shutdown error is propagated.
+
 Without `REDWEB_CLIENT_CANDIDATE`, the command keeps the ordinary registry path;
 it does not use or infer the local npm link. A candidate pass is not a registry
 release pass. `npm run verify:package:tools` includes the fingerprint/containment

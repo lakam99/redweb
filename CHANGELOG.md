@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Extend explicit packed client/server verification to reuse the unchanged full browser acceptance suite and frontend/refresh coverage drivers. Keep runtime dependencies inside the isolated consumer, fingerprint copied test inputs and original package files, and retain reports after workspace cleanup. External test tools are linked individually; this does not change ordinary registry installation or claim full original-client-source coverage.
+
 - Generated network-test cleanup now terminates its owned sockets instead of waiting for an uncooperative peer's closing handshake. Graceful-disconnect assertions still explicitly close and await their sockets. A real paused-peer regression checks this boundary; the earlier intermittent documented-chat timeout remains unexplained.
 
 - Added explicit local-client tarball selection for isolated package verification without changing the development npm link. Verify npm integrity, export paths and all bundle fingerprints before/after tests; run native packed counter/chat/reconnect/disconnect checks. Ordinary registry installation retains its incompatible-published-client failure until the client release and dependency lockfile are updated.
