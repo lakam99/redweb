@@ -8,10 +8,17 @@ Use the version installed in your project (`npx --no-install redweb`) when troub
 npx redweb init my-app
 cd my-app
 npm install
+npm test
 npm run dev
 ```
 
 The initializer creates missing files only. It does not install dependencies, run package scripts, or validate existing source code. A message saying initialization completed means the file operation completed, not that a preserved existing project is valid.
+
+`--template realtime|chat|site|socket` selects a complete runnable recipe. The default is `realtime`, a shared server-owned counter. `chat` includes the canonical reusable chat component and its stylesheet; `site` has two non-live pages with a shared layout; `socket` exposes an echo handler on `/events`. Each starter includes network tests, CSS, build/production instructions, and a development watcher. `--existing` and `--template` cannot be combined.
+
+Run `npm test` for type checking, asset copying, and real HTTP/WebSocket tests on an ephemeral loopback port. `npm run dev` uses development-only Nodemon to rebuild and restart on changes to `src/` or `tsconfig.json`; it does not provide browser hot-module replacement. A type error prevents startup until corrected. `npm run build` produces runtime code and assets in `dist/`; production needs that directory and installed runtime dependencies, not TypeScript or `src/`.
+
+Templates come from `recipes/`, with common configuration/test helpers maintained once. The package gate extracts a tarball, generates every template, runs each generated `npm test`, then removes access to `src/` and runs the network tests again to validate production asset resolution.
 
 For an existing application:
 
@@ -45,4 +52,4 @@ Each finding includes `code`, `severity`, `file`, `message`, and `suggestion`. E
 
 Doctor loads the installed TypeScript compiler to read configuration, but never imports or executes the application's modules. It does not compile/emit files or apply repairs. These checks do not prove full application correctness or validate every package's semver range. Port availability is a point-in-time loopback check, not a reservation or a test of an external proxy. Dependency discovery currently targets conventional npm-style `node_modules` installations.
 
-Source-level asset/route/handler checks, richer executable templates, and the development watch command are tracked as unfinished work in [the release acceptance checklist](AGENT_READY_ACCEPTANCE.md).
+Source-level asset/route/handler checks and the remaining release work are tracked in [the release acceptance checklist](AGENT_READY_ACCEPTANCE.md).

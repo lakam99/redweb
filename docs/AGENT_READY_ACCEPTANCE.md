@@ -10,10 +10,10 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Complete starters and repair loop
 
-- [ ] `redweb init` offers realtime, chat, site, and socket templates with no undefined application placeholders.
+- [x] `redweb init` offers realtime, chat, site, and socket templates with no undefined application placeholders.
 - [x] Existing-project initialization does not generate a second application or overwrite user files; conflicts are reported honestly.
 - [x] Explicit noninteractive options, dry-run, machine-readable output, actionable errors, and safe filesystem handling.
-- [ ] One development command rebuilds/restarts on changes, one test command verifies behavior, and production startup is documented.
+- [x] One development command rebuilds/restarts on changes, one test command verifies behavior, and production startup is documented.
 - [ ] `redweb doctor --json` inspects effective JSX configuration, package/tool versions, assets, duplicate routes/handlers, and an optional port without executing user application code or silently repairing it.
 
 ## Automatic reactive rendering
@@ -52,3 +52,6 @@ This is the full implementation checklist for the requested improvements. Unchec
 - Current implementation branch: `codex/agent-ready`.
 - First increment: discovery metadata; existing-project/dry-run/JSON initialization; preflight filesystem safety; read-only doctor checks for installed dependencies, effective JSX configuration, Node/CLI versions, and optional TCP ports. Source-level doctor checks and all remaining release items are still pending. `tests/unit/cli-tools.unit.test.js` and `tests/integration/init-cli.integration.test.js` exercise real files, compiler configuration, CLI subprocesses, and sockets.
 - First-increment verification: 361 tests across 24 suites; 100% statements, branches, functions, and lines; full type/pretest gates. Packed CLI initialization, consumer compilation, doctor, and rendering are checked by `npm run verify:live-html:package`. This is increment evidence only: it does not satisfy the remaining reactive-rendering, recipe, contract, browser, or release-performance requirements.
+- Starter increment (2026-08-29, Windows, Node 22.21.0): four selectable recipes, default shared counter, canonical chat component reuse, common scaffold/config/test helpers, development-only Nodemon watcher, and production CSS/HTML copying. The watcher integration test runs the actual generated `npm run dev`, edits TSX and CSS, observes rebuilt HTTP responses, introduces a type error, and verifies recovery after repair. No additional watcher implementation was added to the library runtime.
+- Starter verification: `npm test -- --runInBand --silent` passed 372 tests in 26 suites with 100% instrumented-library statements/branches/functions/lines and all existing type/pretest gates. `npm run verify:live-html:package` extracted the tarball and ran every generated `npm test` (real HTTP/WebSockets), then reran the network tests with `src/` unavailable. These cover two-client counter updates, chat messages/escaping/disconnect presence, static pages/CSS/404s, and socket dispatch/invalid payloads. They are not a claim of 100% generated-example coverage or a substitute for the pending full browser/release gates.
+- Audit: zero reported vulnerabilities with Node's `--use-system-ca` option. The initial audit failed certificate validation against this machine's trust setup; verification was retained using the Windows trust store, not disabled.

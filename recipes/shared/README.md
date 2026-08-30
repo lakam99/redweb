@@ -1,0 +1,27 @@
+# Your Redweb application
+
+Requirements: Node.js 18 or newer and npm. Use a currently supported Node.js release in production.
+
+```sh
+npm install
+npm test
+npm run dev
+```
+
+HTTP starters open at http://localhost:8181. Set the `PORT` environment variable to change the listener.
+`npm test` builds and runs real HTTP/WebSocket integration tests on an ephemeral loopback port. No mocks or external service are needed.
+
+## Development and production
+
+Edit `src/app.tsx`. `npm run dev` watches TypeScript, TSX, CSS, HTML, and the root TypeScript configuration,
+then rebuilds and restarts the server. A type error stops startup until you fix it. Refresh your browser after a restart;
+development restarts reset in-memory state. This is server watch/restart, not browser hot-module replacement.
+`npm run build` checks types and copies CSS/HTML beside the compiled classes in `dist/`.
+Run `npm start` to serve the compiled app. For deployment, build first, ship `dist/`, `package.json`, and the lockfile,
+then install runtime dependencies with `npm ci --omit=dev`. The application does not require TypeScript or `src/` at runtime.
+
+For public deployment, configure HTTPS/WSS at your Node server or reverse proxy, authentication, trusted origins,
+and application-specific rate limits. These starters are demonstrations, not a hosted identity or database service.
+Never commit secrets; `.env` is ignored but is not loaded automatically.
+
+`npx redweb doctor --json` reports configuration problems without changing your files.

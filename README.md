@@ -14,15 +14,26 @@ Use only the pieces you need: runtime-free static pages, interactive server-rend
 npm install redweb
 ```
 
-Start a TypeScript + TSX project with Redweb's compiler preset and a small server-rendered page:
+Start a TypeScript + TSX project with Redweb's compiler preset and a server-owned realtime counter:
 
 ```bash
 npx redweb init
 npm install
+npm test
 npm run dev
 ```
 
 Pass a directory to create a new project there: `npx redweb init my-app`. Existing files are never overwritten, so rerunning the command is safe.
+
+Open two tabs at `http://localhost:8181`: clicking the counter updates both through the server. The default `realtime` starter intentionally shares in-memory state. Other complete starters are available:
+
+```sh
+npx redweb init my-chat --template chat
+npx redweb init my-site --template site
+npx redweb init my-service --template socket
+```
+
+Each includes real HTTP/WebSocket tests, a development watcher, and production instructions. `npm run dev` rebuilds and restarts on source, CSS, HTML, or root TypeScript configuration changes; refresh the browser after a restart. `npm run build` copies runtime assets into `dist/`, so production does not require the source directory. The chat starter reuses the canonical chatroom component, including disconnect presence. The socket starter dispatches `type: "echo"` on `/events` to its own handler; it is not an HTML page.
 
 For an existing application, use `npx redweb init --existing` to create only a missing root TypeScript configuration. Add `--dry-run --json` to inspect the plan without writing files. Existing configuration is preserved, not assumed correct.
 

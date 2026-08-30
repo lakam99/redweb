@@ -6,7 +6,7 @@ const { projectFiles } = require('./templates');
 
 class ProjectInitializer {
     constructor(version) {
-        this.files = projectFiles(version);
+        this.version = version;
     }
 
     initialize(target, options = {}) {
@@ -14,7 +14,8 @@ class ProjectInitializer {
         const created = [];
         const skipped = [];
         const planned = [];
-        const files = options.existing ? this.files.filter(file => file.path === 'tsconfig.json') : this.files;
+        const templateFiles = projectFiles(this.version, options.template);
+        const files = options.existing ? templateFiles.filter(file => file.path === 'tsconfig.json') : templateFiles;
         // Preflight the complete plan before creating directories or writing files.
         for (const file of files) {
             const destination = path.join(root, file.path);

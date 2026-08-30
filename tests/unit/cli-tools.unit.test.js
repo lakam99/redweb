@@ -31,6 +31,7 @@ describe('CLI command arguments', () => {
         expect(parseArguments(['init', 'my project', '--existing', '--dry-run', '--json'])).toEqual({ command: 'init', target: 'my project', existing: true, dryRun: true, json: true, port: null });
         expect(parseArguments(['doctor', '--port', '8181', '--json']).port).toBe(8181);
         expect(parseArguments(['doctor', '--port', '0']).port).toBe(0);
+        expect(parseArguments(['init', '--template', 'chat']).template).toBe('chat');
     });
 
     test.each([
@@ -38,6 +39,8 @@ describe('CLI command arguments', () => {
         ['init', '--json', '--json'], ['doctor', '--existing'], ['doctor', '--dry-run'],
         ['init', '--port', '80'], ['doctor', '--port'], ['doctor', '--port', '65536'],
         ['doctor', '--port', '-1'], ['doctor', '--port', '1.5'], ['init', '--unknown'],
+        ['init', '--template'], ['init', '--template', '../file'], ['init', '--existing', '--template', 'site'],
+        ['doctor', '--template', 'chat'], ['init', '--template', 'site', '--template', 'chat'],
     ])('rejects invalid arguments: %j', (...args) => {
         expect(() => parseArguments(args)).toThrow();
     });
@@ -60,7 +63,7 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
         const initializer = new ProjectInitializer(version);
         const plan = initializer.initialize(target, { dryRun: true });
         expect(plan.created).toEqual([]);
-        expect(plan.planned).toHaveLength(4);
+        expect(plan.planned).toHaveLength(9);
         expect(fs.existsSync(target)).toBe(false);
         const created = initializer.initialize(target, { existing: true });
         expect(created.created).toEqual(['tsconfig.json']);

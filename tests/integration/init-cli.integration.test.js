@@ -50,7 +50,7 @@ describe('redweb init CLI integration', () => {
     });
 
     test('scaffolds, safely reruns, compiles, and serves through the shipped preset', async () => {
-        const first = run(['init', 'game'], workspace);
+        const first = run(['init', 'game', '--template', 'site'], workspace);
         expect(first.status).toBe(0);
         expect(first.stdout).toContain('Created: package.json, tsconfig.json, src/app.tsx, src/app.css');
 
@@ -66,6 +66,7 @@ describe('redweb init CLI integration', () => {
         });
         expect(compiled.stderr || compiled.stdout).toBe('');
         expect(compiled.status).toBe(0);
+        expect(spawnSync(process.execPath, ['scripts/copy-assets.cjs'], { cwd: target, encoding: 'utf8' }).status).toBe(0);
 
         const port = await availablePort();
         const app = spawn(process.execPath, ['dist/app.js'], {
@@ -92,7 +93,7 @@ describe('redweb init CLI integration', () => {
 
         const source = path.join(target, 'src', 'app.tsx');
         fs.writeFileSync(source, 'user-owned source', 'utf8');
-        const second = run(['init', 'game'], workspace);
+        const second = run(['init', 'game', '--template', 'site'], workspace);
         expect(second.status).toBe(0);
         expect(second.stdout).toContain('Kept existing: package.json, tsconfig.json, src/app.tsx, src/app.css');
         expect(fs.readFileSync(source, 'utf8')).toBe('user-owned source');

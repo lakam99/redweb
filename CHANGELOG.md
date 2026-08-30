@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added `realtime` (default), `chat`, `site`, and `socket` starters with one shared scaffolding path, generated real-network tests, development watch/restart, and compiled production assets. The chat starter uses the existing canonical component rather than duplicating its behavior. Every starter is exercised against the packed package, including execution without the source directory.
+
 - Added explicit existing-project initialization, read-only dry-run plans, structured CLI output, and preflight checks that refuse conflicting paths and linked subdirectories.
 - Added read-only `redweb doctor` configuration/version diagnostics and optional real TCP port checks, with stable finding codes and machine-readable results.
 - Added package discovery metadata and current capability/fit guidance. The full developer/agent experience release remains in progress; see `docs/AGENT_READY_ACCEPTANCE.md`.

@@ -1,7 +1,9 @@
 'use strict';
 
+const { TEMPLATES } = require('./templates');
+
 const USAGE = [
-    'Usage: redweb init [directory] [--existing] [--dry-run] [--json]',
+    'Usage: redweb init [directory] [--template realtime|chat|site|socket] [--existing] [--dry-run] [--json]',
     '       redweb doctor [directory] [--port number] [--json]',
     '       redweb --help | --version',
     '',
@@ -30,12 +32,18 @@ function parseArguments(args) {
         if (value === '--json') result.json = true;
         else if (value === '--existing' && command === 'init') result.existing = true;
         else if (value === '--dry-run' && command === 'init') result.dryRun = true;
+        else if (value === '--template' && command === 'init') {
+            const template = rest[++i];
+            if (!TEMPLATES.includes(template)) throw new Error(`--template must be one of: ${TEMPLATES.join(', ')}.`);
+            result.template = template;
+        }
         else if (value === '--port' && command === 'doctor') {
             const port = rest[++i];
             if (!/^\d+$/.test(port) || Number(port) > 65535) throw new Error('--port must be an integer from 0 through 65535.');
             result.port = Number(port);
         } else throw new Error(`Unknown option for ${command}: ${value}`);
     }
+    if (result.existing && result.template) throw new Error('--existing and --template cannot be combined.');
     return result;
 }
 
