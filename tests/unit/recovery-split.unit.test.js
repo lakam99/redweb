@@ -1,6 +1,18 @@
 'use strict';
 
-const { phases, fingerprint, describeFailure } = require('../../scripts/diagnostics/recovery-split.cjs');
+const { phases, fingerprint, describeFailure, workerFlags } = require('../../scripts/diagnostics/recovery-split.cjs');
+
+test.each(['server', 'client'])('diagnostic flags are explicit and isolated for %s', role => {
+    expect(workerFlags(role)).toEqual(['--expose-gc']);
+    expect(workerFlags(role, 'baseline')).toEqual(['--expose-gc']);
+    expect(workerFlags(role, 'trace')).toEqual(['--expose-gc', '--trace-gc', '--trace-flush-code']);
+    expect(workerFlags(role, 'client-jitless')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc', '--jitless']);
+    expect(() => workerFlags(role, '--arbitrary-flag')).toThrow('Unknown diagnostic mode');
+});
+
+test('unknown roles cannot launch a diagnostic worker', () => {
+    expect(() => workerFlags('unknown')).toThrow('Unknown diagnostic role');
+});
 
 test('split diagnosis retains the fixed seven-phase 7400-connection workload', () => {
     expect(phases).toEqual([['preconditioning', 1200], ['warm', 200],

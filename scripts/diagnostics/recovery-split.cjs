@@ -8,23 +8,74 @@ const { inspect } = require('node:util');
 const { spawnManaged, stopProcessTree } = require('../evaluation/process');
 const { withTimeout } = require('../../tests/helpers/network');
 
+function workerFlags(role, mode = 'baseline') {
+    assert(['server', 'client'].includes(role), 'Unknown diagnostic role');
+    assert(['baseline', 'trace', 'client-jitless'].includes(mode), 'Unknown diagnostic mode');
+    return ['--expose-gc', ...(mode === 'trace' ? ['--trace-gc', '--trace-flush-code'] : []),
+        ...(mode === 'client-jitless' && role === 'client' ? ['--jitless'] : [])];
+}
+
+// Append synchronously in the coordinator: no unbounded stream buffer or open
+// log descriptor can outlive cleanup. A limit/write error invalidates the run.
+function outputRecorder(directory, maxBytes = 16 * 1024 * 1024) {
+    assert(Number.isSafeInteger(maxBytes) && maxBytes > 0, 'Invalid output limit');
+    const logs = {};
+    for (const role of ['server', 'client']) {
+        for (const stream of ['stdout', 'stderr']) {
+            const name = `${role}.${stream}.log`;
+            fs.writeFileSync(path.join(directory, name), '', { flag: 'wx' });
+            logs[name] = { bytes: 0, complete: true };
+        }
+    }
+    return {
+        write(role, stream, chunk) {
+            const name = `${role}.${stream}.log`;
+            assert(Object.hasOwn(logs, name), 'Unknown diagnostic output stream');
+            const log = logs[name];
+            try {
+                assert(log.complete, 'Diagnostic output already failed');
+                assert(log.bytes + chunk.length <= maxBytes, `Diagnostic output exceeded ${maxBytes} bytes: ${name}`);
+                fs.appendFileSync(path.join(directory, name), chunk);
+                log.bytes += chunk.length;
+            } catch (error) {
+                log.complete = false;
+                throw error;
+            }
+        },
+        summary() {
+            return Object.fromEntries(Object.entries(logs).map(([name, log]) => {
+                const bytes = fs.readFileSync(path.join(directory, name));
+                return [name, { ...log, complete: log.complete && bytes.length === log.bytes,
+                    sha256: createHash('sha256').update(bytes).digest('hex') }];
+            }));
+        },
+    };
+}
+
 class DiagnosticProcess {
-    constructor(role, { coverageDirectory = '' } = {}) {
-        this.child = spawnManaged(['--expose-gc', path.join(__dirname, 'recovery-split-worker.cjs'), role], {
+    constructor(role, { coverageDirectory = '', mode = 'baseline', output } = {}) {
+        this.child = spawnManaged([...workerFlags(role, mode), path.join(__dirname, 'recovery-split-worker.cjs'), role], {
             // Coverage is explicitly opt-in for behavioral tests, never inherited
             // by measured workers in run().
             stdio: ['ignore', 'pipe', 'pipe', 'ipc'], env: { ...process.env, NODE_OPTIONS: '', NODE_V8_COVERAGE: coverageDirectory },
         });
         this.output = '';
-        const capture = chunk => {
+        const capture = (stream, chunk) => {
+            try { if (output) output(role, stream, chunk); }
+            catch (error) {
+                if (!this.outputFailure) {
+                    this.outputFailure = error;
+                    this.child.emit('error', error);
+                }
+            }
             this.output += chunk;
             if (this.output.length > 1024 * 1024) {
                 this.output = this.output.slice(-1024 * 1024);
                 this.outputTruncated = true;
             }
         };
-        this.child.stdout.on('data', capture);
-        this.child.stderr.on('data', capture);
+        this.child.stdout.on('data', chunk => capture('stdout', chunk));
+        this.child.stderr.on('data', chunk => capture('stderr', chunk));
         this.child.on('error', error => { this.failure = error; });
         // Explicit IPC disconnect on Windows can omit ChildProcess 'close' even
         // after process exit and both pipes close. Observe the owned resources.
@@ -85,6 +136,7 @@ class DiagnosticProcess {
             }
             throw new AggregateError(failures, `Diagnostic cleanup uncertain for PID ${this.child.pid}`);
         }
+        if (this.outputFailure) throw this.outputFailure;
     }
 }
 
@@ -93,13 +145,13 @@ const phases = Object.freeze([
     ...Array.from({ length: 5 }, (_, index) => [`storm-${index + 1}`, 1200]),
 ]);
 
-async function run(report, record = () => {}) {
+async function run(report, record = () => {}, { mode = 'baseline', output } = {}) {
     let server;
     let client;
     let primary;
     try {
-        server = new DiagnosticProcess('server');
-        client = new DiagnosticProcess('client');
+        server = new DiagnosticProcess('server', { mode, output });
+        client = new DiagnosticProcess('client', { mode, output });
         const { url } = await server.request('start');
         let start = 0;
         for (const [phase, count] of phases) {
@@ -111,13 +163,15 @@ async function run(report, record = () => {}) {
                 assert.equal(barrier.received, delivery.sent);
             }
             start += count;
-            const [serverSample, clientSample] = await Promise.all([server.request('sample'), client.request('sample')]);
+            const [serverSample, clientSample] = await Promise.all([server.request('sample', { phase }), client.request('sample', { phase })]);
             const sample = { phase, server: serverSample, client: clientSample };
             report.samples.push(sample);
             record(sample);
         }
         assert.equal(start, 7400);
         await Promise.all([server.request('stop'), client.request('stop')]);
+        for (const worker of [server, client]) worker.child.disconnect();
+        await Promise.all([server, client].map(worker => withTimeout(worker.closed, 'diagnostic graceful exit', 5000)));
     } catch (error) {
         primary = error;
         throw error;
@@ -155,21 +209,26 @@ function fingerprint() {
 }
 
 async function main() {
+    assert(process.argv.length <= 3, 'Usage: node recovery-split.cjs [baseline|trace|client-jitless]');
+    const mode = process.argv[2] ?? 'baseline';
+    workerFlags('server', mode);
     const base = path.resolve(__dirname, '../../coverage');
     fs.mkdirSync(base, { recursive: true });
     const directory = fs.mkdtempSync(path.join(base, 'recovery-split-'));
-    const report = { diagnosticOnly: true, protocol: 'split-steady-v2', startedAt: new Date().toISOString(),
+    const report = { diagnosticOnly: true, mode, protocol: 'split-steady-v2', startedAt: new Date().toISOString(),
         platform: process.platform, architecture: process.arch, coordinatorPid: process.pid,
         workload: { preconditioning: 1200, warm: 200, storms: 5, connectionsPerStorm: 1200, batchSize: 50, settleMs: 400 },
         sourceHashes: fingerprint(), wsVersion: require('ws/package.json').version,
         samples: [], deliveryAndCleanupPassed: false };
     process.stdout.write(`Diagnostic evidence: ${directory}\n`);
     let primary;
+    let output;
     try {
+        output = outputRecorder(directory);
         await run(report, sample => {
             fs.appendFileSync(path.join(directory, 'samples.ndjson'), `${JSON.stringify(sample)}\n`);
             process.stdout.write(`${sample.phase}: server ${sample.server.memory.heapUsed}, client ${sample.client.memory.heapUsed}\n`);
-        });
+        }, { mode, output: output.write });
         assert.deepEqual(fingerprint(), report.sourceHashes, 'Measured inputs changed during diagnosis');
     } catch (error) {
         primary = error;
@@ -178,12 +237,23 @@ async function main() {
         throw error;
     } finally {
         report.endedAt = new Date().toISOString();
+        let outputFailure;
+        try {
+            if (output) {
+                report.outputFiles = output.summary();
+                assert(Object.values(report.outputFiles).every(log => log.complete), 'Diagnostic output is incomplete');
+            }
+        } catch (error) {
+            outputFailure = error;
+            report.outputError = describeFailure(error);
+            report.deliveryAndCleanupPassed = false;
+        }
         try {
             fs.writeFileSync(path.join(directory, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
         } catch (error) {
-            if (primary) throw new AggregateError([primary, error], 'Diagnosis and report preservation failed');
-            throw error;
+            throw new AggregateError([primary, outputFailure, error].filter(Boolean), 'Diagnosis or report preservation failed');
         }
+        if (outputFailure) throw new AggregateError([primary, outputFailure].filter(Boolean), 'Diagnostic output preservation failed');
     }
 }
 
@@ -192,5 +262,5 @@ function describeFailure(error) {
     return inspect(error, { depth: null, customInspect: false });
 }
 
-module.exports = { DiagnosticProcess, phases, fingerprint, describeFailure, run };
+module.exports = { DiagnosticProcess, phases, fingerprint, describeFailure, workerFlags, outputRecorder, run };
 if (require.main === module) main().catch(error => { process.stderr.write(`${describeFailure(error)}\n`); process.exitCode = 1; });

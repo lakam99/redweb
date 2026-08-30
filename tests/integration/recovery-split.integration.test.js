@@ -1,6 +1,11 @@
 'use strict';
 
-const { DiagnosticProcess } = require('../../scripts/diagnostics/recovery-split.cjs');
+const { DiagnosticProcess, outputRecorder, workerFlags } = require('../../scripts/diagnostics/recovery-split.cjs');
+const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createHash } = require('node:crypto');
+const { spawnManaged, stopProcessTree } = require('../../scripts/evaluation/process');
 const { WebSocketServer } = require('ws');
 const { waitFor } = require('../../scripts/realtime-harness');
 const net = require('node:net');
@@ -89,7 +94,7 @@ test('unexpected worker exit rejects a pending command and disconnected requests
     const client = worker('client');
     try {
         // Wait for boot before disconnecting during the fixed settling delay.
-        await client.request('stop');
+        await client.request('sample');
         const pending = client.request('sample');
         client.child.disconnect();
         await expect(pending).rejects.toThrow('exited');
@@ -111,3 +116,95 @@ test.each([
     try { await expect(child.request(command, data)).rejects.toThrow(message); }
     finally { await disconnect(child); }
 });
+
+test.each(['trace', 'client-jitless'])('real sockets preserve complete output in %s mode', mode =>
+    new VerificationWorkspace().run(async workspace => {
+        const output = outputRecorder(workspace.directory);
+        const options = { mode, output: output.write, coverageDirectory: process.env.NODE_V8_COVERAGE };
+        const server = new DiagnosticProcess('server', options);
+        const client = new DiagnosticProcess('client', options);
+        try {
+            const { url } = await server.request('start');
+            expect(await client.request('batch', { url, start: 0, count: 50 })).toEqual({ sent: 50, received: 50, clients: 0 });
+            expect(await server.request('barrier')).toEqual({ received: 50 });
+            for (const [role, child] of [['server', server], ['client', client]]) {
+                const sample = await child.request('sample', { phase: 'test' });
+                expect(sample.execArgv).toEqual(workerFlags(role, mode));
+                expect(Object.values(sample.registries).every(value => value === 0)).toBe(true);
+                await child.request('stop');
+            }
+        } finally { await Promise.all([disconnect(server), disconnect(client)]); }
+        for (const [filename, metadata] of Object.entries(output.summary())) {
+            const bytes = fs.readFileSync(path.join(workspace.directory, filename));
+            expect(metadata).toEqual({ bytes: bytes.length, complete: true,
+                sha256: createHash('sha256').update(bytes).digest('hex') });
+        }
+        const trace = fs.readFileSync(path.join(workspace.directory, 'server.stdout.log'), 'utf8');
+        if (mode === 'trace') {
+            expect(trace).toContain('[rw-phase test settle-begin]');
+            expect(trace).toContain('[rw-phase test sampled heap=');
+            expect(trace).toMatch(/Mark-Compact|Scavenge/);
+        } else expect(trace).toBe('');
+    }), 30000);
+
+test('output limits invalidate a real traced worker and never silently truncate success', () =>
+    new VerificationWorkspace().run(async workspace => {
+        const output = outputRecorder(workspace.directory, 1);
+        const child = new DiagnosticProcess('server', { mode: 'trace', output: output.write });
+        try {
+            await expect((async () => {
+                await child.request('start');
+                await child.request('sample', { phase: 'limited' });
+            })()).rejects.toThrow('Diagnostic output');
+        }
+        finally { await expect(child.close()).rejects.toThrow('Diagnostic output'); }
+        expect(Object.values(output.summary()).some(log => !log.complete)).toBe(true);
+        expect(child.child.exitCode !== null || child.child.signalCode !== null).toBe(true);
+    }), 15000);
+
+test('recorder validates limits, preserves exact bytes and refuses to overwrite prior evidence', () =>
+    new VerificationWorkspace().run(async workspace => {
+        expect(() => outputRecorder(workspace.directory, 0)).toThrow('Invalid output limit');
+        const output = outputRecorder(workspace.directory, 4);
+        output.write('server', 'stdout', Buffer.from('test'));
+        expect(fs.readFileSync(path.join(workspace.directory, 'server.stdout.log'), 'utf8')).toBe('test');
+        expect(() => output.write('wrong', 'stdout', Buffer.from('x'))).toThrow('Unknown diagnostic output');
+        expect(() => output.write('server', 'stdout', Buffer.from('x'))).toThrow('exceeded');
+        expect(() => output.write('server', 'stdout', Buffer.from('x'))).toThrow('already failed');
+        expect(output.summary()['server.stdout.log'].complete).toBe(false);
+        expect(() => outputRecorder(workspace.directory)).toThrow();
+        expect(fs.readFileSync(path.join(workspace.directory, 'server.stdout.log'), 'utf8')).toBe('test');
+    }));
+
+test('successful worker stop drains queued stdout before process exit', () =>
+    new VerificationWorkspace().run(async workspace => {
+        const output = outputRecorder(workspace.directory);
+        const size = 8 * 1024 * 1024;
+        const workerPath = path.resolve(__dirname, '../../scripts/diagnostics/recovery-split-worker.cjs');
+        // Real worker lifecycle plus a fixture producer: queue output before the
+        // async stop reply, then have the coordinator disconnect immediately.
+        const fixture = `process.argv[2]='client'; require(${JSON.stringify(workerPath)});
+            process.on('message', message => {
+                if (message.command === 'stop') process.stdout.write(Buffer.alloc(${size}, 120));
+            });`;
+        const child = spawnManaged(['--expose-gc', '-e', fixture], { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+        const closed = Promise.all([
+            new Promise(resolve => child.once('exit', resolve)),
+            ...[child.stdout, child.stderr].map(stream => new Promise(resolve => stream.once('close', resolve))),
+        ]);
+        child.stdout.on('data', chunk => output.write('client', 'stdout', chunk));
+        child.stderr.on('data', chunk => output.write('client', 'stderr', chunk));
+        try {
+            const reply = waitFor(child, 'message');
+            child.send({ command: 'stop' });
+            expect((await reply)[0]).toEqual({ result: { stopped: true } });
+            child.disconnect();
+            await withTimeout(closed, 'queued output exit', 5000);
+            expect(child.exitCode).toBe(0);
+            expect(output.summary()['client.stdout.log']).toEqual({ bytes: size, complete: true,
+                sha256: createHash('sha256').update(Buffer.alloc(size, 120)).digest('hex') });
+        } finally {
+            await stopProcessTree(child);
+            await withTimeout(closed, 'queued output cleanup', 5000);
+        }
+    }), 20000);

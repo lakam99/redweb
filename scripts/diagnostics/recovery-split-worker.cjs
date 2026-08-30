@@ -5,12 +5,14 @@ const assert = require('node:assert/strict');
 const v8 = require('node:v8');
 const { silentLogger, waitFor, WebSocket, closeClient } = require('../realtime-harness');
 const role = process.argv[2];
+const tracing = process.execArgv.includes('--trace-flush-code');
 let server;
+let stopped = false;
 let sent = 0;
 let received = 0;
 const clients = new Set();
 
-async function dispatch({ command, url, start, count }) {
+async function dispatch({ command, url, start, count, phase }) {
     switch (command) {
         case 'start': {
             assert.equal(role, 'server');
@@ -80,6 +82,7 @@ async function dispatch({ command, url, start, count }) {
             return { received };
         }
         case 'sample': {
+            if (tracing) process.stdout.write(`[rw-phase ${phase} settle-begin]\n`);
             await new Promise(resolve => setTimeout(resolve, 400));
             global.gc();
             await new Promise(resolve => setImmediate(resolve));
@@ -92,11 +95,13 @@ async function dispatch({ command, url, start, count }) {
                 ? { clients: server.routes[0].clients.size, rooms: server.routes[0].rooms.size, sessions: server.routes[0].sessions.size }
                 : { clients: clients.size };
             assert(Object.values(registries).every(value => value === 0), 'Recovery registries are not empty');
+            if (tracing) process.stdout.write(`[rw-phase ${phase} sampled heap=${memory.heapUsed} bytecode=${code.bytecode_and_metadata_size}]\n`);
             return { pid: process.pid, node: process.version, v8: process.versions.v8, execArgv: process.execArgv,
                 memory, spaces, code, registries, sent, received };
         }
         case 'stop':
             if (server) await server.shutdown();
+            stopped = true;
             return { stopped: true };
         default: throw new Error(`Unknown diagnostic command: ${command}`);
     }
@@ -110,5 +115,8 @@ process.on('message', async message => {
         process.send({ error: error.stack });
     }
 });
-// No orphan listener if the coordinator exits, even during a stuck command.
-process.on('disconnect', () => process.exit(0));
+// Successful shutdown must drain queued output naturally (POSIX pipes are
+// asynchronous). Unexpected coordinator loss must not leave an orphan listener.
+process.on('disconnect', () => {
+    if (!stopped) process.exit(0);
+});
