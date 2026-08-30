@@ -5,7 +5,7 @@ This is the full implementation checklist for the requested improvements. Unchec
 ## Discovery and honest positioning
 
 - [x] Package repository, homepage, issue tracker, and meaningful search keywords.
-- [ ] README leads with the current integrated site/socket workflow, a runnable example, fit/non-fit guidance, and no stale release-specific introduction.
+- [x] README leads with the current integrated site/socket workflow, a runnable example, fit/non-fit guidance, and no stale release-specific introduction.
 - [ ] Website presents the same supported capabilities and release version.
 
 ## Complete starters and repair loop
@@ -34,8 +34,8 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Documentation and executable recipes
 
-- [ ] Plain Markdown per topic, compact `llms.txt`, versioned release docs, task-oriented recipes, and clear prerequisites/filenames/commands/results.
-- [ ] Human pages, agent docs, and code snippets derive from one maintained recipe/content source.
+- [x] Plain Markdown per topic, compact `llms.txt`, versioned release docs, task-oriented recipes, and clear prerequisites/filenames/commands/results (implementation and local serving verified; publication remains a separate gate).
+- [x] Human pages, agent docs, and code snippets derive from one maintained recipe/content source.
 - [x] Recipes compile against a packed npm release and pass real HTTP/WebSocket acceptance tests.
 - [ ] Read-only documentation access can be exposed through an optional MCP adapter without enlarging the normal runtime or claiming automatic agent selection.
 
@@ -46,7 +46,21 @@ This is the full implementation checklist for the requested improvements. Unchec
 - [ ] Full 100% statement/branch/function/line coverage, type gates, real-network/browser tests, load/recovery/memory gates, package checks, and audit.
 - [ ] README, changelog, examples, website, and evidence agree on shipped behavior; final requirement-by-requirement audit proves every checkbox.
 
+## Follow-on application ergonomics and adoption
+
+- [ ] Typed, validated action inputs eliminate repeated form parsing while preserving explicit exposure and safe failure boundaries.
+- [ ] Consistent action loading, success, and error states need no custom browser glue.
+- [ ] HTTP and socket identity share a clear request/session context, with explicit authorization hooks for pages, actions, and rooms.
+- [ ] Complete persistent cards and authenticated dashboard recipes demonstrate durable data and private updates without adding a database framework to Redweb.
+- [ ] Runtime diagnostics distinguish validation, authentication, authorization, and application failures without leaking secrets; retry guidance states actual guarantees.
+- [ ] Fresh-agent evaluations separately measure successful use when assigned Redweb and discovery/selection when not instructed to choose it; record first-pass success, repair attempts, time, and independent correctness checks.
+- [ ] Package provenance and release support/compatibility guidance are documented and verified where available; no claim of provenance as proof of security.
+
 ## Work log
+
+- Website documentation increment: the core catalogue now includes 52 Markdown pages, 29 API sections with full ELI5 articles, and 10 capability examples. The separate site derives its existing articles, examples, homepage code, versioned guides, downloads, and discovery links from that catalogue. Imports preserve historical snapshots; shared preflight validates field shapes, hashes, paths, release identities, and immutable-version agreement before writes. Historical pages point to their own agent index. Current content is labelled unreleased; nothing has been published or deployed by this increment.
+- Website documentation verification (Windows, Node 22.21.0): 429 core tests/35 suites passed with all type/pretest gates and 100% instrumented-library statements/branches/functions/lines. The standalone shared HTTP/WebSocket homepage program is now exercised over real listeners. The site builds 84 HTML pages and 104 assets; real HTTP checks cover all routes, Markdown/source downloads, internal links and anchors. Five unit/real-process integration tests pass with 100% line/branch/function coverage of the new Markdown renderer, exporter, catalogue helpers/validator, and import command, including multi-release builds and malformed-import preservation. The senior critic approved this increment after the archive-preflight and historical-index findings were fixed. These are scoped implementation results, not approval of the broader release, all browser branches, or public availability.
+- The same increment's packed-package gate passed, including extracted Markdown applications, every generated starter, source-free production execution, and the standalone shared listener. All generated guide titles/social descriptions and every page's referenced stylesheets are checked. Core and website dependency audits each reported zero vulnerabilities with certificate verification retained through the system trust store.
 
 - Executable-documentation increment: `docs/generated.json` now derives topic Markdown, all public declaration entrypoints, a compact agent index, and four complete applications from canonical content and the initializer's file plan. The README counter is generated from the same source. Development and exact-version release channels are explicit; release snapshots are immutable, tolerate equivalent Git line endings, and require a versioned changelog without pending entries. No public release or website deployment is implied by a local catalogue.
 - Documentation verification: 428 tests/35 suites and all type/pretest gates passed with 100% instrumented-library statement/branch/function/line coverage, including the new documentation module. Tests extract the programs printed in Markdown, compile them, run actual HTTP/WebSockets, and rerun with source unavailable. The tarball gate repeats the initializer and Markdown consumers against extracted package code. Real generator subprocess tests cover stale content, README drift, release immutability, CRLF checkouts, channel preservation, and invalid commands. The critic approved after three findings were fixed. Package testing also caught and fixed prepack progress text contaminating `npm pack --json`; progress now goes to stderr. These results do not prove all illustrative guide snippets, browser branches, website integration, MCP, or fresh-agent benchmarks.

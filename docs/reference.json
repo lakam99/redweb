@@ -1,0 +1,1184 @@
+{
+  "api": [
+    {
+      "id": "httpserver",
+      "name": "HttpServer",
+      "type": "HTTP",
+      "summary": "Wraps Express with sensible defaults (JSON body parsing, CORS, and static asset folders) and starts listening immediately unless `listen: false` is supplied. You get the underlying Express instance back via `app`.",
+      "usage": "const { HttpServer, METHODS } = require('redweb')\n\nconst server = new HttpServer({\n  port: 4000,\n  bind: '0.0.0.0',\n  publicPaths: ['./static'],\n  services: [\n    { serviceName: '/ping', method: METHODS.GET, function: (req, res) => res.json({ pong: true }) },\n  ],\n})\n\n// Express is still available:\nserver.app.get('/health', (req, res) => res.send('ok'))",
+      "options": [
+        "port: number (default 80)",
+        "bind: string (default 0.0.0.0)",
+        "publicPaths: string[] (default [\"./public\"])",
+        "services: array of { serviceName, method, function }",
+        "listen: boolean (default true); set false to build app without binding a port",
+        "listenCallback: function invoked after listen",
+        "encoding: \"json\" | \"urlencoded\" (default json)",
+        "corsOptions: passed to cors"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Merges defaults, wires body parsing, CORS, static serving, registers REST services, and starts listening unless listen is false."
+        },
+        {
+          "name": "app (Express instance)",
+          "detail": "Use the returned `app` to add middleware or routes exactly like a normal Express server."
+        }
+      ],
+      "article": {
+        "eli5": "Think of HttpServer as a furnished storefront: Express is the building, while Redweb installs the front door, service counter, signs, and sensible safety rails before you open.",
+        "useWhen": "Choose it when Redweb should own a normal HTTP listener and you still want direct access to Express for middleware or one-off routes.",
+        "walkthrough": [
+          "Redweb creates the Express application and installs the configured parsers, CORS policy, static folders, and services.",
+          "The server binds to the requested interface unless listen is false.",
+          "The app property remains the same Express application, so adding /health does not require a Redweb abstraction."
+        ],
+        "watchFor": "Use listen: false when another object must own the Node listener; two owners trying to bind the same port is an application design error."
+      }
+    },
+    {
+      "id": "basehttpserver",
+      "name": "BaseHttpServer",
+      "type": "HTTP",
+      "summary": "Public Express app builder used by HttpServer and HttpsServer. Use it for advanced composition when you want Redweb middleware, static files, and services without any listener behavior.",
+      "usage": "const { BaseHttpServer, METHODS } = require('redweb')\n\nconst base = new BaseHttpServer({\n  publicPaths: ['./public'],\n  services: [\n    { serviceName: '/health', method: METHODS.GET, function: (req, res) => res.json({ ok: true }) },\n  ],\n})\n\nbase.app.get('/extra', (req, res) => res.send('ok'))",
+      "options": [
+        "All `HttpServer` app-building options",
+        "server: existing Express application to configure",
+        "listen is ignored because BaseHttpServer never binds a port"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Builds or configures an Express app with body parsing, CORS, static serving, and REST services."
+        },
+        {
+          "name": "app (Express instance)",
+          "detail": "The configured Express application. Pass it to http.createServer(app) for custom server ownership."
+        }
+      ],
+      "article": {
+        "eli5": "BaseHttpServer prepares the kitchen but does not open the restaurant. You get a fully arranged Express app and decide which Node server will serve it.",
+        "useWhen": "Use it for custom composition, tests, serverless adapters, or any setup where creating and listening on the HTTP server belongs to your application.",
+        "walkthrough": [
+          "The constructor configures either your Express app or a new one.",
+          "Static folders and service definitions are registered in deterministic order.",
+          "You pass base.app to http.createServer, a test harness, or another host when you are ready."
+        ],
+        "watchFor": "It intentionally ignores listener settings. If requests are not arriving, confirm that your own server is listening and forwarding them to base.app."
+      }
+    },
+    {
+      "id": "httpsserver",
+      "name": "HttpsServer",
+      "type": "HTTP",
+      "summary": "TLS-enabled variant of `HttpServer`. Accepts `ssl.key` and `ssl.cert` file paths, wraps them in an https server, and bootstraps the same middleware pipeline.",
+      "usage": "const { HttpsServer, METHODS } = require('redweb')\n\nnew HttpsServer({\n  port: 4443,\n  ssl: { key: './certs/dev.key', cert: './certs/dev.crt' },\n  services: [\n    { serviceName: '/secure', method: METHODS.GET, function: (req, res) => res.json({ ok: true }) },\n  ],\n})",
+      "options": [
+        "All `HttpServer` options",
+        "ssl.key: path to private key (required)",
+        "ssl.cert: path to certificate (required)"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Loads the provided key/cert pair, builds the Express app with BaseHttpServer, then creates and starts the HTTPS listener unless listen is false."
+        }
+      ],
+      "article": {
+        "eli5": "HttpsServer is HttpServer with a locked, encrypted front door. It reads your certificate and key, then serves the same Express application through TLS.",
+        "useWhen": "Use it when the Node process terminates TLS itself instead of sitting behind a reverse proxy or managed load balancer.",
+        "walkthrough": [
+          "The key and certificate files are loaded before the listener starts.",
+          "The standard HTTP middleware and services are attached to the Express app.",
+          "The resulting HTTPS server binds on the configured port and handles encrypted requests."
+        ],
+        "watchFor": "Certificate rotation, filesystem permissions, and secure protocol policy remain deployment concerns. Behind a TLS-terminating proxy, HttpServer is usually simpler."
+      }
+    },
+    {
+      "id": "socketserver",
+      "name": "SocketServer",
+      "type": "WebSocket",
+      "summary": "HTTP-upgrade WebSocket server on top of `ws`. Builds and listens on its own HTTP server by default; if you pass a Node `server`, it attaches upgrade handling and leaves `.listen()` to you unless `listen: true` is explicit.",
+      "usage": "const http = require('http')\nconst { HttpServer, METHODS, SocketServer } = require('redweb')\n\nconst httpServer = new HttpServer({\n  listen: false,\n  publicPaths: ['./public'],\n  services: [\n    { serviceName: '/health', method: METHODS.GET, function: (req, res) => res.json({ ok: true }) },\n  ],\n})\n\nconst server = http.createServer(httpServer.app)\n\nnew SocketServer({\n  server,\n  routes: [ChatRoute],\n})\n\nserver.listen(3030)",
+      "options": [
+        "port: number (default 3000)",
+        "listen: boolean (default true for owned servers); supplied servers do not listen unless explicitly true",
+        "server: existing http.Server to attach to without double-listening (optional)",
+        "routes: array of SocketRoute subclasses (defaults to a single DefaultRoute at \"/\")"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Creates or reuses an HTTP server, instantiates supplied routes or a DefaultRoute, attaches upgrade handling, and starts listening only when Redweb owns the server or listen is explicitly true."
+        },
+        {
+          "name": "addRoute(RouteClass)",
+          "detail": "Instantiate and register another `SocketRoute` at runtime."
+        },
+        {
+          "name": "handleUpgrade(req, socket, head)",
+          "detail": "Internal: normalises the request path, picks a matching route (or \"/\"), and forwards the upgrade to that route's server."
+        },
+        {
+          "name": "shutdown()",
+          "detail": "Closes all registered routes and the underlying HTTP server."
+        }
+      ],
+      "article": {
+        "eli5": "SocketServer is a switchboard for persistent conversations. It accepts a WebSocket upgrade, finds the route for that path, and lets that route handle the connection.",
+        "useWhen": "Choose it for ws:// endpoints or when a reverse proxy already handles TLS and you need one or more independently configured socket routes.",
+        "walkthrough": [
+          "The HTTP server is built or reused according to the options.",
+          "Upgrade requests are matched to routes instead of being sent to every handler.",
+          "Each route owns its clients, handlers, services, limits, and cleanup lifecycle."
+        ],
+        "watchFor": "When supplying an existing Node server, Redweb does not assume it should call listen. Make listener ownership explicit and shut down in the reverse order of startup."
+      }
+    },
+    {
+      "id": "securesocketserver",
+      "name": "SecureSocketServer",
+      "type": "WebSocket",
+      "summary": "HTTPS + WebSocket pairing. Mirrors `SocketServer` but wraps an HTTPS server built from the provided TLS files.",
+      "usage": "const { SecureSocketServer } = require('redweb')\nconst { GameRoute } = require('./routes/GameRoute')\n\nnew SecureSocketServer({\n  port: 3443,\n  ssl: { key: './certs/dev.key', cert: './certs/dev.crt' },\n  routes: [GameRoute],\n})",
+      "options": [
+        "port: number (default 3000)",
+        "listen: boolean (default true for owned servers); supplied servers do not listen unless explicitly true",
+        "server: existing https.Server to attach to without double-listening (optional)",
+        "ssl.key and ssl.cert: required file paths",
+        "routes: array of SocketRoute subclasses"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Loads TLS files or reuses a supplied HTTPS server, registers the provided routes, attaches upgrade handling, and starts listening only when Redweb owns the server or listen is explicitly true."
+        },
+        {
+          "name": "addRoute(RouteClass)",
+          "detail": "Same runtime route attachment as `SocketServer`."
+        },
+        {
+          "name": "shutdown()",
+          "detail": "Stops routes, services, and the HTTPS listener."
+        }
+      ],
+      "article": {
+        "eli5": "SecureSocketServer is the encrypted version of the WebSocket switchboard: clients use wss:// and the connection stays protected from the first handshake onward.",
+        "useWhen": "Use it when Redweb directly owns a TLS WebSocket listener rather than sharing an externally terminated HTTPS connection.",
+        "walkthrough": [
+          "TLS material is loaded to create or configure the HTTPS listener.",
+          "WebSocket upgrades travel through the same route selection used by SocketServer.",
+          "Route handlers see ordinary Redweb sockets after the secure handshake completes."
+        ],
+        "watchFor": "Do not duplicate TLS termination accidentally. If a proxy already provides wss:// publicly, attach SocketServer behind it and validate forwarded origin information."
+      }
+    },
+    {
+      "id": "socketroute",
+      "name": "SocketRoute",
+      "type": "WebSocket",
+      "summary": "Defines a WebSocket endpoint and owns its handlers, services, clients, and opt-in multiplayer policies. Routes can add bounded admission, transport limits, ordered work, heartbeat, rooms, resumable sessions, distribution, draining, metrics, and protocol negotiation without changing legacy routes.",
+      "usage": "const { SocketRoute } = require('redweb')\nconst { ChatHandler } = require('./handlers/ChatHandler')\nconst { ClockService } = require('./services/ClockService')\n\nclass ChatRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/chat',\n      handlers: [ChatHandler],\n      services: [ClockService],\n      allowDuplicateConnections: true,\n      websocketOptions: {\n        maxPayload: 1024 * 1024,\n        perMessageDeflate: false,\n      },\n    })\n  }\n}",
+      "options": [
+        "path: WebSocket path (required)",
+        "handlers: array of handler classes (required)",
+        "services: array of SocketService subclasses (optional)",
+        "allowDuplicateConnections: allow multiple clients from the same IP",
+        "websocketOptions: options passed to ws WebSocketServer, such as maxPayload or perMessageDeflate",
+        "admission: authenticate, validate origins, and optionally place a client before upgrade",
+        "maxPendingUpgrades: finite concurrent admission/negotiation work (default 64)",
+        "limits: connection, message-rate, pending-message, and outbound-buffer ceilings",
+        "orderedMessages: serialize each connection through a bounded queue",
+        "heartbeat: one route-level half-open connection monitor",
+        "rooms and sessions: bounded grouping and expiring application-issued ownership",
+        "distribution: optional bounded broker adapter; no broker is bundled or required",
+        "drainHandlers: track handler work and expose a cooperative shutdown signal",
+        "protocol: version negotiation, stable envelopes/error codes, and optional binary codecs"
+      ],
+      "methods": [
+        {
+          "name": "constructor({ path, handlers, services, allowDuplicateConnections, websocketOptions })",
+          "detail": "Validates input, instantiates handlers/services, sets up a `ws` server for the path with any websocketOptions, and registers connection listeners."
+        },
+        {
+          "name": "addHandler(HandlerClass)",
+          "detail": "Adds another handler class unless a handler with the same name already exists."
+        },
+        {
+          "name": "handleConnection(socket, req)",
+          "detail": "Stores the client (deduping by IP unless allowed), decorates the socket with `sendJson`/`broadcast`, and wires close/error/message listeners."
+        },
+        {
+          "name": "handleMessage(socket, data)",
+          "detail": "Parses JSON text frames, finds the handler matching `data.type`; on success delegates to handler.handleMessage, otherwise replies with an error and closes the socket."
+        },
+        {
+          "name": "handleBinaryMessage(socket, buffer)",
+          "detail": "Handles binary frames separately from JSON text frames and delegates to a handler selected by acceptsBinary(socket, buffer)."
+        },
+        {
+          "name": "handleClose(socket, ip)",
+          "detail": "Removes the client from the registry and triggers an optional `connectionCloseCallback`."
+        },
+        {
+          "name": "shutdown()",
+          "detail": "Marks the route draining, stops services, bounds handler/adapter cleanup, closes clients, and releases every route-owned resource."
+        },
+        {
+          "name": "beginDrain()",
+          "detail": "Flips readiness and rejects new upgrades before shutdown work begins."
+        },
+        {
+          "name": "isReady()",
+          "detail": "Reports whether the route is accepting upgrades and any required distribution adapter is healthy."
+        },
+        {
+          "name": "publish(type, payload)",
+          "detail": "Publishes through the optional bounded distribution adapter and resolves to a success boolean."
+        },
+        {
+          "name": "handleError(socket, error, ip)",
+          "detail": "Logs socket errors; override for custom reporting."
+        }
+      ],
+      "article": {
+        "eli5": "A SocketRoute is a room with its own door and rules. The URL chooses the room; message.type chooses which handler inside the room receives the message.",
+        "useWhen": "Create one whenever a WebSocket path represents a distinct protocol, trust boundary, workload, or group of multiplayer resources.",
+        "walkthrough": [
+          "The /match path selects the route during the WebSocket upgrade.",
+          "Admission and capacity checks run before the connection becomes an active client.",
+          "Messages are dispatched by type to BaseHandler instances while route services and registries share the same lifecycle."
+        ],
+        "watchFor": "Keep routing decisions out of message.action branches. Prefer one route per protocol area and one handler per message type."
+      }
+    },
+    {
+      "id": "socketservice",
+      "name": "SocketService",
+      "type": "WebSocket",
+      "summary": "Route-scoped background worker. Used by `SocketRoute` to run ticks or lifecycle hooks tied to a specific route.",
+      "usage": "const { SocketService } = require('redweb')\n\nclass ClockService extends SocketService {\n  constructor() { super('clock', 1000) }\n  onTick() {\n    this.route.clients.forEach((socket) => socket.sendJson({ type: 'time', now: Date.now() }))\n  }\n}",
+      "methods": [
+        {
+          "name": "constructor(name, tickRateMs = null)",
+          "detail": "Stores a service id and optional tick interval; the interval is activated in onInit if onTick exists."
+        },
+        {
+          "name": "onInit(route)",
+          "detail": "Called once by SocketRoute, sets `this.route` and, if a tick interval was supplied, schedules recurring onTick execution."
+        },
+        {
+          "name": "onTick()",
+          "detail": "Optional; implement to run on the configured interval."
+        },
+        {
+          "name": "onShutdown()",
+          "detail": "Clears the tick interval; extend for cleanup hooks."
+        }
+      ],
+      "article": {
+        "eli5": "A SocketService is a helper that clocks in when its route starts and clocks out when the route stops, such as presence tracking or a periodic snapshot publisher.",
+        "useWhen": "Use it for route-scoped background behavior that needs explicit startup, shutdown, and access to the owning route.",
+        "walkthrough": [
+          "The service is constructed with a stable name.",
+          "SocketRoute starts it once the route is ready.",
+          "Shutdown awaits the service so timers, subscriptions, and external connections cannot leak."
+        ],
+        "watchFor": "Every resource acquired in start must have a bounded and idempotent release in stop. Avoid detached timers or promises that outlive the route."
+      }
+    },
+    {
+      "id": "fixedstepservice",
+      "name": "FixedStepService",
+      "type": "Multiplayer",
+      "summary": "Route-scoped simulation clock that compensates for drift, prevents overlapping async ticks, bounds catch-up work, and reports dropped retained lag instead of replaying forever.",
+      "usage": "const { FixedStepService } = require('redweb')\n\nclass Simulation extends FixedStepService {\n  constructor() { super('simulation', 50, 3) }\n  async onTick(stepMs, tick) {\n    await game.update(stepMs, tick)\n  }\n}",
+      "methods": [
+        {
+          "name": "constructor(name, tickRateMs, maxCatchUpTicks?, maxRetainedLagMs?)",
+          "detail": "Creates a fixed-step route service with finite catch-up and retained-lag limits."
+        },
+        {
+          "name": "onTick(stepMs, tick)",
+          "detail": "Implement one simulation step. Async work never overlaps the next pulse."
+        },
+        {
+          "name": "onLagDropped(milliseconds)",
+          "detail": "Optional observability hook called when retained lag is deliberately discarded."
+        }
+      ],
+      "article": {
+        "eli5": "FixedStepService is a metronome for game logic. Even when the computer hesitates, it advances the simulation in measured beats without starting two beats at once.",
+        "useWhen": "Use it for authoritative simulations or periodic work that needs stable step sizes, bounded catch-up, and explicit handling of excessive lag.",
+        "walkthrough": [
+          "The service schedules ticks using the configured fixed interval.",
+          "A slow asynchronous tick finishes before another begins.",
+          "Limited catch-up reduces drift, while old excess lag is reported and discarded instead of causing an endless spiral."
+        ],
+        "watchFor": "A fixed step does not make expensive work free. Measure onTick duration, set conservative catch-up limits, and keep network I/O outside the critical simulation path."
+      }
+    },
+    {
+      "id": "roomregistry",
+      "name": "RoomRegistry",
+      "type": "Multiplayer",
+      "summary": "Bounded route-local connection groups. Sockets normally use joinRoom, leaveRoom, and roomBroadcast; disconnect cleanup removes all memberships and reclaims empty rooms.",
+      "usage": "class MatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [JoinMatchHandler, MoveMatchHandler, ResumeMatchHandler],\n      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },\n    })\n  }\n}",
+      "methods": [
+        {
+          "name": "socket.joinRoom(roomId)",
+          "detail": "Idempotently joins a bounded room and returns whether membership is active."
+        },
+        {
+          "name": "socket.leaveRoom(roomId)",
+          "detail": "Idempotently leaves one room and reclaims it when empty."
+        },
+        {
+          "name": "socket.roomBroadcast(roomId, data, options?)",
+          "detail": "Serializes once and sends to selected connected members."
+        }
+      ],
+      "article": {
+        "eli5": "RoomRegistry is a set of labeled group chats. A socket can join a label, and one message can be delivered to everyone carrying that label.",
+        "useWhen": "Use rooms for match participants, parties, regions, spectators, or any bounded route-local fan-out group.",
+        "walkthrough": [
+          "A join handler adds the socket to the requested match room.",
+          "The move handler broadcasts the accepted update to that room and can exclude the sender.",
+          "Disconnect cleanup removes every membership and empty rooms are reclaimed automatically."
+        ],
+        "watchFor": "A room is a delivery group, not authoritative game state. Validate membership and permissions before broadcasting, and configure hard room and membership limits."
+      }
+    },
+    {
+      "id": "sessionregistry",
+      "name": "SessionRegistry",
+      "type": "Multiplayer",
+      "summary": "Bounded, expiring ownership records for application-issued opaque session IDs. Redweb handles takeover and expiry; the application owns credential issuance and payload validation.",
+      "usage": "class MatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [JoinMatchHandler, MoveMatchHandler, ResumeMatchHandler],\n      sessions: { ttlMs: 30000, maxSessions: 10000 },\n    })\n  }\n}",
+      "methods": [
+        {
+          "name": "socket.createSession(sessionId, data)",
+          "detail": "Creates a bounded application-issued session owned by the current connection."
+        },
+        {
+          "name": "socket.resumeSession(sessionId)",
+          "detail": "Atomically transfers ownership, closes the former owner, and returns stored data."
+        },
+        {
+          "name": "stop()",
+          "detail": "Stops the one route-level sweep timer and clears every retained record."
+        }
+      ],
+      "article": {
+        "eli5": "SessionRegistry is a numbered coat-check ticket. A reconnecting player presents the ticket and safely takes ownership of the stored session from an older connection.",
+        "useWhen": "Use it for short reconnect windows, controlled connection takeover, and small pieces of application-issued resumable state.",
+        "walkthrough": [
+          "The application creates an opaque session ID and stores bounded state against the connected socket.",
+          "After a disconnect, the record remains available for the configured TTL.",
+          "Resume atomically transfers ownership and closes the former owner if it is still connected."
+        ],
+        "watchFor": "Session IDs are credentials: issue them securely, never trust client-selected identity, limit stored data, and persist important state outside this in-memory registry."
+      }
+    },
+    {
+      "id": "protocolclient",
+      "name": "ProtocolClient",
+      "type": "Client",
+      "summary": "Dependency-free helper from redweb/client for opt-in versioned routes. It builds, sends, and validates stable envelopes from the same checked-in schema used by server constants and TypeScript declarations.",
+      "usage": "const { ProtocolClient, ERROR_CODES } = require('redweb/client')\n\nconst socket = new WebSocket('wss://game.example/match?redwebVersion=1')\nconst client = new ProtocolClient(socket, '1')\nclient.send('move', { x: 4, y: 2 }, { sequence: 17 })",
+      "methods": [
+        {
+          "name": "constructor(socket, version)",
+          "detail": "Wraps any socket-like object with send(data) and selects the envelope version."
+        },
+        {
+          "name": "envelope(type, payload, metadata?)",
+          "detail": "Builds a stable versioned event with optional requestId and sequence."
+        },
+        {
+          "name": "send(type, payload, metadata?)",
+          "detail": "Serializes and sends one versioned event through the wrapped socket."
+        },
+        {
+          "name": "parse(value)",
+          "detail": "Parses and validates a protocol event or error envelope."
+        }
+      ],
+      "article": {
+        "eli5": "ProtocolClient is a phrasebook shared with the browser. It puts outgoing messages into Redweb’s expected envelope and checks incoming envelopes before your code trusts them.",
+        "useWhen": "Use it for opt-in versioned routes when browser clients should share protocol constants, parsing, sequencing, and error handling with the server.",
+        "walkthrough": [
+          "The client connects to the versioned route and creates a ProtocolClient for that version.",
+          "send builds a stable typed envelope containing payload and optional sequence metadata.",
+          "parse validates server messages so application code can respond to known errors such as rate limiting."
+        ],
+        "watchFor": "Protocol validation is not domain validation. Continue checking payload shape, authorization, and game rules on the authoritative server."
+      }
+    },
+    {
+      "id": "socketregistry",
+      "name": "SocketRegistry",
+      "type": "WebSocket",
+      "summary": "Small EventEmitter-backed list for socket-scoped entities (players, rooms, etc.). Emits `added` and `removed` events.",
+      "usage": "const { SocketRegistry } = require('redweb')\n\nclass PlayerRegistry extends SocketRegistry {\n  addPlayer(player) {\n    this.add(player)\n    this.emit('playerJoined', player)\n  }\n}",
+      "methods": [
+        {
+          "name": "add(item)",
+          "detail": "Stores the item and emits an `added` event."
+        },
+        {
+          "name": "remove(itemOrId, by = \"id\")",
+          "detail": "Remove by object reference or by matching a property (defaults to \"id\"); returns true when removal occurred and emits `removed`."
+        },
+        {
+          "name": "all()",
+          "detail": "Returns a shallow copy of all stored items."
+        },
+        {
+          "name": "count()",
+          "detail": "Convenience getter for `all().length`."
+        }
+      ],
+      "article": {
+        "eli5": "SocketRegistry is the route’s attendance sheet. It knows which sockets are active and provides a controlled way to visit or disconnect them.",
+        "useWhen": "Use it when route logic needs bounded connection tracking, fan-out, observability, or coordinated draining.",
+        "walkthrough": [
+          "Accepted connections are registered once and removed during close cleanup.",
+          "Iteration works over the route-owned set rather than an application-global list.",
+          "Shutdown can stop admissions, notify clients, and close the remaining registry deterministically."
+        ],
+        "watchFor": "Do not retain sockets in parallel collections without cleanup. Prefer rooms or socket context for indexes with clear ownership."
+      }
+    },
+    {
+      "id": "basehandler",
+      "name": "BaseHandler",
+      "type": "WebSocket",
+      "summary": "Abstract message handler. Provide a name in the constructor; clients send `{ type: name, ... }` to target JSON messages, while binary frames can be accepted and handled as raw Buffer payloads.",
+      "usage": "const { BaseHandler } = require('redweb')\n\nclass UploadHandler extends BaseHandler {\n  constructor() { super('upload') }\n\n  onMessage(socket, message) {\n    socket.sendJson({ type: 'upload:control', action: message.action })\n  }\n\n  acceptsBinary(socket, buffer) {\n    return buffer.length > 0\n  }\n\n  onBinaryMessage(socket, buffer) {\n    socket.sendJson({ type: 'upload:chunk', bytes: buffer.length })\n  }\n}",
+      "methods": [
+        {
+          "name": "constructor(name)",
+          "detail": "Stores the handler name used by incoming messages."
+        },
+        {
+          "name": "handleMessage(socket, message)",
+          "detail": "Calls onMessage; override only if you need pre/post handling logic."
+        },
+        {
+          "name": "onMessage(socket, message)",
+          "detail": "Required; implement your message processing here. Throwing will close the socket with an error."
+        },
+        {
+          "name": "acceptsBinary(socket, buffer)",
+          "detail": "Optional selector used by SocketRoute to choose a handler for binary frames. Return true when this handler should receive the Buffer."
+        },
+        {
+          "name": "handleBinaryMessage(socket, buffer)",
+          "detail": "Calls onBinaryMessage. If onBinaryMessage is not implemented, Redweb sends a \"Binary messages are not supported by this handler\" error."
+        },
+        {
+          "name": "onBinaryMessage(socket, buffer)",
+          "detail": "Optional; override for normal binary-message handling. The second argument is the raw Buffer payload."
+        },
+        {
+          "name": "onInitialContact(socket)",
+          "detail": "Optional hook for first-touch logic (not used by default route)."
+        }
+      ],
+      "article": {
+        "eli5": "BaseHandler is a labeled mailbox. A message with the matching type goes directly into that mailbox, so your code does not need a switch statement.",
+        "useWhen": "Create a small handler for each message type that deserves its own validation, authorization, rate policy, and behavior.",
+        "walkthrough": [
+          "The handler name declares the message type it accepts.",
+          "SocketRoute performs dispatch before onMessage runs.",
+          "The handler validates the payload, changes authoritative state, and sends or broadcasts the result."
+        ],
+        "watchFor": "Do not add a second message.action dispatcher inside one handler. That hides protocol operations and defeats type-based routing."
+      }
+    },
+    {
+      "id": "sendjson",
+      "name": "sendJson",
+      "type": "Utility",
+      "summary": "Utility to JSON.stringify data and send it over a `ws` socket.",
+      "usage": "const { sendJson } = require('redweb')\n\nsendJson(socket, { type: 'ping' })",
+      "methods": [
+        {
+          "name": "sendJson(socket, data)",
+          "detail": "Serialises data and writes it to the socket."
+        }
+      ],
+      "article": {
+        "eli5": "sendJson is a careful packer: give it a JavaScript value and it turns that value into one JSON message before placing it on the socket.",
+        "useWhen": "Use it for structured server-to-client messages instead of repeating JSON.stringify and transport checks throughout handlers.",
+        "walkthrough": [
+          "Application code creates a normal object with a type and payload.",
+          "sendJson serializes it once using the route’s safe sending path.",
+          "The client receives one complete text frame and parses the matching JSON value."
+        ],
+        "watchFor": "Serialization can fail on cycles and BigInt values, and large objects still consume memory. Bound payload sizes and keep messages purpose-specific."
+      }
+    },
+    {
+      "id": "errorcodes",
+      "name": "ERROR_CODES",
+      "type": "Constants",
+      "summary": "Stable framework error codes shared by protocol-enabled servers and redweb/client.",
+      "usage": "const { ERROR_CODES } = require('redweb')\n\n// INVALID_MESSAGE, UNKNOWN_HANDLER, HANDLER_FAILED,\n// BINARY_UNSUPPORTED, RATE_LIMITED, QUEUE_FULL,\n// CAPACITY_REACHED, INITIALIZATION_FAILED",
+      "methods": [
+        {
+          "name": "Message errors",
+          "detail": "INVALID_MESSAGE, UNKNOWN_HANDLER, HANDLER_FAILED, and BINARY_UNSUPPORTED."
+        },
+        {
+          "name": "Capacity errors",
+          "detail": "RATE_LIMITED, QUEUE_FULL, and CAPACITY_REACHED."
+        },
+        {
+          "name": "Lifecycle errors",
+          "detail": "INITIALIZATION_FAILED."
+        }
+      ],
+      "article": {
+        "eli5": "ERROR_CODES is a shared list of machine-readable reasons, like standardized traffic signs that every client interprets the same way.",
+        "useWhen": "Use these constants whenever application behavior depends on a Redweb protocol failure rather than human-facing wording.",
+        "walkthrough": [
+          "The server emits a stable code inside its error envelope.",
+          "The client compares it with ERROR_CODES instead of copying a string literal.",
+          "UI or retry policy can change independently of the readable error message."
+        ],
+        "watchFor": "Codes describe protocol outcomes, not every domain failure. Add your own namespaced application codes without changing Redweb’s meanings."
+      }
+    },
+    {
+      "id": "socketoptions",
+      "name": "SOCKET_OPTIONS",
+      "type": "Constants",
+      "summary": "Default WebSocket server options used by BaseSocketServer.",
+      "usage": "const { SOCKET_OPTIONS } = require('redweb')\n// { port: 3000, ssl: null, listen: true, routes: [] }",
+      "methods": [
+        {
+          "name": "port",
+          "detail": "Default WebSocket port (3000)."
+        },
+        {
+          "name": "ssl",
+          "detail": "Default TLS config (null)."
+        },
+        {
+          "name": "listen",
+          "detail": "Owned socket servers listen by default. Supplied servers remain caller-owned unless listen is explicitly true."
+        },
+        {
+          "name": "routes",
+          "detail": "Routes array default (empty; a DefaultRoute is created when none are provided)."
+        }
+      ],
+      "article": {
+        "eli5": "SOCKET_OPTIONS is the default settings card Redweb starts from before applying the socket choices you provide.",
+        "useWhen": "Read it to understand defaults or build tooling that presents Redweb configuration, but pass explicit options for production decisions.",
+        "walkthrough": [
+          "Redweb begins with immutable documented defaults.",
+          "User configuration overrides only the supplied fields.",
+          "The normalized result is used consistently when the socket server starts."
+        ],
+        "watchFor": "Treat exported defaults as documentation, not mutable global configuration. Never change the object to configure one server."
+      }
+    },
+    {
+      "id": "httpoptions",
+      "name": "HTTP_OPTIONS",
+      "type": "Constants",
+      "summary": "Frozen defaults used by the HTTP and HTTPS server constructors.",
+      "usage": "const { HTTP_OPTIONS } = require('redweb')\n// port 80, bind 0.0.0.0, publicPaths ['./public'],\n// listen true, encoding 'json', and safe error exposure disabled",
+      "methods": [
+        {
+          "name": "Server defaults",
+          "detail": "port, bind, listen, ssl, logger, and static public paths."
+        },
+        {
+          "name": "Application defaults",
+          "detail": "services, encoding, CORS, and safe error exposure."
+        }
+      ],
+      "article": {
+        "eli5": "HTTP_OPTIONS is Redweb’s starter checklist for HTTP servers: port, bind address, public folders, encoding, and related defaults.",
+        "useWhen": "Consult it when you need to know what omitted HttpServer options mean or when generating configuration documentation.",
+        "walkthrough": [
+          "The server copies its baseline HTTP choices.",
+          "Your provided values are validated and merged.",
+          "The completed configuration drives app creation and optional listener startup."
+        ],
+        "watchFor": "Defaults are convenient locally but production networking should be explicit, especially bind address, port, CORS, and listener ownership."
+      }
+    },
+    {
+      "id": "encodings",
+      "name": "ENCODINGS",
+      "type": "Constants",
+      "summary": "Supported request-body parser names for HTTP server configuration.",
+      "usage": "const { ENCODINGS } = require('redweb')\n// ENCODINGS.json, ENCODINGS.urlencoded",
+      "methods": [
+        {
+          "name": "json",
+          "detail": "Use Express JSON body parsing."
+        },
+        {
+          "name": "urlencoded",
+          "detail": "Use Express URL-encoded body parsing."
+        }
+      ],
+      "article": {
+        "eli5": "ENCODINGS is a tiny menu that lets you choose whether request bodies arrive as JSON or traditional URL-encoded form data.",
+        "useWhen": "Use the constants when configuring HTTP body parsing so spelling stays aligned with supported Redweb values.",
+        "walkthrough": [
+          "The selected constant is passed in HttpServer options.",
+          "Redweb installs the corresponding Express body parser.",
+          "Route handlers then read the parsed value from req.body."
+        ],
+        "watchFor": "Body parsing is not schema validation. Limit body size and validate every field before using it."
+      }
+    },
+    {
+      "id": "methods",
+      "name": "METHODS",
+      "type": "Constants",
+      "summary": "Lowercase HTTP verb helpers passed straight to Express route registration.",
+      "usage": "const { METHODS } = require('redweb')\n// METHODS.GET, METHODS.POST, METHODS.PUT, METHODS.DELETE",
+      "methods": [
+        {
+          "name": "GET",
+          "detail": "Use with services array or Express: METHODS.GET"
+        },
+        {
+          "name": "POST",
+          "detail": "Use with services array or Express: METHODS.POST"
+        },
+        {
+          "name": "PUT",
+          "detail": "Use with services array or Express: METHODS.PUT"
+        },
+        {
+          "name": "DELETE",
+          "detail": "Use with services array or Express: METHODS.DELETE"
+        }
+      ],
+      "article": {
+        "eli5": "METHODS is a spelling-safe list of HTTP verbs—the labels on requests that say whether they read, create, replace, change, or delete something.",
+        "useWhen": "Use it in Redweb service definitions to avoid scattered uppercase strings and accidental unsupported verbs.",
+        "walkthrough": [
+          "A service definition pairs its path with a METHODS value.",
+          "BaseHttpServer registers the matching Express operation.",
+          "Requests with another verb do not accidentally invoke that service."
+        ],
+        "watchFor": "The HTTP verb is only one part of API semantics. Implement authentication, idempotency, validation, and appropriate status codes in the service."
+      }
+    },
+    {
+      "id": "basesocketserver",
+      "name": "BaseSocketServer",
+      "type": "WebSocket",
+      "summary": "Shared lifecycle and route-composition base for SocketServer and SecureSocketServer. Extend the concrete servers for normal applications; use this type when building infrastructure integrations.",
+      "usage": "import { BaseSocketServer } from 'redweb'\n\n// SocketServer and SecureSocketServer inherit:\n// addRoute(), handleUpgrade(), beginDrain(), and shutdown().",
+      "methods": [
+        {
+          "name": "addRoute(RouteClass)",
+          "detail": "Creates and registers one route class while enforcing unique paths."
+        },
+        {
+          "name": "beginDrain()",
+          "detail": "Stops accepting new upgrades across every registered route."
+        },
+        {
+          "name": "shutdown()",
+          "detail": "Drains routes and closes owned listeners without closing caller-owned servers."
+        }
+      ],
+      "article": {
+        "eli5": "BaseSocketServer is the engine room beneath both plain and secure socket servers. It coordinates routes and upgrades without deciding how the outer listener was created.",
+        "useWhen": "Use this advanced surface for custom integrations that need Redweb routing on a specially managed Node HTTP or HTTPS server.",
+        "walkthrough": [
+          "Your application supplies or prepares the listener.",
+          "BaseSocketServer attaches bounded WebSocket upgrade and route lifecycle behavior.",
+          "Concrete server ownership remains visible, including whether Redweb may listen or close it."
+        ],
+        "watchFor": "Most applications should use SocketServer or SecureSocketServer. Reach for the base class only when listener ownership cannot be expressed by their options."
+      }
+    },
+    {
+      "id": "livehtmlserver",
+      "name": "LiveHtmlServer",
+      "type": "Live HTML",
+      "summary": "Decorator-first server rendering and realtime browser updates on Redweb’s existing HTTP and WebSocket stack. Pages can be connection-scoped or intentionally shared.",
+      "usage": "import { LiveHtmlServer } from 'redweb'\nimport { DocsPage, StatusPage } from './pages.js'\n\nconst server = new LiveHtmlServer({\n  pages: [DocsPage, StatusPage],\n  port: 8080,\n  heartbeat: { intervalMs: 15_000, timeoutMs: 10_000 },\n})",
+      "options": [
+        "pages: non-empty array of classes decorated with page()",
+        "templateRoot: optional root for colocated HTML and CSS assets",
+        "sessionTtlMs and maxSessions: bound pending and reconnectable sessions",
+        "maxConcurrentRenders: independent HTTP render concurrency ceiling",
+        "heartbeat: detects half-open browser connections",
+        "authenticate: binds HTTP renders and socket upgrades to one stable identity",
+        "origins: exact allowlist or asynchronous origin predicate"
+      ],
+      "methods": [
+        {
+          "name": "constructor(options)",
+          "detail": "Builds the page renderer, HTTP routes, generated assets, and live WebSocket route on one listener."
+        },
+        {
+          "name": "shutdown()",
+          "detail": "Aborts active renders, drains routes, disposes pages and components, and closes owned resources."
+        }
+      ],
+      "article": {
+        "eli5": "LiveHtmlServer is a stage manager for server-rendered pages. It serves the first complete HTML scene, then carries approved actions backstage and sends updated pieces back.",
+        "useWhen": "Use it for decorator-first HTML applications that need server state and realtime interaction without React, hydration, or a separate client API layer.",
+        "walkthrough": [
+          "HTTP rendering creates complete HTML and binds a stable page identity.",
+          "The generated live socket accepts only declared actions for that page.",
+          "State changes produce bounded updates while authentication and resource limits cover both transports."
+        ],
+        "watchFor": "Decide deliberately whether page state is per connection or shared. Authenticate both HTTP and upgrade paths with the same identity and cap render concurrency."
+      }
+    },
+    {
+      "id": "livepage",
+      "name": "LivePage and start",
+      "type": "Live HTML",
+      "summary": "A page is an ordinary decorated class; extending LivePage is optional. start() is the concise entry point that creates a LiveHtmlServer for one or more page classes.",
+      "methods": [
+        {
+          "name": "start(PageClass, options?)",
+          "detail": "Starts one decorated page, or an array of pages, with the concise Live HTML server API."
+        },
+        {
+          "name": "loading(context)",
+          "detail": "Optional cancellable hook that runs before the initial server render."
+        },
+        {
+          "name": "connected(context)",
+          "detail": "Optional hook that runs after the authenticated live socket connects."
+        },
+        {
+          "name": "disconnected(context)",
+          "detail": "Optional hook for stopping connection-owned timers and subscriptions."
+        },
+        {
+          "name": "disposed()",
+          "detail": "Optional idempotent final cleanup hook for pages and components."
+        }
+      ],
+      "article": {
+        "eli5": "LivePage is one server-owned screen; start is the power button that publishes your collection of screens and their realtime connection.",
+        "useWhen": "Use a LivePage class when a route owns state, actions, lifecycle, and rendered output; use start to launch the assembled application.",
+        "walkthrough": [
+          "The page decorator assigns the HTTP route and rendering metadata.",
+          "A new page instance is created according to its configured scope.",
+          "start builds the HTTP and socket surfaces, then returns a handle for orderly shutdown."
+        ],
+        "watchFor": "Keep page constructors cheap and move cancellable preparation into lifecycle hooks. Always retain and await the returned shutdown handle."
+      },
+      "recipe": {
+        "template": "realtime",
+        "file": "src/app.tsx"
+      },
+      "language": "tsx"
+    },
+    {
+      "id": "livedecorators",
+      "name": "page, component, state, action, view",
+      "type": "Live HTML",
+      "summary": "Small TypeScript decorators declare routes, reusable component ownership, reactive server state, browser-callable actions, and collection item views.",
+      "methods": [
+        {
+          "name": "page(path, options?)",
+          "detail": "Registers a unique route plus template, CSS, sharing, metadata, caching, and live/static behavior."
+        },
+        {
+          "name": "component()",
+          "detail": "Marks a class as a reusable state/action/lifecycle namespace."
+        },
+        {
+          "name": "component(render)",
+          "detail": "Creates a concise synchronous function component for stateless reusable HTML."
+        },
+        {
+          "name": "state(options?)",
+          "detail": "Publishes reassigned values; writable state may also receive bounded browser input."
+        },
+        {
+          "name": "action()",
+          "detail": "Explicitly exposes one method to rw-click or rw-submit. Undecorated methods stay unreachable."
+        },
+        {
+          "name": "view(stateName)",
+          "detail": "Renders each item of one decorated array for an rw-each collection."
+        }
+      ],
+      "article": {
+        "eli5": "The decorators are small labels: page says where a screen lives, component says what can be reused, state says what may change, action says what the browser may request, and view describes repeated items.",
+        "useWhen": "Use them to make server-rendered ownership visible next to the class member it affects instead of maintaining a separate routing and binding manifest.",
+        "walkthrough": [
+          "@page registers the outer route and page policy.",
+          "@state and @action expose only explicitly declared reactive behavior.",
+          "The counter renders ordinary TSX over its state; changes reach both tabs because the page explicitly opts into shared state. Use the chat recipe to explore reusable class components."
+        ],
+        "watchFor": "Decorators are an allow-list, not decoration. Keep actions narrow, validate their arguments, and avoid exposing arbitrary method invocation."
+      },
+      "recipe": {
+        "template": "realtime",
+        "file": "src/app.tsx"
+      },
+      "language": "tsx"
+    },
+    {
+      "id": "jsxruntime",
+      "name": "JSX rendering",
+      "type": "Live HTML",
+      "summary": "Dependency-free server-side TSX that renders directly to HtmlFragment values. It provides readable components, fragments, arrays, automatic escaping, safe attributes, and existing html-fragment interoperability without React, a virtual DOM, or hydration.",
+      "usage": "// tsconfig.json\n// { \"compilerOptions\": { \"jsx\": \"react-jsx\", \"jsxImportSource\": \"redweb\" } }\n\nimport { component, page } from 'redweb'\nimport type { Child } from 'redweb/jsx-runtime'\n\nconst Card = component((props: { title: string; children?: Child }) => (\n  <article class=\"card\">\n    <h2>{props.title}</h2>\n    {props.children}\n  </article>\n))\n\n@page('/docs', { css: 'docs.css', live: false })\nclass DocsPage {\n  render() {\n    return <main><Card title=\"Redweb\">Readable server TSX</Card></main>\n  }\n}",
+      "options": [
+        "TypeScript: jsx = react-jsx and jsxImportSource = redweb",
+        "Production runtime: redweb/jsx-runtime; development runtime: redweb/jsx-dev-runtime",
+        "External CSS and rw-* server directives replace inline styles and browser event functions"
+      ],
+      "methods": [
+        {
+          "name": "Intrinsic elements",
+          "detail": "Serialize standard, SVG, custom, data-*, aria-*, and rw-* attributes with HTML-correct boolean handling."
+        },
+        {
+          "name": "Fragments and arrays",
+          "detail": "Compose nested fragments and readonly child arrays without wrapper markup or comma coercion."
+        },
+        {
+          "name": "Function components",
+          "detail": "Synchronous functions receive typed props and children and must return an HtmlFragment or fragment array."
+        },
+        {
+          "name": "Escaping and URLs",
+          "detail": "Text and attributes escape automatically; URL attributes retain Redweb’s safe-protocol validation."
+        },
+        {
+          "name": "Interoperability",
+          "detail": "Existing html fragments nest in TSX and TSX fragments nest in html for incremental migration."
+        }
+      ],
+      "article": {
+        "eli5": "Redweb JSX is a readable HTML-shaped pencil. It turns TSX into safe server HTML directly—there is no React engine or browser copy hiding behind it.",
+        "useWhen": "Use it whenever nested template strings become difficult to read or reusable server-rendered components make page structure clearer.",
+        "walkthrough": [
+          "TypeScript sends JSX calls to redweb/jsx-runtime.",
+          "Text and attributes are escaped while fragments, arrays, and components are flattened predictably.",
+          "The resulting HtmlFragment works with static pages and Live HTML without hydration."
+        ],
+        "watchFor": "JSX is syntax, not automatic client reactivity. Only Live HTML state and actions create a realtime channel; static-site TSX remains zero-runtime HTML."
+      }
+    },
+    {
+      "id": "safehtml",
+      "name": "html, attribute, url, each, codeBlock",
+      "type": "Live HTML",
+      "summary": "Safe composition primitives escape text and quoted primitive attributes by default. URL attributes additionally reject executable, protocol-relative, and malformed values. Arrays must contain trusted HtmlFragment values.",
+      "usage": "import { codeBlock, each, html } from 'redweb'\n\nconst links = sections.map(section => ({\n  id: section.id,\n  href: `#${section.id}`,\n  label: section.name,\n}))\n\nconst navigation = each(links, link => html`\n  <a id=\"${link.id}\" href=\"${link.href}\">${link.label}</a>\n`)\n\nconst example = codeBlock(source, {\n  language: 'ts',\n  label: 'TypeScript',\n  highlight: highlightTypeScript,\n})",
+      "methods": [
+        {
+          "name": "html`...`",
+          "detail": "Creates an HtmlFragment and escapes every ordinary interpolation."
+        },
+        {
+          "name": "attribute(value)",
+          "detail": "Optionally brands a primitive for a quoted, non-URL attribute when explicit intent improves readability."
+        },
+        {
+          "name": "url(value)",
+          "detail": "Optionally brands a safe relative, HTTP, HTTPS, mail, or telephone URL; direct strings receive the same validation."
+        },
+        {
+          "name": "each(items, render)",
+          "detail": "Validates and joins a mutable or readonly list of HtmlFragment results."
+        },
+        {
+          "name": "codeBlock(code, options?)",
+          "detail": "Builds an escaped figure/pre/code fragment and can invoke a safe server-side highlighter."
+        }
+      ],
+      "article": {
+        "eli5": "These helpers are different safety tools: html builds trusted structure, attribute and url escape risky contexts, each joins lists, and codeBlock displays code without executing it.",
+        "useWhen": "Use them for low-level templates, dynamic attributes, URLs, collections, and code samples when JSX is not the clearest representation.",
+        "walkthrough": [
+          "Untrusted values are passed through the helper matching their HTML context.",
+          "HtmlFragment values preserve the distinction between approved markup and ordinary text.",
+          "Collection and code helpers produce predictable escaped output without hand-built concatenation."
+        ],
+        "watchFor": "Escaping is context-specific. Never treat an escaped attribute as a safe URL or mark user-provided HTML as trusted."
+      }
+    },
+    {
+      "id": "definesite",
+      "name": "defineSite",
+      "type": "Live HTML",
+      "summary": "Defines shared static-site CSS, metadata, caching, layout, canonical URLs, and export behavior once. Site pages are always runtime-free.",
+      "usage": "import { defineSite } from 'redweb'\n\nconst docs = defineSite({\n  origin: 'https://example.com',\n  css: 'site.css',\n  head: { description: 'Product documentation', image: '/og.png' },\n  cache: { maxAge: 300 },\n  layout: content => <body><nav>Product</nav><main>{content}</main></body>,\n})\n\n@docs.page('/docs', { head: { title: 'Documentation' } })\nclass DocsPage {\n  render() { return <h1>Documentation</h1> }\n}\n\nawait docs.export(DocsPage, {\n  outDir: 'dist',\n  publicDir: 'public',\n})",
+      "options": [
+        "origin: optional HTTP(S) origin used to derive canonical and root-relative social-image URLs",
+        "css, head, cache, and layout: defaults inherited by every site.page() decorator",
+        "layout: synchronous function receiving the trusted page fragment and portable request context",
+        "publicDir: optional link-free asset tree staged with generated output"
+      ],
+      "methods": [
+        {
+          "name": "site.page(path, options?)",
+          "detail": "Creates a non-live page decorator while merging shared defaults and page-specific overrides."
+        },
+        {
+          "name": "site.export(pageOrPages, options)",
+          "detail": "Stages all pages and public assets, rejects path collisions, then writes the destination and returns every output path."
+        }
+      ],
+      "article": {
+        "eli5": "defineSite is the shared blueprint for a collection of pages: one place for the frame, colors, metadata, cache policy, canonical links, and export rules.",
+        "useWhen": "Use it for documentation, marketing, or content sites where many runtime-free pages should share layout and production behavior.",
+        "walkthrough": [
+          "The site definition establishes origin, common CSS, head metadata, cache policy, and layout.",
+          "Decorated pages contribute their own route, title, description, and stylesheet.",
+          "site.export stages every page and asset into one consistent static output."
+        ],
+        "watchFor": "The layout must handle every exported route. Keep route-specific chrome derived from stable metadata rather than scattered path checks."
+      }
+    },
+    {
+      "id": "exportstatic",
+      "name": "exportStatic",
+      "type": "Live HTML",
+      "summary": "Renders non-live decorated pages to deterministic directory indexes and content-addressed CSS. It is intended for docs, marketing pages, and static hosting.",
+      "usage": "import path from 'node:path'\nimport { exportStatic, page } from 'redweb'\n\n@page('/docs', { live: false, css: 'docs.css' })\nclass DocsPage {\n  render() { return '<h1>Redweb docs</h1>' }\n}\n\nawait exportStatic(DocsPage, {\n  outDir: path.resolve('dist'),\n  templateRoot: path.resolve('src/pages'),\n})",
+      "options": [
+        "outDir: required output directory; existing unrelated files are preserved",
+        "templateRoot: optional explicit root for templates and CSS",
+        "logger: optional framework logger or null"
+      ],
+      "methods": [
+        {
+          "name": "exportStatic(pageOrPages, options)",
+          "detail": "Returns frozen page and asset path lists after every page renders and its CSS is written."
+        }
+      ],
+      "article": {
+        "eli5": "exportStatic is a printing press: give it pages, and it writes finished HTML and assets that any ordinary static host can serve.",
+        "useWhen": "Use it when you need direct static export without defining a reusable site object and its shared layout policy.",
+        "walkthrough": [
+          "Page metadata determines output routes and page assets.",
+          "Every page renders on the server into a staging destination.",
+          "The returned paths let build tooling audit or publish exactly what was produced."
+        ],
+        "watchFor": "Export into a staging directory and replace the live build atomically. A failed render should never leave a partially updated site."
+      }
+    },
+    {
+      "id": "htmlrenderer",
+      "name": "HtmlRenderer",
+      "type": "Live HTML",
+      "summary": "Lower-level rendering utility behind Live HTML. Most applications should use page(), start(), defineSite(), and exportStatic(); this surface supports advanced integrations and tooling.",
+      "usage": "import { HtmlRenderer } from 'redweb'\n\nconst markup = HtmlRenderer.render(\n  '<h1>{{ title }}</h1>',\n  { title: 'Reference' },\n  { live: false },\n)\n\nconst document = HtmlRenderer.document(markup, null, [], {\n  title: 'Reference',\n})",
+      "methods": [
+        {
+          "name": "render(source, page, options?)",
+          "detail": "Renders declarative bindings and collection views against a page object."
+        },
+        {
+          "name": "document(markup, config?, stylesheets?, metadata?)",
+          "detail": "Wraps markup in a complete document and injects metadata, CSS, and optional live bootstrap."
+        },
+        {
+          "name": "template() / stylesheet()",
+          "detail": "Loads a validated page asset inside an explicit root."
+        },
+        {
+          "name": "statePayload()",
+          "detail": "Builds the text or trusted-HTML state payload used by live updates."
+        }
+      ],
+      "article": {
+        "eli5": "HtmlRenderer is the machinery under the hood that turns a page object and its declared bindings into final markup.",
+        "useWhen": "Use it for tooling or advanced integrations that genuinely need lower-level rendering control; normal applications should prefer pages, start, defineSite, or exportStatic.",
+        "walkthrough": [
+          "A source template or fragment and page instance enter the renderer.",
+          "Declared state, actions, views, and safe values are resolved under the render options.",
+          "The caller receives final HTML suitable for its own response or build pipeline."
+        ],
+        "watchFor": "The lower-level API gives you more lifecycle responsibility. Preserve escaping, cancellation, ownership, and bounded concurrency rather than rebuilding them casually."
+      }
+    },
+    {
+      "id": "socketcontract",
+      "name": "defineSocketContract",
+      "type": "WebSocket",
+      "language": "ts",
+      "summary": "One shared Standard Schema contract validates wire payloads and infers client/server types. Route URLs choose the service; individual handler factories dispatch by message type.",
+      "recipe": {
+        "template": "socket",
+        "file": "src/contract.ts"
+      },
+      "methods": [
+        {
+          "name": "defineSocketContract(version, schemas, options?)",
+          "detail": "Creates an immutable contract and negotiated protocol policy from Standard Schema validators. Redweb does not require a particular validator at runtime."
+        },
+        {
+          "name": "handler(type, callback)",
+          "detail": "Creates a BaseHandler subclass. Validation completes before the callback receives its typed payload."
+        },
+        {
+          "name": "client(socket)",
+          "detail": "Wraps an existing WebSocket with typed, validated send and parse methods. It does not open or reconnect the connection."
+        },
+        {
+          "name": "send(socket, type, payload, metadata?)",
+          "detail": "Validates server output before sending through the normal transport and protocol policy."
+        }
+      ],
+      "article": {
+        "eli5": "A socket contract is a shared form for both sides of a conversation. It says which messages exist and what each message must contain, so the server checks a message before handing it to the matching handler.",
+        "useWhen": "Use it when a site, app, or game client should share payload types and runtime validation with a routed Redweb service.",
+        "walkthrough": [
+          "The shared module defines join, move, resume, and state payload schemas once.",
+          "The match route registers separate handlers created by the contract instead of switching on a secondary action field.",
+          "The client and server validate their outgoing messages and parse incoming envelopes against the same schema."
+        ],
+        "watchFor": "Schema validation is not authentication or game-rule validation. Keep bearer session IDs private, apply authorization in handlers, and persist important data outside the starter's bounded in-memory sessions. Async validation deadlines cannot preempt synchronous JavaScript."
+      }
+    }
+  ],
+  "examples": [
+    {
+      "id": "shared-server",
+      "label": "Start here",
+      "title": "HTTP and WebSockets on one listener",
+      "summary": "Build the Express side without binding, attach route classes to the same Node server, then listen once. Redweb leaves the server visible and caller-owned.",
+      "notes": [
+        "GET /health returns JSON; ws://127.0.0.1:3030/chat accepts {\"type\":\"hello\"}.",
+        "Run this file with Node after installing the matching Redweb package. It binds loopback for local development.",
+        "HTTP owns the listener. Shut down the borrowed socket service before the HTTP server. Configure authentication, trusted origins, and HTTPS/WSS before public deployment."
+      ],
+      "codeSource": "docs/snippets/shared-server.cjs"
+    },
+    {
+      "id": "live-html",
+      "label": "Rendered UI",
+      "language": "tsx",
+      "title": "Server state and reusable TSX components",
+      "summary": "Ordinary TSX expressions read server-owned state and update automatically after an action; no repeated binding names or browser component runtime.",
+      "notes": [
+        "The first response is complete server-rendered HTML.",
+        "Function components handle stateless snippets; decorated classes own state and actions.",
+        "There is no React dependency, virtual DOM, or hydration pass."
+      ],
+      "recipe": {
+        "template": "realtime",
+        "file": "src/app.tsx"
+      }
+    },
+    {
+      "id": "static-site",
+      "label": "Static HTML",
+      "language": "tsx",
+      "title": "A complete site with shared defaults",
+      "summary": "Define metadata, layout, CSS, caching, and asset export once, then keep each page focused on its content.",
+      "notes": [
+        "Canonical URLs are derived from the route and origin.",
+        "Public assets and rendered pages are staged before output changes.",
+        "The generated site contains no Redweb browser runtime or WebSocket."
+      ],
+      "code": "import { defineSite } from 'redweb'\n\nconst site = defineSite({\n  origin: 'https://example.com',\n  css: 'site.css',\n  head: { description: 'Product documentation', image: '/og.png' },\n  cache: { maxAge: 300 },\n  layout: content => <body><nav>Product</nav><main>{content}</main></body>,\n})\n\n@site.page('/docs', { head: { title: 'Documentation' } })\nclass DocsPage {\n  render() { return <h1>Documentation</h1> }\n}\n\nawait site.export(DocsPage, {\n  outDir: 'dist',\n  publicDir: 'public',\n})"
+    },
+    {
+      "id": "handlers",
+      "label": "Messages",
+      "title": "JSON routing, broadcast, and binary frames",
+      "summary": "Text messages select a handler by type. Binary frames stay as Buffer values and can be accepted by the handler that understands them.",
+      "notes": [
+        "sendJson and broadcast share the same outbound policy.",
+        "acceptsBinary can select among multiple binary handlers.",
+        "Async handler failures become safe client errors."
+      ],
+      "code": "const { BaseHandler, SocketRoute } = require('redweb')\n\nclass ChatHandler extends BaseHandler {\n  constructor() { super('chat') }\n\n  onMessage(socket, message) {\n    socket.broadcast({ type: 'chat', text: message.text })\n  }\n}\n\nclass SnapshotHandler extends BaseHandler {\n  constructor() { super('snapshot') }\n  onMessage() {}\n  acceptsBinary(_socket, buffer) { return buffer.length > 0 }\n  onBinaryMessage(socket, buffer) {\n    socket.sendJson({ type: 'snapshot:received', bytes: buffer.length })\n  }\n}\n\nclass RealtimeRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/realtime',\n      handlers: [ChatHandler, SnapshotHandler],\n      websocketOptions: { maxPayload: 64 * 1024 },\n    })\n  }\n}"
+    },
+    {
+      "id": "protected-route",
+      "label": "Production",
+      "title": "Bound admission, work, and slow peers",
+      "summary": "Production controls are opt-in and route-local. Authenticate before upgrade, cap every queue, and use one heartbeat scheduler for the whole route.",
+      "notes": [
+        "Authentication completes before onInitialContact.",
+        "Ordered overflow closes pending work synchronously.",
+        "Disabled controls add no per-connection queue or timer."
+      ],
+      "code": "class MatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [InputHandler],\n      admission: {\n        origins: ['https://game.example'],\n        timeoutMs: 3000,\n        authenticate: (request, { signal }) =>\n          verifyPlayer(request, signal),\n      },\n      maxPendingUpgrades: 64,\n      limits: {\n        maxConnections: 5000,\n        maxBufferedBytes: 1024 * 1024,\n        maxPendingMessages: 64,\n        messageRate: { capacity: 60, refillPerSecond: 30 },\n      },\n      orderedMessages: true,\n      heartbeat: { intervalMs: 30000, timeoutMs: 10000 },\n      websocketOptions: { maxPayload: 64 * 1024 },\n    })\n  }\n}"
+    },
+    {
+      "id": "rooms-sessions",
+      "label": "Players",
+      "title": "Rooms and resumable ownership",
+      "summary": "Give the match its own socket route, then let handlers dispatch join, move, and resume messages by type. Redweb owns cleanup; your application owns credential issuance and data size.",
+      "notes": [
+        "Each handler replaces a manual message-type branch.",
+        "Joins, leaves, and disconnect cleanup are idempotent.",
+        "A takeover closes the previous owner atomically."
+      ],
+      "code": "const { BaseHandler, SocketRoute } = require('redweb')\n\nclass JoinMatchHandler extends BaseHandler {\n  constructor() { super('join') }\n\n  onMessage(socket, message) {\n    socket.sendJson({ joined: socket.joinRoom(message.roomId) })\n  }\n}\n\nclass MoveMatchHandler extends BaseHandler {\n  constructor() { super('move') }\n\n  onMessage(socket, message) {\n    socket.roomBroadcast(message.roomId, {\n      type: 'player:moved',\n      playerId: socket.context.principal.playerId,\n      position: message.position,\n    }, { except: socket })\n  }\n}\n\nclass ResumeMatchHandler extends BaseHandler {\n  constructor() { super('resume') }\n\n  onMessage(socket, message) {\n    socket.sendJson({ state: socket.resumeSession(message.sessionId) })\n  }\n}\n\nclass MatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [JoinMatchHandler, MoveMatchHandler, ResumeMatchHandler],\n      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },\n      sessions: { ttlMs: 30000, maxSessions: 10000 },\n    })\n  }\n}"
+    },
+    {
+      "id": "fixed-step",
+      "label": "Simulation",
+      "title": "Fixed-step work without overlapping ticks",
+      "summary": "FixedStepService compensates for scheduler drift, bounds catch-up, contains async failures, and reports lag that was deliberately dropped.",
+      "notes": [
+        "The active async tick must finish before another begins.",
+        "maxCatchUpTicks prevents a spiral of death.",
+        "maxRetainedLagMs bounds remembered delay."
+      ],
+      "code": "const { FixedStepService, SocketRoute } = require('redweb')\n\nclass Simulation extends FixedStepService {\n  constructor() {\n    super('simulation', 50, 3, 250)\n  }\n\n  async onTick(stepMs, tick) {\n    await authoritativeGame.update(stepMs, tick)\n  }\n\n  onLagDropped(milliseconds) {\n    console.warn('Simulation lag discarded', { milliseconds })\n  }\n}\n\nclass SimulationRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/simulation',\n      handlers: [InputHandler],\n      services: [Simulation],\n    })\n  }\n}"
+    },
+    {
+      "id": "protocol",
+      "label": "Clients",
+      "title": "Versioned envelopes and the dependency-free client",
+      "summary": "Negotiate a finite protocol version before upgrade, then share stable envelopes and error codes between server and client.",
+      "notes": [
+        "Browsers negotiate with redwebVersion in the query.",
+        "requestId correlates; sequence expresses application ordering.",
+        "Neither field promises durability or exactly-once delivery."
+      ],
+      "code": "const { SocketRoute } = require('redweb')\n\nclass ProtocolRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [MoveHandler],\n      protocol: {\n        versions: ['2', '1'],\n        binary: {\n          maxBytes: 64 * 1024,\n          encode: (state) => codec.encode(state),\n          decode: (bytes) => codec.decode(bytes),\n        },\n      },\n    })\n  }\n}\n\n// Browser client\nconst { ProtocolClient, ERROR_CODES } = require('redweb/client')\nconst socket = new WebSocket(\n  'wss://game.example/match?redwebVersion=2'\n)\nconst client = new ProtocolClient(socket, '2')\n\nsocket.addEventListener('message', (event) => {\n  const message = client.parse(event)\n  if (message.error?.code === ERROR_CODES.RATE_LIMITED) backOff()\n})\n\nclient.send('move', { x: 4, y: 2 }, { sequence: 17 })"
+    },
+    {
+      "id": "distribution",
+      "label": "Multiple nodes",
+      "title": "Bring your own broker adapter",
+      "summary": "Redweb supplies a bounded composition seam rather than choosing infrastructure. Events are finite, deduplicated briefly, and explicitly best-effort.",
+      "notes": [
+        "Required adapters affect readiness; best-effort adapters do not.",
+        "Source-node events are ignored to prevent reflection loops.",
+        "Authoritative state and partition reconciliation remain application work."
+      ],
+      "code": "const { SocketRoute } = require('redweb')\n\nclass DistributedMatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [JoinMatchHandler, MoveMatchHandler, ResumeMatchHandler],\n      rooms: true,\n      distribution: {\n        adapter: brokerAdapter,\n        channel: 'matches',\n        nodeId: process.env.INSTANCE_ID,\n        required: true,\n        maxEventBytes: 64 * 1024,\n        maxConcurrentPublishes: 32,\n        onEvent(event, route) {\n          route.rooms.broadcast(event.payload.roomId, {\n            type: event.type,\n            payload: event.payload,\n          })\n        },\n      },\n    })\n  }\n}\n\n// From a connected socket:\nawait socket.publishEvent('match:update', update)"
+    },
+    {
+      "id": "draining",
+      "label": "Operations",
+      "title": "Readiness first, then bounded shutdown",
+      "summary": "Stop placement to the node, flip readiness, let cooperative handlers observe cancellation, and await deterministic cleanup.",
+      "notes": [
+        "New upgrades receive 503 once draining starts.",
+        "The route signal is shared through socket.context.signal.",
+        "A hard deadline terminates non-cooperating peers."
+      ],
+      "code": "const { HttpServer, SocketServer } = require('redweb')\n\nconst http = new HttpServer({ listen: false })\nconst socketServer = new SocketServer({\n  server: http.server,\n  routes: [MatchRoute],\n})\n\nhttp.app.get('/ready', (_request, response) => {\n  response.sendStatus(socketServer.isReady() ? 200 : 503)\n})\n\nhttp.server.listen(3000)\n\nprocess.once('SIGTERM', async () => {\n  socketServer.beginDrain()\n  await stopExternalPlacement()\n  await socketServer.shutdown()\n  await http.shutdown()\n})\n\n// In a handler with drainHandlers: true\nawait saveCheckpoint({ signal: socket.context.signal })"
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Unified website API articles, capability examples, and homepage code with the canonical documentation catalogue. Added individual API/example Markdown pages and a standalone, real-network-tested shared HTTP/WebSocket example. The separate site's importer validates and retains historical release snapshots; human pages, raw recipes, and per-version agent indexes are generated together without a browser framework.
+
 - Added a deterministic documentation catalogue built from canonical Markdown, public declarations, and the initializer's exact recipe files. Complete Markdown applications are extracted, compiled, and exercised with real HTTP/WebSocket tests, including the packed-package and source-free deployment gates. Unreleased content is labelled explicitly; release snapshots are version-pinned and immutable.
 
 - Expanded read-only `redweb doctor` diagnostics to declared CSS/templates, source syntax, and duplicate page/socket/handler registrations, with source locations and actionable JSON output. Imported constants and shared stylesheet roots are understood; dynamic/mutated configurations and bounded-analysis limits are reported explicitly. Unsupported installed TypeScript versions receive a diagnostic instead of crashing.

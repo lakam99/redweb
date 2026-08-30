@@ -100,6 +100,38 @@ class Documentation {
             markdown: `${this.notice()}\n\n${this.links(this.read(topic.source), topic.source)}`,
         }));
         pages.push(...TEMPLATES.map(template => this.recipe(template)));
+        const reference = JSON.parse(this.read('docs/reference.json'));
+        const recipeCode = entry => {
+            const files = projectFiles(this.manifest.version, entry.template, this.root);
+            const file = files.find(file => file.path === entry.file);
+            if (!file) throw new Error(`Unknown documentation recipe file: ${entry.template}/${entry.file}`);
+            return normalize(file.content);
+        };
+        const api = reference.api.map(section => ({ ...section, usage: section.recipe ? recipeCode(section.recipe) : section.usage }));
+        const examples = reference.examples.map(example => ({ ...example, code: example.recipe ? recipeCode(example.recipe) : example.codeSource ? this.read(example.codeSource) : example.code }));
+        for (const example of examples) {
+            pages.push({ id: `examples/${example.id}`, title: example.title, summary: example.summary, source: 'docs/reference.json', markdown: [
+                `# ${example.title}`, this.notice(), example.summary,
+                example.recipe ? `Use the [complete ${example.recipe.template} recipe](${this.basePath}/recipes/${example.recipe.template}.md) for setup, files, and tests.` : 'This pattern demonstrates one API area. Application-specific names, credentials, assets, and policies may need to be supplied. Complete starter recipes include all required application files.',
+                fence(example.code, example.language || 'js'),
+                '## Notes and boundaries', example.notes.map(note => `- ${note}`).join('\n'),
+            ].join('\n\n') + '\n' });
+        }
+        for (const section of api) {
+            const article = section.article;
+            pages.push({ id: `api/${section.id}`, title: section.name, summary: section.summary, source: 'docs/reference.json', markdown: [
+                `# ${section.name}`, this.notice(), section.summary,
+                '## Explain it like I\u2019m five', article.eli5,
+                '## When should I use it?', article.useWhen,
+                '## Follow the example',
+                section.recipe ? `This source is part of the [complete ${section.recipe.template} recipe](${this.basePath}/recipes/${section.recipe.template}.md). Follow its setup and tests.` : 'This API pattern illustrates the named surface; it may require application-owned classes, credentials, or assets. Start from a complete recipe for a runnable application.',
+                fence(section.usage, section.language || (section.type === 'Live HTML' ? 'tsx' : 'js')),
+                article.walkthrough.map((step, index) => `${index + 1}. ${step}`).join('\n'),
+                ...(section.options ? ['## Options', section.options.map(option => `- ${option}`).join('\n')] : []),
+                '## Methods and members', section.methods.map(method => `### ${method.name}\n\n${method.detail}`).join('\n\n'),
+                '## What should I watch for?', article.watchFor,
+            ].join('\n\n') + '\n' });
+        }
         const apiFiles = ['index.d.ts', 'client.d.ts', 'contract.d.ts', 'jsx-runtime.d.ts', 'jsx-dev-runtime.d.ts'];
         pages.push({ id: 'api-types', title: 'Complete public TypeScript declarations', summary: 'Exact shipped signatures, options, and public types; not standalone application snippets.', source: 'index.d.ts', markdown: [
             '# Public TypeScript API', this.notice(),
@@ -117,7 +149,7 @@ class Documentation {
             '## Guides and complete recipes',
             ...pages.map(page => `- [${page.title}](${page.url}): ${page.summary}`),
         ].join('\n\n') + '\n';
-        return { schemaVersion: 1, packageVersion: this.manifest.version, channel: this.channel, basePath: this.basePath, llms, pages };
+        return { schemaVersion: 1, packageVersion: this.manifest.version, channel: this.channel, basePath: this.basePath, llms, pages, api, examples };
     }
 }
 

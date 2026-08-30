@@ -18,7 +18,7 @@ describe('single-source documentation', () => {
         expect(builder.build()).toEqual(docs);
         expect(docs.channel).toBe('unreleased');
         expect(docs.packageVersion).toBe(version);
-        expect(docs.pages).toHaveLength(13);
+        expect(docs.pages).toHaveLength(13 + docs.api.length + docs.examples.length);
         expect(new Set(docs.pages.map(page => page.id)).size).toBe(docs.pages.length);
         for (const page of docs.pages) {
             expect(docs.llms).toContain(`](${page.url})`);
@@ -41,6 +41,11 @@ describe('single-source documentation', () => {
         const contract = docs.pages.find(page => page.id === 'socket-contracts').markdown;
         expect(contract).toContain('](/docs/reference/unreleased/recipes/socket.md)');
         expect(contract).toContain('](/docs/reference/unreleased/recipes/socket/files/src/contract.ts)');
+        for (const section of docs.api) {
+            const article = docs.pages.find(page => page.id === `api/${section.id}`);
+            expect(article.markdown).toContain(section.usage.trimEnd());
+            expect(article.markdown).toContain(section.article.eli5);
+        }
     });
 
     test('resolves source-relative links without rewriting code examples', () => {
@@ -81,6 +86,12 @@ describe('single-source documentation', () => {
             expect(socketManifest.devDependencies.typescript).toBe('5.1.0');
             expect(socketManifest.devDependencies.ws).toBe('8.0.0');
             expect(socketManifest.dependencies.zod).toBe('4.0.0');
+            const referencePath = path.join(temporary, 'docs/reference.json');
+            const reference = JSON.parse(fs.readFileSync(referencePath, 'utf8'));
+            reference.api[0].recipe = { template: 'realtime', file: 'missing.tsx' };
+            fs.writeFileSync(referencePath, JSON.stringify(reference));
+            expect(() => new Documentation(temporary, version).build()).toThrow('Unknown documentation recipe file');
+            fs.copyFileSync(path.join(root, 'docs/reference.json'), referencePath);
             fs.writeFileSync(path.join(temporary, 'CHANGELOG.md'), `# Changelog\n\n## ${version}\n\n- Released.\n`);
             expect(new Documentation(temporary, version).build().channel).toBe(version);
             fs.writeFileSync(path.join(temporary, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n- Pending.\n');

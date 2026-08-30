@@ -5,11 +5,15 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyDocumentation } = require('../../scripts/lib/verify-documentation');
+const { verifySharedServer } = require('../../scripts/lib/verify-shared-server');
 const { copyDocumentationSource } = require('../helpers/documentation');
 
 const root = path.resolve(__dirname, '../..');
 
 describe('documented applications without mocks', () => {
+    test('the homepage shared-listener example answers real HTTP and typed socket messages', async () => {
+        await verifySharedServer(root);
+    }, 10000);
     test('the printed Markdown applications compile and pass HTTP/socket tests without source at runtime', () => {
         const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-documentation-'));
         try {
