@@ -21,6 +21,9 @@ const runFeedbackCases = require('../tests/fixtures/browser-feedback-cases');
 const { verifyRuntimeBrowser } = require('./lib/verify-runtime-browser');
 const refreshBrowser = require('../src/development/refreshBrowser');
 const { verifyRefreshCoverage } = require('./lib/verify-refresh-coverage');
+const BrowserClientPeer = require('../tests/fixtures/BrowserClientPeer');
+const clientProtocolCases = require('../tests/fixtures/client-protocol-cases');
+const browserClientCases = require('../tests/fixtures/browser-client-cases');
 
 const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
@@ -56,7 +59,7 @@ async function verifyLiveSelection(tab) {
     return { serverActions: 2, transport: 'live Redweb HTTP/WebSocket page', input: 'native keyboard and pointer events' };
 }
 
-async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, mode }) {
+async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, onPeer, mode }) {
     const app = express();
     const runtime = browserRuntime('/__redweb/client.js');
     if (mode === 'client') {
@@ -85,6 +88,18 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
                 result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
                 result.cases.morph = await runCases(tab);
             }
+            if (mode === 'client') {
+                const peer = new BrowserClientPeer();
+                onPeer(peer);
+                await peer.run(async () => {
+                    result.cases.client = await evaluate(tab, `(async () => {
+                        const api = await import('/__redweb/client.js');
+                        return { protocol: (${clientProtocolCases.toString()})(api),
+                            network: await (${browserClientCases.toString()})(api, ${JSON.stringify(peer.url)}) };
+                    })()`);
+                });
+                onPeer(undefined);
+            }
             run[instrumented ? 'instrumentedCases' : 'plainCases'] = result.cases;
         },
     });
@@ -100,7 +115,7 @@ async function main() {
     const coverage = new BrowserCoverage(mode === 'client' ? 'redweb-client.imported.js' : `browser${mode[0].toUpperCase() + mode.slice(1)}.generated.js`, sources[mode]());
     const run = { id: randomUUID(), startedAt: new Date().toISOString() };
     const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
-        let browser, coveredTab, application, refreshPeer, failure, launchAttempted = false;
+        let browser, coveredTab, application, refreshPeer, clientPeer, failure, launchAttempted = false;
         const tabs = [];
         const recordFailure = error => { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
         const server = mode === 'morph' ? http.createServer((request, response) => {
@@ -133,6 +148,7 @@ async function main() {
                 for (const instrumented of [false, true]) {
                     await verifyFeedback({
                         coverage, debugPort, run, instrumented, mode, onServer: server => { application = server; },
+                        onPeer: peer => { clientPeer = peer; },
                         visit: async url => {
                             const tab = await visit(url);
                             if (instrumented) coveredTab = tab;
@@ -164,6 +180,8 @@ async function main() {
             catch (error) { execution.cleanupFailure = error; recordFailure(error); }
             try { if (refreshPeer) await bounded(refreshPeer.pause(), 'revision peer cleanup'); }
             catch (error) { execution.cleanupFailure = error; refreshPeer.server.unref(); recordFailure(error); }
+            try { if (clientPeer) await clientPeer.close(); }
+            catch (error) { execution.cleanupFailure = error; clientPeer.server.unref(); recordFailure(error); }
             try {
                 if (browser) {
                     await bounded(stopBrowser(browser.child), 'browser shutdown');
