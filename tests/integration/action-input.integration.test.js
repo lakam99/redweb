@@ -98,6 +98,78 @@ describe('action input validation over real HTTP and WebSockets', () => {
         await expect(client.request('redweb:html', { kind: 'action', name: 'run', args: ['input'] })).rejects.toMatchObject({ code: 'HANDLER_FAILED', message: 'Handler failed' });
     });
 
+    test('checks current permissions after asynchronous validation and keeps denials recoverable', async () => {
+        let allowed = true, finish, calls = 0, policyInput;
+        class Page { render() { return '<p>Permission check</p>'; } run(value, context) { calls += 1; return { value, principal: context.principal }; } }
+        page('/')(Page);
+        action({ input: z.string().transform(async value => {
+            if (value === '3') await new Promise(resolve => { finish = resolve; });
+            return Number(value);
+        }), authorize: (context, input) => {
+            policyInput = input;
+            return context.principal === 'owner' && allowed;
+        } })(Page.prototype, 'run', Object.getOwnPropertyDescriptor(Page.prototype, 'run'));
+        const client = await connect(Page, { authenticate: () => 'owner' });
+        const pending = client.request('redweb:html', { kind: 'action', name: 'run', args: ['3'] });
+        const denied = expect(pending).rejects.toMatchObject({ code: 'ACCESS_DENIED', message: 'This operation is not permitted.' });
+        await waitForCondition(() => finish, 'validation entered');
+        allowed = false;
+        finish();
+        await denied;
+        expect(policyInput).toBe(3);
+        expect(calls).toBe(0);
+        expect(client.state).toBe('open');
+        allowed = true;
+        expect((await client.request('redweb:html', { kind: 'action', name: 'run', args: ['4'] })).payload).toEqual({ value: 4, principal: 'owner' });
+        expect(calls).toBe(1);
+    });
+
+    test('times out policies, signals cancellation, and ignores late permission', async () => {
+        let finish, policySignal, calls = 0;
+        class Page { render() { return '<p>Permission timeout</p>'; } run(value) { calls += 1; return value; } }
+        page('/')(Page);
+        action({ authorizationTimeoutMs: 20, authorize: (context, input) => {
+            if (input !== 'slow') return true;
+            policySignal = context.signal;
+            return new Promise(resolve => { finish = resolve; });
+        } })(Page.prototype, 'run', Object.getOwnPropertyDescriptor(Page.prototype, 'run'));
+        const client = await connect(Page);
+        await expect(client.request('redweb:html', { kind: 'action', name: 'run', args: ['slow'] })).rejects.toMatchObject({ code: 'ACCESS_TIMEOUT' });
+        expect(policySignal.aborted).toBe(true);
+        finish(true);
+        expect((await client.request('redweb:html', { kind: 'action', name: 'run', args: ['fast'] })).payload).toBe('fast');
+        expect(calls).toBe(1);
+    });
+
+    test('disconnect aborts a pending policy without invoking its action after late approval', async () => {
+        let finish, policySignal, calls = 0;
+        class Page { render() { return '<p>Permission cancellation</p>'; } run() { calls += 1; } }
+        page('/')(Page);
+        action({ authorize: context => {
+            policySignal = context.signal;
+            return new Promise(resolve => { finish = resolve; });
+        } })(Page.prototype, 'run', Object.getOwnPropertyDescriptor(Page.prototype, 'run'));
+        const client = await connect(Page);
+        const pending = client.request('redweb:html', { kind: 'action', name: 'run', args: [] }).catch(() => null);
+        await waitForCondition(() => finish, 'policy entered');
+        client.close();
+        await pending;
+        await waitForCondition(() => policySignal.aborted, 'policy cancellation');
+        finish(true);
+        await new Promise(resolve => setTimeout(resolve, 25));
+        expect(calls).toBe(0);
+    });
+
+    test('policy exceptions stay sanitized application failures, not permission denials', async () => {
+        let calls = 0;
+        class Page { render() { return '<p>Broken policy</p>'; } run() { calls += 1; } }
+        page('/')(Page);
+        action({ authorize: () => { throw new Error('private permission database password'); } })(Page.prototype, 'run', Object.getOwnPropertyDescriptor(Page.prototype, 'run'));
+        const client = await connect(Page);
+        await expect(client.request('redweb:html', { kind: 'action', name: 'run', args: [] })).rejects.toMatchObject({ code: 'HANDLER_FAILED', message: 'Handler failed' });
+        expect(calls).toBe(0);
+    });
+
     test.each([null, false, 'private validator bug'])('malformed validator issues (%p) remain server errors', async issues => {
         let calls = 0;
         class Page { render() { return '<p>Malformed validator</p>'; } run() { calls += 1; } }

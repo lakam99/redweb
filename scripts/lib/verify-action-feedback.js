@@ -67,6 +67,21 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
         await status('first', 'error');
         assert.equal(await browser.evaluate(`document.querySelector('#first [data-rw-feedback]').textContent`), 'Check the form values and try again.');
 
+        const callsBeforeDenials = control.forms.get('first').calls;
+        for (const [value, message] of [
+            ['denied', 'You do not have permission to perform this action.'],
+            ['policy timeout', 'Authorization timed out. The action was not run.'],
+        ]) {
+            await submit('first', value);
+            await status('first', 'error');
+            assert.equal(await browser.evaluate(`document.querySelector('#first [data-rw-feedback]').textContent`), message);
+            assert.equal(await browser.evaluate(`document.querySelector('#first input').value`), value, 'Permission failures must preserve the draft.');
+            assert.equal(control.forms.get('first').calls, callsBeforeDenials);
+        }
+        await submit('first', 'permitted');
+        await finish('permitted');
+        await status('first', 'success');
+
         await submit('second', 'second');
         await submit('nested', 'nested');
         await status('second', 'pending');
@@ -113,8 +128,9 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
         control.page.version += 1;
         await browser.evaluate(eventual(`!document.getElementById('first').hasAttribute('data-rw-status')`, 'source replacement'));
         await browser.evaluate(`document.querySelector('#first input').value = 'replacement draft'`);
+        const afterRemoved = control.forms.get('first').completed + 1;
         await finish('removed');
-        await browser.evaluate(eventual(`document.querySelector('#first output').textContent === '6'`, 'old action completed on server'));
+        await browser.evaluate(eventual(`document.querySelector('#first output').textContent === '${afterRemoved}'`, 'old action completed on server'));
         assert.equal(await browser.evaluate(`document.querySelector('#first input').value`), 'replacement draft');
         assert.equal(await browser.evaluate(`document.getElementById('first').hasAttribute('data-rw-status')`), false, 'Old completion must not target a replacement.');
 
@@ -133,6 +149,7 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
         assert.equal(await browser.evaluate(`document.getElementById('first').getAttribute('aria-label')`), 'Authored label');
 
         const beforeCapacity = control.forms.get('first').calls;
+        const afterCapacity = control.forms.get('first').completed + 32;
         await browser.evaluate(`(() => {
             const form = document.getElementById('first');
             for (let i = 0; i < 33; i++) {
@@ -144,7 +161,7 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual }) {
         assert.equal(await browser.evaluate(`document.querySelector('[data-extra="32"]').getAttribute('data-rw-status')`), 'error');
         assert.equal(await browser.evaluate(`document.querySelector('[data-extra="32"]').nextElementSibling.textContent.includes('not sent')`), true);
         for (let i = 0; i < 32; i++) await finish('click');
-        await browser.evaluate(eventual(`document.querySelector('#first output').textContent === '39'`, 'capacity drain'));
+        await browser.evaluate(eventual(`document.querySelector('#first output').textContent === '${afterCapacity}'`, 'capacity drain'));
         assert.equal(control.forms.get('first').calls, beforeCapacity + 32);
         assert.equal(await browser.evaluate(`document.querySelectorAll('#first [data-rw-feedback]').length`), 1, 'Removed controls must not leave orphaned statuses.');
 

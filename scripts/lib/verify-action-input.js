@@ -46,8 +46,13 @@ async function verifyActionInput(packageRoot, workspace) {
                 await assert.rejects(invoke([{ amount }]), { code: 'ACTION_INVALID_INPUT' });
             }
             await assert.rejects(invoke([{ amount: '3' }, { principal: 'forged' }]), { code: 'ACTION_INVALID_INPUT' });
+            await assert.rejects(invoke([{ amount: '11' }]), { code: 'ACCESS_DENIED' });
             assert.deepEqual((await invoke([{ amount: '3' }])).payload, { total: 3, principal: 'trusted-owner' });
             assert.deepEqual((await invoke([{ amount: '2' }])).payload, { total: 5, principal: 'trusted-owner' });
+            for (const args of [[], [{ principal: 'forged' }]]) {
+                assert.equal((await client.request('redweb:html', { kind: 'action', name: 'who', args })).payload, 'trusted-owner');
+            }
+            await assert.rejects(client.request('redweb:html', { kind: 'action', name: 'who', args: [null, { principal: 'forged' }] }), { code: 'ACTION_INVALID_INPUT' });
         } finally {
             client?.close();
             await server.shutdown();

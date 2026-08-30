@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added explicit action authorization after input validation, with inferred transformed policy inputs, trusted identity context, recoverable permission denials, bounded deadlines, and cancellation signals. Authorization-only actions keep input/context in fixed positions. Validation and authorization share one lifetime primitive; action guards do not imply page protection, passive-subscription revocation, or private shared state.
+
 - Added automatic pending/success/error feedback for browser actions, optional component-scoped `rw-status` slots, per-control duplicate suppression, and a 32-request client cap. Successful forms reset only when the original node/binding/draft remains unchanged. Generated feedback follows surviving keyed nodes and is removed with its control. Disconnected actions/state writes are not queued or replayed; ambiguous failures never claim the action had no side effects.
 
 - Added `@action({ input: schema })` with transformed `ActionInput` types, Standard Schema v1 validation shared with socket contracts, bounded validation deadlines, and disconnect/disposal cancellation before invocation. Invalid input is recoverable without closing the connection; validator bugs remain sanitized server failures. Form serialization now preserves prototype-named fields as data. Real HTTP/WebSocket, browser, and compiled standard/legacy consumer checks cover the new path.

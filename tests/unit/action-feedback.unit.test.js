@@ -20,7 +20,7 @@ describe('action feedback request state', () => {
         expect(updates.map(update => update[1])).toEqual(['pending', 'pending', 'success', 'success', 'pending', 'success']);
     });
 
-    test.each(['ACTION_INVALID_INPUT', 'ACTION_VALIDATION_TIMEOUT', 'ACTION_CANCELLED', 'ACTION_OFFLINE', '__proto__', 'toString', undefined])('sanitizes %p and allows correction after failure', async code => {
+    test.each(['ACTION_INVALID_INPUT', 'ACTION_VALIDATION_TIMEOUT', 'ACTION_CANCELLED', 'ACCESS_DENIED', 'ACCESS_TIMEOUT', 'ACCESS_CANCELLED', 'ACTION_OFFLINE', '__proto__', 'toString', undefined])('sanitizes %p and allows correction after failure', async code => {
         const updates = [], errors = [];
         const feedback = new ActionFeedback((_source, record) => updates.push(record.message), error => errors.push(error));
         const source = {};

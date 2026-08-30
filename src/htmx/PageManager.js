@@ -12,6 +12,7 @@ const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
 const synchronous = require('./synchronous');
 const { ActionInputError } = require('./ActionDefinition');
+const { AccessDenied } = require('./AccessPolicy');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
@@ -390,7 +391,7 @@ class PageManager {
             async onMessage(socket, message) {
                 try { return await manager.receive(socket, message); }
                 catch (error) {
-                    if (!(error instanceof ActionInputError)) throw error;
+                    if (!(error instanceof ActionInputError) && !(error instanceof AccessDenied)) throw error;
                     socket.sendProtocolError(error.code, error.message, { requestId: message.requestId });
                 }
             }

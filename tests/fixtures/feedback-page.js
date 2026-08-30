@@ -33,7 +33,11 @@ function createFeedbackPage(control) {
     state()(Form.prototype, 'completed');
     state()(Form.prototype, 'slotVersion');
     state()(Form.prototype, 'visible');
-    action({ input: z.object({ message: z.string().min(1).max(100) }).strict() })(Form.prototype, 'save', Object.getOwnPropertyDescriptor(Form.prototype, 'save'));
+    action({
+        input: z.object({ message: z.string().min(1).max(100) }).strict(),
+        authorize: (_context, { message }) => message === 'policy timeout' ? new Promise(() => {}) : message !== 'denied',
+        authorizationTimeoutMs: 50,
+    })(Form.prototype, 'save', Object.getOwnPropertyDescriptor(Form.prototype, 'save'));
     action()(Form.prototype, 'click', Object.getOwnPropertyDescriptor(Form.prototype, 'click'));
     class Group {
         nested = new Form('nested', true);

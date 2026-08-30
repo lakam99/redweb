@@ -529,11 +529,18 @@ declare module 'redweb' {
         (properties: Props) => HtmlFragment;
     export function state(options?: StateOptions): LiveStateDecorator;
     export function action(): LiveActionDecorator;
+    export interface ActionAuthorization<Input> {
+        authorize: (context: LivePageConnectionContext, input: Input) => boolean | Promise<boolean>;
+        /** Bounds permission checks, not application execution; defaults to 5000ms. */
+        authorizationTimeoutMs?: number;
+    }
     export function action<Schema extends import('redweb/contract').SocketSchema>(options: {
         input: Schema;
         /** Bounds input validation, not application execution; defaults to 5000ms. */
         validationTimeoutMs?: number;
-    }): ValidatedActionDecorator<ActionInput<Schema>>;
+    } & (ActionAuthorization<ActionInput<Schema>> | { authorize?: undefined; authorizationTimeoutMs?: never })): ValidatedActionDecorator<ActionInput<Schema>>;
+    /** Authorized actions use a fixed (input, context) shape, including buttons without a payload. */
+    export function action(options: ActionAuthorization<unknown>): ValidatedActionDecorator<unknown>;
     export function view(stateName: string): LiveViewDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
     export function attribute(value: string | number | bigint | boolean): HtmlAttribute;

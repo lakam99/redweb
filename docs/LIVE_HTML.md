@@ -334,6 +334,31 @@ Validation has a five-second default deadline; override it with `@action({ input
 
 The same bounded validation implementation is shared with socket contracts. Their existing `INVALID_PAYLOAD` contract error behavior is unchanged. Automatic action feedback reports safe form-level messages, not raw validator issues or field-level messages.
 
+## Action authorization
+
+Identity and permission are separate: the server's existing `authenticate(request)` hook establishes `context.principal`; an action policy decides whether that identity may perform this operation. On this unreleased branch, add `authorize` to the action decorator instead of repeating permission checks inside each method:
+
+```tsx
+// Inside a page/component; `input` is the amount schema from the example above.
+@action({
+  input,
+  authorize: (context, value) => context.principal === 'owner' && value.amount <= 10,
+})
+save(value: ActionInput<typeof input>) {
+  this.total += value.amount;
+}
+```
+
+The policy receives **trusted context first, transformed input second**. Only `true` permits invocation. The check runs after validation on every invocation, so a permission change during asynchronous validation is visible to the policy. Both standard and legacy decorators and component-scoped actions follow the same path. The literal owner check above illustrates the API, not an authentication system: applications must verify real credentials in `authenticate`, query their own current permissions, and enforce database ownership/transaction rules.
+
+For a button without a schema, use `@action({ authorize: context => context.principal === 'owner' })`. Such methods use the fixed signature `run(input: unknown, context: LivePageConnectionContext)`; with no submitted payload, `input` is `undefined`. A caller can supply at most one untrusted input, never replace the second context argument. Use a schema whenever you inspect submitted values. Ordinary `@action()` keeps its existing variadic behavior.
+
+Policies may be asynchronous. `authorizationTimeoutMs` defaults to 5,000 ms and requires an `authorize` callback. This deadline is separate from `validationTimeoutMs`; neither bounds a method that has started. The policy's `context.signal` aborts when the connection closes or the permission deadline expires. Pass it to cancellable application operations. Redweb cannot preempt synchronous code, cancel work that ignores the signal, undo policy side effects, or make a policy check and later database write atomic; keep policies read-only and enforce transactional authorization in storage where required. An overdue or cancelled result cannot invoke the action later. Page disposal also prevents invocation, but does not itself stop ongoing external policy work.
+
+Denial returns recoverable `ACCESS_DENIED`; timeout returns `ACCESS_TIMEOUT`; connection cancellation returns `ACCESS_CANCELLED` when a response can still be delivered. None invokes the action. Built-in feedback shows safe text and retains the draft. A thrown/rejected policy is a sanitized `HANDLER_FAILED` application failure, not a permission denial, and must be investigated rather than blindly retried. Authentication/permission secrets and submitted values are never included in these protocol errors.
+
+**This protects action invocation only.** It does not protect HTTP rendering, loading hooks, writable state, room publication, or passive subscriptions; it does not revoke existing sockets. Shared page state is shared across identities, not private per user. Do not use an action guard as a substitute for page/resource isolation or session revocation. The unified protected-page/revocation and durable dashboard recipes remain pending on the acceptance checklist.
+
 ## Automatic action feedback
 
 Existing `rw-click` buttons and `rw-submit` forms show **Working…**, **Done.**, or a safe error message without custom browser JavaScript. Redweb inserts a plain-text status span at the end of a form or immediately after a click control, with `role="status"` and `aria-live="polite"`. The control and its status have `data-rw-status="pending"`, `"success"`, or `"error"` for application CSS. Native form constraints still run before submission.

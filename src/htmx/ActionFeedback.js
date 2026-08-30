@@ -43,6 +43,9 @@ class ActionFeedback {
             ACTION_CANCELLED: 'Input validation was cancelled. The action was not run.',
             ACTION_OFFLINE: 'Not connected. The action was not sent.',
             ACTION_CAPACITY: 'Too many pending actions. Wait before trying again. This action was not sent.',
+            ACCESS_DENIED: 'You do not have permission to perform this action.',
+            ACCESS_TIMEOUT: 'Authorization timed out. The action was not run.',
+            ACCESS_CANCELLED: 'Authorization was cancelled. The action was not run.',
         };
         record.message = Object.hasOwn(messages, error?.code) ? messages[error.code]
             : 'The action could not be confirmed. Check before trying again.';
