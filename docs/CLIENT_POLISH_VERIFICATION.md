@@ -53,7 +53,7 @@ checked before and after execution.
 This is tracked original-source coverage, not exhaustive optional-chain or
 compiler-generated V8 branch coverage. At the start of this increment, the client's
 `npm run check` failed because it used only the Node-only V8 command, which does
-not exercise browser modules. That underlying command remains `npm test` with
+not exercise browser modules. That underlying command is now `npm run test:v8` with
 unchanged thresholds and an unresolved result; the comprehensive command update
 below does not reclassify the earlier failure as a pass.
 
@@ -107,8 +107,9 @@ Report: `coverage/client-polish-full-suite.json`; SHA-256
 
 Client `ee74017` and Redweb `45a34d5` make `npm run check` use the complete
 original-source Node/browser gate rather than only running Node tests over browser
-code. The existing separate `npm test` V8 command and thresholds remain unchanged;
-its failure is still recorded, not presented as fixed.
+code. At that increment, the separate `npm test` V8 command and thresholds remained
+unchanged; the later default-command increment below names it `npm run test:v8`.
+Its failure is still recorded, not presented as fixed.
 
 Before building, `check:link` compares the expected client's canonical path with
 the package installed into Redweb. It resolves the package/junction independently
@@ -143,3 +144,38 @@ checks passed, along with 25 focused documentation/preflight/report tests and tw
 real generator/release-immutability cases. The critic independently rechecked the
 final source report hashes and unchanged client bundles. Both development links
 and dependency lockfiles remain unchanged.
+
+## Default test command
+
+The client now delegates `npm test` to that same complete `npm run check` path.
+The original `vitest run --coverage` command is preserved as `npm run test:v8`;
+its thresholds and known Node-only missing-browser failure are unchanged. This
+chooses the documented combined original-source denominator for the default
+command; it does not retroactively fix the V8 diagnostic. No runtime, tests or
+coverage instrumentation changed. The client README now reflects the current
+77-test inventory and passing original-source metrics instead of stale failures.
+
+Actual `npm test` passed linkage preflight, build, types, 77 tests in each mode,
+native Chromium acceptance and all 791/521/125/659 authored counters. The run
+completed normally at `2026-08-30T22:56:53.072Z`, on Windows/Node 22.21.0 and
+Chrome 152.0.7977.64. Evidence:
+
+- `coverage/client-source/a7c2bcd8-bc07-4496-b8a1-571e40d68288/summary.json`,
+  SHA-256 `f5770e60d8c011da0874ba2094dbe07904a3f6fdaed7a772f6dbd053b60f3e8b`.
+- Coverage JSON SHA-256 remains
+  `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
+
+The senior critic approved the nonrecursive delegation and explicit denominator
+boundary. Final README wording was corrected after this run; production source,
+test/configuration inputs and built bundles did not change. Matching registry
+publication, latest-head CI and remaining release gates are still outstanding.
+
+The subsequent full linked Redweb regression passed 858 tests across 83 suites
+in 421.094 seconds, with all 5,445 statements, 4,044 branches, 978 functions and
+4,464 library lines covered. No runtime/test inputs changed during that run.
+Report: `coverage/polish-final-core-suite.json`, SHA-256
+`73e41db9f26285b13aa293e168be8b8a012d0824403d31b750ae8020772721aa`.
+The README and guide's stale current coverage/command claims were corrected
+afterward; the type/generated-documentation preflight was rerun for that prose
+increment. Production dependency audit reported zero vulnerabilities with system
+certificate trust enabled, without disabling TLS verification.
