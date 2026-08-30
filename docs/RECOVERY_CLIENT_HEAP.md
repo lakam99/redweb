@@ -163,6 +163,11 @@ not identify the exact earlier invalidated versions, prove exclusive retention,
 explain all hidden data, or resolve the original recovery failure or historical
 shutdown timeout. No speculative production optimization or acceptance change was made.
 
+Follow-through: [offline function and root attribution](RECOVERY_CODE_ATTRIBUTION.md)
+now records that analysis of the same snapshots, including persistent function
+identities and all three standard-stream/prototype Socket roles. The original
+capture and verification evidence below remains unchanged.
+
 ## Evidence identity
 
 - Original local run: `coverage/recovery-split-f7owK8`.
