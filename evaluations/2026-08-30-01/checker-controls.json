@@ -1,0 +1,284 @@
+[
+  {
+    "fault": "working-control",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:49:46.376Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 914
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 73
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 42
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 611
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:60696",
+      "browser": {
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:60696\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:49:48.471Z",
+      "durationMs": 2095
+    }
+  },
+  {
+    "fault": "local-counter",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:49:48.471Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 832
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7019,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:56001",
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:56001\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:49:57.385Z",
+      "durationMs": 8914
+    }
+  },
+  {
+    "fault": "draft-loss",
+    "expectedFailure": "draft-preservation",
+    "result": {
+      "startedAt": "2026-08-30T06:49:57.385Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 821
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 76
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 55
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "draft-preservation",
+          "passed": false,
+          "durationMs": 30,
+          "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:57537",
+      "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:57537\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:49:58.656Z",
+      "durationMs": 1271
+    }
+  },
+  {
+    "fault": "unsafe-html",
+    "expectedFailure": "literal-message-safety",
+    "result": {
+      "startedAt": "2026-08-30T06:49:58.656Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 775
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 53
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 48
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 47
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 30
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": false,
+          "durationMs": 7018,
+          "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:50557",
+      "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:50557\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:50:07.694Z",
+      "durationMs": 9038
+    }
+  },
+  {
+    "fault": "stale-presence",
+    "expectedFailure": "disconnect-presence",
+    "result": {
+      "startedAt": "2026-08-30T06:50:07.694Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 808
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 58
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 34
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 30
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": false,
+          "durationMs": 5005,
+          "error": "Disconnected Bob remained in presence longer than five seconds."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:53494",
+      "error": "Disconnected Bob remained in presence longer than five seconds.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:53494\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:50:14.800Z",
+      "durationMs": 7106
+    }
+  },
+  {
+    "fault": "http-updates",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:50:14.801Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 834
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7026,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:55891",
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:55891\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:50:23.753Z",
+      "durationMs": 8952
+    }
+  }
+]
