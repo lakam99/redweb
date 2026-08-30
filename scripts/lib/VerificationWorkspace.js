@@ -3,8 +3,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnManaged, stopProcessTree } = require('../evaluation/process');
+const { spawn } = require('node:child_process');
+const { stopProcessTree } = require('../evaluation/process');
 const { withTimeout } = require('../../tests/helpers/network');
+const { verificationError } = require('./verificationError');
 
 /** Owns one newly created verification directory and its sequential commands. */
 class VerificationWorkspace {
@@ -13,9 +15,10 @@ class VerificationWorkspace {
         this.cleanupFailure = null;
     }
 
-    async command(args, { cwd = this.directory, environment = {}, timeoutMs = 120000 } = {}) {
+    async command(args, { cwd = this.directory, environment = {}, timeoutMs = 120000, executable = process.execPath } = {}) {
         if (this.cleanupFailure) throw this.cleanupFailure;
-        const child = spawnManaged(args, { cwd, env: { ...process.env, NODE_PATH: '', ...environment }, shell: false });
+        const child = spawn(executable, args, { cwd, env: { ...process.env, NODE_PATH: '', ...environment }, shell: false,
+            stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
         let stdout = '', stderr = '', launchError;
         child.stdout.on('data', chunk => { stdout = (stdout + chunk).slice(-1024 * 1024); });
         child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-1024 * 1024); });
@@ -49,7 +52,7 @@ class VerificationWorkspace {
     async run(operation) {
         let result, failure;
         try { result = await operation(this); }
-        catch (error) { failure = error; }
+        catch (error) { failure = verificationError(error); }
         if (this.cleanupFailure) {
             failure = failure && failure !== this.cleanupFailure
                 ? new AggregateError([failure, this.cleanupFailure], failure.message, { cause: failure }) : this.cleanupFailure;

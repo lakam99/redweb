@@ -9,7 +9,7 @@ async function main() {
     await new VerificationWorkspace().run(async execution => {
         // All templates copy this exact helper and test; verifyStarter also checks
         // the generated commands and then removes src/ from the deployed layout.
-        verifyStarter(root, execution.directory, 'realtime');
+        await verifyStarter(root, execution, 'realtime');
         console.log(await execution.command([
             require.resolve('c8/bin/c8.js'), '--all', '--src=dist', '--include=dist/run-app.js',
             '--reporter=text', '--reporter=json', `--reports-dir=${path.join(root, 'coverage/starter-lifecycle')}`,

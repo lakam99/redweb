@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { npmEntrypoint } = require('./evaluation/process');
 const { verifyStarter } = require('./lib/verify-starter');
 const { verifyDocumentation } = require('./lib/verify-documentation');
 const { verifyActionInput } = require('./lib/verify-action-input');
@@ -10,21 +10,11 @@ const { verifyRoomExample } = require('./lib/verify-room-example');
 const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 
-function run(command, args, options = {}) {
-    const result = spawnSync(command, args, {
-        encoding: 'utf8',
-        shell: process.platform === 'win32',
-        ...options,
-    });
-    if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed:\n${result.stderr || result.stdout}`);
-    return result.stdout;
-}
-
 async function main() {
     const root = path.resolve(__dirname, '..');
     await new VerificationWorkspace().run(async execution => {
         const workspace = execution.directory;
-        const pack = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', workspace], { cwd: root }));
+        const pack = JSON.parse(await execution.command([npmEntrypoint(), 'pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
         const metadata = require('../package.json');
         const dependencyChecks = await verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
@@ -32,15 +22,15 @@ async function main() {
         console.log(dependencyChecks.withoutValidator.trim());
         console.log(dependencyChecks.withValidator.trim());
         console.log(dependencyChecks.additions);
-        run('tar', ['-xf', archive, '-C', workspace]);
+        await execution.command(['-xf', archive, '-C', workspace], { executable: 'tar' });
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(root, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
         for (const template of require('../src/cli/templates').TEMPLATES) {
-            verifyStarter(packageRoot, workspace, template);
+            await verifyStarter(packageRoot, execution, template);
         }
-        verifyDocumentation(packageRoot, workspace);
+        await verifyDocumentation(packageRoot, execution);
         await verifyActionInput(packageRoot, workspace);
         await verifyRoomExample(packageRoot, workspace);
         if (manifest.bin.redweb !== 'bin/redweb.js' ||
@@ -49,12 +39,12 @@ async function main() {
             throw new Error('Packed initializer or TypeScript preset is missing.');
         }
         const initializedRoot = path.join(workspace, 'initialized-app');
-        run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'init', initializedRoot], { cwd: workspace, shell: false });
+        await execution.command([path.join(packageRoot, 'bin', 'redweb.js'), 'init', initializedRoot]);
         fs.mkdirSync(path.join(initializedRoot, 'node_modules'), { recursive: true });
         fs.symlinkSync(packageRoot, path.join(initializedRoot, 'node_modules', 'redweb'), 'junction');
         fs.symlinkSync(path.dirname(require.resolve('typescript/package.json')), path.join(initializedRoot, 'node_modules', 'typescript'), 'junction');
-        run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot, shell: false });
-        const diagnosis = JSON.parse(run(process.execPath, [path.join(packageRoot, 'bin', 'redweb.js'), 'doctor', '--json', '--port', '0'], { cwd: initializedRoot, shell: false }));
+        await execution.command([require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot });
+        const diagnosis = JSON.parse(await execution.command([path.join(packageRoot, 'bin', 'redweb.js'), 'doctor', '--json', '--port', '0'], { cwd: initializedRoot }));
         if (!diagnosis.ok || diagnosis.installedVersion !== manifest.version || diagnosis.source.registrations !== 1 ||
             diagnosis.issues.length !== 1 || diagnosis.issues[0].code !== 'SOURCE_UNRESOLVED' ||
             diagnosis.issues[0].message !== 'Asset templateRoot is not statically known.') {
@@ -121,8 +111,8 @@ async function main() {
             "  if (!document.includes('<title>Packed TSX</title>') || !document.includes('<strong>Static</strong>')) throw new Error('TSX static export mismatch');",
             "})().catch(error => { console.error(error); process.exitCode = 1; });",
         ].join('\n'));
-        run(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', consumerRoot], { cwd: consumerRoot, shell: false });
-        run(process.execPath, [path.join(consumerRoot, 'consumer.js')], { cwd: consumerRoot, shell: false });
+        await execution.command([require.resolve('typescript/bin/tsc'), '-p', consumerRoot], { cwd: consumerRoot });
+        await execution.command([path.join(consumerRoot, 'consumer.js')], { cwd: consumerRoot });
         class SmokePage extends installed.LivePage {
             constructor() {
                 super();

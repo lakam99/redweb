@@ -5,14 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const { verifyApplication } = require('./verify-starter');
 
-function verifyDocumentation(packageRoot, workspace) {
+async function verifyDocumentation(packageRoot, execution) {
     const catalogue = JSON.parse(fs.readFileSync(path.join(packageRoot, 'docs/generated.json'), 'utf8'));
     const { Documentation } = require(path.join(packageRoot, 'src/docs/Documentation'));
     assert.deepEqual(catalogue, new Documentation(packageRoot, catalogue.channel).build(), 'Packed docs must match packed code.');
     const reports = [];
     for (const page of catalogue.pages.filter(page => page.files)) {
         const template = page.id.split('/')[1];
-        const target = path.join(workspace, `documented-${template}`);
+        const target = path.join(execution.directory, `documented-${template}`);
         fs.mkdirSync(target);
         // Execute the code actually printed in Markdown, not a second copy from the JSON file list.
         const extracted = [...page.markdown.matchAll(/^### ([\w./-]+)\n\n(`{3,})\w+\n([\s\S]*?)\n\2(?=\n|$)/gm)];
@@ -24,7 +24,7 @@ function verifyDocumentation(packageRoot, workspace) {
             fs.mkdirSync(path.dirname(destination), { recursive: true });
             fs.writeFileSync(destination, `${match[3]}\n`, { flag: 'wx' });
         }
-        reports.push({ template, output: verifyApplication(packageRoot, target, template) });
+        reports.push({ template, output: await verifyApplication(packageRoot, target, template, execution) });
     }
     const { TEMPLATES } = require(path.join(packageRoot, 'src/cli/templates'));
     assert.deepEqual(reports.map(report => report.template), TEMPLATES, 'Every documented recipe must run.');

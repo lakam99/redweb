@@ -2,6 +2,7 @@ const assert = require('assert/strict');
 const { start } = require('../..');
 const { createFeedbackPage } = require('../../tests/fixtures/feedback-page');
 const { waitForCondition, waitForListening, silentLogger, withTimeout } = require('../../tests/helpers/network');
+const { verificationError } = require('./verificationError');
 
 async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serverOptions = {}, afterChecks, onServer }) {
     const waits = new Map();
@@ -183,7 +184,7 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serv
         assert.equal(waits.has('offline draft'), false, 'Disconnected actions must never replay after reconnect.');
         if (afterChecks) await afterChecks(browser, { server, control, finish });
     } catch (error) {
-        failure = error instanceof Error ? error : new Error(String(error), { cause: error });
+        failure = verificationError(error);
     } finally {
         waits.forEach(wait => wait.resolve());
         try { await withTimeout(server.shutdown(), 'action feedback server shutdown', 15000); }

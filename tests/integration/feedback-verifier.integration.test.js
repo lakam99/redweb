@@ -33,13 +33,14 @@ describe('action-feedback verification resource failures', () => {
         expect(application.manager.sharedPages.size).toBe(0);
     });
 
-    test('a non-Error setup failure remains a failure after actual server cleanup', async () => {
+    test.each([{ label: 'null', thrown: null }, { label: 'non-stringifiable object', thrown: Object.create(null) }])(
+        'a $label setup failure remains a failure after actual server cleanup', async ({ thrown }) => {
         let application, failure;
         try {
-            await verifyActionFeedback({ onServer(server) { application = server; throw null; } });
+            await verifyActionFeedback({ onServer(server) { application = server; throw thrown; } });
         } catch (error) { failure = error; }
         expect(failure).toBeInstanceOf(Error);
-        expect(failure.cause).toBeNull();
+        expect(failure.cause).toBe(thrown);
         expect(application.server.listening).toBe(false);
         expect(application.manager.sharedPages.size).toBe(0);
     });

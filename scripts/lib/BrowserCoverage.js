@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { isNativeError } = require('node:util/types');
+const { verificationError } = require('./verificationError');
 const { createInstrumenter } = require('istanbul-lib-instrument');
 const { createCoverageMap } = require('istanbul-lib-coverage');
 
@@ -44,7 +44,7 @@ class BrowserCoverage {
     async verify(operation) {
         let failure;
         try { await operation(); this.assertComplete(); }
-        catch (error) { failure = isNativeError(error) ? error : new Error(String(error), { cause: error }); }
+        catch (error) { failure = verificationError(error); }
         return {
             failure,
             report: { ...this.report(), status: failure ? 'failed' : 'passed', error: failure?.message, retainedWorkspace: failure?.retainedWorkspace },

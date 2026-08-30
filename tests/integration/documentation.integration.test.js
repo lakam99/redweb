@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyDocumentation } = require('../../scripts/lib/verify-documentation');
+const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 const { verifyRoomExample } = require('../../scripts/lib/verify-room-example');
 const { copyDocumentationSource } = require('../helpers/documentation');
 const { TEMPLATES } = require('../../src/cli/templates');
@@ -17,10 +18,9 @@ describe('documented applications without mocks', () => {
         try { await verifyRoomExample(root, workspace); }
         finally { fs.rmSync(workspace, { recursive: true, force: true }); }
     }, 30000);
-    test('the printed Markdown applications compile and pass HTTP/socket tests without source at runtime', () => {
-        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-documentation-'));
-        try {
-            const reports = verifyDocumentation(root, workspace);
+    test('the printed Markdown applications compile and pass HTTP/socket tests without source at runtime', async () => {
+        await new VerificationWorkspace().run(async execution => {
+            const reports = await verifyDocumentation(root, execution);
             expect(reports.map(report => report.template)).toEqual(TEMPLATES);
             for (const report of reports) {
                 if (report.output.startsWith('# SKIP')) expect(report.template).toBe('dashboard');
@@ -29,8 +29,8 @@ describe('documented applications without mocks', () => {
                     expect(report.output).toContain('# fail 0');
                 }
             }
-        } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
-    }, 90000);
+        });
+    }, 420000); // Six applications, each with two bounded 30s commands plus cleanup.
 
     test('the actual generator rejects invalid arguments and verifies the checked-in artifact', () => {
         const script = path.join(root, 'scripts/generate-docs.js');

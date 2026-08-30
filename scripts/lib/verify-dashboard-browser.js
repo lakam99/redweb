@@ -1,16 +1,18 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
-const { once } = require('node:events');
 const { verifyStarter } = require('./verify-starter');
+const { VerificationWorkspace } = require('./VerificationWorkspace');
+const { waitForListening, withTimeout } = require('../../tests/helpers/network');
+const { verificationError } = require('./verificationError');
+
+const evaluate = (page, expression) => withTimeout(page.evaluate(expression), 'dashboard browser evaluation', 8000);
 
 async function waitForPage(page, expression) {
     const deadline = Date.now() + 8000;
     while (Date.now() < deadline) {
-        try { if (await page.evaluate(expression)) return; }
+        try { if (await evaluate(page, expression)) return; }
         catch (error) { if (!/context|navigat|object.*found/i.test(error.message)) throw error; }
         await new Promise(resolve => setTimeout(resolve, 30));
     }
@@ -18,11 +20,33 @@ async function waitForPage(page, expression) {
 }
 
 async function verifyDashboardBrowser({ openPage, debugPort }) {
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-dashboard-browser-'));
+    return new VerificationWorkspace().run(execution => verifyDashboard(execution, { openPage, debugPort }));
+}
+
+async function verifyDashboard(execution, { openPage, debugPort }) {
+    const workspace = execution.directory;
     const pages = [];
-    let app;
+    const openings = [];
+    const cleanup = [];
+    let app, failure, closing = false;
+    const closePage = async page => {
+        try { await withTimeout(page.command('Page.close'), 'dashboard page close', 5000); }
+        finally { page.socket.terminate(); }
+    };
+    const open = async url => {
+        const opening = { settled: false };
+        opening.promise = Promise.resolve().then(() => openPage(debugPort, url)).then(async page => {
+            if (closing) {
+                try { await closePage(page); }
+                catch (error) { cleanup.push(error); }
+            } else pages.push(page);
+            return page;
+        }).finally(() => { opening.settled = true; });
+        openings.push(opening);
+        return withTimeout(opening.promise, 'dashboard page open', 10000);
+    };
     try {
-        assert.doesNotMatch(verifyStarter(path.resolve(__dirname, '../..'), workspace, 'dashboard'), /# SKIP/);
+        assert.doesNotMatch(await verifyStarter(path.resolve(__dirname, '../..'), execution, 'dashboard'), /# SKIP/);
         const root = path.join(workspace, 'dashboard');
         const { createApp } = require(path.join(root, 'dist/app'));
         const { DashboardStore } = require(path.join(root, 'dist/store'));
@@ -32,37 +56,48 @@ async function verifyDashboardBrowser({ openPage, debugPort }) {
         try { store.provision('alice', await credentials('browser-test-only-password')); }
         finally { store.close(); }
         app = createApp({ port: 0, database });
-        await once(app.server, 'listening');
+        await waitForListening(app.server);
         const origin = `http://127.0.0.1:${app.server.address().port}`;
-        const first = await openPage(debugPort, `${origin}/login`); pages.push(first);
+        const first = await open(`${origin}/login`);
         const signIn = async page => {
-            await page.evaluate(`document.querySelector('#account').value = 'alice'; document.querySelector('#password').value = 'browser-test-only-password'; document.querySelector('form').requestSubmit();`);
+            await evaluate(page, `document.querySelector('#account').value = 'alice'; document.querySelector('#password').value = 'browser-test-only-password'; document.querySelector('form').requestSubmit();`);
             await waitForPage(page, `Boolean(document.querySelector('#card-title')) && document.documentElement.getAttribute('data-rw-connection') === 'open'`);
         };
         await signIn(first);
-        const second = await openPage(debugPort, origin); pages.push(second);
-        await second.evaluate(`window.savedInput = document.querySelector('#card-title'); savedInput.value = 'Unsent draft'; savedInput.focus(); savedInput.setSelectionRange(2, 5);`);
-        await first.evaluate(`document.querySelector('#card-title').value = 'Browser saved card'; document.querySelector('[rw-submit="add"]').requestSubmit();`);
+        const second = await open(origin);
+        await evaluate(second, `window.savedInput = document.querySelector('#card-title'); savedInput.value = 'Unsent draft'; savedInput.focus(); savedInput.setSelectionRange(2, 5);`);
+        await evaluate(first, `document.querySelector('#card-title').value = 'Browser saved card'; document.querySelector('[rw-submit="add"]').requestSubmit();`);
         for (const page of pages) await waitForPage(page, `document.querySelector('.card-grid h2')?.textContent === 'Browser saved card'`);
-        assert.ok(await second.evaluate(`savedInput === document.querySelector('#card-title') && savedInput.value === 'Unsent draft' && document.activeElement === savedInput && savedInput.selectionStart === 2`));
-        assert.equal(await first.evaluate(`document.cookie.includes('redweb_dashboard')`), false, 'Session cookie must remain HttpOnly.');
-        await first.evaluate(`document.querySelector('form[action="/logout"]').requestSubmit();`);
+        assert.ok(await evaluate(second, `savedInput === document.querySelector('#card-title') && savedInput.value === 'Unsent draft' && document.activeElement === savedInput && savedInput.selectionStart === 2`));
+        assert.equal(await evaluate(first, `document.cookie.includes('redweb_dashboard')`), false, 'Session cookie must remain HttpOnly.');
+        await evaluate(first, `document.querySelector('form[action="/logout"]').requestSubmit();`);
         await waitForPage(first, `Boolean(document.querySelector('#account'))`);
         await waitForPage(second, `document.documentElement.getAttribute('data-rw-connection') !== 'open'`);
-        assert.equal(await second.evaluate(`fetch('/').then(response => response.status)`), 401);
+        assert.equal(await evaluate(second, `fetch('/').then(response => response.status)`), 401);
         await signIn(first);
-        assert.equal(await first.evaluate(`document.querySelector('.card-grid h2').textContent`), 'Browser saved card');
-        await first.evaluate(`document.querySelector('[rw-submit="remove"]').requestSubmit();`);
+        assert.equal(await evaluate(first, `document.querySelector('.card-grid h2').textContent`), 'Browser saved card');
+        await evaluate(first, `document.querySelector('[rw-submit="remove"]').requestSubmit();`);
         await waitForPage(first, `document.querySelectorAll('.card-grid li').length === 0`);
         console.log('Dashboard browser passed: real sign-in/forms, private live cards, draft preservation, HttpOnly cookies, sign-out/re-login and deletion.');
-    } finally {
-        for (const page of pages) {
-            await page.command('Page.close').catch(() => {});
-            page.socket.close();
-        }
-        await app?.shutdown();
-        fs.rmSync(workspace, { recursive: true, force: true });
+    } catch (error) { failure = verificationError(error); }
+    closing = true;
+    await Promise.allSettled(openings.map(opening => withTimeout(opening.promise, 'dashboard pending page open', 10000)));
+    // A rejected opening is already the primary failure; an unsettled opening is
+    // uncertain ownership and must prevent temporary workspace removal.
+    if (openings.some(opening => !opening.settled)) {
+        cleanup.push(new Error('Dashboard page creation did not settle during cleanup.'));
     }
+    try {
+        for (const page of pages) {
+            try { await closePage(page); }
+            catch (error) { cleanup.push(error); }
+        }
+    } finally {
+        try { if (app) await withTimeout(app.shutdown(), 'dashboard application shutdown', 15000); }
+        catch (error) { cleanup.push(error); app.server.unref(); }
+    }
+    if (cleanup.length) execution.cleanupFailure = new AggregateError(cleanup, 'Dashboard cleanup failed');
+    if (failure) throw failure;
 }
 
-module.exports = { verifyDashboardBrowser };
+module.exports = { verifyDashboardBrowser, verifyDashboard };

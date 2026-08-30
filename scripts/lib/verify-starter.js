@@ -2,37 +2,29 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { npmEntrypoint } = require('../evaluation/process');
 const { projectNodeIssue } = require('../../src/cli/ProjectDoctor');
 
-function node(args, cwd) {
-    const result = spawnSync(process.execPath, args, { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true });
-    if (result.status !== 0) throw new Error(`${args.join(' ')} failed:\n${result.error || ''}${result.stdout}${result.stderr}`);
-    return result.stdout;
-}
-
 // Both CI and the tarball gate use the exact generated tests, with real consumers and network listeners.
-function verifyStarter(packageRoot, workspace, template) {
-    const target = path.join(workspace, template);
-    const output = node([path.join(packageRoot, 'bin/redweb.js'), 'init', target, '--template', template, '--json'], workspace);
+async function verifyStarter(packageRoot, execution, template, { timeoutMs = 30000 } = {}) {
+    const target = path.join(execution.directory, template);
+    const output = await execution.command([path.join(packageRoot, 'bin/redweb.js'), 'init', target, '--template', template, '--json'],
+        { timeoutMs });
     const report = JSON.parse(output);
     if (report.created.length < 9) throw new Error(`Incomplete ${template} starter`);
-    return verifyApplication(packageRoot, target, template);
+    return verifyApplication(packageRoot, target, template, execution, { timeoutMs });
 }
 
-function verifyApplication(packageRoot, target, template) {
+async function verifyApplication(packageRoot, target, template, execution, { timeoutMs = 30000 } = {}) {
     const manifest = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8'));
     if (projectNodeIssue(process.versions.node, manifest.engines?.node)?.severity === 'error') {
         return `# SKIP ${template}: requires Node ${manifest.engines.node}; current ${process.versions.node}. CI verifies it on Node 22.\n`;
     }
     linkApplication(packageRoot, target, template, manifest);
-    const tests = spawnSync('npm', ['test'], {
-        cwd: target, encoding: 'utf8', timeout: 30000, windowsHide: true, shell: process.platform === 'win32',
-    });
-    if (tests.status !== 0) throw new Error(`Generated npm test failed:\n${tests.error || ''}${tests.stdout}${tests.stderr}`);
+    await execution.command([npmEntrypoint(), 'test'], { cwd: target, timeoutMs });
     // Deployment must use compiled output/assets, not accidentally depend on the source tree.
     fs.renameSync(path.join(target, 'src'), path.join(target, 'source-not-deployed'));
-    return node(['--test', 'test/app.test.cjs', 'test/run-app.test.cjs'], target);
+    return execution.command(['--test', 'test/app.test.cjs', 'test/run-app.test.cjs'], { cwd: target, timeoutMs });
 }
 
 function linkApplication(packageRoot, target, template, manifest) {

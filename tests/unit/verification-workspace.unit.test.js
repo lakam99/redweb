@@ -34,6 +34,16 @@ test('command diagnostics retain real nonzero exits and launch failures', async 
     });
 });
 
+test('native archive commands use the same owner without shell argument interpretation', async () => {
+    await new VerificationWorkspace().run(async execution => {
+        expect(await execution.command(['--version'], { executable: 'tar' })).toMatch(/tar/i);
+        const archive = 'absent archive; $variable & quoted.tar';
+        await expect(execution.command(['-tf', archive], { executable: 'tar' })).rejects.toThrow(archive);
+        await expect(execution.command([], { executable: path.join(execution.directory, 'absent-executable') })).rejects.toThrow('ENOENT');
+        expect(fs.readdirSync(execution.directory)).toEqual([]);
+    });
+});
+
 test('verbose children cannot grow captured output without bound', async () => {
     await new VerificationWorkspace().run(async context => {
         const output = await context.command(['-e', 'process.stdout.write("x".repeat(2*1024*1024)); process.stderr.write("y".repeat(2*1024*1024));']);
@@ -62,6 +72,32 @@ test('successful cleanup preserves the original check failure', async () => {
     const original = new Error('original check failure');
     await expect(execution.run(async () => { throw original; })).rejects.toBe(original);
     expect(fs.existsSync(execution.directory)).toBe(false);
+});
+
+test.each([undefined, null, false, 0, 'primitive verification failure'])('non-Error failures cannot become successful verification (%s)', async thrown => {
+    const execution = new VerificationWorkspace();
+    const failure = await execution.run(() => { throw thrown; }).catch(error => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure.message).toBe(String(thrown));
+    expect(failure.cause).toBe(thrown);
+    expect(fs.existsSync(execution.directory)).toBe(false);
+});
+
+test('failure normalization never invokes object coercion and retains cross-realm native errors', async () => {
+    const hostile = { toString() { throw new Error('must not coerce'); } };
+    const callable = () => {};
+    callable.toString = () => { throw new Error('must not coerce callable'); };
+    const crossRealm = require('node:vm').runInNewContext('new Error("cross-realm verification failure")');
+    for (const thrown of [Object.create(null), hostile, callable, crossRealm]) {
+        const execution = new VerificationWorkspace();
+        const failure = await execution.run(() => { throw thrown; }).catch(error => error);
+        if (thrown === crossRealm) expect(failure).toBe(crossRealm);
+        else {
+            expect(failure.message).toBe('Verification failed with a non-Error value.');
+            expect(failure.cause).toBe(thrown);
+        }
+        expect(fs.existsSync(execution.directory)).toBe(false);
+    }
 });
 
 (process.platform === 'win32' ? test : test.skip).each([true, false])(
