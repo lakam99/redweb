@@ -1,10 +1,27 @@
 const redweb = require('..');
 const { silentLogger, waitFor, openClient, closeClient } = require('./realtime-harness');
 
-const warmConnections = Number(process.env.REDWEB_RECOVERY_WARM_CONNECTIONS || 200);
-const stormConnections = Number(process.env.REDWEB_RECOVERY_STORM_CONNECTIONS || 1200);
-const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE || 50);
+const warmConnections = Number(process.env.REDWEB_RECOVERY_WARM_CONNECTIONS ?? 200);
+const stormConnections = Number(process.env.REDWEB_RECOVERY_STORM_CONNECTIONS ?? 1200);
+const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE ?? 50);
+for (const [name, value] of Object.entries({
+    REDWEB_RECOVERY_WARM_CONNECTIONS: warmConnections,
+    REDWEB_RECOVERY_STORM_CONNECTIONS: stormConnections,
+    REDWEB_RECOVERY_BATCH_SIZE: batchSize,
+})) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${name} must be a positive safe integer.`);
+}
+if (!Number.isSafeInteger(warmConnections + stormConnections)) throw new RangeError('Combined recovery connection count must be a safe integer.');
+if (!Number.isSafeInteger(batchSize * 2)) throw new RangeError('Recovery connection capacity must be a safe integer.');
+const diagnostics = process.env.REDWEB_RECOVERY_DIAGNOSTICS === '1';
+const v8 = diagnostics ? require('node:v8') : undefined;
 if (typeof global.gc !== 'function') throw new Error('Run with node --expose-gc scripts/verify-recovery.js.');
+
+// Opt-in observation only: these allocations can perturb the diagnostic run.
+// Never subtract code bytes from the acceptance measurement or budget.
+function diagnosticSnapshot() {
+    return { spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() };
+}
 
 class ReconnectHandler extends redweb.BaseHandler {
     constructor() { super('connect'); }
@@ -69,9 +86,11 @@ async function main() {
         await runConnections(route, url, 0, warmConnections);
         await new Promise(resolve => setTimeout(resolve, 400));
         const warmedHeap = await collectHeap();
+        const warmDiagnostics = diagnostics ? diagnosticSnapshot() : undefined;
         await runConnections(route, url, warmConnections, stormConnections);
         await new Promise(resolve => setTimeout(resolve, 400));
         const recoveredHeap = await collectHeap();
+        const recoveredDiagnostics = diagnostics ? diagnosticSnapshot() : undefined;
         const result = {
             warmConnections,
             stormConnections,
@@ -79,6 +98,7 @@ async function main() {
             recoveredHeap,
             recoveredHeapPercentOfWarm: recoveredHeap / warmedHeap * 100,
             registries: { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size },
+            ...(diagnostics ? { diagnostics: { warm: warmDiagnostics, recovered: recoveredDiagnostics } } : {}),
         };
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
         if (Object.values(result.registries).some(value => value !== 0) || result.recoveredHeapPercentOfWarm > 110) {
