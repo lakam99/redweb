@@ -12,14 +12,30 @@ if (args.some(arg => !['--check', '--release'].includes(arg)) || new Set(args).s
 const target = path.join(root, 'docs', 'generated.json');
 const channel = args.includes('--release') ? require('../package.json').version
     : args.includes('--check') && fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')).channel : 'unreleased';
-const catalogue = new Documentation(root, channel).build();
+const documentation = new Documentation(root, channel);
+const catalogue = documentation.build();
 const output = JSON.stringify(catalogue, null, 2) + '\n';
 const readmePath = path.join(root, 'README.md');
 const readme = fs.readFileSync(readmePath, 'utf8').replace(/\r\n/g, '\n');
-const region = /<!-- redweb:realtime:start -->[\s\S]*?<!-- redweb:realtime:end -->/g;
-if ([...readme.matchAll(region)].length !== 1) throw new Error('README must contain exactly one realtime recipe region.');
-const snippet = catalogue.pages.find(page => page.id === 'recipes/realtime').files.find(file => file.path === 'src/app.tsx').content;
-const generatedReadme = readme.replace(region, () => `<!-- redweb:realtime:start -->\n${fence(snippet, 'tsx')}\n<!-- redweb:realtime:end -->`);
+const regions = ['realtime', 'setup', 'http-ws'].map(name => {
+    const start = `<!-- redweb:${name}:start -->`;
+    const end = `<!-- redweb:${name}:end -->`;
+    const region = new RegExp(`${start}[\\s\\S]*?${end}`, 'g');
+    const matches = [...readme.matchAll(region)];
+    if (readme.split(start).length !== 2 || readme.split(end).length !== 2 || matches.length !== 1) {
+        throw new Error(`README must contain exactly one ${name} recipe region.`);
+    }
+    const content = name === 'setup' ? `${documentation.notice()}\n\n${documentation.setup('realtime')}`
+        : fence(catalogue.pages.find(page => page.id === `recipes/${name}`).files.find(file => file.path === 'src/app.tsx').content, 'tsx');
+    return { region, index: matches[0].index, length: matches[0][0].length, content: `${start}\n${content}\n${end}` };
+});
+const ordered = [...regions].sort((left, right) => left.index - right.index);
+for (let index = 1; index < ordered.length; index++) {
+    if (ordered[index - 1].index + ordered[index - 1].length > ordered[index].index) {
+        throw new Error('README recipe regions must not overlap or nest.');
+    }
+}
+const generatedReadme = regions.reduce((markdown, { region, content }) => markdown.replace(region, () => content), readme);
 if (args.includes('--check')) {
     if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== output) {
         throw new Error('Generated documentation is stale. Run npm run generate:docs.');

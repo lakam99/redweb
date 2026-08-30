@@ -1076,13 +1076,14 @@
       "id": "shared-server",
       "label": "Start here",
       "title": "HTTP and WebSockets on one listener",
-      "summary": "Build the Express side without binding, attach route classes to the same Node server, then listen once. Redweb leaves the server visible and caller-owned.",
+      "summary": "Build the Express side without binding, attach route classes to the same Node server, and explicitly give the socket service responsibility for listening and cleanup.",
+      "language": "tsx",
       "notes": [
-        "GET /health returns JSON; ws://127.0.0.1:3030/chat accepts {\"type\":\"hello\"}.",
-        "Run this file with Node after installing the matching Redweb package. It binds loopback for local development.",
-        "HTTP owns the listener. Shut down the borrowed socket service before the HTTP server. Configure authentication, trusted origins, and HTTPS/WSS before public deployment."
+        "GET /health returns JSON; ws://127.0.0.1:8181/chat accepts {\"type\":\"hello\"}. The HTTP endpoint reports liveness, not readiness.",
+        "Use the complete http-ws starter for compiler configuration, the shared entrypoint helper, and actual HTTP/WebSocket tests. It binds loopback for local development.",
+        "The socket service explicitly owns shared-listener cleanup with closeServerOnShutdown: true. Call its shutdown() rather than a second HTTP shutdown sequence. Configure authentication, trusted origins, limits, and HTTPS/WSS before public deployment."
       ],
-      "codeSource": "docs/snippets/shared-server.cjs"
+      "recipe": { "template": "http-ws", "file": "src/app.tsx" }
     },
     {
       "id": "live-html",

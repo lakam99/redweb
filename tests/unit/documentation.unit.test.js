@@ -34,6 +34,7 @@ describe('single-source documentation', () => {
             expect(recipe.markdown).toContain('npm install --save-exact TARBALL');
             expect(recipe.markdown).toContain('npm test');
             expect(recipe.markdown).toContain('No mocks');
+            expect(recipe.markdown).toContain(builder.setup(template));
         }
         const api = docs.pages.find(page => page.id === 'api-types').markdown;
         expect(api).toMatch(/export (?:interface|type) LiveHtmlServerOptions\b/);
@@ -59,6 +60,7 @@ describe('single-source documentation', () => {
         expect(() => builder.links('[unknown](missing.md)', 'docs/CLI.md')).toThrow('Undocumented link target');
         expect(() => new Documentation(root, '../release')).toThrow('exact package version');
         expect(() => new Documentation(root, version)).toThrow('Move unreleased changes');
+        expect(() => builder.setup('../unknown')).toThrow('Unknown starter template');
     });
 
     test('chooses fences that preserve nested Markdown and trailing newlines', () => {
@@ -78,7 +80,13 @@ describe('single-source documentation', () => {
             packageData.dependencies.ws = '8.0.0';
             fs.writeFileSync(packageFile, JSON.stringify(packageData));
             fs.writeFileSync(path.join(temporary, 'CHANGELOG.md'), `# Changelog\n\n## Unreleased\n\n## ${version}\n\n- Released.\n`);
-            const docs = new Documentation(temporary, version).build();
+            const builder = new Documentation(temporary, version);
+            const docs = builder.build();
+            for (const template of TEMPLATES) {
+                expect(builder.setup(template)).toContain(`npx --yes redweb@${version} init my-${template} --template ${template}`);
+                expect(builder.setup(template)).toContain(`cd my-${template}\nnpm install --save-exact redweb@${version}`);
+                expect(docs.pages.find(page => page.id === `recipes/${template}`).markdown).toContain(builder.setup(template));
+            }
             expect(docs.llms).toContain(`Documentation for Redweb ${version}`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).toContain(`npx --yes redweb@${version} init`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).not.toContain('TARBALL');

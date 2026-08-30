@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
-const TEMPLATES = Object.freeze(['realtime', 'chat', 'site', 'socket', 'dashboard']);
+const TEMPLATES = Object.freeze(['realtime', 'chat', 'site', 'socket', 'dashboard', 'http-ws']);
 
 function projectFiles(version, template = 'realtime', root = path.resolve(__dirname, '../..')) {
     if (!TEMPLATES.includes(template)) throw new Error('Unknown starter template.');

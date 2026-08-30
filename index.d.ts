@@ -1,7 +1,7 @@
 declare module 'redweb' {
     export { defineSocketContract } from 'redweb/contract';
     export type { SocketContract, ContractClient, SocketSchema, ContractInput, ContractOutput, ContractMessage } from 'redweb/contract';
-    import { Application } from 'express';
+    import { Application, RequestHandler } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
     import { Server as NodeHttpsServer } from 'https';
@@ -17,7 +17,7 @@ declare module 'redweb' {
         port?: number;
         bind?: string;
         publicPaths?: string[];
-        services?: Array<{ serviceName: string; method: string; function: Function }>;
+        services?: Array<{ serviceName: string; method: string; function: RequestHandler }>;
         listen?: boolean;
         listenCallback?: () => void;
         encoding?: RedWebEncoding;

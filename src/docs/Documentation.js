@@ -77,19 +77,23 @@ class Documentation {
             : `> Documentation for Redweb ${this.channel}. Install that exact version when following these examples.`;
     }
 
-    recipe(template) {
-        const files = projectFiles(this.manifest.version, template, this.root).map(file => ({ ...file, content: normalize(file.content) }));
-        const source = `recipes/${template}/README.md`;
-        const explanation = this.links(this.read(source), source);
-        const commands = this.channel === 'unreleased'
+    setup(template) {
+        if (!TEMPLATES.includes(template)) throw new Error('Unknown starter template.');
+        return this.channel === 'unreleased'
             ? [
                 'These instructions require an absolute path to the matching tarball, produced by `npm pack` from this checkout. Replace `TARBALL` below with that path (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball.',
                 fence(`npx --yes --package TARBALL redweb init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact TARBALL\nnpm test\nnpm run dev`, 'sh'),
             ].join('\n\n')
             : fence(`npx --yes redweb@${this.channel} init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact redweb@${this.channel}\nnpm test\nnpm run dev`, 'sh');
+    }
+
+    recipe(template) {
+        const files = projectFiles(this.manifest.version, template, this.root).map(file => ({ ...file, content: normalize(file.content) }));
+        const source = `recipes/${template}/README.md`;
+        const explanation = this.links(this.read(source), source);
         const markdown = [
             `# ${template[0].toUpperCase()}${template.slice(1)}: complete application`, this.notice(),
-            explanation, '## Setup and acceptance', commands,
+            explanation, '## Setup and acceptance', this.setup(template),
             this.read('recipes/shared/README.md').replace(/^# Your Redweb application\n/, ''),
             '## Exact generated files',
             'These files come from the initializer itself. The tests below run real listeners; they are not illustrative pseudocode. The generated manifest uses the package metadata version; the installation step above pins the matching artifact or release.',

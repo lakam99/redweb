@@ -7,10 +7,10 @@ Use the version installed in your project (`npx --no-install redweb`) when troub
 This command is currently **unreleased**, like the other branch-specific capabilities in the README.
 
 ```sh
-npx redweb add page dashboard
-npx redweb add component notifications
-npx redweb add socket-route match
-npx redweb add page account-settings --dry-run --json
+npx --no-install redweb add page dashboard
+npx --no-install redweb add component notifications
+npx --no-install redweb add socket-route match
+npx --no-install redweb add page account-settings --dry-run --json
 ```
 
 Each addition writes a named-export TypeScript module and a `.test.cjs` file. Pages and owned components demonstrate server state plus an exposed increment action. The socket route demonstrates a validated `ping` handler returning `pong`, without an inner action dispatcher; extend its contract and register additional handlers as needed. For complete join/move/resume behavior, use the existing socket starter instead.
@@ -31,17 +31,11 @@ The shared writer rejects any destination conflict before writing and creates fi
 
 ## Initialize a project
 
-```sh
-npx redweb init my-app
-cd my-app
-npm install
-npm test
-npm run dev
-```
+Follow a [complete recipe's version-specific setup](GETTING_STARTED.md#start-with-a-complete-recipe). Its commands initialize a new directory, install the matching release or packed artifact, run tests, and start development. The unreleased channel requires the same tarball for initialization and installation; ordinary `npx redweb` does not select this checkout.
 
 The initializer creates missing files only. It does not install dependencies, run package scripts, or validate existing source code. A message saying initialization completed means the file operation completed, not that a preserved existing project is valid.
 
-`--template realtime|chat|site|socket|dashboard` selects a complete runnable recipe. The default is `realtime`, a shared server-owned counter. `chat` includes the canonical reusable chat component, validated actions and its stylesheet; `site` has two non-live pages with a shared layout; `socket` exposes `/match` with separate `join`, `move`, and `resume` handlers, a shared Zod contract, and bounded in-memory sessions. The [dashboard](../recipes/dashboard/README.md) combines private live cards, SQLite persistence, explicit account provisioning, expiring sessions and account-wide sign-out. It requires Node 22.13+. Each starter includes network tests, build/production instructions, and a development watcher. `--existing` and `--template` cannot be combined. The chat, socket and dashboard starters add Zod; Redweb itself does not require Zod or SQLite at runtime.
+`--template realtime|chat|site|socket|dashboard|http-ws` selects a complete runnable recipe. The default is `realtime`, a shared server-owned counter. `chat` includes the canonical reusable chat component, validated actions and its stylesheet; `site` has two non-live pages with a shared layout; `socket` exposes `/match` with separate `join`, `move`, and `resume` handlers, a shared Zod contract, and bounded in-memory sessions. The [dashboard](../recipes/dashboard/README.md) combines private live cards, SQLite persistence, explicit account provisioning, expiring sessions and account-wide sign-out. It requires Node 22.13+. The [http-ws starter](../recipes/http-ws/README.md) combines an HTTP health endpoint and a raw socket route on one explicitly owned listener. Each starter includes network tests, build/production instructions, and a development watcher. `--existing` and `--template` cannot be combined. The chat, socket and dashboard starters add Zod; Redweb itself does not require Zod or SQLite at runtime.
 
 Doctor also checks the application's declared `engines.node` minimum (for example `>=22.13.0`). An incompatible runtime produces `PROJECT_NODE_UNSUPPORTED`. More complex ranges produce `PROJECT_NODE_UNCHECKED`, not a guessed success; npm remains responsible for its full engine-range interpretation. CI runs the dashboard acceptance tests on Node 22; older core compatibility jobs explicitly skip that recipe's runtime execution.
 
@@ -52,9 +46,9 @@ Templates come from `recipes/`, with common configuration/test helpers maintaine
 For an existing application:
 
 ```sh
-npx redweb init --existing --dry-run --json
-npx redweb init --existing
-npx redweb doctor --json
+npx --no-install redweb init --existing --dry-run --json
+npx --no-install redweb init --existing
+npx --no-install redweb doctor --json
 ```
 
 `--existing` creates only a missing `tsconfig.json`; it does not generate a new app, CSS, or package manifest. Adjust the generated source/output directories for your application. An existing `tsconfig.json` is never overwritten, even if it is incompatible.
@@ -66,8 +60,8 @@ This is not a transactional installer or a lock on the filesystem tree. An opera
 ## Diagnose without changing the project
 
 ```sh
-npx redweb doctor --json
-npx redweb doctor --port 8181
+npx --no-install redweb doctor --json
+npx --no-install redweb doctor --port 8181
 ```
 
 The current checks are explicit in the result's `checks` array:

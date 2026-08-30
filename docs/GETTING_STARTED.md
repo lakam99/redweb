@@ -12,6 +12,7 @@ Choose one of these complete applications:
 - [Chatroom](../recipes/chat/README.md): reusable stateful components, messages, and live presence.
 - [Site](../recipes/site/README.md): non-live pages with a shared layout and stylesheet.
 - [Socket service](../recipes/socket/README.md): a typed `/match` route with separate join/move/resume handlers.
+- [HTTP and WebSockets](../recipes/http-ws/README.md): one listener, an HTTP health endpoint and a raw `/chat` route with an explicit cleanup owner.
 - [Private dashboard](../recipes/dashboard/README.md): persistent SQLite cards, account sessions and private live updates (Node 22.13+).
 
 Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.

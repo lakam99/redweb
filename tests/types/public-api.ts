@@ -27,6 +27,22 @@ import {
     view,
 } from 'redweb';
 
+new HttpServer({
+    listen: false,
+    services: [{
+        serviceName: '/health', method: 'get',
+        function: (request, response, next) => {
+            const path: string = request.path;
+            response.status(200).json({ path });
+            next();
+            // @ts-expect-error Express response status requires a number, not an untyped callback argument.
+            response.status('ok');
+            // @ts-expect-error Incoming requests are not Express responses.
+            request.status(200);
+        },
+    }],
+});
+
 @component()
 class TypedComponent {
     @state()

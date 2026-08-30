@@ -4,11 +4,11 @@ Edit the canonical Markdown guides listed in `docs/topics.json`, API/article/exa
 
 `npm run generate:docs` builds a deterministic, version-labelled catalogue containing topic Markdown, full public TypeScript declarations, a compact `llms.txt`, and complete recipe files. Recipe files come from the exact same `projectFiles()` implementation used by `redweb init`. Chat continues to reuse the canonical component example. Markdown code fences expand when necessary so nested Markdown/readme examples remain intact.
 
-The README's marked realtime application block is generated from that same recipe. Other README prose is preserved. Both package/test preflights reject a stale generated block.
+The README's marked realtime and HTTP/WebSocket application blocks are generated from those same recipes. Its setup block uses the same channel-aware commands as recipe pages, including the version notice, directory change, and matching artifact for both initialization and installation. Other README prose is preserved. Package/test preflights reject stale, missing or duplicate blocks.
 
 The generated catalogue is included in the npm tarball but is not loaded by the HTTP/WebSocket runtime. A site or a separate read-only documentation adapter can consume the same JSON. Each page has a stable ID, versioned Markdown URL, source path, summary, and SHA-256 content hash. Recipe pages also contain their complete file lists. Hashes identify content, not package authenticity or signatures.
 
-API articles retain their ELI5 explanations, practical examples, walkthroughs, methods, and production cautions. Each API section and capability example also has an individual Markdown page. The shared HTTP/WebSocket homepage example is a maintained standalone program, exercised against both the checkout and packed package; it uses one listener with separate route and message-handler classes.
+API articles retain their ELI5 explanations, practical examples, walkthroughs, methods, and production cautions. Each API section and capability example also has an individual Markdown page. The shared HTTP/WebSocket example comes from the complete `http-ws` starter, exercised against both the checkout and packed package; it uses one listener with separate route and message-handler classes and the shared entrypoint lifecycle helper. Historical release snapshots retain their original source/examples.
 
 ## Version boundaries
 

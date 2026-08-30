@@ -1,6 +1,6 @@
 # Your Redweb application
 
-Requirements: Node.js 18 or newer and npm for the realtime, chat, site and socket templates; the dashboard template requires Node.js 22.13+ for native SQLite. Use a currently supported Node.js release in production.
+Requirements: Node.js 18 or newer and npm for the realtime, chat, site, socket and http-ws templates; the dashboard template requires Node.js 22.13+ for native SQLite. Use a currently supported Node.js release in production.
 
 ```sh
 npm install
@@ -34,4 +34,4 @@ For public deployment, configure HTTPS/WSS at your Node server or reverse proxy,
 and application-specific rate limits. These starters are demonstrations, not a hosted identity or database service.
 Never commit secrets; `.env` is ignored but is not loaded automatically.
 
-`npx redweb doctor --json` reports configuration problems without changing your files.
+`npx --no-install redweb doctor --json` reports configuration problems without changing your files.

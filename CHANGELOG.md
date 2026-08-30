@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Simplified the README around the first working counter and a shared HTTP/WebSocket application. Setup commands and both code blocks are generated from the same version-aware recipes; missing, duplicated, reversed or overlapping regions fail before writes. Historical migration guidance remains available in a canonical guide.
+- Added the `http-ws` starter with one explicitly owned HTTP/WebSocket listener, separate raw message handlers, shared bounded entrypoint cleanup, and real network/partial-peer/failing-cleanup tests. It replaces the separately maintained shared-server snippet and verifier. HTTP service callbacks now infer Express request, response and next types instead of requiring manual annotations.
+
 - All generated starters now share an import-safe application entrypoint helper for idempotent signal/listener-error shutdown, preserved failure exit status and a whole-application cleanup deadline. The dashboard retains database/auth cleanup without a competing HTTP timer. Generated and source-free tests exercise real processes/transports; a separate shared-helper coverage gate runs in CI.
 
 - Unified owned-listener cleanup for Live HTML and socket servers. Incomplete HTTP bodies, headers, and TLS handshakes can no longer hold shutdown open indefinitely, including after native listener close has already begun. Borrowed HTTP listeners remain application-owned. Live HTML's final HTTP cleanup has its own bounded phase; forced transport closure is not an application persistence guarantee.

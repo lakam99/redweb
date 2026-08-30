@@ -5,7 +5,6 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyStarter } = require('./lib/verify-starter');
 const { verifyDocumentation } = require('./lib/verify-documentation');
-const { verifySharedServer } = require('./lib/verify-shared-server');
 const { verifyActionInput } = require('./lib/verify-action-input');
 const { verifyRoomExample } = require('./lib/verify-room-example');
 const { verifyExampleDependencies } = require('./lib/verify-example-dependencies');
@@ -42,7 +41,6 @@ async function main() {
             verifyStarter(packageRoot, workspace, template);
         }
         verifyDocumentation(packageRoot, workspace);
-        await verifySharedServer(packageRoot);
         await verifyActionInput(packageRoot, workspace);
         await verifyRoomExample(packageRoot, workspace);
         if (manifest.bin.redweb !== 'bin/redweb.js' ||

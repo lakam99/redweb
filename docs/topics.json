@@ -1,5 +1,6 @@
 [
   { "id": "getting-started", "title": "Choose a starter and build a working app", "summary": "Requirements, fit, development, tests, and production boundaries.", "source": "docs/GETTING_STARTED.md" },
+  { "id": "migration", "title": "Upgrade an existing Redweb application", "summary": "Historical socket defaults, asynchronous ownership, HTML migration and version-matched verification.", "source": "docs/MIGRATION.md" },
   { "id": "cli", "title": "Initialization and diagnostics", "summary": "Noninteractive setup, safe existing-project adoption, and structured repair guidance.", "source": "docs/CLI.md" },
   { "id": "development", "title": "Develop with browser refresh and safe inspection", "summary": "Loopback-only refresh with an explicit edit guard, plus bounded metadata and reactive update inspection without application values.", "source": "docs/DEVELOPMENT.md" },
   { "id": "runtime-diagnostics", "title": "Understand runtime failures before retrying", "summary": "Safe authentication, authorization, validation and application errors, with actual retry and cancellation guarantees.", "source": "docs/RUNTIME_DIAGNOSTICS.md" },
