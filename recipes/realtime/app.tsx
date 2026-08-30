@@ -13,7 +13,7 @@ export class CounterPage {
                 <h1>A counter owned by the server</h1>
                 <p>Open this page in two tabs. Either button updates both.</p>
                 <button rw-click="increment">
-                    Count <output data-rw-state="count">{this.count}</output>
+                    Count <output>{this.count}</output>
                 </button>
             </main>
         );

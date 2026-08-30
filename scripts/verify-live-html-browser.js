@@ -14,12 +14,16 @@ const { CardsPage } = require('../examples/live-html/cards');
 const { ComponentsPage } = require('../examples/live-html/components');
 const { JsxPage } = require('../examples/live-html/jsx-page');
 const { jsx, jsxs } = require('../jsx-runtime');
+const { ReactivePage } = require('../tests/fixtures/reactive-pages');
 
 class TableComponent {
     count = 0;
     increment() { this.count += 1; }
     render() {
-        return html`<tr><td><output data-rw-state="count">${this.count}</output></td><td><button rw-click="increment">Add</button></td></tr>`;
+        return jsxs('tr', { children: [
+            jsx('td', { children: jsx('output', { 'data-rw-state': 'count', children: this.count }) }),
+            jsx('td', { children: jsx('button', { 'rw-click': 'increment', children: 'Add' }) }),
+        ] });
     }
 }
 component()(TableComponent);
@@ -27,7 +31,7 @@ state()(TableComponent.prototype, 'count');
 action()(TableComponent.prototype, 'increment', Object.getOwnPropertyDescriptor(TableComponent.prototype, 'increment'));
 class OptionComponent {
     label = 'Scoped option';
-    render() { return html`<option data-rw-state="label">${this.label}</option>`; }
+    render() { return jsx('option', { 'data-rw-state': 'label', children: this.label }); }
 }
 component()(OptionComponent);
 state()(OptionComponent.prototype, 'label');
@@ -219,6 +223,7 @@ async function main() {
     const cards = start(CardsPage, { port: 0, bind: '127.0.0.1', logger });
     const components = start(ComponentsPage, { port: 0, bind: '127.0.0.1', logger });
     const jsxServer = start(JsxPage, { port: 0, bind: '127.0.0.1', logger });
+    const reactiveServer = start(ReactivePage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
@@ -230,6 +235,7 @@ async function main() {
             waitForListening(cards.server),
             waitForListening(components.server),
             waitForListening(jsxServer.server),
+            waitForListening(reactiveServer.server),
             waitForListening(componentBoundaries.server),
         ]);
         const launched = await launchBrowserWithRetry(executable, profile);
@@ -320,11 +326,64 @@ async function main() {
         pages.push(jsxPage);
         await jsxPage.evaluate(`document.querySelector('[rw-click="increment"]').click()`);
         await jsxPage.evaluate(eventual(
-            `document.querySelector('output[data-rw-state="count"]').textContent === '1'`,
+            `document.querySelector('output').textContent === '1'`,
             'the TSX server action DOM update'
         ));
         const jsxCardColor = await jsxPage.evaluate("getComputedStyle(document.querySelector('.counter-card')).backgroundColor");
         if (jsxCardColor !== 'rgb(17, 24, 39)') throw new Error(`TSX page CSS was not applied: ${jsxCardColor}`);
+
+        const reactivePage = await openPage(debugPort, `http://127.0.0.1:${reactiveServer.server.address().port}/?visitor=Browser`);
+        pages.push(reactivePage);
+        await reactivePage.evaluate(`document.querySelector('#primary button').click()`);
+        await reactivePage.evaluate(eventual(`document.querySelector('#primary .derived').textContent === '4'`, 'derived component expression'));
+        await reactivePage.evaluate(`
+            window.savedInput = document.querySelector('input[name="b"]');
+            window.savedSecondary = document.querySelector('#secondary');
+            savedInput.value = 'unsubmitted draft';
+            savedInput.focus();
+            savedInput.setSelectionRange(3, 8);
+            document.querySelector('#reverse').click();
+        `);
+        await reactivePage.evaluate(eventual(`document.querySelector('li[data-item]').getAttribute('data-item') === 'c'`, 'keyed fragment reorder'));
+        const preserved = await reactivePage.evaluate(`
+            savedInput === document.querySelector('input[name="b"]') &&
+            savedInput.value === 'unsubmitted draft' && document.activeElement === savedInput &&
+            savedInput.selectionStart === 3 && savedInput.selectionEnd === 8 &&
+            savedSecondary === document.querySelector('#secondary') &&
+            document.querySelector('#primary .derived').textContent === '4'
+        `);
+        if (!preserved) throw new Error('Reactive keyed rendering lost node identity, draft input, selection, focus, or component state.');
+        await reactivePage.evaluate(`document.querySelector('#toggle').click()`);
+        await reactivePage.evaluate(eventual(`Boolean(document.querySelector('#hidden'))`, 'conditional removal'));
+        if (!await reactivePage.evaluate(`savedSecondary === document.querySelector('#secondary')`)) throw new Error('Removing a sibling replaced an unrelated identified element.');
+        await reactivePage.evaluate(`document.querySelector('#toggle').click()`);
+        await reactivePage.evaluate(eventual(`document.querySelector('#primary .derived')?.textContent === '4'`, 'conditional component restoration'));
+        await reactivePage.evaluate(`document.querySelector('[data-rw-component="nested.leaf"][rw-click]').click()`);
+        await reactivePage.evaluate(eventual(`document.querySelector('aside .derived').textContent === '4'`, 'nested component patch'));
+        await reactivePage.evaluate(`
+            document.querySelector('#server-input').value = 'draft';
+            document.querySelector('#server-textarea').value = 'draft text';
+            document.querySelector('#server-checkbox').checked = true;
+            document.querySelector('#server-select').value = 'b';
+            document.querySelector('#reverse').click();
+        `);
+        await reactivePage.evaluate(eventual(`document.querySelector('li[data-item]').getAttribute('data-item') === 'a'`, 'second reorder'));
+        if (!await reactivePage.evaluate(`
+            document.querySelector('#server-input').value === 'draft' &&
+            document.querySelector('#server-textarea').value === 'draft text' &&
+            document.querySelector('#server-checkbox').checked && document.querySelector('#server-select').value === 'b'
+        `)) throw new Error('Unchanged server values erased local form input.');
+        await reactivePage.evaluate(`
+            document.querySelector('#server-select').value = 'a';
+            const input = document.querySelector('#server-input');
+            input.focus(); input.setSelectionRange(0, 2);
+            document.querySelector('#update-controls').click();
+        `);
+        await reactivePage.evaluate(eventual(`document.querySelector('#server-input').value === '42'`, 'changed server form values'));
+        if (!await reactivePage.evaluate(`
+            document.querySelector('#server-textarea').value === 'server text' &&
+            document.querySelector('#server-checkbox').checked && document.querySelector('#server-select').value === 'b'
+        `)) throw new Error('Changed server form values were not applied.');
 
         const boundaryPage = await openPage(debugPort, `http://127.0.0.1:${componentBoundaries.server.address().port}/`);
         pages.push(boundaryPage);
@@ -340,6 +399,8 @@ async function main() {
             `document.querySelector('output[data-rw-component="row"]').textContent === '1'`,
             'the table component action under strict CSP'
         ));
+        [...componentBoundaries.manager.active.values()][0].page.option.label = 'Updated option';
+        await boundaryPage.evaluate(eventual(`document.querySelector('select option').textContent === 'Updated option'`, 'reactive option boundary'));
 
         const noscriptMarkup = HtmlRenderer.render(
             '<body><noscript><span id="hidden">{{ value }}</span></noscript><p id="after">{{ value }}</p></body>',
@@ -428,7 +489,7 @@ async function main() {
         pages.forEach(page => page.socket.close());
         await stopBrowser(browser?.child);
         await Promise.allSettled([
-            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), componentBoundaries.shutdown(),
+            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), reactiveServer.shutdown(), componentBoundaries.shutdown(),
         ]);
         try {
             await removeTemporaryDirectory(profile);

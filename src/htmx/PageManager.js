@@ -1,10 +1,12 @@
 const { createHash, randomUUID } = require('crypto');
 const path = require('path');
+const { setMaxListeners } = require('events');
 const { BaseHandler } = require('../ws/BaseHandler');
 const { SocketRoute } = require('../ws');
 const HtmlRenderer = require('./HtmlRenderer');
 const PageAssetLoader = require('./PageAssetLoader');
 const LivePage = require('./LivePage');
+const ReactiveRenderer = require('./ReactiveRenderer');
 const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
@@ -112,6 +114,7 @@ class PageManager {
         this.renderWaiters = [];
         this.renderPages = new Set();
         this.renderAbortController = new AbortController();
+        setMaxListeners(maxSessions + maxConcurrentRenders + 1, this.renderAbortController.signal);
         this.closing = false;
         pages.forEach(PageClass => this.register(PageClass));
         this.hasLivePages = [...this.records.values()].some(record => record.metadata.live !== false);
@@ -203,6 +206,7 @@ class PageManager {
         if (live) this.liveRendering += 1;
         const ownsPage = record.metadata.scope === 'connection';
         let page;
+        let renderer;
         try {
             page = ownsPage ? this.instantiate(record) : record.shared;
             this.renderPages.add(page);
@@ -212,18 +216,19 @@ class PageManager {
                 error.status = 401;
                 throw error;
             }
+            if (live) renderer = new ReactiveRenderer(page, this.renderAbortController.signal);
             const context = Object.freeze({
                 request,
                 params: request.params,
                 query: request.query,
                 body: request.body,
                 principal,
-                signal: this.renderAbortController.signal,
+                signal: renderer ? renderer.controller.signal : this.renderAbortController.signal,
             });
             await page.loading?.(context);
             await page._loadComponents(context);
             if (this.closing) throw new Error('Live HTML server is shutting down.');
-            const markup = await LivePage.withRenderContext(context, async () => {
+            const render = async () => {
                 const source = record.template ?? await page.render?.(context);
                 if (this.closing) throw new Error('Live HTML server is shutting down.');
                 if (source === undefined) throw new Error(`${record.PageClass.name} must provide a template or render().`);
@@ -232,20 +237,30 @@ class PageManager {
                 const result = synchronous(record.metadata.layout(trustedHtml(content), context), 'Page layouts must render synchronously.');
                 if (!isHtml(result)) throw new TypeError('Page layouts must return html.');
                 return renderValue(result);
-            });
+            };
+            const withContext = callback => LivePage.withRenderContext(context, callback);
+            const markup = renderer ? await renderer.initialize(render, withContext) : await withContext(render);
             if (record.metadata.live === false) {
                 const document = HtmlRenderer.document(markup, null, record.stylesheets, record.metadata.head);
                 if (ownsPage) await page.dispose();
                 return document;
             }
             const session = this.createSession(page, ownsPage, principal);
-            return HtmlRenderer.document(markup, {
+            session.renderLifetime = renderer;
+            const config = {
                 pageId: session.id,
                 socketPath: this.paths.socket,
                 runtimePath: this.paths.runtime,
                 version: PROTOCOL_VERSION,
-            }, record.stylesheets, record.metadata.head);
+            };
+            if (renderer.enabled) {
+                session.renderer = renderer;
+                renderer.document = value => HtmlRenderer.document(value, config, record.stylesheets, record.metadata.head);
+                renderer.onError = error => this.logger.error?.('Live HTML reactive render failed.', error);
+            } else renderer.nodes.clear();
+            return HtmlRenderer.document(markup, config, record.stylesheets, record.metadata.head);
         } catch (error) {
+            renderer?.dispose();
             if (ownsPage && page) await page.dispose();
             throw error;
         } finally {
@@ -311,12 +326,14 @@ class PageManager {
         this.active.set(session.id, session);
         session.socket = socket;
         socket.__redwebPageSession = session;
-        return session.page._attach(socket, Object.freeze({ socket, signal: socket.context?.signal, principal: session.principal }));
+        return session.page._attach(socket, Object.freeze({ socket, signal: socket.context?.signal, principal: session.principal }))
+            .then(result => session.renderer ? session.renderer.attach(socket, LivePage.snapshots(session.page)) : result);
     }
 
     async disconnect(socket) {
         const session = socket.__redwebPageSession;
         if (!session || session.socket !== socket) return false;
+        session.renderer?.detach();
         const detaching = Promise.resolve(session.page._detach(socket, Object.freeze({ socket })))
             .finally(() => { session.detaching = null; });
         session.detaching = detaching;
@@ -327,6 +344,7 @@ class PageManager {
     }
 
     async release(session) {
+        session.renderLifetime?.dispose();
         clearTimeout(session.timer);
         this.pending.delete(session.id);
         this.active.delete(session.id);

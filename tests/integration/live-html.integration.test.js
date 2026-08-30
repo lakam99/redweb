@@ -138,18 +138,20 @@ describe('Live HTML integration without mocks', () => {
         expect(response.status).toBe(200);
         expect(response.body).toContain('<h1>Redweb JSX</h1>');
         expect(response.body).toContain('<article class="counter-card">');
-        expect(response.body).toContain('data-rw-state="count">0</output>');
+        expect(response.body).toContain('<output>0</output>');
         const config = pageConfig(response.body);
         const updates = [];
         const client = liveClient(port, config);
-        client.on('redweb:state', message => updates.push(message.payload));
+        client.on('redweb:patch', message => updates.push(message.payload));
         clients.add(client);
         await client.connect();
         await waitForCondition(() => updates.length === 1, 'JSX state snapshot');
-        expect(updates[0]).toEqual({ name: 'count', value: '0', html: false });
+        expect(updates[0].patches[0].html).toContain('<output>0</output>');
+        expect(updates[0].states).toEqual([]);
         await client.request('redweb:html', { kind: 'action', name: 'increment', args: [] });
         await waitForCondition(() => updates.length === 2, 'JSX action state update');
-        expect(updates[1]).toEqual({ name: 'count', value: '1', html: false });
+        expect(updates[1].patches[0].html).toContain('<output>1</output>');
+        expect(updates[1].states).toEqual([]);
     });
 
     async function connectClient(port, config) {

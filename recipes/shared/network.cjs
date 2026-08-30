@@ -44,6 +44,7 @@ async function live(t, origin) {
     const connection = await connect(t, `${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, origin);
     return {
         ...connection,
+        patch: predicate => connection.receive(message => message.type === 'redweb:patch' && message.payload.patches.some(predicate)),
         action: (name, args = [], component) => connection.send({
             v: config.version, type: 'redweb:html', payload: { kind: 'action', name, args, component },
         }),

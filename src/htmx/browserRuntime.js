@@ -1,8 +1,11 @@
+const browserMorph = require('./browserMorph');
+
 function browserRuntime(clientPath) {
     return `import { RedwebClient } from ${JSON.stringify(clientPath)};
 
 const configNode = document.getElementById('__redweb_page');
 const config = JSON.parse(configNode.textContent);
+${browserMorph()}
 const client = new RedwebClient(config.socketPath + '?pageId=' + encodeURIComponent(config.pageId), {
     baseUrl: window.location.href,
     version: config.version,
@@ -30,12 +33,11 @@ const named = (attribute, name, component) => attribute === 'data-rw-state'
         node.getAttribute(attribute) === name && componentOf(node) === component);
 indexState();
 
-client.on('redweb:state', message => {
-    const update = message.payload;
+const applyState = update => {
     const component = update.component || null;
     named('data-rw-state', update.name, component).forEach(node => {
         if (update.html) {
-            node.innerHTML = update.value;
+            morphContent(node, update.value);
             indexState();
         }
         else node.textContent = update.value;
@@ -44,6 +46,16 @@ client.on('redweb:state', message => {
         if (node.type === 'checkbox') node.checked = update.value === true || update.value === 'true';
         else if (node.value !== update.value) node.value = update.value;
     });
+};
+client.on('redweb:state', message => preserveFocus(() => applyState(message.payload)));
+client.on('redweb:patch', message => {
+    try {
+        preserveFocus(() => {
+            message.payload.patches.forEach(applyPatch);
+            indexState();
+            message.payload.states.forEach(applyState);
+        });
+    } catch (error) { report(error); }
 });
 
 const report = error => emit('redweb:error', error);

@@ -1,6 +1,7 @@
 const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
 const TemplateRenderer = require('./TemplateRenderer');
+const ReactiveRenderer = require('./ReactiveRenderer');
 const { isHtml, markHtml, renderValue } = require('./Html');
 const { forEachState, getActionImplementation, getStateConfig, isComponentClass } = require('./metadata');
 
@@ -80,6 +81,13 @@ class LivePage {
         return payload;
     }
 
+    static snapshots(page) {
+        const values = [];
+        forEachState(page.constructor, (_options, name) => values.push(LivePage.statePayload(page, name, page[name])));
+        for (const child of runtime(page).children.values()) values.push(...LivePage.snapshots(child));
+        return values;
+    }
+
     static withRenderContext(context, render) {
         return COMPONENT_RENDER_CONTEXT.run(context, render);
     }
@@ -119,8 +127,12 @@ class LivePage {
             Object.defineProperty(this, name, {
                 configurable: true,
                 enumerable: true,
-                get: () => internal.stateValues.get(name),
+                get: () => {
+                    ReactiveRenderer.read(this, name);
+                    return internal.stateValues.get(name);
+                },
                 set: value => {
+                    ReactiveRenderer.assertWritable();
                     const previous = internal.stateValues.get(name);
                     internal.stateValues.set(name, value);
                     if (previous !== value) LivePage.prototype._stateChanged.call(this, name, value);
@@ -141,11 +153,13 @@ class LivePage {
     _renderComponent() {
         const internal = runtime(this);
         if (!internal.componentId) throw new Error('Components must be owned by a page field before rendering.');
-        const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
-        if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
-        if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
-        const markup = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), this);
-        return TemplateRenderer.component(markup, internal.componentId);
+        return ReactiveRenderer.component(this, internal.componentId, () => {
+            const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
+            if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
+            if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
+            const markup = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), this);
+            return TemplateRenderer.component(markup, internal.componentId);
+        });
     }
 
     _component(id) {
@@ -164,6 +178,7 @@ class LivePage {
         if (internal.disposed) throw new Error('Cannot connect a disposed page.');
         internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
+            if (socket.__redwebPageSession?.renderer) return;
             const payload = LivePage.statePayload(this, name, this[name]);
             socket.sendEvent?.('redweb:state', payload);
         });
@@ -190,7 +205,11 @@ class LivePage {
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
         const payload = LivePage.statePayload(this, name, value);
-        runtime(this).connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
+        runtime(this).connections.forEach(socket => {
+            const renderer = socket.__redwebPageSession?.renderer;
+            if (renderer) renderer.invalidate(this, name, payload);
+            else socket.sendEvent?.('redweb:state', payload);
+        });
         return true;
     }
 

@@ -41,7 +41,7 @@ class CounterPage extends LivePage {
     return (
       <Panel title="Server counter">
         <button rw-click="increment">
-          Count <output data-rw-state="count">{this.count}</output>
+          Count <output>{this.count}</output>
         </button>
       </Panel>
     );
@@ -51,7 +51,27 @@ class CounterPage extends LivePage {
 
 Intrinsic elements, fragments (`<>...</>`), nested readonly arrays, and synchronous function components are supported. Strings, numbers, and attributes are escaped once; null, undefined, and boolean children render nothing. Safe existing `html` fragments compose in either direction.
 
-JSX intentionally remains a server serializer rather than a React compatibility layer. It retains no tree and provides no hooks, refs, hydration, client event functions, or object-style API. Use `rw-click`, `rw-submit`, `rw-bind`, and the other Redweb directives for server actions, and use `@page({ css })` or external assets for styling and scripts. Unsafe URL protocols, `on*`, dynamic `style`, `srcdoc`, `srcset`, children on void elements, and executable `<script>` or `<style>` children are rejected.
+JSX remains a server renderer rather than a React compatibility layer: no React hooks, refs, hydration, client event functions, or object-style API. Live sessions retain owner-level HTML snapshots and state dependencies for automatic updates; static pages retain no reactive tree and ship no runtime. Use `rw-click`, `rw-submit`, `rw-bind`, and the other Redweb directives for server actions, and use `@page({ css })` or external assets for styling and scripts. Unsafe URL protocols, `on*`, dynamic `style`, `srcdoc`, `srcset`, children on void elements, and executable `<script>` or `<style>` children are rejected.
+
+## Automatic reactive TSX
+
+A decorated state read during `render()` subscribes that page or class component to the state. Changing the property rerenders the affected owners, batches synchronous assignments, and sends changed HTML only. Ordinary expressions such as `{this.count * 2}`, conditional branches, and `.map()` need no state-binding attributes. Function components participate in their enclosing owner's render; use a class `@component()` for an independently stateful boundary.
+
+```tsx
+render() {
+  return <ul>{this.cards.map(card => (
+    <li key={card.id}><input name="title" value={card.title} /></li>
+  ))}</ul>;
+}
+```
+
+Keys must be stable strings or numbers (at most 256 characters), unique among siblings. Keyed elements and fragments preserve their DOM nodes during moves. Unchanged server values preserve unsent input; a changed server `value` or `checked` attribute intentionally updates the control. Focus and text selection are preserved when their node survives. Removing a keyed item removes its local input state. Unkeyed repeated items do not promise identity across reordering.
+
+Updates use `redweb:patch` with owner patches and any explicit state bindings in one frame. Existing non-TSX pages continue using `redweb:state`. Explicit `data-rw-state` and `rw-bind` directives can coexist with TSX; do not combine a direct binding with a different derived expression on the same element. The runtime reconciles HTML rather than executing browser components. Internal HTML comments delimit components/keys without introducing layout wrappers, including inside table bodies and selects.
+
+State changes remain assignment-driven. Mutating an array or object in place is not observed; assign a new value. `render()` must be side-effect-free with respect to decorated state (writes during rendering throw). Loading, connections, timers, and persistence belong in lifecycle hooks or actions, which are not rerun for UI patches. Hiding an element is not an authorization boundary for its actions.
+
+Each HTTP/page session retains its own request context and snapshots, even when the underlying page state is shared. Reconnect sends a current root snapshot. Disconnect discards unfinished update results; session disposal aborts its render signal and releases snapshots. Async rendering has a five-second limit, and a snapshot tree is bounded to 1 MiB of retained HTML and 1,024 owners. These bounds include nested snapshots, not just visible document size. As with ordinary JavaScript, synchronous application code cannot be preempted; async work should honor cancellation and avoid unbounded operations. A failed update is logged and closes the affected connection instead of emitting partial HTML.
 
 This layer deliberately owns page concerns only: `@page`, `@state`, `@view`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
 

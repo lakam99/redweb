@@ -53,6 +53,7 @@ test('the generated dev command rebuilds TSX/CSS, refuses type errors, and recov
         }, 'stylesheet rebuild');
         fs.writeFileSync(source, `${changed}\nconst invalid: number = 'not a number';\n`);
         await eventually(() => output.includes('TS2322'), 'type failure reported');
+        await eventually(() => output.includes('app crashed'), 'watcher remains alive after the compiler exits');
         expect(output).not.toContain('EADDRINUSE');
         fs.writeFileSync(source, changed.replace('Updated by watch', 'Recovered after type error'));
         await eventually(async () => (await request({ port })).body.includes('Recovered after type error'), 'type repair rebuild');

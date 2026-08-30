@@ -110,7 +110,7 @@ class CounterPage extends LivePage {
       <main>
         <Card title="Server counter">
           <button rw-click="increment">
-            Count <output data-rw-state="count">{this.count}</output>
+            Count <output>{this.count}</output>
           </button>
         </Card>
       </main>
@@ -154,7 +154,9 @@ start(CounterPage, { port: 8080 });
 <output aria-live="polite" data-rw-state="count"></output>
 ```
 
-Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
+In live TSX pages, ordinary expressions over `@state()` update automatically: no repeated `data-rw-state` name is required. Redweb tracks which page or class component reads each state property, batches assignments, rerenders affected owners, and reconciles the resulting HTML in the browser. Derived expressions and conditionals use normal TypeScript. Use stable JSX `key` values for lists to preserve DOM identity and unsent input during reordering. Explicit template/state bindings remain available and share a single update frame with reactive patches.
+
+State is still shallow and assignment-driven: use `this.items = [...this.items, item]`, not `this.items.push(item)`. Rendering must not mutate decorated state or perform lifecycle work. Each browser session keeps its own render context, even for shared page state. See [reactive rendering and limits](docs/LIVE_HTML.md#automatic-reactive-tsx).
 
 CSS is colocated with the page and needs no static-server setup. Pass one file with `css: 'counter.css'` or compose several with `css: ['base.css', 'counter.css']`. Redweb resolves the files beside the decorated class, injects `<link>` elements during SSR, and serves content-addressed stylesheets with immutable browser caching.
 
@@ -183,7 +185,7 @@ class ChatroomPage {
 
 Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
 
-Collections use the same model without manual concatenation. Keep the array in `@state()`, render one item with `@view('cards')`, and place it with `<section rw-each="cards"></section>`. Item views must return `html` fragments, so values remain escaped. The current protocol replaces the collection contents atomically; keyed incremental patches can be added later without changing the page API.
+TSX collections use ordinary `.map()` with stable keys, such as `{this.cards.map(card => <article key={card.id}>{card.title}</article>)}`. Declarative templates can instead keep the array in `@state()`, render one item with `@view('cards')`, and place it with `<section rw-each="cards"></section>`. Item views must return `html` fragments, so values remain escaped.
 
 Documentation and content-heavy pages can compose nested fragments without a client framework:
 

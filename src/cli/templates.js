@@ -24,7 +24,7 @@ function projectFiles(version, template = 'realtime') {
         nodemonConfig: {
             watch: ['src', 'tsconfig.json'],
             ext: 'ts,tsx,css,html,json',
-            exec: 'npm run build && npm start',
+            exec: 'npm run build && npm start || exit 1',
             delay: 200,
         },
     };

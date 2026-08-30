@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added automatic live TSX owner rendering: tracked state reads, batched component-scoped patches, derived expressions/conditionals, keyed element and fragment reconciliation, per-visitor shared-page contexts, reconnect snapshots, cancellation, and bounded retained snapshots. Explicit bindings remain supported without a second conflicting state frame. The TSX counter and realtime starter now use plain expressions without duplicate binding names.
+- Fixed development watching after TypeScript exits with code 2; the watcher remains active for subsequent repairs.
+
 - Added `realtime` (default), `chat`, `site`, and `socket` starters with one shared scaffolding path, generated real-network tests, development watch/restart, and compiled production assets. The chat starter uses the existing canonical component rather than duplicating its behavior. Every starter is exercised against the packed package, including execution without the source directory.
 
 - Added explicit existing-project initialization, read-only dry-run plans, structured CLI output, and preflight checks that refuse conflicting paths and linked subdirectories.
