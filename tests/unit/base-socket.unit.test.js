@@ -33,6 +33,25 @@ function fakeServer() {
 }
 
 describe('BaseSocketServer units', () => {
+    test.each(['getter', 'prototype'])('capacity routes keep %s authorization inside the protected lifecycle', async mode => {
+        const original = SocketRoute.prototype.authorizeUpgrade;
+        const server = new BaseSocketServer(fakeServer(), { routes: [FirstRoute], logger: null });
+        const route = server.routes[0];
+        route.transportPolicy = { maxConnections: 1 };
+        const socket = { destroyed: false, end: jest.fn() };
+        server.completeUpgrade = jest.fn();
+        try {
+            if (mode === 'getter') Object.defineProperty(route, 'authorizeUpgrade', { get() { throw new Error('private authorization detail'); } });
+            else SocketRoute.prototype.authorizeUpgrade = () => false;
+            expect(() => server.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0))).not.toThrow();
+            await new Promise(setImmediate);
+            expect(socket.end).toHaveBeenCalledWith(expect.stringContaining(mode === 'getter' ? '500 Internal Server Error' : '401 Unauthorized'));
+            expect(server.completeUpgrade).not.toHaveBeenCalled();
+            expect(server.pendingUpgrades.size).toBe(0);
+            expect(route.pendingCapacity).toBe(0);
+            expect(route.pendingUpgrades).toBe(0);
+        } finally { SocketRoute.prototype.authorizeUpgrade = original; }
+    });
     test('validates the server and options', () => {
         expect(() => new BaseSocketServer()).toThrow('server is required');
         const server = fakeServer();
