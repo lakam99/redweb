@@ -69,12 +69,19 @@ function assertSafePath(destination, root) {
             throw new Error(`Nonportable destination segment: ${part}`);
         }
     }
+    const ancestors = [];
     for (let current = destination; ; current = path.dirname(current)) {
+        ancestors.push(current);
+        if (path.dirname(current) === current) break;
+    }
+    // Check parents before descendants: POSIX lstat throws ENOTDIR below a file,
+    // and no descendant should be inspected through an unchecked symbolic link.
+    for (const current of ancestors.reverse()) {
         const entry = fs.lstatSync(current, { throwIfNoEntry: false });
         if (entry?.isSymbolicLink()) throw new Error(`Refusing to initialize through a symbolic link: ${current}`);
         if (current !== destination && entry && !entry.isDirectory()) throw new Error(`Expected a directory at ${current}; nothing was written.`);
         const parent = path.dirname(current);
-        if (parent === current) return;
+        if (parent === current) continue;
         // Portable plans must not create case aliases even on a case-sensitive host.
         if ((current === root || current.startsWith(`${root}${path.sep}`)) && fs.lstatSync(parent, { throwIfNoEntry: false })?.isDirectory()) {
             const name = path.basename(current);

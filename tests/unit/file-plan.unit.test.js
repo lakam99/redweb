@@ -48,6 +48,18 @@ describe('shared scaffold file-plan writer on the real filesystem', () => {
         fs.writeFileSync(path.join(root, 'blocked'), 'existing file');
         expect(() => new FilePlan(root, [file('blocked/new.ts')]).write()).toThrow('Expected a directory');
     });
+    test('preflights obstructed ancestors before inspecting descendants or writing any planned file', () => {
+        fs.mkdirSync(root);
+        fs.writeFileSync(path.join(root, 'blocked'), 'user-owned file');
+        for (const dryRun of [true, false]) {
+            expect(() => new FilePlan(root, [file('safe.ts'), file('blocked/missing/new.ts')]).write({ dryRun }))
+                .toThrow(`Expected a directory at ${path.join(root, 'blocked')}`);
+            expect(() => new FilePlan(path.join(root, 'blocked/project'), [file('new.ts')]).write({ dryRun }))
+                .toThrow(`Expected a directory at ${path.join(root, 'blocked')}`);
+        }
+        expect(fs.readFileSync(path.join(root, 'blocked'), 'utf8')).toBe('user-owned file');
+        expect(fs.readdirSync(root)).toEqual(['blocked']);
+    });
     test('refuses symlink ancestors above the chosen project root', () => {
         fs.mkdirSync(path.join(workspace, 'real'));
         const link = path.join(workspace, 'linked');
