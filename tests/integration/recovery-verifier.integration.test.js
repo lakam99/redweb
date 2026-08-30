@@ -102,37 +102,37 @@ test('aggregate unit cases redact arbitrary labels and reject malformed metadata
     expect(() => summarize({ ...fixture, snapshot: { meta: { node_fields: {}, node_types: [] } } })).toThrow();
 });
 
-test('fixed candidate uses preconditioning and three storms against one unchanged baseline', async () => {
+test.each(['steady-v2', undefined])('fixed protocol uses five storms against one baseline (selection=%s)', async protocol => {
     await new VerificationWorkspace().run(async owner => {
         const result = JSON.parse(await owner.command(['--expose-gc', script], {
-            environment: { ...configured, REDWEB_RECOVERY_PROTOCOL: 'steady-v2' }, timeoutMs: 20000,
+            environment: { ...configured, REDWEB_RECOVERY_PROTOCOL: protocol }, timeoutMs: 20000,
         }));
-        expect(result).toMatchObject({ protocol: 'steady-v2', preconditioningConnections: 4, stormRounds: 3 });
-        expect(result.cycles).toHaveLength(3);
+        expect(result).toMatchObject({ protocol: 'steady-v2', preconditioningConnections: 4, stormRounds: 5 });
+        expect(result.cycles).toHaveLength(5);
         for (const phase of [result.preconditioning, result.warm, ...result.cycles]) {
             expect(phase.registries).toEqual({ clients: 0, rooms: 0, sessions: 0 });
             expect(phase.heap).toBeGreaterThan(0);
         }
         for (const cycle of result.cycles) expect(cycle.recoveredHeapPercentOfWarm).toBe(cycle.heap / result.warmedHeap * 100);
-        expect(result.recoveredHeap).toBe(result.cycles[2].heap);
+        expect(result.recoveredHeap).toBe(result.cycles[4].heap);
         await expect(owner.command(['--expose-gc', script], {
             environment: { ...configured, REDWEB_RECOVERY_PROTOCOL: 'adaptive' }, timeoutMs: 10000,
         })).rejects.toThrow('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2');
     });
 }, 35000);
 
-test('extended candidate preserves its baseline and cannot reduce the declared storm count', async () => {
+test('extended protocol preserves its baseline and cannot reduce the declared storm count', async () => {
     await new VerificationWorkspace().run(async owner => {
         const environment = { ...configured, REDWEB_RECOVERY_PROTOCOL: 'steady-v2' };
-        for (const value of ['', '0', '2', '3.5', 'invalid', 'Infinity', '9007199254740992']) {
+        for (const value of ['', '0', '2', '3', '4', '3.5', 'invalid', 'Infinity', '9007199254740992']) {
             await expect(owner.command(['--expose-gc', script], {
                 environment: { ...environment, REDWEB_RECOVERY_STORM_ROUNDS: value }, timeoutMs: 10000,
-            })).rejects.toThrow('REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least 3');
+            })).rejects.toThrow('REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least 5');
         }
         const result = JSON.parse(await owner.command(['--expose-gc', script], {
-            environment: { ...environment, REDWEB_RECOVERY_STORM_ROUNDS: '5' }, timeoutMs: 20000,
+            environment: { ...environment, REDWEB_RECOVERY_STORM_ROUNDS: '7' }, timeoutMs: 20000,
         }));
-        expect(result.cycles).toHaveLength(5);
+        expect(result.cycles).toHaveLength(7);
         for (const cycle of result.cycles) expect(cycle.recoveredHeapPercentOfWarm).toBe(cycle.heap / result.warmedHeap * 100);
     });
 }, 95000);

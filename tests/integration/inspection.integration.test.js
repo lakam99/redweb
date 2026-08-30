@@ -117,6 +117,21 @@ test('disabled inspection uses the original renderer and adds no listeners or br
     await first.client.request('redweb:html', { kind: 'action', name: 'nothing', args: [] });
 });
 
+test('a native closing socket is not reported as retained before reconnect admission is ready', async () => {
+    await boot(SharedReactivePage);
+    const first = await visitor();
+    const session = server.manager.active.get(first.config.pageId);
+    const socket = session.socket;
+    socket.close();
+    expect(socket.readyState).toBe(WebSocket.CLOSING);
+    expect(server.inspect().pages.connections).toEqual({ connected: 0, pending: 0, detaching: 1, retained: 0 });
+    await waitForCondition(() => server.inspect().pages.connections.retained === 1, 'completed native disconnect');
+    expect(session.socket).toBeNull();
+    expect(session.detaching).toBeNull();
+    await visitor(first.config);
+    expect(server.inspect().pages.connections.connected).toBe(1);
+});
+
 test('raw route inspection follows dynamic handlers/routes without materializing socket context', async () => {
     class Echo extends BaseHandler { constructor() { super('echo'); } onMessage() {} }
     class Route extends SocketRoute { constructor() { super({ path: '/first', handlers: [Echo], allowDuplicateConnections: true }); } }

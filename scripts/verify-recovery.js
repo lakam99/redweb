@@ -4,11 +4,11 @@ const { silentLogger, waitFor, openClient, closeClient } = require('./realtime-h
 const warmConnections = Number(process.env.REDWEB_RECOVERY_WARM_CONNECTIONS ?? 200);
 const stormConnections = Number(process.env.REDWEB_RECOVERY_STORM_CONNECTIONS ?? 1200);
 const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE ?? 50);
-// Keep the original acceptance protocol until the fixed candidate is reviewed
-// across runtimes. Its warm-up is declared in advance, never adjusted to pass.
-const protocol = process.env.REDWEB_RECOVERY_PROTOCOL ?? 'cold-v1';
+// Fixed preconditioning distinguishes runtime warm-up from retained application
+// growth. Keep the original cold protocol selectable for historical comparisons.
+const protocol = process.env.REDWEB_RECOVERY_PROTOCOL ?? 'steady-v2';
 if (!['cold-v1', 'steady-v2'].includes(protocol)) throw new TypeError('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2.');
-const minimumRounds = protocol === 'steady-v2' ? 3 : 1;
+const minimumRounds = protocol === 'steady-v2' ? 5 : 1;
 const stormRounds = Number(process.env.REDWEB_RECOVERY_STORM_ROUNDS ?? minimumRounds);
 if (!Number.isSafeInteger(stormRounds) || stormRounds < minimumRounds) {
     throw new TypeError(`REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least ${minimumRounds}.`);

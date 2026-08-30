@@ -96,8 +96,9 @@ class Inspection {
 }
 
 function sessionStatus(manager, session) {
-    return session.detaching ? 'detaching' : session.socket?.readyState === 1 ? 'connected' :
-        manager.pending.has(session.id) ? 'pending' : 'retained';
+    if (session.detaching) return 'detaching';
+    if (session.socket) return session.socket.readyState === 1 ? 'connected' : 'detaching';
+    return manager.pending.has(session.id) ? 'pending' : 'retained';
 }
 
 module.exports = { Inspection, createInspection };
