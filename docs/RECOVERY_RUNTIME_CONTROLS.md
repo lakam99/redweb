@@ -176,3 +176,6 @@ or resolve the original shared-process CI failure. No further repeated benchmark
 is justified merely to obtain a smaller number or a flushing event. Original
 acceptance limits, runtime/library sources, dependencies, npm links, publication
 and deployment remain unchanged. No raw heap snapshots were taken.
+
+Follow-up: [client code-creation census](RECOVERY_CODE_CENSUS.md) identifies
+concrete normal-JIT compilation candidates without claiming retained-size proof.
