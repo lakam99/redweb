@@ -9,6 +9,7 @@ test.each(['server', 'client'])('diagnostic flags are explicit and isolated for 
     expect(workerFlags(role, 'client-jitless')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc', '--jitless']);
     expect(workerFlags(role, 'client-code')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc',
         '--log-code', '--no-log-source-code', '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-']);
+    expect(workerFlags(role, 'client-deopt')).toEqual(role === 'server' ? ['--expose-gc'] : [...workerFlags(role, 'client-code'), '--log-deopt']);
     expect(() => workerFlags(role, '--arbitrary-flag')).toThrow('Unknown diagnostic mode');
 });
 

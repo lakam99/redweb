@@ -209,10 +209,10 @@ test('successful worker stop drains queued stdout before process exit', () =>
         }
     }), 20000);
 
-test('native client code log brackets real traffic without source text or server instrumentation', () =>
+test.each(['client-code', 'client-deopt'])('native %s log brackets real traffic without source text or server instrumentation', mode =>
     new VerificationWorkspace().run(async workspace => {
         const output = outputRecorder(workspace.directory);
-        const options = { mode: 'client-code', output: output.write, coverageDirectory: process.env.NODE_V8_COVERAGE };
+        const options = { mode, output: output.write, coverageDirectory: process.env.NODE_V8_COVERAGE };
         const server = new DiagnosticProcess('server', options);
         const client = new DiagnosticProcess('client', options);
         let port;
@@ -224,7 +224,7 @@ test('native client code log brackets real traffic without source text or server
                 expect(await server.request('barrier')).toEqual({ received: start + 50 });
                 for (const [role, child] of [['server', server], ['client', client]]) {
                     const sample = await child.request('sample', { phase });
-                    expect(sample.execArgv).toEqual(workerFlags(role, 'client-code'));
+                    expect(sample.execArgv).toEqual(workerFlags(role, mode));
                     expect(Object.values(sample.registries).every(value => value === 0)).toBe(true);
                 }
             }

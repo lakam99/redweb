@@ -10,11 +10,12 @@ const { withTimeout } = require('../../tests/helpers/network');
 
 function workerFlags(role, mode = 'baseline') {
     assert(['server', 'client'].includes(role), 'Unknown diagnostic role');
-    assert(['baseline', 'trace', 'client-jitless', 'client-code'].includes(mode), 'Unknown diagnostic mode');
+    assert(['baseline', 'trace', 'client-jitless', 'client-code', 'client-deopt'].includes(mode), 'Unknown diagnostic mode');
     return ['--expose-gc', ...(mode === 'trace' ? ['--trace-gc', '--trace-flush-code'] : []),
         ...(mode === 'client-jitless' && role === 'client' ? ['--jitless'] : []),
-        ...(mode === 'client-code' && role === 'client' ? ['--log-code', '--no-log-source-code',
-            '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-'] : [])];
+        ...(['client-code', 'client-deopt'].includes(mode) && role === 'client' ? ['--log-code', '--no-log-source-code',
+            '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-'] : []),
+        ...(mode === 'client-deopt' && role === 'client' ? ['--log-deopt'] : [])];
 }
 
 // Append synchronously in the coordinator: no unbounded stream buffer or open
@@ -194,6 +195,7 @@ function fingerprint() {
     const files = ['index.js', 'package.json', 'package-lock.json',
         'scripts/diagnostics/recovery-split.cjs', 'scripts/diagnostics/recovery-split-worker.cjs',
         'scripts/diagnostics/recovery-code-summary.cjs',
+        'scripts/diagnostics/DeoptimizationCensus.cjs',
         'scripts/verify-recovery.js', 'scripts/realtime-harness.js'];
     const walk = directory => {
         for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
@@ -212,7 +214,7 @@ function fingerprint() {
 }
 
 async function main() {
-    assert(process.argv.length <= 3, 'Usage: node recovery-split.cjs [baseline|trace|client-jitless|client-code]');
+    assert(process.argv.length <= 3, 'Usage: node recovery-split.cjs [baseline|trace|client-jitless|client-code|client-deopt]');
     const mode = process.argv[2] ?? 'baseline';
     workerFlags('server', mode);
     const base = path.resolve(__dirname, '../../coverage');
@@ -245,7 +247,7 @@ async function main() {
             if (output) {
                 report.outputFiles = output.summary();
                 assert(Object.values(report.outputFiles).every(log => log.complete), 'Diagnostic output is incomplete');
-                if (mode === 'client-code') {
+                if (['client-code', 'client-deopt'].includes(mode)) {
                     report.codeCensus = require('./recovery-code-summary.cjs').summarize(
                         fs.readFileSync(path.join(directory, 'client.stdout.log'), 'utf8'));
                 }
