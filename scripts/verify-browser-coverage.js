@@ -19,6 +19,8 @@ const browserRuntime = require('../src/htmx/browserRuntime');
 const { verifyActionFeedback } = require('./lib/verify-action-feedback');
 const runFeedbackCases = require('../tests/fixtures/browser-feedback-cases');
 const { verifyRuntimeBrowser } = require('./lib/verify-runtime-browser');
+const refreshBrowser = require('../src/development/refreshBrowser');
+const { verifyRefreshCoverage } = require('./lib/verify-refresh-coverage');
 
 const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
@@ -89,12 +91,12 @@ async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     const mode = process.argv[2] || 'morph';
-    const sources = { morph: browserMorph, feedback: browserFeedback, runtime: () => browserRuntime('/__redweb/client.js') };
-    assert.ok(Object.hasOwn(sources, mode), 'Expected morph, feedback or runtime coverage mode');
+    const sources = { morph: browserMorph, feedback: browserFeedback, runtime: () => browserRuntime('/__redweb/client.js'), refresh: refreshBrowser };
+    assert.ok(Object.hasOwn(sources, mode), 'Expected morph, feedback, runtime or refresh coverage mode');
     const coverage = new BrowserCoverage(`browser${mode[0].toUpperCase() + mode.slice(1)}.generated.js`, sources[mode]());
     const run = { id: randomUUID(), startedAt: new Date().toISOString() };
     const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
-        let browser, coveredTab, application, failure, launchAttempted = false;
+        let browser, coveredTab, application, refreshPeer, failure, launchAttempted = false;
         const tabs = [];
         const recordFailure = error => { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
         const server = mode === 'morph' ? http.createServer((request, response) => {
@@ -120,7 +122,10 @@ async function main() {
                 tabs.push(tab);
                 return tab;
             };
-            if (mode !== 'morph') {
+            if (mode === 'refresh') {
+                for (const instrumented of [false, true]) await verifyRefreshCoverage({ coverage, instrumented, visit, debugPort, directory: execution.directory, run, onPeer: peer => { refreshPeer = peer; } });
+                assert.deepEqual(run.instrumentedCases, run.plainCases);
+            } else if (mode !== 'morph') {
                 for (const instrumented of [false, true]) {
                     await verifyFeedback({
                         coverage, debugPort, run, instrumented, mode, onServer: server => { application = server; },
@@ -153,6 +158,8 @@ async function main() {
             for (const tab of tabs) tab.socket.terminate();
             try { if (application) await bounded(application.shutdown(), 'live server shutdown'); }
             catch (error) { execution.cleanupFailure = error; recordFailure(error); }
+            try { if (refreshPeer) await bounded(refreshPeer.pause(), 'revision peer cleanup'); }
+            catch (error) { execution.cleanupFailure = error; refreshPeer.server.unref(); recordFailure(error); }
             try {
                 if (browser) {
                     await bounded(stopBrowser(browser.child), 'browser shutdown');

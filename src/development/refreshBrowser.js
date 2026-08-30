@@ -74,7 +74,8 @@ if (host && validRevision(initialRevision)) {
             clearTimeout(timeout);
             if (generation === lifetime) {
                 request = null;
-                if (!stopped) timer = setTimeout(poll, 1000);
+                // cleanup always advances lifetime before stopping this generation.
+                timer = setTimeout(poll, 1000);
             }
         }
     };

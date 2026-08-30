@@ -12,7 +12,8 @@ class BrowserCoverage {
         this.filename = filename;
         this.source = source;
         this.sha256 = createHash('sha256').update(source).digest('hex');
-        const instrumenter = createInstrumenter({ coverageVariable: '__redwebBrowserCoverage__', esModules: true });
+        const instrumenter = createInstrumenter({ coverageVariable: '__redwebBrowserCoverage__', esModules: true,
+            coverageGlobalScope: 'globalThis', coverageGlobalScopeFunc: false });
         this.instrumented = instrumenter.instrumentSync(source, filename);
         // CDP transports coverage as JSON, omitting undefined location fields.
         this.map = createCoverageMap(JSON.parse(JSON.stringify({ [filename]: instrumenter.lastFileCoverage() })));

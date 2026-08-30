@@ -8,11 +8,13 @@ const { randomUUID } = require('crypto');
 const { openPage, combineFailures } = require('../verify-live-html-browser');
 const refreshBrowser = require('../../src/development/refreshBrowser');
 const styles = require('../../src/development/refreshStyles');
+const { withTimeout, waitForListening } = require('../../tests/helpers/network');
 
 // A real HTTP peer for browser transport/lifecycle failure injection. No fetch,
 // DOM, timer or WebSocket implementation is replaced by the test.
 class RevisionPeer {
-    constructor() {
+    constructor(script = refreshBrowser()) {
+        this.script = script;
         this.revision = randomUUID();
         this.mode = 'valid';
         this.kind = 'input';
@@ -23,21 +25,28 @@ class RevisionPeer {
         this.aborted = 0;
         this.maximumPending = 0;
         this.seen = [];
+        this.closing = null;
         this.server = http.createServer((request, response) => this.respond(request, response));
     }
     async listen() {
-        await new Promise(resolve => this.server.listen(this.port || 0, '127.0.0.1', resolve));
+        if (this.closing) await withTimeout(this.closing, 'previous revision peer shutdown', 15000);
+        this.server.listen(this.port || 0, '127.0.0.1');
+        await waitForListening(this.server);
+        this.closing = null;
         this.port = this.server.address().port;
         this.url = `http://127.0.0.1:${this.port}`;
     }
-    async pause() {
-        if (!this.server.listening) return;
-        this.server.closeAllConnections();
-        await new Promise(resolve => this.server.close(resolve));
+    async pause(timeoutMs = 15000) {
+        if (!this.closing) {
+            if (!this.server.listening) return;
+            this.server.closeAllConnections();
+            this.closing = new Promise((resolve, reject) => this.server.close(error => error ? reject(error) : resolve()));
+        }
+        await withTimeout(this.closing, 'revision peer shutdown', timeoutMs);
     }
     releaseScripts() {
         this.holdScript = false;
-        for (const response of this.scripts) response.end(refreshBrowser());
+        for (const response of this.scripts) response.end(this.script);
         this.scripts.clear();
     }
     respond(request, response) {
@@ -57,7 +66,7 @@ class RevisionPeer {
         } else if (pathname === '/__redweb/development.js') {
             response.setHeader('Content-Type', 'text/javascript');
             if (this.holdScript) { this.scripts.add(response); response.once('close', () => this.scripts.delete(response)); }
-            else response.end(refreshBrowser());
+            else response.end(this.script);
         } else if (pathname === '/__redweb/development.css') {
             response.setHeader('Content-Type', 'text/css'); response.end(styles);
         } else if (pathname === '/__redweb/development') {
@@ -76,13 +85,12 @@ class RevisionPeer {
     }
 }
 
-async function verifyRefreshControls(debugPort, directory, { until, click, closePage }) {
-    const peer = new RevisionPeer();
+async function verifyRefreshControls(debugPort, directory, { until, click, closePage, peer = new RevisionPeer(), open = openPage, afterChecks }) {
     const pages = [];
     let failure;
     try {
         await peer.listen();
-        const browser = await openPage(debugPort, 'about:blank');
+        const browser = await open(debugPort, 'about:blank');
         pages.push(browser);
         await browser.command('Page.addScriptToEvaluateOnNewDocument', { source: `window.__restores=[]; window.addEventListener('pageshow',event=>window.__restores.push(event.persisted));` });
         await browser.command('Page.navigate', { url: peer.url });
@@ -131,7 +139,7 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
             peer.kind = kind;
             peer.holdScript = true;
             peer.revision = randomUUID();
-            const delayed = await openPage(debugPort, 'about:blank');
+            const delayed = await open(debugPort, 'about:blank');
             pages.push(delayed);
             await delayed.command('Page.addScriptToEvaluateOnNewDocument', { source: `window.__cspViolations=[]; document.addEventListener('securitypolicyviolation',event=>window.__cspViolations.push(event.violatedDirective));` });
             await delayed.command('Page.navigate', { url: peer.url });
@@ -168,6 +176,7 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
             pages.pop();
         }
         assert.ok(peer.seen.every(url => !url.includes('private-unsent-draft') && !url.includes('refresh-upload')));
+        if (afterChecks) await afterChecks(peer);
         console.log('Refresh controls passed: actual outage/recovery, malformed/redirect/partial responses, bounded polling, delayed-script revision and input/password/file/contenteditable/select draft guards under self-only CSP.');
     } catch (error) { failure = error; }
     finally {
@@ -183,4 +192,4 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
     if (failure) throw failure;
 }
 
-module.exports = { verifyRefreshControls };
+module.exports = { verifyRefreshControls, RevisionPeer };

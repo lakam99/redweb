@@ -17,6 +17,14 @@ const snapshot = (coverage, exercise) => {
 };
 
 describe('exact generated-source coverage collector', () => {
+    test('does not require dynamic code evaluation to locate the coverage global', () => {
+        const coverage = new BrowserCoverage('fixture.js', source);
+        const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false } });
+        vm.runInContext(coverage.instrumented + 'choose(true); choose(false);', context);
+        coverage.collect(JSON.parse(JSON.stringify(context.__redwebBrowserCoverage__)));
+        coverage.assertComplete();
+    });
+
     test('keeps unexecuted source in the denominator and merges independent executions', () => {
         const coverage = new BrowserCoverage('fixture.js', source);
         expect(coverage.report().sourceSha256).toBe(createHash('sha256').update(source).digest('hex'));

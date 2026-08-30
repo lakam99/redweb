@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Extend real-browser coverage to development refresh under its self-only script policy; instrumentation no longer requires dynamic evaluation. Remove a redundant stopped-state check only where the unchanged generation already proves it. Harden verification uploads and pending native listener cleanup, with real HTTP/TCP regressions.
+
 - Measure 100% of the complete emitted Live HTML browser runtime with the existing real-browser coverage collector. Reuse canonical morph/action cases and add actual protocol/state/input/reconnect checks; this does not instrument the imported client package or change production behavior.
 
 - Extend the generated-browser coverage gate to action feedback: exact emitted source (including its shared state machine), real HTTP/WebSocket acceptance, and native-DOM ownership cases run plain and instrumented. No production behavior or browser instrumentation is shipped by this verification increment.
