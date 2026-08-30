@@ -1,15 +1,12 @@
 const { BoundedOperation, OperationInterrupted } = require('../async/BoundedOperation');
+const codes = require('./failure-codes.json');
 
 class AccessDenied extends Error {
     constructor(code = 'ACCESS_DENIED') {
-        super({
-            ACCESS_DENIED: 'This operation is not permitted.',
-            ACCESS_TIMEOUT: 'Authorization timed out. The operation was not run.',
-            ACCESS_CANCELLED: 'Authorization was cancelled. The operation was not run.',
-            ACCESS_CAPACITY: 'Authorization capacity reached. The operation was not run.',
-        }[code]);
-        this.code = code;
-        this.status = code === 'ACCESS_DENIED' ? 403 : 503;
+        const safeCode = typeof code === 'string' && code.startsWith('ACCESS_') && Object.hasOwn(codes, code) ? code : 'ACCESS_DENIED';
+        super(codes[safeCode].message);
+        this.code = safeCode;
+        this.status = codes[safeCode].status;
     }
 }
 
@@ -29,7 +26,7 @@ class AccessPolicy {
             const allowed = await this.boundary.run(signal => this.authorize(Object.freeze({ ...context, signal }), input), context?.signal);
             if (allowed !== true) throw new AccessDenied();
         } catch (error) {
-            if (error instanceof AccessDenied) throw error;
+            if (error instanceof AccessDenied) throw new AccessDenied(error.code);
             if (error instanceof OperationInterrupted) throw new AccessDenied(error.reason === 'timeout' ? 'ACCESS_TIMEOUT' : 'ACCESS_CANCELLED');
             // Do not turn a broken policy into a permission denial or expose its details.
             throw new Error('Authorization policy failed.');

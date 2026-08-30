@@ -279,7 +279,7 @@ describe('protected pages and revocation over real HTTP/WebSockets', () => {
         const admission = deniedUpgrade(config);
         await waitForCondition(() => finish, 'upgrade policy');
         await server.revoke('alice');
-        expect(await admission).toBe(401);
+        expect(await admission).toBe(503);
         finish(true);
         block = false;
         expect(await deniedUpgrade(config)).toBe(401);

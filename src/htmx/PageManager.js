@@ -1,4 +1,5 @@
 const { createHash, randomUUID } = require('crypto');
+const { RequestFailure } = require('../access/RequestFailure');
 const path = require('path');
 const { setMaxListeners } = require('events');
 const { BaseHandler } = require('../ws/BaseHandler');
@@ -11,7 +12,6 @@ const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
 const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
 const synchronous = require('./synchronous');
-const { ActionInputError } = require('./ActionDefinition');
 const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
 const PageLifetime = require('./PageLifetime');
@@ -179,7 +179,7 @@ class PageManager {
         this.stylesheets.forEach((content, url) => app.get(url, (_request, response) => {
             response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
         }));
-        this.records.forEach(record => app.get(record.metadata.path, (request, response, next) => {
+        this.records.forEach(record => app.get(record.metadata.path, (request, response) => {
             const controller = new AbortController();
             const closed = () => controller.abort();
             const finished = () => { response.off('close', closed); response.off('finish', finished); };
@@ -199,13 +199,13 @@ class PageManager {
                 }
                 response.type('html').send(markup);
             }).catch(error => {
+                if (response.destroyed || response.writableEnded) return;
+                if (response.headersSent) { response.destroy(); return; }
                 if (this.closing) response.set('Connection', 'close');
-                const known = error instanceof AccessDenied || error instanceof AuthenticationFailure;
-                if (known || record.metadata.policy) {
-                    response.set('Cache-Control', 'private, no-store').status(known ? error.status : 500).json({ error: {
-                        code: known ? error.code : 'PAGE_FAILED', message: known ? error.message : 'Page request failed.',
-                    } });
-                } else next(error);
+                const failure = RequestFailure.from(error, 'PAGE_FAILED');
+                response.set('Cache-Control', 'private, no-store').status(failure.status).json({ error: {
+                    code: failure.code, message: failure.message,
+                } });
             }).finally(finished);
         }));
     }
@@ -221,9 +221,7 @@ class PageManager {
         const live = record.metadata.live !== false;
         const sessionsFull = live && this.pending.size + this.active.size + this.liveRendering >= this.maxSessions;
         if (this.closing || this.rendering >= this.maxConcurrentRenders || sessionsFull) {
-            const error = new Error('Live HTML session capacity reached.');
-            error.status = 503;
-            throw error;
+            throw new RequestFailure('PAGE_CAPACITY');
         }
         this.rendering += 1;
         if (live) this.liveRendering += 1;
@@ -330,20 +328,24 @@ class PageManager {
             if (!Object.is(principal, session.principal)) return false;
             await session.record?.metadata.policy?.check(session.context);
             return this.available(session) && !session.socket && !session.detaching ? session : false;
-        } catch { return false; }
+        } catch (error) {
+            if (error instanceof AuthenticationFailure || error instanceof AccessDenied) throw error;
+            throw new Error('Page upgrade failed.');
+        }
     }
 
     acceptsOrigin(origin, request) {
         if (typeof origin !== 'string') return false;
+        let parsed;
         try {
-            const parsed = new URL(origin);
-            if (typeof this.origins === 'function') return this.origins(origin, request);
-            if (this.origins) return this.origins.includes(parsed.origin);
-            const protocol = request.socket?.encrypted ? 'https:' : 'http:';
-            return parsed.protocol === protocol && parsed.host === request.headers.host;
+            parsed = new URL(origin);
         } catch {
             return false;
         }
+        if (typeof this.origins === 'function') return this.origins(origin, request);
+        if (this.origins) return this.origins.includes(parsed.origin);
+        const protocol = request.socket?.encrypted ? 'https:' : 'http:';
+        return parsed.protocol === protocol && parsed.host === request.headers.host;
     }
 
     connect(session, socket) {
@@ -481,8 +483,9 @@ class PageManager {
             async onMessage(socket, message) {
                 try { return await manager.receive(socket, message); }
                 catch (error) {
-                    if (!(error instanceof ActionInputError) && !(error instanceof AccessDenied)) throw error;
-                    socket.sendProtocolError(error.code, error.message, { requestId: message.requestId });
+                    const failure = RequestFailure.from(error);
+                    if (!failure.code.startsWith('ACTION_') && !failure.code.startsWith('ACCESS_')) throw error;
+                    socket.sendProtocolError(failure.code, failure.message, { requestId: message.requestId });
                 }
             }
         }

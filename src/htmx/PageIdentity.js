@@ -1,16 +1,9 @@
 'use strict';
 const { BoundedOperation, OperationInterrupted } = require('../async/BoundedOperation');
+const AuthenticationFailure = require('../access/AuthenticationFailure');
 
 function isPrincipal(value) {
     return typeof value === 'string' || typeof value === 'bigint' || value === true || (typeof value === 'number' && Number.isFinite(value));
-}
-
-class AuthenticationFailure extends Error {
-    constructor(code = 'AUTHENTICATION_REQUIRED', status = 401) {
-        super('Page authentication did not complete successfully.');
-        this.code = code;
-        this.status = status;
-    }
 }
 
 /** Bounded identity lookup; application code owns credential storage and revocation. */
@@ -29,9 +22,9 @@ class PageIdentity {
             if (!isPrincipal(principal)) throw new AuthenticationFailure();
             return principal;
         } catch (error) {
-            if (error instanceof AuthenticationFailure) throw error;
-            if (error instanceof OperationInterrupted) throw new AuthenticationFailure(error.reason === 'timeout' ? 'AUTHENTICATION_TIMEOUT' : 'AUTHENTICATION_CANCELLED', 503);
-            throw new AuthenticationFailure('AUTHENTICATION_FAILED', 500);
+            if (error instanceof AuthenticationFailure) throw new AuthenticationFailure(error.code);
+            if (error instanceof OperationInterrupted) throw new AuthenticationFailure(error.reason === 'timeout' ? 'AUTHENTICATION_TIMEOUT' : 'AUTHENTICATION_CANCELLED');
+            throw new AuthenticationFailure('AUTHENTICATION_FAILED');
         }
     }
 }

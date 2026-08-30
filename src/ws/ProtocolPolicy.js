@@ -77,7 +77,7 @@ class ProtocolPolicy {
         request[PROTOCOL_REJECTION] = {
             statusCode: 426,
             statusText: 'Upgrade Required',
-            headers: { 'Redweb-Versions': this.versions.join(', ') },
+            headers: { 'Redweb-Versions': this.versions.join(', '), 'Redweb-Error': 'PROTOCOL_UNSUPPORTED', 'Cache-Control': 'no-store' },
             message,
         };
         return false;

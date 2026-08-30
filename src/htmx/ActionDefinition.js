@@ -1,16 +1,6 @@
 const { SchemaValidator } = require('../validation/SchemaValidator');
 const { AccessPolicy } = require('../access/AccessPolicy');
-
-class ActionInputError extends Error {
-    constructor(code = 'ACTION_INVALID_INPUT') {
-        super({
-            ACTION_INVALID_INPUT: 'Action input is invalid. Check the form values and try again.',
-            ACTION_VALIDATION_TIMEOUT: 'Action input validation timed out. The action was not run.',
-            ACTION_CANCELLED: 'The connection closed before input validation completed. The action was not run.',
-        }[code]);
-        this.code = code;
-    }
-}
+const ActionInputError = require('../validation/ActionInputError');
 
 class ActionDefinition {
     constructor(options = {}) {

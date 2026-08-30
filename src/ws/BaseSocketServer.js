@@ -9,6 +9,7 @@
 const DefaultRoute = require('./DefaultRoute');
 const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
+const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
 const {
   listenServer,
   closeServer,
@@ -115,40 +116,41 @@ class BaseSocketServer {
       (this.fallbackToRoot ? this.routes.find(r => r.path === '/') : undefined);
 
     if (!route) return sock.destroy();
-    if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
-    if (route.isReady?.() === false) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+    if (this.draining) return this.rejectFailure(sock, 'SERVER_DRAINING');
+    if (route.isReady?.() === false) return this.rejectFailure(sock, 'ROUTE_UNAVAILABLE');
 
     try { route.runtime.prepareRequest(req); }
-    catch { return this.rejectUpgrade(sock, 400, 'Bad Request'); }
+    catch { return this.rejectFailure(sock, 'REQUEST_INVALID'); }
 
     if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
       let reservation;
       try {
         reservation = route.reserveUpgrade(req);
-      } catch (error) {
-        this.logger?.error?.('WebSocket admission reservation failed:', error);
+      } catch {
+        this.logAdmissionFailure('WebSocket admission reservation failed:');
+        return this.rejectFailure(sock, 'ADMISSION_FAILED');
       }
-      if (!reservation) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+      if (!reservation) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
       const controller = new AbortController();
       this.pendingUpgrades.set(sock, { controller, route, reservation });
       void Promise.resolve()
         .then(() => route.authorizeUpgrade(req, sock, controller.signal))
         .then(accepted => {
           if (sock.destroyed) return;
-          if (this.draining) return this.rejectUpgrade(sock, 503, 'Service Unavailable');
+          if (this.draining) return this.rejectFailure(sock, 'SERVER_DRAINING');
           if (!accepted) {
             const redirect = req[PLACEMENT_REDIRECT];
-            if (redirect) return this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect });
-            const rejection = req[PROTOCOL_REJECTION];
+            if (redirect) return this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect, 'Cache-Control': 'no-store' });
+            const rejection = req[UPGRADE_REJECTION] || req[PROTOCOL_REJECTION];
             return rejection
               ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
-              : this.rejectUpgrade(sock, 401, 'Unauthorized');
+              : this.rejectFailure(sock, 'AUTHENTICATION_REQUIRED');
           }
           this.completeUpgrade(route, req, sock, head);
         })
-        .catch(error => {
-          this.logger?.error?.('WebSocket admission failed:', error);
-          if (!sock.destroyed) this.rejectUpgrade(sock, 401, 'Unauthorized');
+        .catch(() => {
+          this.logAdmissionFailure('WebSocket admission failed:');
+          if (!sock.destroyed) this.rejectFailure(sock, 'ADMISSION_FAILED');
         })
         .finally(async () => {
           await req[ADMISSION_SETTLEMENT];
@@ -165,6 +167,16 @@ class BaseSocketServer {
     route.server.handleUpgrade(req, sock, head, (s, r) =>
       route.server.emit('connection', s, r)
     );
+  }
+
+  logAdmissionFailure(message) {
+    try { this.logger?.error?.(message, new RequestFailure('ADMISSION_FAILED')); }
+    catch { /* A failing application logger must not prevent rejection or cleanup. */ }
+  }
+
+  rejectFailure(socket, code) {
+    const { statusCode, statusText, headers } = new RequestFailure(code).rejection;
+    return this.rejectUpgrade(socket, statusCode, statusText, headers);
   }
 
   rejectUpgrade(socket, statusCode, statusText, headers = {}) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added fixed HTTP upgrade diagnostics through `Redweb-Error` and no-store responses, separating rejected credentials (401), origin/permission/placement denial (403), callback bugs (500), and timeout/cancellation/capacity (503). Clients that previously treated every admission failure as 401 must use the new categories. Protocol negotiation remains 426 with a specific code; safe placement remains 307. Raw authentication still rejects only literal `false`.
+- Admission now shares the bounded-operation primitive and checks deadlines between stages, preventing late identity/origin results from starting placement or further authentication after cancellation. Actual evaluation work retains its admission reservation until settlement. Public and protected page failures are sanitized, capacity is distinguished from application failure, and malformed exceptions/partial responses/throwing upgrade loggers are contained. The new runtime guide states browser visibility, nested page-lifetime cancellation limits and retry/side-effect boundaries.
+
 - Added explicit asynchronous `enterRoom`/`rooms.enter` authorization with shared page/action policy machinery, bounded pending work, safe recoverable diagnostics and atomic membership commits. Synchronous joins fail closed on guarded rooms; guarded socket publication requires a live member. Leave/leaveAll/clear, disconnect, replacement and drain cancel pending entry without reentrant membership resurrection. Timed-out policy work remains charged until its underlying promise settles.
 - Added shared request-context types and immutable selected raw-upgrade snapshots, with per-connection cancellation and protected identity/request references. Mutable application metadata/session fields and existing raw admission object identities remain supported. A complete TSX page/private-room example verifies shared authentication and explicit revocation in standard/legacy and packed source-free consumers.
 

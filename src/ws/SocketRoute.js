@@ -9,7 +9,7 @@ const Metrics = require('./Metrics');
 const RouteRuntime = require('./RouteRuntime');
 const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
 const { InboundContractValidationError } = require('./ContractValidationError');
-const { AccessDenied } = require('../access/AccessPolicy');
+const { RequestFailure } = require('../access/RequestFailure');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -348,9 +348,10 @@ class SocketRoute {
     }
 
     sendAccessFailure(socket, error, metadata) {
-        if (!(error instanceof AccessDenied)) return false;
-        if (this.protocolPolicy && socket.context?.protocol) this.sendFailure(socket, error.code, error.message, metadata);
-        else this.send(socket, { code: error.code, error: error.message });
+        const failure = RequestFailure.from(error);
+        if (!failure.code.startsWith('ACCESS_')) return false;
+        if (this.protocolPolicy && socket.context?.protocol) this.sendFailure(socket, failure.code, failure.message, metadata);
+        else this.send(socket, { code: failure.code, error: failure.message });
         return true;
     }
 

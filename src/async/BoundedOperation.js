@@ -20,6 +20,10 @@ class BoundedOperation {
         let timer, abort;
         const controller = new AbortController();
         const started = performance.now();
+        const checkpoint = () => {
+            if (signal?.aborted) throw new OperationInterrupted('cancelled');
+            if (performance.now() - started >= this.timeoutMs) throw new OperationInterrupted('timeout');
+        };
         try {
             const interrupted = new Promise((_, reject) => {
                 const interrupt = reason => {
@@ -31,10 +35,9 @@ class BoundedOperation {
                 signal?.addEventListener('abort', abort, { once: true });
             });
             const work = Promise.resolve().then(async () => {
-                if (signal?.aborted) throw new OperationInterrupted('cancelled');
-                const value = await operation(controller.signal);
-                if (signal?.aborted) throw new OperationInterrupted('cancelled');
-                if (performance.now() - started >= this.timeoutMs) throw new OperationInterrupted('timeout');
+                checkpoint();
+                const value = await operation(controller.signal, checkpoint);
+                checkpoint();
                 return value;
             });
             return await Promise.race([work, interrupted]);

@@ -184,7 +184,7 @@ describe('BaseSocketServer units', () => {
         socketServer.handleUpgrade({ url: '/first', headers: {} }, rejected, Buffer.alloc(0));
         await new Promise(setImmediate);
         expect(logger.error).toHaveBeenCalledWith('WebSocket admission failed:', expect.any(Error));
-        expect(rejected.end).toHaveBeenCalledWith(expect.stringContaining('401 Unauthorized'));
+        expect(rejected.end).toHaveBeenCalledWith(expect.stringContaining('500 Internal Server Error'));
 
         const destroyed = { destroyed: true, end: jest.fn() };
         socketServer.handleUpgrade({ url: '/first', headers: {} }, destroyed, Buffer.alloc(0));
@@ -274,7 +274,7 @@ describe('BaseSocketServer units', () => {
         const socket = { destroyed: false, end: jest.fn() };
         socketServer.handleUpgrade({ url: '/first', headers: {} }, socket, Buffer.alloc(0));
         expect(logger.error).toHaveBeenCalledWith('WebSocket admission reservation failed:', expect.any(Error));
-        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('503 Service Unavailable'));
+        expect(socket.end).toHaveBeenCalledWith(expect.stringContaining('500 Internal Server Error'));
     });
 
     test('owned servers can be created without listening and shutdown repeatedly', async () => {

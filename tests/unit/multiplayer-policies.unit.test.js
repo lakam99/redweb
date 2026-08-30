@@ -108,7 +108,7 @@ describe('production multiplayer policies', () => {
         const externalResult = externallyCancelled.authorize({ headers: {} }, rawSocket(), route(), external.signal);
         external.abort();
         expect(await externalResult).toBe(false);
-        expect(externalSignal.aborted).toBe(true);
+        expect(externalSignal).toBeUndefined(); // Already cancelled work must not invoke application code.
 
         const alreadyAborted = new AbortController();
         alreadyAborted.abort();

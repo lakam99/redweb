@@ -638,7 +638,7 @@ describe('Live HTML integration without mocks', () => {
         const status = await websocketUpgradeStatus(url, {
             headers: { Origin: 'https://foreign.example' },
         });
-        expect(status).toBe(401);
+        expect(status).toBe(403);
 
         const socket = new WebSocket(url, { headers: { Origin: `http://127.0.0.1:${port}` } });
         rawSockets.add(socket);
@@ -696,7 +696,7 @@ describe('Live HTML integration without mocks', () => {
                 headers: { Origin: `http://127.0.0.1:${port}` },
             }
         );
-        expect(rejectedStatus).toBe(401);
+        expect(rejectedStatus).toBe(403);
     });
 
     test('binds a page token to the same authenticated HTTP and WebSocket principal', async () => {

@@ -276,7 +276,7 @@ describe('WebSocket integration without mocks', () => {
         const server = await start({ routes: [ProtectedRoute] });
         expect(await expectConnectionFailure(address(server, '/protected'), {
             headers: { origin: 'https://evil.example', authorization: 'Bearer valid' },
-        })).toBe(401);
+        })).toBe(403);
         expect(await expectConnectionFailure(address(server, '/protected'), {
             headers: { origin: 'https://game.example', authorization: 'Bearer invalid' },
         })).toBe(401);
@@ -316,7 +316,7 @@ describe('WebSocket integration without mocks', () => {
             }
         }
         const server = await start({ routes: [TimedAdmissionRoute] });
-        expect(await expectConnectionFailure(address(server, '/timed-admission'))).toBe(401);
+        expect(await expectConnectionFailure(address(server, '/timed-admission'))).toBe(503);
         expect(aborted).toBe(true);
         expect(initialContacts).toBe(0);
         expect(server.routes[0].clients.size).toBe(0);
@@ -380,7 +380,7 @@ describe('WebSocket integration without mocks', () => {
             }
         }
         const server = await start({ routes: [NonCooperatingRoute] });
-        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(401);
+        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(503);
         expect(server.routes[0].pendingUpgrades).toBe(1);
         expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(503);
         finishAuthentication(false);
