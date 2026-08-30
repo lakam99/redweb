@@ -1,5 +1,7 @@
 const { EventEmitter } = require('events');
 const { AdmissionPolicy, ADMISSION_CONTEXT, PLACEMENT_REDIRECT } = require('../../src/ws/AdmissionPolicy');
+const { UPGRADE_REJECTION } = require('../../src/access/RequestFailure');
+const { withTimeout } = require('../helpers/network');
 const HeartbeatMonitor = require('../../src/ws/HeartbeatMonitor');
 const TaskQueue = require('../../src/ws/TaskQueue');
 const TokenBucket = require('../../src/ws/TokenBucket');
@@ -62,7 +64,7 @@ describe('production multiplayer policies', () => {
         expect(contexts[0].signal).toBeInstanceOf(AbortSignal);
     });
 
-    test('rejects disallowed, missing, false, throwing, closed, and timed-out admission', async () => {
+    test('rejects disallowed, missing, false, throwing, and closed admission', async () => {
         const exact = new AdmissionPolicy({ origins: ['https://game.example'] });
         expect(await exact.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
         expect(await exact.authorize({ headers: { origin: 'https://evil.example' } }, rawSocket(), route())).toBe(false);
@@ -85,17 +87,6 @@ describe('production multiplayer policies', () => {
         const closeResult = closePolicy.authorize({ headers: {} }, closing, route());
         closing.emit('close');
         expect(await closeResult).toBe(false);
-
-        let timeoutSignal;
-        const timeoutPolicy = new AdmissionPolicy({
-            timeoutMs: 1,
-            authenticate(_request, context) {
-                timeoutSignal = context.signal;
-                return new Promise(() => {});
-            },
-        });
-        expect(await timeoutPolicy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
-        expect(timeoutSignal.aborted).toBe(true);
 
         const external = new AbortController();
         let externalSignal;
@@ -165,17 +156,42 @@ describe('production multiplayer policies', () => {
         const accepted = { headers: {} };
         expect(await new AdmissionPolicy({ place: () => true }).authorize(accepted, rawSocket(), route())).toBe(true);
         expect(accepted[ADMISSION_CONTEXT]).toEqual({ principal: undefined });
+    });
 
-        let placementAborted = false;
-        const timedPlacement = new AdmissionPolicy({
-            timeoutMs: 1,
-            place(_principal, _request, { signal }) {
-                signal.addEventListener('abort', () => { placementAborted = true; }, { once: true });
-                return new Promise(() => {});
-            },
-        });
-        expect(await timedPlacement.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
-        expect(placementAborted).toBe(true);
+    test.each(['authenticate', 'place'])('real deadline rejects pending %s without requiring application entry', async stage => {
+        const observedSignals = [];
+        const policy = new AdmissionPolicy({ timeoutMs: 1, [stage](...args) {
+            observedSignals.push(args.at(-1).signal);
+            return new Promise(() => {});
+        } });
+        const request = { headers: {} };
+        expect(await policy.authorize(request, rawSocket(), route())).toBe(false);
+        expect(request[UPGRADE_REJECTION].headers['Redweb-Error']).toBe('ADMISSION_TIMEOUT');
+        // A real deadline may expire at a checkpoint before the callback starts.
+        // Any callback that did start must receive cancellation; entry and abort
+        // delivery are independently required by the synchronized test below.
+        for (const signal of observedSignals) expect(signal.aborted).toBe(true);
+    });
+
+    test.each(['authenticate', 'place'])('cancellation reaches %s after application entry', async stage => {
+        const external = new AbortController();
+        let enter, aborted = false;
+        const entered = new Promise(resolve => { enter = resolve; });
+        const policy = new AdmissionPolicy({ [stage](...args) {
+            const { signal } = args.at(-1);
+            signal.addEventListener('abort', () => { aborted = true; }, { once: true });
+            enter(signal);
+            return new Promise(() => {});
+        } });
+        const request = { headers: {} };
+        const result = policy.authorize(request, rawSocket(), route(), external.signal);
+        let signal, accepted;
+        try { signal = await withTimeout(entered, `${stage} application entry`, 1000); }
+        finally { external.abort(); accepted = await result; }
+        expect(accepted).toBe(false);
+        expect(signal.aborted).toBe(true);
+        expect(aborted).toBe(true);
+        expect(request[UPGRADE_REJECTION].headers['Redweb-Error']).toBe('ADMISSION_CANCELLED');
     });
 
     test('token buckets refill monotonically and validate costs and options', () => {
