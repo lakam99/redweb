@@ -153,3 +153,6 @@ rewrite Redweb or its client based only on these creation counts: this native
 load generator does not import either runtime. No acceptance workload, warm-up,
 memory limit, production source, dependency, frozen helper, npm link, publication,
 deployment or merge changed. Release gates remain open.
+
+Follow-up: [client deoptimization investigation](RECOVERY_DEOPTIMIZATION.md)
+identifies the observed invalidation mechanism without claiming retained-size proof.
