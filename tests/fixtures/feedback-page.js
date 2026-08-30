@@ -50,10 +50,13 @@ function createFeedbackPage(control) {
         group = new Group();
         tick = 0;
         version = 0;
+        label = '';
+        checked = false;
         constructor() { control.page = this; }
         render() {
             return jsxs('main', { children: [
                 jsx('p', { id: 'tick', children: this.tick }),
+                jsx('p', { id: 'server-label', 'data-rw-state': 'label' }),
                 jsx('section', { children: this.first }, String(this.version)),
                 this.second, this.group,
             ] });
@@ -62,6 +65,8 @@ function createFeedbackPage(control) {
     page('/', { shared: true })(Page);
     state()(Page.prototype, 'tick');
     state()(Page.prototype, 'version');
+    state({ writable: true })(Page.prototype, 'label');
+    state({ writable: true })(Page.prototype, 'checked');
     return Page;
 }
 

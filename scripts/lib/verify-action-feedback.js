@@ -181,7 +181,7 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serv
         await finish('online again');
         await status('first', 'success');
         assert.equal(waits.has('offline draft'), false, 'Disconnected actions must never replay after reconnect.');
-        if (afterChecks) await afterChecks(browser);
+        if (afterChecks) await afterChecks(browser, { server, control, finish });
     } catch (error) {
         failure = error instanceof Error ? error : new Error(String(error), { cause: error });
     } finally {

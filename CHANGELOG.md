@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Measure 100% of the complete emitted Live HTML browser runtime with the existing real-browser coverage collector. Reuse canonical morph/action cases and add actual protocol/state/input/reconnect checks; this does not instrument the imported client package or change production behavior.
+
 - Extend the generated-browser coverage gate to action feedback: exact emitted source (including its shared state machine), real HTTP/WebSocket acceptance, and native-DOM ownership cases run plain and instrumented. No production behavior or browser instrumentation is shipped by this verification increment.
 
 - Preserve exact selected option identities when values are duplicated, including keyed moves and server-authored default changes. Add 100% generated DOM-morph coverage in real Chromium plus a live HTTP/WebSocket selection regression; no browser API mocks or runtime instrumentation is shipped.

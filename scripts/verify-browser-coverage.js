@@ -18,6 +18,7 @@ const browserFeedback = require('../src/htmx/browserFeedback');
 const browserRuntime = require('../src/htmx/browserRuntime');
 const { verifyActionFeedback } = require('./lib/verify-action-feedback');
 const runFeedbackCases = require('../tests/fixtures/browser-feedback-cases');
+const { verifyRuntimeBrowser } = require('./lib/verify-runtime-browser');
 
 const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
@@ -53,13 +54,15 @@ async function verifyLiveSelection(tab) {
     return { serverActions: 2, transport: 'live Redweb HTTP/WebSocket page', input: 'native keyboard and pointer events' };
 }
 
-async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer }) {
+async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, onServer, mode }) {
     const app = express();
     const runtime = browserRuntime('/__redweb/client.js');
-    assert.equal(runtime.split(coverage.source).length, 2, 'Feedback source must occur exactly once in the shipped runtime');
+    assert.equal(runtime.split(coverage.source).length, 2, 'Covered source must occur exactly once in the shipped runtime');
     app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
         runtime.replace(coverage.source, () => instrumented ? coverage.instrumented : coverage.source) +
-        '\nwindow.feedbackTest = { feedback, showFeedback, refreshFeedback, indexSlots, slotOwners, feedbackNodes, revisions, performAction, client };'));
+        '\nwindow.feedbackTest = { feedback, showFeedback, refreshFeedback, indexSlots, slotOwners, feedbackNodes, revisions, performAction, client };' +
+        '\nwindow.morph = { units, marker, rangeNodes, morphNode, morphContent, preserveFocus, applyPatch, clientNodes };' +
+        '\nwindow.runtimeTest = { applyState, indexState, formValues, send, client };'));
     await verifyActionFeedback({
         debugPort, pages: [], eventual, serverOptions: { server: app }, onServer,
         openPage: async (_port, url) => {
@@ -67,12 +70,16 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
             run.browser = await command(tab, 'Browser.getVersion');
             return { ...tab, evaluate: expression => evaluate(tab, expression), command: (method, params) => command(tab, method, params) };
         },
-        afterChecks: async tab => {
+        afterChecks: async (tab, context) => {
             const result = await evaluate(tab, `(async () => {
                 try { return { ok: true, cases: await (${runFeedbackCases.toString()})() }; }
                 catch (error) { return { ok: false, error: error.stack }; }
             })()`);
             assert.ok(result.ok, result.error);
+            if (mode === 'runtime') {
+                result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
+                result.cases.morph = await runCases(tab);
+            }
             run[instrumented ? 'instrumentedCases' : 'plainCases'] = result.cases;
         },
     });
@@ -82,8 +89,9 @@ async function main() {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     const mode = process.argv[2] || 'morph';
-    assert.ok(['morph', 'feedback'].includes(mode), 'Expected morph or feedback coverage mode');
-    const coverage = new BrowserCoverage(mode === 'morph' ? 'browserMorph.generated.js' : 'browserFeedback.generated.js', mode === 'morph' ? browserMorph() : browserFeedback());
+    const sources = { morph: browserMorph, feedback: browserFeedback, runtime: () => browserRuntime('/__redweb/client.js') };
+    assert.ok(Object.hasOwn(sources, mode), 'Expected morph, feedback or runtime coverage mode');
+    const coverage = new BrowserCoverage(`browser${mode[0].toUpperCase() + mode.slice(1)}.generated.js`, sources[mode]());
     const run = { id: randomUUID(), startedAt: new Date().toISOString() };
     const outcome = await coverage.verify(() => new VerificationWorkspace().run(async execution => {
         let browser, coveredTab, application, failure, launchAttempted = false;
@@ -112,10 +120,10 @@ async function main() {
                 tabs.push(tab);
                 return tab;
             };
-            if (mode === 'feedback') {
+            if (mode !== 'morph') {
                 for (const instrumented of [false, true]) {
                     await verifyFeedback({
-                        coverage, debugPort, run, instrumented, onServer: server => { application = server; },
+                        coverage, debugPort, run, instrumented, mode, onServer: server => { application = server; },
                         visit: async url => {
                             const tab = await visit(url);
                             if (instrumented) coveredTab = tab;
