@@ -8,6 +8,32 @@ permissions:
   contents: read
 
 jobs:
+  # Temporary diagnostic at the observed failing revision. Remove after collecting
+  # this run; its output is not a replacement for the current-candidate gates.
+  recovery-diagnostic:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 16 }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bfcad29a90d293f023f4d4d795d90c60413a9897
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Trace original recovery workload (diagnostic only)
+        run: |
+          node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
+          git rev-parse HEAD
+          set +e
+          node --expose-gc --trace-gc-nvp --trace-opt --trace-deopt scripts/verify-recovery.js
+          diagnostic_status=$?
+          echo "Diagnostic exit status: $diagnostic_status (not replacement acceptance evidence)"
+          exit "$diagnostic_status"
+
   test:
     runs-on: ubuntu-latest
     strategy:
