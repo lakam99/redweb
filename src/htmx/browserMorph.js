@@ -1,12 +1,14 @@
 // Kept as a browser module source like browserRuntime; exercised in the real-browser gate.
 function browserMorph() {
     return `
+const clientNodes = new WeakSet();
 const marker = node => node?.nodeType === 8 && /^rw:[ck][0-9a-f]*$/.test(node.data) ? node.data : null;
 const units = (parent, start = null, end = null) => {
     const result = [];
     const keys = new Set();
     let node = start ? start.nextSibling : parent.firstChild;
     while (node && node !== end) {
+        if (clientNodes.has(node)) { node = node.nextSibling; continue; }
         const key = marker(node);
         let last = node;
         if (key) {

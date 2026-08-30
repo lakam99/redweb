@@ -815,6 +815,10 @@
           "detail": "Explicitly exposes one method to rw-click or rw-submit. An optional Standard Schema input validates and transforms one submitted argument before invocation; ActionInput<typeof schema> describes its output. Invalid input stays recoverable, while validator bugs remain server failures. Undecorated methods stay unreachable."
         },
         {
+          "name": "rw-status=\"action\"",
+          "detail": "Optional component-scoped placement for built-in action feedback. Without a slot, buttons/forms get an automatic status message. Pending duplicates from one control are suppressed; late responses preserve changed drafts and replacement forms. Disconnected actions are never queued or replayed."
+        },
+        {
           "name": "view(stateName)",
           "detail": "Renders each item of one decorated array for an rw-each collection."
         }

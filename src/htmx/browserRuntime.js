@@ -1,4 +1,5 @@
 const browserMorph = require('./browserMorph');
+const browserFeedback = require('./browserFeedback');
 
 function browserRuntime(clientPath) {
     return `import { RedwebClient } from ${JSON.stringify(clientPath)};
@@ -10,7 +11,7 @@ const client = new RedwebClient(config.socketPath + '?pageId=' + encodeURICompon
     baseUrl: window.location.href,
     version: config.version,
     reconnect: { enabled: true, maxAttempts: 8 },
-    maxQueueSize: 32
+    maxQueueSize: 0
 });
 
 const emit = (type, detail) => document.dispatchEvent(new CustomEvent(type, { detail }));
@@ -47,18 +48,23 @@ const applyState = update => {
         else if (node.value !== update.value) node.value = update.value;
     });
 };
-client.on('redweb:state', message => preserveFocus(() => applyState(message.payload)));
+client.on('redweb:state', message => preserveFocus(() => {
+    applyState(message.payload);
+    refreshFeedback();
+}));
 client.on('redweb:patch', message => {
     try {
         preserveFocus(() => {
             message.payload.patches.forEach(applyPatch);
             indexState();
             message.payload.states.forEach(applyState);
+            refreshFeedback();
         });
     } catch (error) { report(error); }
 });
 
 const report = error => emit('redweb:error', error);
+${browserFeedback()}
 const send = payload => {
     try { client.send('redweb:html', payload); }
     catch (error) { report(error); }
@@ -76,7 +82,7 @@ document.addEventListener('click', event => {
     const target = event.target.closest('[rw-click]');
     if (!target) return;
     event.preventDefault();
-    client.request('redweb:html', {
+    performAction(target, {
         kind: 'action', name: target.getAttribute('rw-click'), component: componentOf(target), args: []
     }).catch(report);
 });
@@ -85,9 +91,16 @@ document.addEventListener('submit', event => {
     const form = event.target.closest('form[rw-submit]');
     if (!form) return;
     event.preventDefault();
-    client.request('redweb:html', {
-        kind: 'action', name: form.getAttribute('rw-submit'), component: componentOf(form), args: [formValues(form)]
-    }).then(() => form.reset()).catch(report);
+    const values = formValues(form);
+    const revision = revisions.get(form) || 0;
+    const binding = bindingOf(form);
+    performAction(form, {
+        kind: 'action', name: form.getAttribute('rw-submit'), component: componentOf(form), args: [values]
+    }, () => {
+        if (form.isConnected && bindingOf(form) === binding && (revisions.get(form) || 0) === revision && JSON.stringify(formValues(form)) === JSON.stringify(values)) {
+            HTMLFormElement.prototype.reset.call(form);
+        }
+    }).catch(report);
 });
 
 document.addEventListener('input', event => {
@@ -101,7 +114,10 @@ document.addEventListener('input', event => {
 });
 
 client.onError(report);
-client.onStateChange(state => emit('redweb:connection', state));
+client.onStateChange(state => {
+    document.documentElement.setAttribute('data-rw-connection', state);
+    emit('redweb:connection', state);
+});
 client.connect().catch(report);
 `;
 }

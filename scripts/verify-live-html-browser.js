@@ -16,6 +16,7 @@ const { JsxPage } = require('../examples/live-html/jsx-page');
 const { jsx, jsxs } = require('../jsx-runtime');
 const { ReactivePage } = require('../tests/fixtures/reactive-pages');
 const { createActionPage } = require('../tests/fixtures/action-page');
+const { verifyActionFeedback } = require('./lib/verify-action-feedback');
 
 class TableComponent {
     count = 0;
@@ -183,7 +184,8 @@ async function openPage(debugPort, url) {
         if (result.exceptionDetails) throw new Error(result.exceptionDetails.text);
         return result.result.value;
     };
-    return { socket, evaluate };
+    if (url.startsWith('http')) await evaluate(eventual(`!document.getElementById('__redweb_page') || document.documentElement.getAttribute('data-rw-connection') === 'open'`, 'live page connection readiness'));
+    return { socket, evaluate, command };
 }
 
 function eventual(expression, label) {
@@ -245,6 +247,8 @@ async function main() {
         browser = launched.browser;
         const endpoint = new URL(launched.endpoint);
         const debugPort = Number(endpoint.port);
+
+        await verifyActionFeedback({ openPage, debugPort, pages, eventual });
 
         const actionPage = await openPage(debugPort, `http://127.0.0.1:${validatedActions.server.address().port}/`);
         pages.push(actionPage);
@@ -513,7 +517,7 @@ async function main() {
             document.querySelector('p').textContent === 'mixed fragment'
         `);
         if (!jsxSafety) throw new Error('Escaped JSX content executed or composed incorrectly in the browser.');
-        console.log('Live HTML browser gate passed: validated actions, CSS, JSX, collections, components, counter, chat, raw-text safety, and documentation composition.');
+        console.log('Live HTML browser gate passed: validated actions and feedback, CSS, JSX, collections, components, counter, chat, raw-text safety, and documentation composition.');
     } catch (error) {
         failure = error;
     } finally {

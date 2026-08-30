@@ -268,11 +268,11 @@ save(form: { displayName: string }) {
 </form>
 ```
 
-`rw-click="action"` prevents default navigation and invokes an action without arguments. `rw-submit="action"` prevents submission, passes form fields as the first argument, preserves duplicate field names as arrays, and resets only after the server acknowledges success. `rw-bind="property"` sends text values or checkbox state only when that property was declared with `@state({ writable: true })`.
+`rw-click="action"` prevents default navigation and invokes an action without arguments. `rw-submit="action"` prevents submission, passes form fields as the first argument, preserves duplicate field names as arrays, and resets only an unchanged, still-connected form after the server acknowledges success. `rw-bind="property"` sends text values or checkbox state only when that property was declared with `@state({ writable: true })`.
 
 When an HTML-valued component state renders new actions or bindings, Redweb automatically scopes those directives back to that component. A component can therefore replace a join form with a composer—or swap any other interactive view—without manual component IDs or browser glue.
 
-The document emits `redweb:connection` events as transport state changes and `redweb:error` events when an interaction fails. A bounded queue covers interaction during initial connection; actions are request/response operations and are not replayed during reconnect.
+The document emits `redweb:connection` events as transport state changes and `redweb:error` events when an interaction fails. Interactions require an open connection; they are not queued during initial connection or reconnect. Actions use request/response operations and are never automatically replayed.
 
 Names such as `constructor`, `prototype`, and `__proto__` are rejected. Arbitrary methods and undeclared state cannot be reached through the Live HTML protocol.
 
@@ -332,7 +332,29 @@ Invalid input produces `ACTION_INVALID_INPUT`, does not invoke the method, and l
 
 Validation has a five-second default deadline; override it with `@action({ input, validationTimeoutMs: 500 })`. A validation deadline produces `ACTION_VALIDATION_TIMEOUT`; an interrupted validation produces `ACTION_CANCELLED` if the connection can still receive a response. Neither invokes the action. Disconnects and disposal prevent an outstanding validation result from starting application code later. These limits apply to validation, not to an action that has already started: Redweb cannot undo its side effects, preempt synchronous JavaScript, or stop external work inside a validator. It does not automatically retry actions. Prefer pure validators, and implement application-specific cancellation/idempotency where needed.
 
-The same bounded validation implementation is shared with socket contracts. Their existing `INVALID_PAYLOAD` contract error behavior is unchanged. Action loading/success/error display is a separate, not-yet-implemented ergonomics improvement; this overload does not promise automatic field-level messages or built-in status UI.
+The same bounded validation implementation is shared with socket contracts. Their existing `INVALID_PAYLOAD` contract error behavior is unchanged. Automatic action feedback reports safe form-level messages, not raw validator issues or field-level messages.
+
+## Automatic action feedback
+
+Existing `rw-click` buttons and `rw-submit` forms show **Working…**, **Done.**, or a safe error message without custom browser JavaScript. Redweb inserts a plain-text status span at the end of a form or immediately after a click control, with `role="status"` and `aria-live="polite"`. The control and its status have `data-rw-status="pending"`, `"success"`, or `"error"` for application CSS. Native form constraints still run before submission.
+
+For deliberate placement, supply a slot in the same component (or page scope):
+
+```tsx
+<form rw-submit="save">
+  <label>Amount <input name="amount" /></label>
+  <button type="submit">Save</button>
+  <output rw-status="save" />
+</form>
+```
+
+This replaces the automatic span for that action. Slots receive text, never HTML. Redweb preserves authored accessibility attributes; use an `output`, or add an appropriate live-region role to another element. Slots are component-scoped, including wrapper-free/nested components. If several controls in one scope share a slot, the most recently started invocation owns that slot; an older completion cannot overwrite it. Do not combine `rw-status` with a server-rendered state binding on the same node.
+
+Each control allows one pending invocation; repeated clicks/submits from that same DOM node are ignored until it settles. Other controls remain independent, with a fixed page-wide maximum of 32 outstanding actions. This is UI duplicate suppression, not authorization, server rate limiting, or an exactly-once guarantee. Inputs stay editable and controls keep their authored accessibility/disabled attributes. A successful form resets only if its node, action binding, submitted values, and input/change revision are unchanged. New drafts, failed forms, and replacement forms are never cleared by an old response. Use stable JSX keys to preserve the intended node identity during reordering.
+
+Feedback follows surviving nodes through server patches, including replacement status slots; removed controls release their generated status nodes and clear slots they still own. A replacement control does not inherit an old invocation's outcome. The most recently started invocation keeps ownership when controls share a slot, so late results cannot overwrite its feedback.
+
+Disconnected actions are not queued, and actions are never automatically retried. The browser reports a known-unsent action separately from an unconfirmed result. A lost connection, response timeout, or application failure can occur after side effects; the message asks the user to check before trying again. Successful completion confirms the response, not durable persistence. Applications remain responsible for transactions, idempotency, and durable storage. Browser state writes are also not queued while disconnected. `redweb:error` remains available for application-level reporting, and `data-rw-connection` on the document element reflects the current client connection state.
 
 ## Browser transport
 

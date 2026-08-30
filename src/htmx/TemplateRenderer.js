@@ -13,7 +13,7 @@ const BINDING = /{{\s*([A-Za-z_$][\w$]*)\s*}}/g;
 const ATTRIBUTE_BINDING = /{{\s*[A-Za-z_$][\w$]*\s*}}/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
 const DIRECTIVES = new Set(['data-rw-state', 'data-rw-html', 'rw-each']);
-const COMPONENT_DIRECTIVES = new Set(['data-rw-component', 'data-rw-state', 'rw-bind', 'rw-click', 'rw-submit']);
+const COMPONENT_DIRECTIVES = new Set(['data-rw-component', 'data-rw-state', 'rw-bind', 'rw-click', 'rw-submit', 'rw-status']);
 
 function attributes(tag, nameEnd, tracked = DIRECTIVES) {
     const found = new Map();
