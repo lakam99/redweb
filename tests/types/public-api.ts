@@ -7,6 +7,7 @@ import {
     RoomRegistry,
     SessionRegistry,
     SocketRoute,
+    SocketServer,
     SocketService,
     ERROR_CODES,
     LiveHtmlServer,
@@ -239,6 +240,19 @@ void standaloneSessions;
 void Simulation;
 void CallbackRoute;
 new HttpServer({ listen: false, corsOptions: false });
+
+const inspectedServer = new SocketServer({ listen: false, development: { inspect: true } });
+const inspection = inspectedServer.inspect();
+if (inspection?.sockets.available) {
+    const registered: number = inspection.sockets.routes.items[0].registeredConnections;
+    void registered;
+    // @ts-expect-error Inspection snapshots are deeply read-only.
+    inspection.sockets.routes.items.push({ path: '/fake' });
+}
+// @ts-expect-error Inspection is explicitly boolean, not a callback or endpoint.
+new SocketServer({ development: { inspect: () => true } });
+// @ts-expect-error Inspection belongs to servers, not individual routes.
+route.inspect();
 
 new SocketRoute({
     path: '/invalid',

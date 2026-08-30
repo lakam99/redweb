@@ -3,6 +3,7 @@ const HttpServer = require('../http/HttpServer');
 const HttpsServer = require('../http/HttpsServer');
 const SocketServer = require('../ws/SocketServer');
 const { PageManager } = require('./PageManager');
+const { createInspection } = require('../development/Inspection');
 
 class LiveHtmlServer {
     constructor(options = {}) {
@@ -21,9 +22,11 @@ class LiveHtmlServer {
             authenticate,
             authenticationTimeoutMs,
             origins,
+            development,
             server: suppliedApp,
             ...httpOptions
         } = options;
+        this._inspection = createInspection(development);
         const app = suppliedApp === undefined ? express() : suppliedApp;
         if (!app || typeof app.get !== 'function' || typeof app.use !== 'function') {
             throw new TypeError('`server` must be an Express-compatible application.');
@@ -42,6 +45,7 @@ class LiveHtmlServer {
             origins,
             logger: httpOptions.logger,
         });
+        if (this._inspection) this.manager.Renderer = this._inspection.Renderer;
         this.manager.mount(app);
         const listen = httpOptions.listen ?? true;
         const ServerClass = httpOptions.ssl ? HttpsServer : HttpServer;
@@ -67,6 +71,8 @@ class LiveHtmlServer {
     }
 
     revoke(principal) { return this.manager.revoke(principal); }
+
+    inspect() { return this._inspection ? this._inspection.snapshot(this) : null; }
 
     shutdown() {
         if (!this._shutdownPromise) {

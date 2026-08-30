@@ -7,6 +7,7 @@
  */
 
 const DefaultRoute = require('./DefaultRoute');
+const { createInspection } = require('../development/Inspection');
 const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
 const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
@@ -40,6 +41,7 @@ class BaseSocketServer {
    */
   constructor(server, options = {}, ownsServer = false, name = 'SocketServer') {
     if (!server || typeof server.on !== 'function') throw new TypeError('A Node HTTP(S) server is required.');
+    this._inspection = createInspection(options.development);
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
     validateListenerOptions(this);
     if (!Array.isArray(this.routes)) throw new TypeError('`routes` must be an array.');
@@ -218,6 +220,8 @@ class BaseSocketServer {
   isReady() {
     return !this.draining && this.routes.every(route => route.isReady?.() !== false);
   }
+
+  inspect() { return this._inspection ? this._inspection.snapshot(this) : null; }
 
   beginDrain() {
     if (this.draining) return false;

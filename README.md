@@ -10,6 +10,8 @@ For coding agents, the same catalogue can be searched through an [optional read-
 
 Use the [runtime failure and retry guide](docs/RUNTIME_DIAGNOSTICS.md) to distinguish invalid input, rejected identity, denied permission, capacity limits, and application bugs. Diagnostic codes do not imply that external work was cancelled or that retrying an action is safe.
 
+For local development, the unreleased `development: { inspect: true }` server option enables a read-only `server.inspect()` snapshot of registrations, component/action names, connection lifecycles and bounded reactive render history. It creates no debugging endpoint and never includes state values or credentials. See [development inspection and its limits](docs/DEVELOPMENT.md).
+
 **Good fit:** Node-hosted sites with live dashboards, chat, collaboration, or multiplayer socket endpoints; static documentation sites that reuse the same TSX authoring model.
 
 **Choose something else when:** you need React compatibility or browser-side component execution, an edge-only runtime without Node, or a managed database/authentication/matchmaking service. Redweb does not supply those capabilities or promise transport delivery guarantees beyond its documented protocol.

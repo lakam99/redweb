@@ -2,6 +2,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
 const TemplateRenderer = require('./TemplateRenderer');
 const ReactiveRenderer = require('./ReactiveRenderer');
+const dataProperty = require('../dataProperty');
 const { ActionInputError } = require('./ActionDefinition');
 const { isHtml, markHtml, renderValue } = require('./Html');
 const { forEachState, getActionImplementation, getActionDefinition, getStateConfig, isComponentClass } = require('./metadata');
@@ -72,6 +73,14 @@ class LivePage {
     static invoke(page, name, args, context, beforeInvoke) { return LivePage.prototype._invoke.call(page, name, args, context, beforeInvoke); }
     static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
     static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
+
+    // Read owned runtime structure only: no application fields or state values.
+    static describe(page, describeList) {
+        const { list, members } = require('../development/description');
+        const limited = describeList || list;
+        const internal = runtime(page);
+        return { disposed: internal.disposed, components: limited(internal.components, ([id, component]) => ({ id, ...members(dataProperty(component, 'constructor'), limited) })) };
+    }
 
     static statePayload(page, name, value, lazy = false) {
         const internal = runtime(page);

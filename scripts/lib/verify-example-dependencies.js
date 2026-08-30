@@ -11,17 +11,17 @@ function verifyExampleDependencies(archive, workspace, validatorVersion, cliDepe
         name: 'redweb-production-example-check', private: true, dependencies: { redweb: `file:${archive.replaceAll('\\', '/')}` },
     }));
     fs.copyFileSync(path.join(__dirname, 'example-dependency-probe.cjs'), path.join(consumer, 'probe.cjs'));
-    const command = (executable, args, shell = false) => {
-        const result = spawnSync(executable, args, { cwd: consumer, env: { ...process.env, NODE_PATH: '' },
+    const command = (executable, args, shell = false, environment = {}) => {
+        const result = spawnSync(executable, args, { cwd: consumer, env: { ...process.env, NODE_PATH: '', ...environment },
             encoding: 'utf8', windowsHide: true, shell, timeout: 120000 });
         if (result.status !== 0) throw new Error(`Production example dependency check failed: ${result.error || ''}\n${result.stdout}${result.stderr}`);
         return result.stdout;
     };
     const install = args => command('npm', ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', ...args], process.platform === 'win32');
     install([]);
-    const withoutValidator = command(process.execPath, ['probe.cjs', 'core']);
+    const withoutValidator = command(process.execPath, ['probe.cjs', 'core'], false, { NODE_ENV: 'production' });
     install([`zod@${validatorVersion}`]);
-    const withValidator = command(process.execPath, ['probe.cjs', 'chat']);
+    const withValidator = command(process.execPath, ['probe.cjs', 'chat'], false, { NODE_ENV: 'development' });
     command('npm', ['install', '--include=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--save-dev',
         `typescript@${cliDependencies.typescript}`, `ws@${cliDependencies.ws}`], process.platform === 'win32');
     const cli = path.join(consumer, 'node_modules/redweb/bin/redweb.js');

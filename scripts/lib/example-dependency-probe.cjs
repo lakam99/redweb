@@ -18,7 +18,8 @@ async function main() {
         assert.throws(() => require(example('chatroom.js')), { code: 'MODULE_NOT_FOUND' });
     }
     const Page = chat ? require(example('chatroom.js')).createChatroomPage() : require(example('counter.js')).CounterPage;
-    const app = start(Page, { port: 0, bind: '127.0.0.1', logger: null });
+    const app = start(Page, { port: 0, bind: '127.0.0.1', logger: null,
+        ...(chat ? { development: { inspect: true } } : {}) });
     let socket;
     try {
         if (!app.server.listening) await once(app.server, 'listening');
@@ -27,6 +28,7 @@ async function main() {
         assert.equal(response.status, 200);
         const html = await response.text();
         assert.match(html, chat ? /Join the chatroom/ : /Server-side counter/);
+        if (!chat) assert.equal(app.inspect(), null);
         if (chat) {
             const config = JSON.parse(html.match(/id="__redweb_page">([^<]+)/)[1]);
             socket = new WebSocket(`${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, { headers: { Origin: origin } });
@@ -44,8 +46,18 @@ async function main() {
                 socket.send(JSON.stringify({ v: config.version, requestId: 'probe', type: 'redweb:html',
                     payload: { kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Packed visitor' }] } }));
             });
+            const snapshot = app.inspect();
+            assert.equal(snapshot.schemaVersion, 1);
+            assert.equal(snapshot.pages.available, true);
+            assert.equal(snapshot.sockets.available, true);
+            assert.equal(snapshot.pages.connections.connected, 1);
+            assert.ok(snapshot.pages.registrations.items[0].instances.items[0].components.items
+                .some(component => component.actions.items.includes('join')));
+            assert.ok(Object.isFrozen(snapshot.pages.registrations.items));
+            assert.ok(!JSON.stringify(snapshot).includes('Packed visitor'));
+            assert.ok(!JSON.stringify(snapshot).includes(config.pageId));
         }
-        console.log(chat ? 'Packed chat passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript.');
+        console.log(chat ? 'Packed chat and development inspection passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript; inspection disabled.');
     } finally { socket?.close(); await app.shutdown(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -182,7 +182,81 @@ declare module 'redweb' {
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
+    export interface DevelopmentOptions {
+        /** Explicit local-only inspection; rejected when NODE_ENV is production. */
+        inspect?: boolean;
+    }
+
+    export interface InspectionList<T> {
+        readonly items: readonly T[];
+        readonly total: number;
+        readonly truncated: boolean;
+    }
+    export type InspectionSection<T> = { readonly available: false } | ({ readonly available: true } & T);
+    export interface InspectionMembers {
+        readonly className: string;
+        readonly actions: InspectionList<string>;
+        readonly states: InspectionList<string>;
+    }
+    export interface InspectionPage extends InspectionMembers {
+        readonly path: string;
+        readonly live: boolean;
+        readonly shared: boolean;
+        readonly instanceMetadata: 'observed' | 'unobserved';
+        readonly instances: InspectionList<{
+            readonly id: number;
+            readonly disposed: boolean;
+            readonly components: InspectionList<InspectionMembers & { readonly id: string }>;
+        }>;
+    }
+    export interface InspectionSession {
+        /** Inspector-local IDs; never page tokens, credentials or socket IDs. */
+        readonly render: number;
+        readonly instance: number;
+        readonly route: string;
+        readonly status: 'connected' | 'detaching' | 'pending' | 'retained';
+        readonly reactive: boolean;
+    }
+    export interface InspectionEvent {
+        readonly sequence: number;
+        readonly render: number;
+        readonly route: string;
+        readonly kind: 'state-invalidated' | 'flush-started' | 'flush-completed' | 'flush-superseded' | 'flush-failed';
+        readonly state?: string;
+        readonly component?: string;
+        readonly affectedOwners?: InspectionList<string>;
+        readonly snapshot?: boolean;
+        readonly dirtyOwners?: InspectionList<string>;
+        readonly durationMs?: number;
+    }
+    export interface DevelopmentSnapshot {
+        readonly schemaVersion: 1;
+        readonly mode: 'development';
+        readonly pages: InspectionSection<{
+            readonly registrations: InspectionList<InspectionPage>;
+            readonly sessions: InspectionList<InspectionSession>;
+            readonly closing?: boolean;
+            readonly rendering?: number;
+            readonly connections?: Readonly<Record<InspectionSession['status'], number>>;
+        }>;
+        readonly sockets: InspectionSection<{
+            readonly routes: InspectionList<{
+                readonly path: string;
+                readonly handlers: InspectionList<string>;
+                readonly registeredConnections: number;
+                readonly draining: boolean;
+                readonly rooms: number;
+                readonly sessions: number;
+            }>;
+            readonly pendingUpgrades: number;
+            readonly draining: boolean;
+        }>;
+        /** Flush completion is not a network delivery guarantee. */
+        readonly history: InspectionList<InspectionEvent> & { readonly limit: number };
+    }
+
     export interface SocketServerOptions {
+        development?: DevelopmentOptions;
         server?: NodeHttpServer;
         port?: number;
         bind?: string;
@@ -315,6 +389,7 @@ declare module 'redweb' {
 
         addRoute(route: new () => SocketRoute): SocketRoute;
         isReady(): boolean;
+        inspect(): DevelopmentSnapshot | null;
         beginDrain(): boolean;
         shutdown(): Promise<void>;
     }
@@ -573,6 +648,7 @@ declare module 'redweb' {
     export type LivePageClass = new () => object;
 
     export interface LiveHtmlServerBaseOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+        development?: DevelopmentOptions;
         pages: readonly LivePageClass[];
         templateRoot?: string;
         livePaths?: {
@@ -607,6 +683,8 @@ declare module 'redweb' {
         constructor(options: LiveHtmlServerOptions);
         /** Revoke matching in-process sessions/renders; credential invalidation remains application-owned. */
         revoke(principal: string | number | bigint | true): Promise<number>;
+        /** Local metadata only; null unless development inspection was explicitly enabled. */
+        inspect(): DevelopmentSnapshot | null;
         shutdown(): Promise<void>;
     }
 

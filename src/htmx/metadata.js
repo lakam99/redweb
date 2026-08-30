@@ -14,6 +14,7 @@ const { decoratorDirectory } = require('./sourceRoot');
 const synchronous = require('./synchronous');
 const { ActionDefinition } = require('./ActionDefinition');
 const { AccessPolicy } = require('../access/AccessPolicy');
+const dataProperty = require('../dataProperty');
 let metadataVersion = 0;
 
 function assertDecoratorTarget(target, label) {
@@ -82,7 +83,7 @@ function resolvedAction(PageClass) {
     hierarchy(PageClass).forEach(CurrentClass => {
         const own = new Map(ACTION_METADATA.get(CurrentClass) || []);
         STANDARD_ACTIONS.get(CurrentClass)?.forEach((entry, method) => {
-            if (CurrentClass.prototype[method] === entry.implementation) own.set(method, entry);
+            if (dataProperty(CurrentClass.prototype, method) === entry.implementation) own.set(method, entry);
         });
         value.forEach((_implementation, method) => {
             if (Object.prototype.hasOwnProperty.call(CurrentClass.prototype, method) && !own.has(method)) value.delete(method);

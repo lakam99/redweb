@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added opt-in in-process development inspection for Live HTML and socket servers: bounded immutable registration/connection snapshots and reactive invalidation/flush history without state values, identities, request contents or exception messages. Inspection is rejected during production construction and adds no debugging endpoint. Disabled servers use the original reactive renderer. Standard action resolution now excludes accessor replacements without invoking their getters.
+
 - Added `redweb add page`, `redweb add component`, and `redweb add socket-route` with canonical source/test templates, effective TypeScript layout checks and in-memory emission, dry-run/JSON reports, explicit registration instructions, and exclusive creation without rewriting existing application files. Generated artifact-only tests exercise actual HTTP/WebSocket behavior; socket additions keep URL routing separate from validated message handlers.
 
 - Added fixed HTTP upgrade diagnostics through `Redweb-Error` and no-store responses, separating rejected credentials (401), origin/permission/placement denial (403), callback bugs (500), and timeout/cancellation/capacity (503). Clients that previously treated every admission failure as 401 must use the new categories. Protocol negotiation remains 426 with a specific code; safe placement remains 307. Raw authentication still rejects only literal `false`.

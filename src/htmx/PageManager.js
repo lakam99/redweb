@@ -244,7 +244,7 @@ class PageManager {
             page = ownsPage ? this.instantiate(record) : record.shared;
             lifetime.page = ownsPage ? page : null;
             this.renderPages.add(page);
-            if (live) renderer = new ReactiveRenderer(page, lifetime.signal);
+            if (live) renderer = new this.Renderer(page, lifetime.signal);
             await lifetime.wait(() => page.loading?.(context));
             await lifetime.wait(() => page._loadComponents(context));
             const render = async () => {
@@ -551,5 +551,7 @@ class PageManager {
         }
     }
 }
+
+PageManager.prototype.Renderer = ReactiveRenderer;
 
 module.exports = { DEFAULT_PATHS, PROTOCOL_VERSION, PageManager };
