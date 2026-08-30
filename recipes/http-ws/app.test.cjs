@@ -7,6 +7,40 @@ const { SocketRoute } = require('redweb');
 const { createApp, Hello } = require('../dist/app.js');
 const { listen, connect } = require('./network.cjs');
 
+test('an absent PORT binds the documented default or reports that exact port occupied', { timeout: 10000 }, async () => {
+    const { spawnSync } = require('node:child_process');
+    const env = { ...process.env };
+    delete env.PORT;
+    const result = spawnSync(process.execPath, ['-e', `
+        const assert = require('node:assert/strict');
+        const { once } = require('node:events');
+        const WebSocket = require('ws');
+        const { createApp } = require('./dist/app.js');
+        (async () => {
+            const app = createApp();
+            let socket;
+            try {
+                try { if (!app.server.listening) await once(app.server, 'listening'); }
+                catch (error) {
+                    assert.equal(error.code, 'EADDRINUSE');
+                    assert.equal(error.port, 8181);
+                    return; // Never send test traffic to a listener this test does not own.
+                }
+                assert.equal(app.server.address().port, 8181);
+                const response = await fetch('http://127.0.0.1:8181/health', { signal: AbortSignal.timeout(3000) });
+                assert.deepEqual(await response.json(), { ok: true });
+                socket = new WebSocket('ws://127.0.0.1:8181/chat', { handshakeTimeout: 3000 });
+                await once(socket, 'open');
+                const reply = once(socket, 'message');
+                socket.send(JSON.stringify({ type: 'hello' }));
+                assert.equal(JSON.parse((await reply)[0].toString()).type, 'hello');
+            } finally { socket?.terminate(); await app.shutdown(); }
+        })().catch(error => { console.error(error); process.exitCode = 1; });
+    `], { env, encoding: 'utf8', timeout: 7000, windowsHide: true });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
 test('HTTP and separate message handlers share one port, with strict socket paths', { timeout: 10000 }, async t => {
     const origin = await listen(t);
     const response = await fetch(`${origin}/health`, { signal: AbortSignal.timeout(3000) });

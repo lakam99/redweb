@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { once } = require('node:events');
-const { mkdtempSync, rmSync } = require('node:fs');
+const { mkdtempSync, rmSync, writeFileSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
@@ -317,6 +317,34 @@ test('production origin/cookies and malformed forms use real HTTP', async t => {
     assert.equal((await post(origin, '/login', {})).status, 403);
 });
 
+test('capacity failures and abandoned uploads remain contained over real HTTP', { timeout: 10000 }, async t => {
+    const { origin, database } = await fixture(t);
+    const store = new DashboardStore(database);
+    try { for (let index = 0; index < 32; index++) store.issue('alice', 60000); }
+    finally { store.close(); }
+    const response = await post(origin, '/login', { account: 'alice', password });
+    assert.equal(response.status, 503);
+    assert.equal(await response.text(), 'Unable to complete the request. Try again later.');
+    const socket = net.connect(Number(new URL(origin).port), '127.0.0.1');
+    socket.on('error', () => {});
+    t.after(() => socket.destroy());
+    await once(socket, 'connect');
+    const closed = new Promise(resolve => socket.once('close', resolve));
+    socket.end('POST /login HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 100\r\n\r\naccount=alice');
+    socket.resume();
+    await closed;
+    const reset = net.connect(Number(new URL(origin).port), '127.0.0.1');
+    reset.on('error', () => {});
+    t.after(() => reset.destroy());
+    await once(reset, 'connect');
+    const resetClosed = new Promise(resolve => reset.once('close', resolve));
+    reset.write('POST /login HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Encoding: gzip\r\nContent-Length: 100\r\n\r\n');
+    await delay(20);
+    reset.resetAndDestroy();
+    await resetClosed;
+    assert.equal((await fetch(`${origin}/login`)).status, 200);
+});
+
 test('real administrator and standalone startup commands expose errors and persist accounts', async t => {
     const directory = mkdtempSync(join(tmpdir(), 'redweb-dashboard-cli-'));
     const database = join(directory, 'cli.sqlite');
@@ -348,11 +376,26 @@ test('real administrator and standalone startup commands expose errors and persi
     const unavailable = run('dist/app.js', [], { PORT: String(app.server.address().port) });
     assert.equal(unavailable.status, 1);
     assert.match(unavailable.stderr, /Application listener failed/);
-    child = spawn(process.execPath, ['dist/app.js'], { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-    let output = '';
-    child.stdout.on('data', chunk => { output += chunk; });
-    const deadline = Date.now() + 5000;
-    while (!output.includes('/login') && Date.now() < deadline && child.exitCode === null) await delay(20);
-    assert.match(output, /Dashboard: http:\/\/127\.0\.0\.1:\d+\/login/);
-    const exit = once(child, 'exit'); child.kill('SIGTERM'); await exit;
+    // Windows kill('SIGTERM') terminates immediately without invoking Node handlers.
+    // An actual IPC message delivers the signal event there; Unix uses its OS signal.
+    const signalControl = join(directory, 'signal.cjs');
+    writeFileSync(signalControl, "process.once('message', () => { process.disconnect(); process.emit('SIGTERM'); });");
+    for (const configured of [false, true]) {
+        const args = [...(process.platform === 'win32' ? ['--require', signalControl] : []), 'dist/app.js'];
+        child = spawn(process.execPath, args, { env: { ...env, ...(configured ? { DASHBOARD_ORIGIN: 'https://dashboard.example', NODE_ENV: 'production' } : {}) },
+            stdio: ['ignore', 'pipe', 'pipe', ...(process.platform === 'win32' ? ['ipc'] : [])], windowsHide: true });
+        let output = '', errors = '';
+        child.stdout.on('data', chunk => { output += chunk; });
+        child.stderr.on('data', chunk => { errors += chunk; });
+        const deadline = Date.now() + 5000;
+        while (!output.includes('/login') && Date.now() < deadline && child.exitCode === null) await delay(20);
+        assert.match(output, configured ? /Dashboard: https:\/\/dashboard.example\/login/ : /Dashboard: http:\/\/127\.0\.0\.1:\d+\/login/);
+        if (!configured) assert.equal((await fetch(output.match(/http:\/\/127\.0\.0\.1:\d+\/login/)[0])).status, 200);
+        const exit = once(child, 'exit');
+        if (process.platform === 'win32') child.send('stop');
+        else child.kill('SIGTERM');
+        const [code, signal] = await exit;
+        assert.equal(code, 0, errors);
+        assert.equal(signal, null);
+    }
 });

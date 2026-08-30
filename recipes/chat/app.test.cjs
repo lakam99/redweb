@@ -4,6 +4,22 @@ const assert = require('node:assert/strict');
 const { listen, live, connect } = require('./network.cjs');
 const { createChatroomPage, chatInputs } = require('../dist/chatroom.js');
 
+test('the standalone canonical chat reports an occupied default port', { timeout: 10000 }, async t => {
+    const net = require('node:net');
+    const { spawnSync } = require('node:child_process');
+    const occupied = net.createServer(socket => socket.destroy());
+    t.after(() => new Promise(resolve => occupied.close(resolve)));
+    occupied.listen(8080, '0.0.0.0');
+    try { await once(occupied, 'listening'); }
+    catch (error) { assert.equal(error.code, 'EADDRINUSE'); } // An existing listener is left untouched.
+    const result = spawnSync(process.execPath, ['dist/chatroom.js'], {
+        encoding: 'utf8', timeout: 5000, windowsHide: true,
+    });
+    assert.equal(result.error, undefined);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /EADDRINUSE/);
+});
+
 test('members join once, exchange messages, and leave presence on disconnect', { timeout: 10000 }, async t => {
     const origin = await listen(t);
     const alice = await live(t, origin);

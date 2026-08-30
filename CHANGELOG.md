@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a separate original-TypeScript starter coverage gate with zero-seeded module maps, source/compiler/output hashes, real plain/instrumented process tests and retained V8 evidence. Keep remaining dashboard failure callbacks visible rather than excluding them. Extend real default-port, standalone chat, dashboard capacity/aborted-upload and graceful startup checks; production application code is unchanged.
+
 - Run starter, executable-documentation and top-level package verification commands through one bounded subprocess owner, including native archive extraction. Preserve failures and report uncertain cleanup; a non-Error thrown value can no longer become a successful check or interrupt cleanup through coercion. Bound dashboard browser operations and close late-created pages. Add real subprocess/file-lock regressions and a scoped package-tool coverage gate.
 
 - Give every starter a source-mapped `test:coverage` command with development-only c8. Expand chat domain/reconnect/identity tests and socket duplicate-join/unknown-session/capacity tests. Exercise actual application entrypoint failures using owned listeners; record all-starter coverage as run-specific measurement evidence, not a claim of complete application coverage.
