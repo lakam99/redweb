@@ -47,6 +47,19 @@ describe('single-source documentation', () => {
             expect(article.markdown).toContain(section.usage.trimEnd());
             expect(article.markdown).toContain(section.article.eli5);
         }
+        const guides = docs.pages.filter(page => page.id.startsWith('guides/'));
+        expect(guides).toHaveLength(5);
+        for (const guide of guides) {
+            const recipe = docs.pages.find(page => page.id === `recipes/${guide.recipe.template}`);
+            const file = recipe.files.find(file => file.path === guide.recipe.file);
+            expect(guide.files).toBeUndefined();
+            expect(guide.markdown).toContain(builder.setup(guide.recipe.template));
+            expect(guide.markdown).toContain(file.content.trimEnd());
+            expect(guide.markdown).toContain(`](${recipe.url})`);
+            expect(guide.markdown).toContain("## Explain it like I'm five");
+            expect(guide.markdown).toContain('## Check that it works');
+        }
+        expect(builder.setup('dashboard')).toContain('npm install --save-exact TARBALL\nnpm run add-user -- alice\nnpm test\nnpm run dev');
     });
 
     test('resolves source-relative links without rewriting code examples', () => {
@@ -87,6 +100,12 @@ describe('single-source documentation', () => {
                 expect(builder.setup(template)).toContain(`cd my-${template}\nnpm install --save-exact redweb@${version}`);
                 expect(docs.pages.find(page => page.id === `recipes/${template}`).markdown).toContain(builder.setup(template));
             }
+            for (const guide of docs.pages.filter(page => page.id.startsWith('guides/'))) {
+                expect(guide.markdown).toContain(`](/docs/reference/${version}/recipes/${guide.recipe.template}.md)`);
+                expect(guide.markdown).not.toContain('/docs/reference/unreleased/');
+                expect(guide.markdown).not.toContain('TARBALL');
+            }
+            expect(builder.setup('dashboard')).toContain(`npm install --save-exact redweb@${version}\nnpm run add-user -- alice\nnpm test\nnpm run dev`);
             expect(docs.llms).toContain(`Documentation for Redweb ${version}`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).toContain(`npx --yes redweb@${version} init`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).not.toContain('TARBALL');

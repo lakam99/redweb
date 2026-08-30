@@ -8,6 +8,8 @@ The README's marked realtime and HTTP/WebSocket application blocks are generated
 
 The generated catalogue is included in the npm tarball but is not loaded by the HTTP/WebSocket runtime. A site or a separate read-only documentation adapter can consume the same JSON. Each page has a stable ID, versioned Markdown URL, source path, summary, and SHA-256 content hash. Recipe pages also contain their complete file lists. Hashes identify content, not package authenticity or signatures.
 
+Task-oriented guides live under `docs/guides/` and are registered in `docs/topics.json` with a `recipe: { template, file }` selection. Their walkthroughs explain the task; generation appends the same version-correct setup and exact selected starter source used by the initializer/API examples, plus a link to the complete recipe. Guide pages do not duplicate recipe `files` collections. The site selects current-version guides for its task cards and resolves historical guides and file downloads against their own catalogue version. Dashboard setup provisions an explicit account after installation and before development starts.
+
 API articles retain their ELI5 explanations, practical examples, walkthroughs, methods, and production cautions. Each API section and capability example also has an individual Markdown page. The shared HTTP/WebSocket example comes from the complete `http-ws` starter, exercised against both the checkout and packed package; it uses one listener with separate route and message-handler classes and the shared entrypoint lifecycle helper. Historical release snapshots retain their original source/examples.
 
 ## Version boundaries

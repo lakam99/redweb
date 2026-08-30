@@ -79,12 +79,13 @@ class Documentation {
 
     setup(template) {
         if (!TEMPLATES.includes(template)) throw new Error('Unknown starter template.');
+        const acceptance = `${template === 'dashboard' ? 'npm run add-user -- alice\n' : ''}npm test\nnpm run dev`;
         return this.channel === 'unreleased'
             ? [
                 'These instructions require an absolute path to the matching tarball, produced by `npm pack` from this checkout. Replace `TARBALL` below with that path (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball.',
-                fence(`npx --yes --package TARBALL redweb init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact TARBALL\nnpm test\nnpm run dev`, 'sh'),
+                fence(`npx --yes --package TARBALL redweb init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact TARBALL\n${acceptance}`, 'sh'),
             ].join('\n\n')
-            : fence(`npx --yes redweb@${this.channel} init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact redweb@${this.channel}\nnpm test\nnpm run dev`, 'sh');
+            : fence(`npx --yes redweb@${this.channel} init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact redweb@${this.channel}\n${acceptance}`, 'sh');
     }
 
     recipe(template) {
@@ -102,21 +103,32 @@ class Documentation {
         return { id: `recipes/${template}`, title: `${template[0].toUpperCase()}${template.slice(1)} starter`, summary: explanation.split('\n').find(line => line && !line.startsWith('#')), source, markdown, files };
     }
 
+    recipeCode(entry) {
+        const files = projectFiles(this.manifest.version, entry.template, this.root);
+        const file = files.find(file => file.path === entry.file);
+        if (!file) throw new Error(`Unknown documentation recipe file: ${entry.template}/${entry.file}`);
+        return normalize(file.content);
+    }
+
+    topic(topic) {
+        let markdown = `${this.notice()}\n\n${this.links(this.read(topic.source), topic.source)}`;
+        if (topic.recipe) {
+            const { template, file } = topic.recipe;
+            markdown += [
+                '\n## Build and run the complete application', this.setup(template),
+                `The [complete ${template} recipe](${this.basePath}/recipes/${template}.md) contains every generated file, its real acceptance tests, and deployment instructions. The source below is one of those files, not a standalone program; initialize the whole project before modifying it.`,
+                `## Source walkthrough: ${file}`, fence(this.recipeCode(topic.recipe), language(file)),
+            ].join('\n\n') + '\n';
+        }
+        return { ...topic, markdown };
+    }
+
     build() {
-        const pages = this.topics.map(topic => ({
-            ...topic,
-            markdown: `${this.notice()}\n\n${this.links(this.read(topic.source), topic.source)}`,
-        }));
+        const pages = this.topics.map(topic => this.topic(topic));
         pages.push(...TEMPLATES.map(template => this.recipe(template)));
         const reference = this.reference;
-        const recipeCode = entry => {
-            const files = projectFiles(this.manifest.version, entry.template, this.root);
-            const file = files.find(file => file.path === entry.file);
-            if (!file) throw new Error(`Unknown documentation recipe file: ${entry.template}/${entry.file}`);
-            return normalize(file.content);
-        };
-        const api = reference.api.map(section => ({ ...section, usage: section.recipe ? recipeCode(section.recipe) : section.usage }));
-        const examples = reference.examples.map(example => ({ ...example, code: example.recipe ? recipeCode(example.recipe) : example.codeSource ? this.read(example.codeSource) : example.code }));
+        const api = reference.api.map(section => ({ ...section, usage: section.recipe ? this.recipeCode(section.recipe) : section.usage }));
+        const examples = reference.examples.map(example => ({ ...example, code: example.recipe ? this.recipeCode(example.recipe) : example.codeSource ? this.read(example.codeSource) : example.code }));
         for (const example of examples) {
             pages.push({ id: `examples/${example.id}`, title: example.title, summary: example.summary, source: 'docs/reference.json', markdown: [
                 `# ${example.title}`, this.notice(), example.summary,
