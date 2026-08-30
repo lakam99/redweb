@@ -1,6 +1,15 @@
 'use strict';
 
+// Reuse the same assertions in Jest and in an untransformed native V8 run.
+const test = globalThis.test ?? require('node:test').test;
+const expect = globalThis.expect ?? require('expect').expect;
+const fs = require('node:fs');
+const path = require('node:path');
+const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 const { HeapGraph, marker, captureMarker } = require('../../scripts/diagnostics/recovery-heap-graph.cjs');
+const { nodeGroup } = require('../../scripts/diagnostics/recovery-heap-summary.cjs');
+const commandTest = (name, body) => globalThis.test
+    ? test(name, body, 45000) : test(name, { timeout: 45000 }, body);
 
 const runId = '123:12345678-1234-1234-1234-123456789abc';
 const phases = ['warm', 'storm-3', 'recovered'];
@@ -126,4 +135,33 @@ test('malformed graph layouts, offsets, IDs and edge types fail rather than gues
         s => { s.nodes[5] = 0; },
     ];
     for (const mutate of mutations) { const data = snapshot('warm'); mutate(data); expect(() => new HeapGraph(data)).toThrow(); }
+});
+
+test('unknown native node types use a fixed label instead of echoing private names', () => {
+    expect(nodeGroup('private-unknown-type', 'private-name')).toBe('type:other');
+});
+
+commandTest('actual diagnostic CLIs read valid files and redact failed private inputs', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        const command = args => owner.command(args, { timeoutMs: 3000 });
+        const warm = path.join(owner.directory, 'private-warm.json');
+        const peak = path.join(owner.directory, 'private-peak.json');
+        for (const kind of ['graph', 'summary']) {
+            const script = path.resolve(__dirname, `../../scripts/diagnostics/recovery-heap-${kind}.cjs`);
+            fs.writeFileSync(warm, JSON.stringify(snapshot('warm')));
+            fs.writeFileSync(peak, JSON.stringify(snapshot('storm-3', [object(10)])));
+            const result = JSON.parse(await command([script, warm, peak]));
+            expect(result.diagnosticOnly).toBe(true);
+            const failure = `Package verification command failed (1): \nPrivate heap-${kind} diagnostic failed.\n`;
+            await expect(command([script])).rejects.toMatchObject({ message: failure });
+            for (const invalid of ['{ "test-only-private-secret":', '{}']) {
+                fs.writeFileSync(warm, invalid);
+                await expect(command([script, warm, peak])).rejects.toMatchObject({ message: failure });
+            }
+            if (kind === 'graph') {
+                fs.truncateSync(warm, 65 * 1024 * 1024);
+                await expect(command([script, warm, peak])).rejects.toMatchObject({ message: failure });
+            }
+        }
+    });
 });
