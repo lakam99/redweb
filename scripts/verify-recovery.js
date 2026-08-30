@@ -33,11 +33,11 @@ if (typeof global.gc !== 'function') throw new Error('Run with node --expose-gc 
 
 // Opt-in observation only: these allocations can perturb the diagnostic run.
 // Never subtract code bytes from the acceptance measurement or budget.
-function diagnosticSnapshot(stage) {
+function diagnosticSnapshot(stage, capture = true) {
     const sample = { spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() };
     // Raw snapshots may contain secrets. Use only in an isolated diagnostic process;
     // never publish the files. Capturing one adds GC/work, so this is not acceptance.
-    if (snapshotDirectory !== undefined) {
+    if (snapshotDirectory !== undefined && capture) {
         const filename = require('node:path').join(snapshotDirectory, `${stage}.heapsnapshot`);
         const descriptor = require('node:fs').openSync(filename, 'wx', 0o600);
         require('node:fs').closeSync(descriptor);
@@ -124,17 +124,22 @@ async function main() {
         const warm = await settle('warm');
         const warmedHeap = warm.heap;
         const warmDiagnostics = diagnostics ? diagnosticSnapshot('warm') : undefined;
+        const cycleDiagnostics = {};
         const cycles = [];
         for (let round = 0; round < stormRounds; round++) {
             await runConnections(route, url, preconditioningConnections + warmConnections + round * stormConnections, stormConnections);
             const cycle = await settle(`storm-${round + 1}`);
             cycles.push({ ...cycle, recoveredHeapPercentOfWarm: cycle.heap / warmedHeap * 100 });
+            // Observe the known third-storm peak without adding snapshot GC to
+            // storms 1/2/4 or duplicating the final snapshot. Never acceptance.
+            if (diagnostics) cycleDiagnostics[cycle.phase] = diagnosticSnapshot(cycle.phase, round === 2 && round < stormRounds - 1);
         }
         const finalCycle = cycles[cycles.length - 1];
         const recoveredHeap = finalCycle.heap;
         const recoveredDiagnostics = diagnostics ? diagnosticSnapshot('recovered') : undefined;
         const result = {
             protocol,
+            diagnosticOnly: diagnostics,
             preconditioningConnections,
             stormRounds,
             warmConnections,
@@ -146,7 +151,7 @@ async function main() {
             recoveredHeap,
             recoveredHeapPercentOfWarm: recoveredHeap / warmedHeap * 100,
             registries: { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size },
-            ...(diagnostics ? { diagnostics: { warm: warmDiagnostics, recovered: recoveredDiagnostics } } : {}),
+            ...(diagnostics ? { diagnostics: { warm: warmDiagnostics, ...cycleDiagnostics, recovered: recoveredDiagnostics } } : {}),
         };
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
         if (cycles.some(cycle => cycle.recoveredHeapPercentOfWarm > 110)) {

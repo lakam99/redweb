@@ -43,6 +43,7 @@ test.each(['0', '1'])('actual recovery traffic and optional native diagnostics (
         const result = JSON.parse(output);
         expect(result).toMatchObject({ warmConnections: 2, stormConnections: 4, registries: { clients: 0, rooms: 0, sessions: 0 } });
         expect(result.protocol).toBe('cold-v1');
+        expect(result.diagnosticOnly).toBe(enabled === '1');
         expect(result.cycles).toHaveLength(1);
         expect(result.recoveredHeapPercentOfWarm).toBeLessThanOrEqual(110);
         if (enabled === '0') expect(result).not.toHaveProperty('diagnostics');
@@ -58,16 +59,23 @@ test.each(['0', '1'])('actual recovery traffic and optional native diagnostics (
 
 test('private native heap snapshots produce only fixed-label aggregates and never overwrite files', async () => {
     await new VerificationWorkspace().run(async owner => {
-        const environment = { ...configured, REDWEB_RECOVERY_DIAGNOSTICS: '1', REDWEB_RECOVERY_HEAP_DIRECTORY: owner.directory };
+        const environment = { ...configured, REDWEB_RECOVERY_PROTOCOL: 'steady-v2', REDWEB_RECOVERY_DIAGNOSTICS: '1', REDWEB_RECOVERY_HEAP_DIRECTORY: owner.directory };
         await owner.command(['--expose-gc', script], { environment, timeoutMs: 20000 });
         const warm = path.join(owner.directory, 'warm.heapsnapshot');
         const recovered = path.join(owner.directory, 'recovered.heapsnapshot');
+        expect(fs.readdirSync(owner.directory).sort()).toEqual([
+            'recovered.heapsnapshot', 'storm-3.heapsnapshot', 'warm.heapsnapshot',
+        ]);
         const before = fs.readFileSync(warm);
         const output = JSON.parse(await owner.command([path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-summary.cjs'), warm, recovered]));
         expect(output.diagnosticOnly).toBe(true);
         expect(output.groups.find(group => group.group === 'type:code').warm.count).toBeGreaterThan(0);
         expect(output.groups.find(group => group.group === 'object:WebSocket')?.delta.count ?? 0).toBe(0);
         expect(JSON.stringify(output)).not.toContain(owner.directory);
+        const peak = JSON.parse(await owner.command([path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-summary.cjs'),
+            warm, path.join(owner.directory, 'storm-3.heapsnapshot')]));
+        expect(peak.diagnosticOnly).toBe(true);
+        expect(peak.groups.find(group => group.group === 'type:code').warm.count).toBeGreaterThan(0);
         await expect(owner.command(['--expose-gc', script], { environment, timeoutMs: 10000 })).rejects.toThrow('EEXIST');
         expect(fs.readFileSync(warm).equals(before)).toBe(true);
     });
@@ -85,6 +93,35 @@ test('snapshot collection requires explicit diagnostics and an absolute director
     });
 }, 25000);
 
+test('recovery refuses to measure retained heap without explicit garbage collection', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        await expect(owner.command([script], { environment: { ...configured, NODE_OPTIONS: '' }, timeoutMs: 10000 }))
+            .rejects.toThrow('Run with node --expose-gc');
+    });
+}, 15000);
+
+test('private summary CLI failures never echo input contents or paths', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        const summary = path.resolve(__dirname, '../../scripts/diagnostics/recovery-heap-summary.cjs');
+        const filename = path.join(owner.directory, 'private-input.json');
+        const secret = 'test-only-sensitive-snapshot-value';
+        for (const input of [`{ "${secret}":`, JSON.stringify({ private: secret })]) {
+            fs.writeFileSync(filename, input);
+            try {
+                await owner.command([summary, filename, filename], { timeoutMs: 10000 });
+                throw new Error('Malformed snapshot unexpectedly accepted');
+            } catch (error) {
+                expect(error.message).toContain('Private heap-summary diagnostic failed.');
+                expect(error.message).not.toContain(secret);
+                expect(error.message).not.toContain(owner.directory);
+                expect(error.message).toBe('Package verification command failed (1): \nPrivate heap-summary diagnostic failed.\n');
+            }
+        }
+        await expect(owner.command([summary], { timeoutMs: 10000 }))
+            .rejects.toThrow('Private heap-summary diagnostic failed.');
+    });
+}, 35000);
+
 test('aggregate unit cases redact arbitrary labels and reject malformed metadata', () => {
     const fixture = { snapshot: { meta: { node_fields: ['type', 'name', 'self_size'], node_types: [['object', 'unrecognized']] } },
         strings: ['private credential value', 'Socket'], nodes: [0, 0, 16, 0, 1, 32, 1, 0, 8] };
@@ -100,6 +137,16 @@ test('aggregate unit cases redact arbitrary labels and reject malformed metadata
     }
     expect(() => summarize({ ...fixture, strings: {} })).toThrow();
     expect(() => summarize({ ...fixture, snapshot: { meta: { node_fields: {}, node_types: [] } } })).toThrow();
+    for (const invalid of [
+        { ...fixture, nodes: {} },
+        { ...fixture, strings: [17, 'Socket'] },
+        { ...fixture, snapshot: { meta: { node_fields: ['name', 'self_size'], node_types: [] } } },
+        { ...fixture, snapshot: { meta: { node_fields: ['type', 'self_size'], node_types: [[]] } } },
+        { ...fixture, snapshot: { meta: { node_fields: ['type', 'name'], node_types: [[]] } } },
+        { ...fixture, snapshot: { meta: { node_fields: ['type', 'name', 'self_size'], node_types: [null] } } },
+        { ...fixture, snapshot: { meta: { ...fixture.snapshot.meta, node_types: [[17]] } } },
+        { ...fixture, nodes: [0, 0, Number.MAX_SAFE_INTEGER, 0, 0, 1] },
+    ]) expect(() => summarize(invalid)).toThrow();
 });
 
 test.each(['steady-v2', undefined])('fixed protocol uses five storms against one baseline (selection=%s)', async protocol => {

@@ -33,7 +33,7 @@ async function fixture(t, options = {}) {
         if (!app.server.listening) await once(app.server, 'listening');
         return `http://127.0.0.1:${app.server.address().port}`;
     }
-    return { database, restart, origin: await restart() };
+    return { database, restart, origin: await restart(), get app() { return app; } };
 }
 
 function post(origin, path, values, cookie, suppliedOrigin = origin) {
@@ -315,6 +315,25 @@ test('production origin/cookies and malformed forms use real HTTP', async t => {
     assert.equal((await post(origin, '/login', { account: 'alice', password: 'x'.repeat(5000) })).status, 400);
     assert.equal((await post(origin, '/logout', {}, '', 'https://dashboard.example')).status, 303);
     assert.equal((await post(origin, '/login', {})).status, 403);
+});
+
+test('invalid-form middleware leaves an already destroyed native HTTP response untouched', async t => {
+    const { origin, app } = await fixture(t);
+    const handled = new Promise(resolve => app.server.once('request', (request, response) => resolve({ request, response })));
+    const page = await fetch(`${origin}/login`);
+    assert.equal(page.status, 200);
+    await page.text();
+    const { request, response } = await handled;
+    // Unit-test the defensive state with genuine Express objects. This is not
+    // a claim that an aborted upload naturally reaches this middleware branch.
+    const handlers = app.server.listeners('request').flatMap(listener => listener._router?.stack ?? [])
+        .filter(layer => layer.handle.name === 'invalidBody');
+    assert.equal(handlers.length, 1);
+    response.destroy();
+    assert.equal(response.destroyed, true);
+    const before = { status: response.statusCode, headers: response.getHeaders(), ended: response.writableEnded };
+    handlers[0].handle(new Error('Invalid form after disconnect'), request, response, () => assert.fail('must not forward'));
+    assert.deepEqual({ status: response.statusCode, headers: response.getHeaders(), ended: response.writableEnded }, before);
 });
 
 test('capacity failures and abandoned uploads remain contained over real HTTP', { timeout: 10000 }, async t => {

@@ -26,18 +26,45 @@ jobs:
       - run: npm run verify:load
       - run: npm run verify:recovery
         id: recovery
-      - name: Diagnose Node 20 recovery failure (not acceptance)
-        if: ${{ failure() && matrix.node == 20 && steps.recovery.outcome == 'failure' && github.event_name == 'pull_request' }}
+      - run: npm audit --omit=dev
+
+  recovery-peak-diagnostic:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 16 && github.head_ref == 'codex/agent-ready' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Inspect intermediate recovery peak (private diagnostic, not acceptance)
         timeout-minutes: 2
         run: |
           node -p 'JSON.stringify({node: process.version, v8: process.versions.v8})'
           git rev-parse HEAD
+          umask 077
+          diagnostic_dir="$(mktemp -d "${RUNNER_TEMP}/redweb-peak.XXXXXX")"
+          cleanup() {
+            rm -f -- "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot" "$diagnostic_dir/storm-3.heapsnapshot"
+            rmdir -- "$diagnostic_dir"
+          }
+          trap cleanup EXIT
           set +e
-          node --expose-gc --trace-gc-nvp --trace-opt --trace-deopt scripts/verify-recovery.js
+          env -i PATH="$PATH" REDWEB_RECOVERY_DIAGNOSTICS=1 REDWEB_RECOVERY_HEAP_DIRECTORY="$diagnostic_dir" node --expose-gc scripts/verify-recovery.js
           diagnostic_status=$?
-          echo "Diagnostic exit status: $diagnostic_status (the original recovery failure remains a failed gate)"
-          exit "$diagnostic_status"
-      - run: npm audit --omit=dev
+          printf '\nDiagnostic status: %s; original failure remains authoritative.\n' "$diagnostic_status"
+          printf '\nWarm to storm 3 (fixed-label aggregates only):\n'
+          node scripts/diagnostics/recovery-heap-summary.cjs "$diagnostic_dir/warm.heapsnapshot" "$diagnostic_dir/storm-3.heapsnapshot"
+          peak_summary_status=$?
+          printf '\nStorm 3 to storm 5 (fixed-label aggregates only):\n'
+          node scripts/diagnostics/recovery-heap-summary.cjs "$diagnostic_dir/storm-3.heapsnapshot" "$diagnostic_dir/recovered.heapsnapshot"
+          final_summary_status=$?
+          set -e
+          if [ "$diagnostic_status" -ne 0 ]; then exit "$diagnostic_status"; fi
+          if [ "$peak_summary_status" -ne 0 ]; then exit "$peak_summary_status"; fi
+          exit "$final_summary_status"
 
   lifecycle-smoke:
     runs-on: ubuntu-latest
