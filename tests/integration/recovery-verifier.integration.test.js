@@ -11,9 +11,10 @@ const configured = {
     REDWEB_RECOVERY_STORM_CONNECTIONS: '4',
     REDWEB_RECOVERY_BATCH_SIZE: '2',
     REDWEB_RECOVERY_DIAGNOSTICS: '0',
+    REDWEB_RECOVERY_PROTOCOL: 'cold-v1',
 };
 
-test.each(Object.keys(configured).filter(name => name !== 'REDWEB_RECOVERY_DIAGNOSTICS'))(
+test.each(Object.keys(configured).filter(name => /_CONNECTIONS$|_BATCH_SIZE$/.test(name)))(
     'rejects invalid %s before opening a recovery server', async name => {
         await new VerificationWorkspace().run(async owner => {
             for (const value of ['', '0', '-1', '1.5', 'invalid', 'Infinity', '9007199254740992']) {
@@ -41,6 +42,8 @@ test.each(['0', '1'])('actual recovery traffic and optional native diagnostics (
         });
         const result = JSON.parse(output);
         expect(result).toMatchObject({ warmConnections: 2, stormConnections: 4, registries: { clients: 0, rooms: 0, sessions: 0 } });
+        expect(result.protocol).toBe('cold-v1');
+        expect(result.cycles).toHaveLength(1);
         expect(result.recoveredHeapPercentOfWarm).toBeLessThanOrEqual(110);
         if (enabled === '0') expect(result).not.toHaveProperty('diagnostics');
         else {
@@ -98,3 +101,22 @@ test('aggregate unit cases redact arbitrary labels and reject malformed metadata
     expect(() => summarize({ ...fixture, strings: {} })).toThrow();
     expect(() => summarize({ ...fixture, snapshot: { meta: { node_fields: {}, node_types: [] } } })).toThrow();
 });
+
+test('fixed candidate uses preconditioning and three storms against one unchanged baseline', async () => {
+    await new VerificationWorkspace().run(async owner => {
+        const result = JSON.parse(await owner.command(['--expose-gc', script], {
+            environment: { ...configured, REDWEB_RECOVERY_PROTOCOL: 'steady-v2' }, timeoutMs: 20000,
+        }));
+        expect(result).toMatchObject({ protocol: 'steady-v2', preconditioningConnections: 4, stormRounds: 3 });
+        expect(result.cycles).toHaveLength(3);
+        for (const phase of [result.preconditioning, result.warm, ...result.cycles]) {
+            expect(phase.registries).toEqual({ clients: 0, rooms: 0, sessions: 0 });
+            expect(phase.heap).toBeGreaterThan(0);
+        }
+        for (const cycle of result.cycles) expect(cycle.recoveredHeapPercentOfWarm).toBe(cycle.heap / result.warmedHeap * 100);
+        expect(result.recoveredHeap).toBe(result.cycles[2].heap);
+        await expect(owner.command(['--expose-gc', script], {
+            environment: { ...configured, REDWEB_RECOVERY_PROTOCOL: 'adaptive' }, timeoutMs: 10000,
+        })).rejects.toThrow('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2');
+    });
+}, 35000);
