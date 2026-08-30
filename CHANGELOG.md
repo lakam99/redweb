@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a deterministic documentation catalogue built from canonical Markdown, public declarations, and the initializer's exact recipe files. Complete Markdown applications are extracted, compiled, and exercised with real HTTP/WebSocket tests, including the packed-package and source-free deployment gates. Unreleased content is labelled explicitly; release snapshots are version-pinned and immutable.
+
 - Expanded read-only `redweb doctor` diagnostics to declared CSS/templates, source syntax, and duplicate page/socket/handler registrations, with source locations and actionable JSON output. Imported constants and shared stylesheet roots are understood; dynamic/mutated configurations and bounded-analysis limits are reported explicitly. Unsupported installed TypeScript versions receive a diagnostic instead of crashing.
 
 - Added shared socket contracts using existing Standard Schema validators: inferred client/server payload types, validated handler factories, sanitized inbound failures, and a browser-bundle-safe `redweb/contract` entry. Sender validation preserves original wire inputs, including mutating validators; asynchronous/thenable validation remains inside a bounded error boundary.

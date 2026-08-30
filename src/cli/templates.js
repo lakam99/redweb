@@ -2,15 +2,14 @@
 
 const fs = require('fs');
 const path = require('path');
-const { devDependencies, dependencies } = require('../../package.json');
 
-const recipes = path.resolve(__dirname, '../../recipes');
-const read = relative => fs.readFileSync(path.join(recipes, relative), 'utf8');
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const TEMPLATES = Object.freeze(['realtime', 'chat', 'site', 'socket']);
 
-function projectFiles(version, template = 'realtime') {
+function projectFiles(version, template = 'realtime', root = path.resolve(__dirname, '../..')) {
     if (!TEMPLATES.includes(template)) throw new Error('Unknown starter template.');
+    const { devDependencies, dependencies } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const read = relative => fs.readFileSync(path.join(root, 'recipes', relative), 'utf8');
     const manifest = {
         name: 'redweb-app', private: true, version: '0.0.0',
         scripts: {
@@ -45,7 +44,7 @@ function projectFiles(version, template = 'realtime') {
     ];
     if (template === 'chat') {
         // The canonical component example is also the starter: one implementation to maintain.
-        const examples = path.resolve(__dirname, '../../examples/live-html');
+        const examples = path.join(root, 'examples/live-html');
         for (const name of ['chatroom.tsx', 'chatroom.css']) {
             files.push({ path: `src/${name}`, content: fs.readFileSync(path.join(examples, name), 'utf8') });
         }

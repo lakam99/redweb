@@ -36,7 +36,7 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 - [ ] Plain Markdown per topic, compact `llms.txt`, versioned release docs, task-oriented recipes, and clear prerequisites/filenames/commands/results.
 - [ ] Human pages, agent docs, and code snippets derive from one maintained recipe/content source.
-- [ ] Recipes compile against a packed npm release and pass real HTTP/WebSocket acceptance tests.
+- [x] Recipes compile against a packed npm release and pass real HTTP/WebSocket acceptance tests.
 - [ ] Read-only documentation access can be exposed through an optional MCP adapter without enlarging the normal runtime or claiming automatic agent selection.
 
 ## Trust and release verification
@@ -47,6 +47,9 @@ This is the full implementation checklist for the requested improvements. Unchec
 - [ ] README, changelog, examples, website, and evidence agree on shipped behavior; final requirement-by-requirement audit proves every checkbox.
 
 ## Work log
+
+- Executable-documentation increment: `docs/generated.json` now derives topic Markdown, all public declaration entrypoints, a compact agent index, and four complete applications from canonical content and the initializer's file plan. The README counter is generated from the same source. Development and exact-version release channels are explicit; release snapshots are immutable, tolerate equivalent Git line endings, and require a versioned changelog without pending entries. No public release or website deployment is implied by a local catalogue.
+- Documentation verification: 428 tests/35 suites and all type/pretest gates passed with 100% instrumented-library statement/branch/function/line coverage, including the new documentation module. Tests extract the programs printed in Markdown, compile them, run actual HTTP/WebSockets, and rerun with source unavailable. The tarball gate repeats the initializer and Markdown consumers against extracted package code. Real generator subprocess tests cover stale content, README drift, release immutability, CRLF checkouts, channel preservation, and invalid commands. The critic approved after three findings were fixed. Package testing also caught and fixed prepack progress text contaminating `npm pack --json`; progress now goes to stderr. These results do not prove all illustrative guide snippets, browser branches, website integration, MCP, or fresh-agent benchmarks.
 
 - Source-diagnostic increment (Windows/Node 22.21.0): bounded, read-only TypeScript source inspection now reports declared asset errors, duplicate route/handler registrations, and source locations. Dynamic, mutated, escaped, or unsupported expressions produce explicit unresolved warnings rather than guessed success. The reader does not execute application modules. A real nested TypeScript 4.9 installation verifies the unsupported-compiler diagnostic without replacing the project's TypeScript 5.9 compiler.
 - Source-diagnostic verification: 421 tests/33 suites, all type/pretest gates, and 100% instrumented-library statements/branches/functions/lines passed; all packed starters and production-source-free checks passed. The senior critic approved after alias/mutation, bounded expansion, stylesheet provenance, and superclass-registration findings were fixed with regressions. The preceding audit reported zero vulnerabilities with certificate verification retained. One earlier full run hit an intermittent existing duplicate-client-identity WebSocket timeout; the isolated 30-test socket suite, five repetitions of that case, and subsequent full runs passed without socket runtime changes. Its cause remains unconfirmed and repeat reliability testing remains part of the final release gate.

@@ -1,0 +1,10 @@
+[
+  { "id": "getting-started", "title": "Choose a starter and build a working app", "summary": "Requirements, fit, development, tests, and production boundaries.", "source": "docs/GETTING_STARTED.md" },
+  { "id": "cli", "title": "Initialization and diagnostics", "summary": "Noninteractive setup, safe existing-project adoption, and structured repair guidance.", "source": "docs/CLI.md" },
+  { "id": "live-html", "title": "Pages, components, state, actions, and CSS", "summary": "Server-side TSX, automatic updates, keyed lists, lifecycle, and static export.", "source": "docs/LIVE_HTML.md" },
+  { "id": "socket-contracts", "title": "Typed socket routes and handlers", "summary": "Shared validation, client/server types, protocol errors, and join/move/resume.", "source": "docs/SOCKET_CONTRACTS.md" },
+  { "id": "operations", "title": "Deploy and operate socket services", "summary": "Readiness, shutdown, capacity, reconnection, and distributed boundaries.", "source": "docs/MULTIPLAYER_OPERATIONS.md" },
+  { "id": "production-contract", "title": "Production guarantees and limits", "summary": "Resource ownership, delivery semantics, compatibility, and release gates.", "source": "docs/PRODUCTION_READINESS.md" },
+  { "id": "verification", "title": "Recorded verification evidence", "summary": "Historical measurements and their exact scope; not proof of a newer release.", "source": "docs/VERIFICATION_EVIDENCE.md" },
+  { "id": "release-status", "title": "Development release status", "summary": "Acceptance checklist, completed increments, and unfinished release gates.", "source": "docs/AGENT_READY_ACCEPTANCE.md" }
+]

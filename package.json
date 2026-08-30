@@ -42,8 +42,9 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "pretest": "node scripts/build-live-html-examples.js --check && node scripts/generate-protocol-types.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.jsxdev.json && tsc -p tests/types/tsconfig.standard.json",
-    "prepack": "node scripts/build-live-html-examples.js --check",
+    "pretest": "node scripts/build-live-html-examples.js --check && node scripts/generate-protocol-types.js --check && node scripts/generate-docs.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.jsxdev.json && tsc -p tests/types/tsconfig.standard.json",
+    "prepack": "node scripts/build-live-html-examples.js --check && node scripts/generate-docs.js --check",
+    "generate:docs": "node scripts/generate-docs.js",
     "example:counter": "node examples/live-html/counter.js",
     "example:chatroom": "node examples/live-html/chatroom.js",
     "example:cards": "node examples/live-html/cards.js",

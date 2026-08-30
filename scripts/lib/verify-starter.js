@@ -16,6 +16,10 @@ function verifyStarter(packageRoot, workspace, template) {
     const output = node([path.join(packageRoot, 'bin/redweb.js'), 'init', target, '--template', template, '--json'], workspace);
     const report = JSON.parse(output);
     if (report.created.length < 9) throw new Error(`Incomplete ${template} starter`);
+    return verifyApplication(packageRoot, target, template);
+}
+
+function verifyApplication(packageRoot, target, template) {
     fs.mkdirSync(path.join(target, 'node_modules'));
     for (const [name, directory] of [
         ['redweb', packageRoot],
@@ -33,4 +37,4 @@ function verifyStarter(packageRoot, workspace, template) {
     return node(['--test', 'test/app.test.cjs'], target);
 }
 
-module.exports = { verifyStarter };
+module.exports = { verifyStarter, verifyApplication };

@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyStarter } = require('./lib/verify-starter');
+const { verifyDocumentation } = require('./lib/verify-documentation');
 
 function run(command, args, options = {}) {
     const result = spawnSync(command, args, {
@@ -30,6 +31,7 @@ async function main() {
         for (const template of ['realtime', 'chat', 'site', 'socket']) {
             verifyStarter(packageRoot, workspace, template);
         }
+        verifyDocumentation(packageRoot, workspace);
         if (manifest.bin.redweb !== 'bin/redweb.js' ||
             !fs.existsSync(path.join(packageRoot, 'bin', 'redweb.js')) ||
             !fs.existsSync(path.join(packageRoot, 'config', 'tsconfig.json'))) {

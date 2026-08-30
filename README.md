@@ -4,6 +4,8 @@ Build server-rendered TypeScript sites with realtime components and WebSocket en
 
 Use only the pieces you need: runtime-free static pages, interactive server-rendered applications, or bounded socket services. Redweb owns transport boundaries and lifecycle; your application remains responsible for authoritative rules, persistence, and identity.
 
+Development status: this branch includes unreleased improvements. Follow the matching packed artifact when trying its new starters, reactive rendering, contracts, or diagnostics; do not assume the published package has them. The [documentation catalogue](docs/generated.json) labels the channel explicitly and contains complete, tested recipe files. See [documentation maintenance and verification](docs/DOCUMENTATION.md).
+
 **Good fit:** Node-hosted sites with live dashboards, chat, collaboration, or multiplayer socket endpoints; static documentation sites that reuse the same TSX authoring model.
 
 **Choose something else when:** you need React compatibility or browser-side component execution, an edge-only runtime without Node, or a managed database/authentication/matchmaking service. Redweb does not supply those capabilities or promise transport delivery guarantees beyond its documented protocol.
@@ -87,39 +89,39 @@ Extend Redweb's TypeScript preset so builds and editors use the dependency-free 
 }
 ```
 
+The initializer supplies the CSS, compiler setup, and real-network tests alongside this exact `src/app.tsx`. This block is generated from the same recipe, not maintained as another example:
+
+<!-- redweb:realtime:start -->
 ```tsx
-import { LivePage, action, component, page, start, state } from 'redweb';
-import type { Child } from 'redweb/jsx-runtime';
+import { action, page, start, state, type LiveHtmlServerOptions } from 'redweb';
 
-const Card = component((props: { title: string; children?: Child }) => (
-  <article class="card">
-    <h2>{props.title}</h2>
-    {props.children}
-  </article>
-));
+@page('/', { css: 'app.css', shared: true })
+export class CounterPage {
+    @state() count = 0;
 
-@page('/', { css: 'counter.css' })
-class CounterPage extends LivePage {
-  @state() count = 0;
+    @action()
+    increment() { this.count += 1; }
 
-  @action()
-  increment() { this.count += 1; }
-
-  render() {
-    return (
-      <main>
-        <Card title="Server counter">
-          <button rw-click="increment">
-            Count <output>{this.count}</output>
-          </button>
-        </Card>
-      </main>
-    );
-  }
+    render() {
+        return (
+            <main class="home">
+                <h1>A counter owned by the server</h1>
+                <p>Open this page in two tabs. Either button updates both.</p>
+                <button rw-click="increment">
+                    Count <output>{this.count}</output>
+                </button>
+            </main>
+        );
+    }
 }
 
-start(CounterPage, { port: 8181 });
+export function createApp(options: Omit<LiveHtmlServerOptions, 'pages'> = {}) {
+    return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
+}
+
+if (require.main === module) createApp();
 ```
+<!-- redweb:realtime:end -->
 
 Text and attribute values are escaped automatically. URL attributes use Redweb's existing safe-protocol policy. `on*`, inline `style`, `srcdoc`, `srcset`, and executable `<script>` or `<style>` children are rejected; use `rw-*` server directives and external CSS or JavaScript assets. Existing `html` fragments can be nested in TSX, and TSX fragments can be nested in `html`, so migration can be incremental.
 
