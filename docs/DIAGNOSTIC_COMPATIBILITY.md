@@ -35,6 +35,15 @@ remain private local artifacts and are not committed or uploaded.
 
 ## Verification
 
+Full local regression at `daacdac` passed `npm test -- --runInBand --silent`:
+863 tests across 83 suites in 419.852 seconds, including pretest/type checks.
+Instrumented library coverage is all-four 100%: 5,445 statements, 4,044 branches,
+978 functions and 4,464 lines. The local `coverage/coverage-final.json` SHA-256 is
+`546711819397028d98d5a45f6983919ec45a04231d985b31b0b671743e0b796e`.
+This library scope is separate from the diagnostic capture scope below and does
+not imply all repository tooling/browser sources are covered. The documentation
+catalogue was regenerated and checked; hosted final-head CI remains pending.
+
 Sequential focused Jest runs passed 34 tests across four suites on Windows:
 Node 18.20.8, 20.20.2 and 22.21.0. Suites cover flag units, real diagnostic workers,
 native code-log privacy/preflight rejection, deoptimization parsing boundaries,
