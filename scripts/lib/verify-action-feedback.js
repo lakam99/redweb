@@ -3,6 +3,7 @@ const { start } = require('../..');
 const { createFeedbackPage } = require('../../tests/fixtures/feedback-page');
 const { waitForCondition, waitForListening, silentLogger, withTimeout } = require('../../tests/helpers/network');
 const { verificationError } = require('./verificationError');
+const { browserCommands } = require('./browserCommands');
 
 async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serverOptions = {}, afterChecks, onServer }) {
     const waits = new Map();
@@ -20,8 +21,9 @@ async function verifyActionFeedback({ openPage, debugPort, pages, eventual, serv
     try {
         if (onServer) onServer(server);
         await waitForListening(server.server);
-        const browser = await openPage(debugPort, `http://127.0.0.1:${server.server.address().port}/`);
-        pages.push(browser);
+        const tab = await openPage(debugPort, `http://127.0.0.1:${server.server.address().port}/`);
+        pages.push(tab);
+        const browser = browserCommands(tab);
         const submit = (id, value) => browser.evaluate(`(() => {
             const form = document.getElementById(${JSON.stringify(id)});
             form.elements.message.value = ${JSON.stringify(value)};

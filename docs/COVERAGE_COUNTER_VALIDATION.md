@@ -93,8 +93,17 @@ The senior critic approved all 17 actual remote blobs at `659f638`, including th
 shared validator, test supervision, attribution wording and evidence identities.
 Pretest/generated/type checks and four documentation units pass.
 
-The preceding full regression passed 1,456 tests/138 suites at `f96ba79`, recorded
-in `367e104`; it does not include this increment's three new cases. The subsequent
-full regression and hosted checks remain separate, not presumed passed. No npm
-publication, deployment, benchmark waiver, new long soak or whole-repository 100%
-claim is made.
+The full regression for `9c29a6e` then passed 1,459 tests/138 suites in 770.875
+seconds, with two POSIX-only skips. It includes the three new validator cases.
+The unchanged 91-file library scope remains all-four 100%: 5,449 statements,
+4,046 branches, 978 functions and 4,468 lines.
+
+| Full regression evidence | SHA-256 |
+| --- | --- |
+| `coverage/counter-validation-full-results.json` | `0ae3268e1b911fbfe4b766210172a404fbd77e146d7f0ab435ce6e8ce9b807a8` |
+| `coverage/coverage-final.json` | `e3eff8cc021eb82fd323867a079c983c72abb5fe07f83255b302850684dda29e` |
+
+Both preceding `f96ba79` and `367e104` hosted workflows passed completely.
+Hosted checks for this validator increment remain separate, not presumed passed.
+No npm publication, deployment, benchmark waiver, new long soak or whole-repository
+100% claim is made.

@@ -87,7 +87,7 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
                 assert.equal(await evaluate(tab, `fetch('/__redweb/client.js').then(response => response.text())`), expected,
                     'Browser must receive the selected source-built candidate');
             }
-            return { ...tab, evaluate: expression => evaluate(tab, expression), command: (method, params) => command(tab, method, params) };
+            return tab;
         },
         afterChecks: async (tab, context) => {
             const result = await evaluate(tab, `(async () => {

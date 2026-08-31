@@ -79,6 +79,14 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Feedback-command follow-up: a real closed Chromium debugging connection left
+  the verifier pending and its server listening after 20 seconds. A shared
+  15-second command adapter now allows server cleanup without mutating the raw
+  tab or duplicating the coverage caller's adapter. Thirteen unit/native checks
+  pass with 100% of the branch-free adapter; runtime/refresh browser gates pass.
+  Raw page acquisition remains a separate open boundary. See
+  `FEEDBACK_COMMAND_VERIFICATION.md`; no application-socket defect is claimed.
+
 - Coverage-counter follow-up: independent review identified the validation gap;
   a local probe reproduced fractional counters manufacturing a complete browser
   report. Both collectors now share
@@ -88,7 +96,9 @@ and generated additions remain actual consumer checks. See
   authored browser gates retain their unchanged 100% scopes. The isolated harness
   includes the same helper. The full isolated-package gate also passes with registry
   client 0.2.0, source-free consumers and all browser phases; the critic approved
-  all 17 actual remote implementation blobs at `659f638`. See
+  all 17 actual remote implementation blobs at `659f638`. The subsequent full
+  regression passed 1,459 tests/138 suites with two POSIX-only skips and unchanged
+  91-file library coverage. See
   `COVERAGE_COUNTER_VALIDATION.md` for the reproduced
   defect, exact evidence and remaining boundaries; no runtime change or performance
   waiver is implied.

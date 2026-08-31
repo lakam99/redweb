@@ -219,6 +219,8 @@ Run `npm run verify:cli` to test the actual initializer, doctor and incremental-
 
 Browser and authored-source coverage share strict source-map and execution-counter validation. Malformed reports are rejected before merging; see [coverage validation evidence](docs/COVERAGE_COUNTER_VALIDATION.md) for the unit and real-browser checks.
 
+Feedback verification also bounds browser commands so a disconnected debugging socket reaches server cleanup. [Native failure evidence](docs/FEEDBACK_COMMAND_VERIFICATION.md) records the fix and its remaining acquisition boundary.
+
 `npm run verify:live-html:load` checks 200 expired renders, 110 connected clients, presence/broadcast delivery and heap growth after client closure/session expiry, before server shutdown. Its separate `verify:live-html:load:coverage` command tests the verifier's HTTP/socket ownership, malformed responses, real timeouts and failure handling with unit and native integration tests. It requires all-four 100% coverage of the three verifier modules; instrumented tests do not replace clean memory measurements.
 
 `npm run verify:jsx:performance` renders 10,000 component rows and validates their complete markup outside the timed render. CI supervises the command externally; the five-second performance limit cannot itself interrupt synchronous code. `npm run verify:jsx:coverage` separately checks malformed output, measurement limits and the actual CLI, requiring all-four 100% coverage of this verifier.

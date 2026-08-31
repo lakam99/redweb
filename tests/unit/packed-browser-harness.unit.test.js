@@ -31,7 +31,7 @@ test('copies the unchanged required harness, preserves package bytes and isolate
     const harness = new PackedBrowserHarness(root, sourceRoot);
     const report = harness.verify();
     expect(report.packageFiles).toBe(1);
-    expect(report.harnessFiles).toBe(25);
+    expect(report.harnessFiles).toBe(26);
     expect(report.harnessSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(fs.readFileSync(path.join(root, 'scripts/verify-live-html-browser.js')))
         .toEqual(fs.readFileSync(path.join(sourceRoot, 'scripts/verify-live-html-browser.js')));
