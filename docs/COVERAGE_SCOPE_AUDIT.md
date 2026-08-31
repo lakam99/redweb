@@ -496,6 +496,36 @@ lines at 100%, with source-built plain bundles matching the published 0.2.0
 runtime identities. These results are not a new library regression/performance
 measurement or publication approval. The original throughput failure remains open.
 
+The runtime-frame and page-ownership helper scopes are now covered by
+`npm run verify:browser:supplements`, which is part of the existing browser gate.
+Four explicitly isolated boundary units reject failed browser calls/assertions
+and missing sessions; one integration test invokes the unchanged canonical
+plain/instrumented runtime cases with real Redweb HTTP/WebSockets and Chromium.
+The two helper files are unchanged. Authored instrumentation measures all
+90 statements, two branches, ten functions and 84 lines at 100%, including five
+anonymous callbacks omitted by the initial native-converter function inventory.
+The native report's five-function denominator is retained as diagnostic only;
+it is not the acceptance map. Browser-expression strings are constructed here,
+not internally instrumented by this Node report; actual browser execution and
+the separate frontend map remain required.
+
+On Windows/Node 22.21.0, the full browser coverage command passed 27 collector
+tests, the five supplement tests (7.369 seconds), and the separate refresh gate.
+Evidence is preserved under
+`coverage/browser-supplements-evidence/3ff15611-18b6-44a9-af71-3de942420521/`,
+including source identities and all three reports. Authored map SHA-256:
+`cb9029313165322379f9a0eb3d4057e2fccff7a11cd9ff37889b5e7342da22b6`.
+The canonical browser run `3ff15611-18b6-44a9-af71-3de942420521` passed seven
+ownership and thirteen runtime assertions per mode, plus the existing feedback,
+morph and native selection checks. Its separate frontend scope remains
+426 statements/262 branches/64 functions/351 lines at 100%. The refresh run
+`3b4be9fd-8406-4be6-81ca-742d89331341` retained all-four 100% and observed actual
+back-forward-cache restoration. CI retains the
+authored helper map with the existing browser evidence. Within that command,
+this replaces the runtime invocation rather than adding a second one; the
+full regression suite also discovers the new integration test. No new timing
+claim or performance-policy change is introduced.
+
 The development-refresh coordinator has a reviewed launch/cleanup correction and
 15 explicit boundary units, plus the separate actual generated-app browser gate.
 This is not a complete source map and does not remove it from this inventory.
@@ -507,10 +537,8 @@ scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
 scripts/lib/verify-dashboard-browser.js
-scripts/lib/verify-live-page-ownership.js
 scripts/lib/verify-refresh-controls.js
 scripts/lib/verify-refresh-coverage.js
-scripts/lib/verify-runtime-browser.js
 ```
 
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:

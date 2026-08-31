@@ -117,8 +117,7 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
     });
 }
 
-async function main() {
-    const mode = process.argv[2] || 'runtime';
+async function main(mode = process.argv[2] || 'runtime') {
     let bundle;
     let frontendOffset;
     let frontendEnd;
@@ -227,5 +226,5 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
     });
 }
 
-module.exports = { runBrowserChecks };
+module.exports = { main, runBrowserChecks };
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

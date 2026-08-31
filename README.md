@@ -255,4 +255,6 @@ Ownership and stopped-poll edge cases also use native-browser unit-style tests; 
 
 Client verification also retains raw worker files before parsing or cleanup, including failed runs. Its private coordinator has a separate 100% coverage gate; real Vitest failure fixtures exercise retention without replacing filesystem, compiler or process APIs. See [client development](docs/CLIENT_DEVELOPMENT.md) for commands and scope.
 
+`npm run verify:browser:supplements` combines focused units with the existing real-browser runtime cases to require 100% authored-source coverage of the page-ownership and runtime-frame verification helpers, including anonymous callbacks. It is included in the browser coverage gate; see the [coverage scope audit](docs/COVERAGE_SCOPE_AUDIT.md) for exact boundaries and remaining gaps.
+
 Edit canonical recipes/guides, then run `npm run generate:docs`; do not maintain independent copies of the examples. See [documentation maintenance](docs/DOCUMENTATION.md) and the [full acceptance checklist](docs/AGENT_READY_ACCEPTANCE.md) for verification evidence and remaining release work.

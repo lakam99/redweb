@@ -227,6 +227,7 @@ jobs:
           name: browser-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             coverage/browser-collector/
+            coverage/browser-supplements-authored/
             coverage/browser-runtime/
             coverage/browser-refresh/
           if-no-files-found: error
