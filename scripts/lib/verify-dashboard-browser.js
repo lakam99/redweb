@@ -94,7 +94,11 @@ async function verifyDashboard(execution, { openPage, debugPort }) {
         }
     } finally {
         try { if (app) await withTimeout(app.shutdown(), 'dashboard application shutdown', 15000); }
-        catch (error) { cleanup.push(error); app.server.unref(); }
+        catch (error) {
+            cleanup.push(error);
+            try { app.server.unref(); }
+            catch (error) { cleanup.push(error); }
+        }
     }
     if (cleanup.length) execution.cleanupFailure = new AggregateError(cleanup, 'Dashboard cleanup failed');
     if (failure) throw failure;

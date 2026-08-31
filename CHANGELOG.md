@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Preserve the original dashboard verification failure and workspace-retention state when shutdown and handle release both fail. Add maintained direct verifier coverage with explicit fault units, real Chromium/SQLite/authentication checks and adverse-process/filesystem integration; keep application behavior and acceptance limits unchanged.
+
 - Preserve actual plain/instrumented browser back-forward-cache observations in refresh verification reports, separately from required behavioral parity. Add unit and real-browser report checks; do not equate ordinary history navigation with a cache restoration or change runtime behavior.
 
 - Add maintained authored-source coverage for the unchanged browser runtime-frame and page-ownership verification helpers, including anonymous callbacks. Reuse the canonical real-browser cases and preserve their workload; retain native-converter measurements separately where their function inventory is incomplete.

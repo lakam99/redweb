@@ -6,13 +6,52 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 const { verifyDashboard } = require('../../scripts/lib/verify-dashboard-browser');
-const { openPage } = require('../../scripts/verify-live-html-browser');
+const { BrowserPages } = require('../../scripts/lib/BrowserPages');
+const { openPage, browserCandidates, launchBrowserWithRetry, stopBrowser, combineFailures } = require('../../scripts/verify-live-html-browser');
 const { withTimeout, waitForListening } = require('../helpers/network');
 const { projectNodeIssue } = require('../../src/cli/ProjectDoctor');
 const { projectFiles } = require('../../src/cli/templates');
 
 const manifest = JSON.parse(projectFiles(require('../../package.json').version, 'dashboard').find(file => file.path === 'package.json').content);
 const dashboardTest = projectNodeIssue(process.versions.node, manifest.engines.node)?.severity === 'error' ? test.skip : test;
+
+dashboardTest('dashboard verification uses actual Chromium, authentication, SQLite and private live updates', async () => {
+    const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
+    expect(executable).toBeTruthy();
+    const execution = new VerificationWorkspace();
+    await execution.run(async owner => {
+        const bounded = (promise, label) => withTimeout(promise, label, 15000);
+        const pages = new BrowserPages(owner, openPage, bounded);
+        let browser, failure;
+        const recordCleanup = error => {
+            owner.cleanupFailure = combineFailures(owner.cleanupFailure, error);
+            failure = combineFailures(failure, error);
+        };
+        try {
+            const launched = await launchBrowserWithRetry(executable, owner.directory);
+            browser = launched.browser;
+            await verifyDashboard(owner, { debugPort: new URL(launched.endpoint).port,
+                openPage: (port, url) => pages.open(port, url) });
+            expect(pages.tabs).toHaveLength(2);
+            expect(owner.cleanupFailure).toBeNull();
+        } catch (error) { failure = error; }
+        finally {
+            try { await pages.close(); } catch (error) { recordCleanup(error); }
+            try {
+                if (!browser) throw new Error('Dashboard browser launch cleanup remains uncertain');
+                await bounded(stopBrowser(browser.child), 'dashboard test browser shutdown');
+                expect(browser.child.exitCode !== null || browser.child.signalCode !== null).toBe(true);
+            } catch (error) {
+                recordCleanup(error);
+                for (const release of [() => browser?.child?.stderr?.destroy(), () => browser?.child?.unref()]) {
+                    try { release(); } catch (error) { recordCleanup(error); }
+                }
+            }
+        }
+        if (failure) throw failure;
+    });
+    expect(fs.existsSync(execution.directory)).toBe(false);
+}, 300000); // Sequential generated-app commands, browser operations and cleanup.
 
 // A real adverse DevTools HTTP peer exercises the actual openPage request/parser.
 // It does not stand in for a successful browser; native-browser acceptance is separate.

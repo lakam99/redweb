@@ -234,6 +234,17 @@ jobs:
           retention-days: 30
       - run: npm run verify:development:browser
         timeout-minutes: 10
+      - run: npm run verify:dashboard:coverage
+        id: dashboard-verifier
+        timeout-minutes: 12
+      - name: Preserve dashboard verifier coverage
+        if: ${{ always() && steps.dashboard-verifier.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dashboard-verifier-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/dashboard-verifier/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:live-html:load
         timeout-minutes: 4
       - run: npm run verify:live-html:load:coverage

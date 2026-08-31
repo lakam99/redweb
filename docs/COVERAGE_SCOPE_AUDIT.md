@@ -8,6 +8,35 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Dashboard verifier follow-up
+
+`npm run verify:dashboard:coverage` measures the authored dashboard verifier
+separately. Twenty-four explicitly isolated boundary units cover setup, readiness,
+late/unsettled page acquisition and cleanup. The `unref` case failed on the old
+source: secondary handle-release failure escaped before `cleanupFailure` was set,
+replacing the primary error. A nested guard now retains both cleanup failures
+while preserving the primary error. This double fault was reproduced at an API
+boundary, not claimed as an observed native Node failure.
+
+Three no-mock integrations cover the actual generated dashboard's Chromium,
+SQLite, authentication, private card updates and draft-preserving logout/re-login;
+adverse DevTools HTTP setup with natural subprocess exit; and Windows file-lock
+retention. The browser test independently shuts down Chromium and confirms
+temporary-directory removal. Native dashboard checks respect the starter's Node
+requirements; the file-lock case is Windows-only. The new CI gate preserves its
+coverage artifact on success or failure.
+
+Windows / Node 22.21.0: 27 tests / 2 suites passed in 60.683 seconds. Direct
+coverage is 101 statements, 14 branch outcomes, 14 functions and 82 lines, all
+100%. Preserved map:
+`coverage/dashboard-verifier-evidence/72e59434-6d51-491d-89f3-89534a184b09/coverage-final.json`,
+SHA-256 `d486205c7c8549e2fe5487b29c4d8f4405ba074406a0da730d8401b06ab2eeb3`.
+Verifier source SHA-256 (LF-normalized):
+`007d5ca646f3eb182b75b1bc9c84db19f1977b0b70780b694aaaacad95eb6aed`.
+This measures host-side authored code, including construction of browser strings,
+not an execution coverage map for those strings. It does not replace the separate
+frontend map, complete library regression, package or performance acceptance.
+
 ### Refresh history observation follow-up
 
 The refresh verifier now persists the actual `bfcacheRestored` boolean separately
@@ -559,7 +588,6 @@ scripts/verify-browser-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
-scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-refresh-controls.js
 scripts/lib/verify-refresh-coverage.js
 ```
