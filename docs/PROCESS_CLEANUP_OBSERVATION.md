@@ -21,7 +21,7 @@ signal before waiting, so successful fallback is not proof that original cleanup
 alone succeeded. The test now also requires the captured command error to be
 the actual timeout, not merely contain the fixture's output marker.
 
-The next ordinary Node 20 CI execution retains the existing immediate assertion,
+The diagnostic-enabled ordinary Node 20 CI execution retains the existing immediate assertion,
 two-second command limit and five-second fallback limit. The fixture records
 initial process identities. If an assertion fails, it samples descendant and
 group-leader identity **before the fallback signal**, appends the command
@@ -51,6 +51,11 @@ Local Windows tests exercise parsing and the real npm descendant workflow, but
 cannot reproduce Linux reaping or validate the native `/proc` branch. The local
 Docker Linux engine was unavailable; it was not started or reconfigured.
 The final Windows run passed 21 tests with the one Linux-only negative control
-skipped (7.439 seconds). Its native Linux execution remains pending in CI.
+skipped (7.439 seconds). Both [PR](https://github.com/lakam99/redweb/actions/runs/33406107275)
+and [push](https://github.com/lakam99/redweb/actions/runs/33406101028) workflows
+for `4fe0145` subsequently passed all jobs. The actual Node 20.20.2 push job
+passed 1,573 tests with seven platform skips in 823.853 seconds, including the
+Linux escaped-child negative control and malformed-observation regression.
+This validates the diagnostic on Linux, not the cause of the original failure.
 Frozen helpers/evaluation evidence, runtime code and acceptance thresholds remain
 unchanged. No cause or fix for the original CI failure is claimed yet.

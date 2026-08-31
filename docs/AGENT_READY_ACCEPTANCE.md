@@ -79,6 +79,44 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Refresh verification follow-through (2026-08-31): corrected three reproduced
+  failure-boundary defects using shared error handling: swallowed falsy errors,
+  release errors replacing earlier failures, and upload errors lost when controls
+  also fail. The maintained browser command now includes direct authored coverage
+  of both refresh helpers, without duplicating its canonical refresh workload.
+  Final gate: 27 collector, five runtime-helper and 52 refresh tests pass; both
+  helpers cover 395 statements/104 branch outcomes/60 functions/297 lines at
+  100%. Native Chromium/HTTP tests remain separate from explicitly doubled unit
+  boundaries. Independent review required and confirmed a bounded close in the
+  new standalone test. All generated/type checks and eleven documentation/CI
+  units pass. Exact maps, source identities and boundaries are retained in
+  `COVERAGE_SCOPE_AUDIT.md`; frozen tooling/runtime/limits are unchanged.
+
+- Completed full verification of unchanged `4fe0145`: Windows passed 1,577
+  tests, three platform skips and 150 suites in 868.646 seconds; the 91-file
+  library scope covers 5,449 statements/4,046 branch outcomes/978 functions/
+  4,468 lines at 100%. The command used the system CA trust store, without
+  disabling TLS or changing global configuration. Retained JSON
+  `coverage/final-polish-4fe0145-full-results.json` has SHA-256
+  `742e88e003b65f76dc1c088b0c9da3aa5f97587df92eb03bd05c94caf2a08ad7`;
+  map `coverage/final-polish-4fe0145-full/coverage-final.json` has SHA-256
+  `5e0ea2c59c941a63606623a0f5056fb526416fc6302ffcfadd05fc5221237e42`.
+  These full-suite counts precede the refresh increment above. Both workflows
+  (PR 33406107275, push 33406101028) completed successfully, including all four
+  Node versions and the Linux escaped-descendant negative control. The downloaded
+  Linux dashboard map (`coverage/ci-dashboard-4fe0145/coverage-final.json`, SHA-256
+  `ba2193d92f43562483ad2216c2ff5d7e7adc3ac104b064737c85b9942f6cc7c3`)
+  independently retains 101/14/14/82 at 100%. These passes do not prove the cause
+  of the original `08348fb` cleanup failure or waive failed throughput evidence.
+
+- Public release reconciliation (2026-08-31, 15:10 UTC): registry versions remain
+  Redweb 0.12.0 and redweb-client 0.2.0. Actual certificate-verified HTTP requests
+  to the configured public origin found `/docs/` still titled “Redweb 0.9 API
+  reference”; `/llms.txt` returned homepage HTML rather than agent-readable text.
+  Local site/build success is not public alignment. Ignored observation receipt:
+  `coverage/public-release-4fe0145.json` (decoded-body hashes, not raw response
+  archives). No deployment, npm publication, merge or new hour soak was performed.
+
 - Public example correction: independent review and an actual-socket probe found
   that the older match example joined a room but then failed on its missing
   authenticated principal (sanitized error and close 1011); it also never issued

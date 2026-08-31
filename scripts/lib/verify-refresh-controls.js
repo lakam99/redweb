@@ -10,6 +10,7 @@ const refreshBrowser = require('../../src/development/refreshBrowser');
 const styles = require('../../src/development/refreshStyles');
 const { withTimeout, waitForListening } = require('../../tests/helpers/network');
 const { browserCommands } = require('./browserCommands');
+const { verificationError } = require('./verificationError');
 
 // A committed navigation need not have parsed its heading yet.
 const headingReady = text => `document.querySelector("h1")?.textContent === ${JSON.stringify(text)}`;
@@ -186,16 +187,16 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
         assert.ok(peer.seen.every(url => !url.includes('private-unsent-draft') && !url.includes('refresh-upload')));
         if (afterChecks) await afterChecks(peer);
         console.log('Refresh controls passed: actual outage/recovery, malformed/redirect/partial responses, bounded polling, delayed-script revision and input/password/file/contenteditable/select draft guards under self-only CSP.');
-    } catch (error) { failure = error; }
+    } catch (error) { failure = verificationError(error); }
     finally {
         for (const page of pages) {
             try { await closePage(page, debugPort); }
-            catch (error) { failure = combineFailures(failure, error); }
+            catch (error) { failure = combineFailures(failure, verificationError(error)); }
         }
         try { peer.releaseScripts(); }
-        catch (error) { failure = combineFailures(failure, error); }
+        catch (error) { failure = combineFailures(failure, verificationError(error)); }
         try { await peer.pause(); }
-        catch (error) { failure = combineFailures(failure, error); }
+        catch (error) { failure = combineFailures(failure, verificationError(error)); }
     }
     if (failure) throw failure;
     return historyRestoration;

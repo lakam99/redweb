@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Preserve concurrent refresh-verification failures, including rejected non-Error values, page closure, socket release and coverage uploads. Add maintained authored coverage of both private refresh helpers with failure units and real Chromium/HTTP integration; keep rendering runtime, browser assertions and acceptance limits unchanged.
+
 - Preserve the original dashboard verification failure and workspace-retention state when shutdown and handle release both fail. Add maintained direct verifier coverage with explicit fault units, real Chromium/SQLite/authentication checks and adverse-process/filesystem integration; keep application behavior and acceptance limits unchanged.
 
 - Preserve actual plain/instrumented browser back-forward-cache observations in refresh verification reports, separately from required behavioral parity. Add unit and real-browser report checks; do not equate ordinary history navigation with a cache restoration or change runtime behavior.

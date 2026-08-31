@@ -230,6 +230,7 @@ jobs:
             coverage/browser-supplements-authored/
             coverage/browser-runtime/
             coverage/browser-refresh/
+            coverage/refresh-verifier/
           if-no-files-found: error
           retention-days: 30
       - run: npm run verify:development:browser

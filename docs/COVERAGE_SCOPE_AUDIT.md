@@ -8,6 +8,49 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Refresh verifier failure and coverage follow-up
+
+`npm run verify:refresh:coverage` now covers both authored refresh helpers and
+replaces the old refresh CLI invocation inside the browser coverage command.
+The canonical plain/instrumented browser workload is still invoked once; a
+separate native test exercises standalone controls with their default HTTP peer
+and without supplemental checks. Real HTTP tests retain malformed, oversized,
+aborted and valid uploads, listener conflicts and upgraded-socket cleanup.
+Explicit unit doubles cover error boundaries; they are not no-mock integration.
+
+The new regressions reproduced three evidence-handling defects: falsy rejected
+values could be swallowed, socket release could replace collection/page-close
+errors, and a controls failure could hide an earlier upload error. Both helpers
+reuse the shared error normalizer/combiner. Browser behavior and acceptance
+deadlines are unchanged. Independent review also required a bounded close and
+independent socket release in the new standalone test driver; this was corrected
+before the final run.
+
+Final Windows / Node 22.21.0 / Chrome 152.0.7977.64 browser gate passed:
+27 collector tests, five runtime-helper tests (7.180 seconds), and 52 refresh
+tests (53.535 seconds). The two-file authored scope is 395 statements,
+104 branch outcomes, 60 functions and 297 lines, all 100%. An independent AST
+inventory confirmed all 26 controls and 34 coverage-helper functions; there are
+no coverage-ignore exclusions. This map covers construction, not internal
+execution, of embedded browser expressions. Generated refresh coverage remains
+82/44/12/71 and runtime coverage 426/262/64/351, all 100%; both refresh modes
+observed actual back-forward-cache restoration.
+
+Retained evidence directory:
+`coverage/refresh-verifier-evidence/50eccf7b-e6a3-4de4-8bd8-6eea319bdb72/`.
+SHA-256 identities:
+
+- Authored `coverage-final.json`: `e1681a8656ab89951f29ac4f82fcff47e79c1f633d2de72f134a78b4ce2ae5c1`.
+- `refresh.json`: `22b89f04c38478c3e0464774d8f8ebe1077a021b1753a06a254d962717b34e66`.
+- `runtime.json`: `0574735a7144d2b6b46fdcaf1956495ad6e874c21c43bcf304a95d3596742b69`.
+- Controls source, LF-normalized: `4602557d0a287e3155d7681edb6c5514ba31bef44425f683cb10974a37aed006`.
+- Coverage helper source, LF-normalized: `cfb8297b7167354f48320dee6518eb2930f3ff1bf1e2a1814e4a926d6413b4e4`.
+
+CI retains the authored map with the existing browser artifact. This removes only
+these two helpers from the missing-map inventory, not the coordinators or frozen
+tooling below. Performance, original Linux cleanup and publication remain
+separate open evidence requirements.
+
 ### Dashboard verifier follow-up
 
 `npm run verify:dashboard:coverage` measures the authored dashboard verifier
@@ -588,8 +631,6 @@ scripts/verify-browser-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
-scripts/lib/verify-refresh-controls.js
-scripts/lib/verify-refresh-coverage.js
 ```
 
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:

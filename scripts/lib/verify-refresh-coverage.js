@@ -6,6 +6,7 @@ const { RevisionPeer, verifyRefreshControls, headingReady } = require('./verify-
 const { withTimeout } = require('../../tests/helpers/network');
 const { combineFailures } = require('../verify-live-html-browser');
 const { browserCommands } = require('./browserCommands');
+const { verificationError } = require('./verificationError');
 
 class CoverageRevisionPeer extends RevisionPeer {
     constructor(coverage, instrumented) {
@@ -82,29 +83,33 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
     };
     const closePage = async tab => {
         let failure, snapshot;
-        try { snapshot = await collect(tab); } catch (error) { failure = error; }
+        try { snapshot = await collect(tab); } catch (error) { failure = verificationError(error); }
         try {
             if (snapshot) {
                 const reports = peer.reports;
                 await tab.command('Page.navigate', { url: 'about:blank' });
                 await until(() => peer.reports > reports, 'final pagehide coverage delivery');
             }
-        } catch (error) { failure = combineFailures(failure, error); }
-        try { await tab.command('Page.close'); } catch (error) { failure = combineFailures(failure, error); }
-        finally { tab.socket.terminate(); }
+        } catch (error) { failure = combineFailures(failure, verificationError(error)); }
+        try { await tab.command('Page.close'); } catch (error) { failure = combineFailures(failure, verificationError(error)); }
+        finally {
+            try { tab.socket.terminate(); }
+            catch (error) { failure = combineFailures(failure, verificationError(error)); }
+        }
         if (failure) throw failure;
     };
     const usingPage = async (url, operation) => {
         const tab = await open(debugPort, url);
         let failure;
-        try { await operation(tab); } catch (error) { failure = error; }
-        try { await closePage(tab); } catch (error) { failure = combineFailures(failure, error); }
+        try { await operation(tab); } catch (error) { failure = verificationError(error); }
+        try { await closePage(tab); } catch (error) { failure = combineFailures(failure, verificationError(error)); }
         if (failure) throw failure;
     };
     const click = async (tab, expression) => {
         const point = await tab.evaluate(`(() => { const box = (${expression}).getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
         for (const type of ['mousePressed', 'mouseReleased']) await tab.command('Input.dispatchMouseEvent', { type, ...point, button: 'left', clickCount: 1 });
     };
+    let failure;
     const historyRestoration = await verifyRefreshControls(debugPort, directory, { peer, open, until, click, closePage, afterChecks: async () => {
         await usingPage(peer.url + '/heading-readiness', async tab => {
             await until(() => tab.evaluate('Boolean(document.getElementById("heading-readiness"))'), 'heading readiness fixture');
@@ -161,8 +166,10 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
             await until(async () => { try { return await edited.evaluate('document.getElementById("draft").value === ""'); } catch { return false; } }, 'explicit discard reload');
             if (instrumented) await until(() => peer.reports > reports, 'discard coverage received');
         });
-    } });
-    if (peer.failures.length) throw new AggregateError(peer.failures, 'Refresh coverage collection failed');
+    } }).catch(error => { failure = verificationError(error); });
+    if (peer.failures.length) failure = combineFailures(failure,
+        new AggregateError(peer.failures.map(verificationError), 'Refresh coverage collection failed'));
+    if (failure) throw failure;
     // Cache admission is the browser's decision, not a required parity outcome.
     // Retain each observation separately from the mandatory behavioral cases.
     run.historyRestoration ??= {};
