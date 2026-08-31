@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { ClientCandidate } = require('../../scripts/lib/ClientCandidate');
+const { verifyInstalledClient } = require('../../scripts/lib/InstalledClient');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 
 // Filesystem-only fingerprint/ownership units. Actual npm extraction is covered
@@ -45,6 +46,25 @@ test('rejects installed bundle changes even when lock integrity is unchanged', (
     expect(() => candidate.verify(consumer, initial)).toThrow('changed during verification');
 }));
 
+test('registry fingerprints retain npm provenance and reject installed or lock changes', () => fixture(({ consumer, client }) => {
+    const lockFile = path.join(consumer, 'package-lock.json');
+    const lock = JSON.parse(fs.readFileSync(lockFile));
+    lock.packages['node_modules/redweb-client'].resolved = 'https://registry.npmjs.org/redweb-client/-/redweb-client-0.2.0.tgz';
+    fs.writeFileSync(lockFile, JSON.stringify(lock));
+    const initial = verifyInstalledClient(consumer);
+    expect(initial.candidateOnly).toBe(false);
+    expect(initial.archiveSha256).toBeUndefined();
+    expect(initial.resolved).toBe(lock.packages['node_modules/redweb-client'].resolved);
+    expect(verifyInstalledClient(consumer, initial)).toEqual(initial);
+    lock.packages['node_modules/redweb-client'].resolved = 'file:local.tgz';
+    fs.writeFileSync(lockFile, JSON.stringify(lock));
+    expect(() => verifyInstalledClient(consumer, initial)).toThrow('changed during verification');
+    lock.packages['node_modules/redweb-client'].resolved = initial.resolved;
+    fs.writeFileSync(lockFile, JSON.stringify(lock));
+    fs.appendFileSync(path.join(client, 'dist/index.js'), '\n// altered');
+    expect(() => verifyInstalledClient(consumer, initial)).toThrow('changed during verification');
+}));
+
 test('checks secondary bundles even when the exported CommonJS entry stays inside', () => fixture(({ candidate, consumer, client, directory }) => {
     fs.mkdirSync(path.join(client, 'safe'));
     fs.copyFileSync(path.join(client, 'dist/live-html.cjs'), path.join(client, 'safe/live-html.cjs'));
@@ -55,7 +75,7 @@ test('checks secondary bundles even when the exported CommonJS entry stays insid
     const outside = path.join(directory, 'outside-dist');
     fs.renameSync(path.join(client, 'dist'), outside);
     fs.symlinkSync(outside, path.join(client, 'dist'), 'junction');
-    expect(() => candidate.verify(consumer)).toThrow('Every candidate bundle');
+    expect(() => candidate.verify(consumer)).toThrow('Every client bundle');
 }));
 
 test('rejects directories, non-tarball paths and changed candidate bytes', () => fixture(({ candidate, archive, consumer, directory }) => {

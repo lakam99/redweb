@@ -69,7 +69,7 @@
     "verify:starters:lifecycle": "node scripts/verify-starter-lifecycle.js",
     "measure:starters:coverage": "node scripts/measure-starter-coverage.js",
     "verify:starters:source-coverage": "node node_modules/jest/bin/jest.js tests/unit/application-coverage.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/ApplicationCoverage.js --coverageDirectory=coverage/application-collector && node scripts/verify-starter-source-coverage.js",
-    "verify:package:tools": "node node_modules/jest/bin/jest.js tests/unit/verification-workspace.unit.test.js tests/unit/client-candidate.unit.test.js tests/unit/packed-browser-harness.unit.test.js tests/unit/packed-browser-report.unit.test.js tests/integration/starter-verifier.integration.test.js tests/integration/starters.integration.test.js tests/integration/documentation.integration.test.js tests/integration/action-input.integration.test.js tests/integration/consumer-compiler.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --collectCoverageFrom=scripts/lib/ClientCandidate.js --collectCoverageFrom=scripts/lib/PackedBrowserHarness.js --collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js --collectCoverageFrom=scripts/lib/verificationError.js --collectCoverageFrom=scripts/lib/verify-starter.js --collectCoverageFrom=scripts/lib/verify-documentation.js --collectCoverageFrom=scripts/lib/compile-consumer.js --coverageDirectory=coverage/package-tools",
+    "verify:package:tools": "node node_modules/jest/bin/jest.js tests/unit/verification-workspace.unit.test.js tests/unit/client-candidate.unit.test.js tests/unit/packed-browser-harness.unit.test.js tests/unit/packed-browser-report.unit.test.js tests/integration/starter-verifier.integration.test.js tests/integration/starters.integration.test.js tests/integration/documentation.integration.test.js tests/integration/action-input.integration.test.js tests/integration/consumer-compiler.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --collectCoverageFrom=scripts/lib/ClientCandidate.js --collectCoverageFrom=scripts/lib/InstalledClient.js --collectCoverageFrom=scripts/lib/PackedBrowserHarness.js --collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js --collectCoverageFrom=scripts/lib/verificationError.js --collectCoverageFrom=scripts/lib/verify-starter.js --collectCoverageFrom=scripts/lib/verify-documentation.js --collectCoverageFrom=scripts/lib/compile-consumer.js --coverageDirectory=coverage/package-tools",
     "verify:live-html:load": "node scripts/build-live-html-examples.js --check && node --expose-gc scripts/verify-live-html-load.js",
     "verify:jsx:performance": "node --expose-gc scripts/verify-jsx-performance.js",
     "verify:live-html:package": "node scripts/verify-live-html-package.js",
@@ -125,7 +125,7 @@
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
     "express": "^4.22.2",
-    "redweb-client": "^0.1.0",
+    "redweb-client": "^0.2.0",
     "ws": "^8.21.3"
   },
   "devDependencies": {

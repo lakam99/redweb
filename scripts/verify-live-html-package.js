@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const assert = require('node:assert/strict');
 const { npmEntrypoint } = require('./evaluation/process');
 const { verifyStarter } = require('./lib/verify-starter');
 const { verifyDocumentation } = require('./lib/verify-documentation');
@@ -28,17 +29,27 @@ async function main() {
         const metadata = require('../package.json');
         const dependencyChecks = await verifyExampleDependencies(archive, workspace, metadata.devDependencies.zod,
             { typescript: metadata.devDependencies.typescript, ws: metadata.dependencies.ws }, execution, candidate);
-        if (candidate) {
-            for (const [name, digest] of Object.entries(dependencyChecks.candidateEvidence.bundles)) {
+        {
+            if (!candidate) {
+                const locked = require('../package-lock.json').packages['node_modules/redweb-client'];
+                const installed = dependencyChecks.clientEvidence;
+                assert.deepEqual([installed.clientVersion, installed.resolved, installed.integrity],
+                    [locked.version, locked.resolved, locked.integrity], 'Registry client must match the committed dependency lock');
+            }
+            for (const [name, digest] of Object.entries(dependencyChecks.clientEvidence.bundles)) {
                 const linkedFile = path.join(path.dirname(require.resolve('redweb-client/live-html')), name);
                 if (createHash('sha256').update(fs.readFileSync(linkedFile)).digest('hex') !== digest) {
-                    throw new Error('Installed candidate differs from the locally tested client build.');
+                    throw new Error('Installed client differs from the locally tested client build.');
                 }
             }
-            console.log(JSON.stringify(dependencyChecks.candidateEvidence));
-            const browser = await verifyPackedBrowser(path.join(dependencyChecks.consumer, 'node_modules/redweb'), execution);
-            candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
-            console.log(JSON.stringify({ candidateOnly: true, packedBrowser: browser }));
+            console.log(JSON.stringify(dependencyChecks.clientEvidence));
+            let browser, failure;
+            try { browser = await verifyPackedBrowser(path.join(dependencyChecks.consumer, 'node_modules/redweb'), execution); }
+            catch (error) { failure = error; }
+            try { dependencyChecks.verifyClient(dependencyChecks.clientEvidence); }
+            catch (error) { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; }
+            if (failure) throw failure;
+            console.log(JSON.stringify({ candidateOnly: Boolean(candidate), packedBrowser: browser }));
         }
         console.log(dependencyChecks.withoutValidator.trim());
         console.log(dependencyChecks.withValidator.trim());
@@ -46,13 +57,13 @@ async function main() {
         await execution.command(['-xf', archive, '-C', workspace], { executable: 'tar' });
         const packageRoot = path.join(workspace, 'package');
         fs.symlinkSync(path.join(dependencyChecks.consumer, 'node_modules'), path.join(packageRoot, 'node_modules'), 'junction');
-        if (candidate) {
+        {
             const harness = new PackedBrowserHarness(packageRoot, root);
             const environment = { TEMP: workspace, TMP: workspace, TMPDIR: workspace, NODE_OPTIONS: '' };
             const reportDirectory = path.join(root, 'coverage/packed-browser', randomUUID());
             fs.mkdirSync(reportDirectory, { recursive: true });
             const report = { redwebArchiveSha256: createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
-                client: dependencyChecks.candidateEvidence, phases: [], status: 'failed' };
+                client: dependencyChecks.clientEvidence, phases: [], status: 'failed' };
             let failure;
             try {
                 for (const [name, args] of [
@@ -64,7 +75,7 @@ async function main() {
                     fs.writeFileSync(path.join(reportDirectory, `${name}.log`), output);
                     console.log(output);
                     harness.verify();
-                    candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+                    dependencyChecks.verifyClient(dependencyChecks.clientEvidence);
                     report.phases.push(name);
                 }
                 const runtime = JSON.parse(fs.readFileSync(path.join(packageRoot, 'coverage/browser-runtime/report.json'), 'utf8'));
@@ -73,10 +84,10 @@ async function main() {
             } catch (error) { failure = error; }
             try {
                 report.inputs = harness.verify();
-                candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+                dependencyChecks.verifyClient(dependencyChecks.clientEvidence);
             } catch (error) { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; }
             failure = preservePackedBrowserReport(report, reportDirectory, path.join(packageRoot, 'coverage'), failure);
-            console.log(JSON.stringify({ candidateOnly: true, packedRegressions: report, reportDirectory }));
+            console.log(JSON.stringify({ candidateOnly: Boolean(candidate), packedRegressions: report, reportDirectory }));
             if (failure) {
                 failure.reportDirectory = reportDirectory;
                 throw failure;
@@ -206,7 +217,7 @@ async function main() {
         if (!staticDocument.includes('<title>Packed docs</title>') || staticDocument.includes('__redweb_page')) {
             throw new Error('Packed static exporter did not emit a standalone document.');
         }
-        if (candidate) candidate.verify(dependencyChecks.consumer, dependencyChecks.candidateEvidence);
+        dependencyChecks.verifyClient(dependencyChecks.clientEvidence);
         console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation${candidate ? ' (explicit local client candidate; not registry-release evidence)' : ''}.`);
     });
 }
