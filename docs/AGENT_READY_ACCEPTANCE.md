@@ -79,6 +79,18 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Packaged-example checkpoint (`449a369` / `551a905`): 1,292 tests/126 suites
+  passed in 690.807 seconds with two POSIX-only skips and unchanged all-four
+  100% across exactly 91 library files. The new 40-test private scope also passes
+  all-four 100%; its VM map stays outside the library denominator. Full isolated
+  package/browser/starters/docs, clean load/memory/HTML/JSX/server recovery,
+  30-second soak and production audit passed. The soak recorded five missing
+  replies out of 4,368, within the existing allowance, not lossless. The critic
+  approved all 18 actual remote blobs; both implementation-head workflows passed.
+  Exact identities and limits are in `PACKAGED_EXAMPLE_VERIFICATION.md`. Neither
+  this checkpoint nor the narrowly corrected room-phase mechanics test waives
+  the historical throughput benchmark or closes the remaining release checklist.
+
 - Verified soak local checkpoint: full regression selected at `31fa9b2` passed 1,246 tests/119 suites in 653.569 seconds, with two POSIX-only skips and all-four 100% across the unchanged 91-file library scope. The five later recorder units passed separately, not retroactively included in that inventory. Pretest/types and generated documentation pass. The critic approved all 15 actual remote blobs; hosted checks remain pending. Exact map/inventory hashes and retained short-soak outcomes are in `SOAK_VERIFICATION.md`. Remaining private-tool coverage, performance acceptance and release alignment stay open.
 
 - Application-recorder coverage: the unchanged exit hook now has nonvacuous original-source coverage of all six statements/lines, two branches and its one function. Six selected tests pass (five new isolated recorder units plus an existing actual instrumented-pipeline integration); eight unrelated cases are filtered. Native process/file checks preserve absent-data behavior, exact reports, child identities and visible write/serialization failures. The initial native converter omitted the anonymous function from its denominator; raw V8 execution and the limitation were independently verified, and that map remains diagnostic only. The critic approved the maintained authored scope and restoration/CI budgets. These five new units are not retroactively included in the preceding full run. See `APPLICATION_RECORDER_VERIFICATION.md`.

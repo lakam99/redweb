@@ -10,10 +10,13 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,246 tests/119 suites selected at `31fa9b2`, including the
+  Latest full local evidence: 1,292 tests/126 suites for the source set in `449a369`
+  and `551a905`, with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
+  The latest clean package/load/memory/recovery/soak/audit checkpoint and both
+  passing implementation-head workflows are in `PACKAGED_EXAMPLE_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
 - Six starter applications and shared `run-app.ts`: original-TypeScript gate,
   104 tests per mode, 600 statements, 299 branches, 160 functions and 472 lines,

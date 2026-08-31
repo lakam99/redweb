@@ -78,3 +78,49 @@ its retained browser report is
 `coverage/packed-browser/f91d60fd-dffd-4c6e-806f-c8615ecc687c/`.
 That archive preceded this explanatory document; it is runtime/tool behavior
 evidence, not a byte identity claim about a later documentation-bearing tarball.
+
+## Complete increment checkpoint
+
+The complete local regression of the source set committed in `449a369` and
+`551a905` passed **1,292 tests / 126 suites** in 690.807 seconds, with two
+POSIX-only skips. Generated documentation, example/protocol snapshots and all
+three TypeScript configurations passed. The ordinary coverage map contains
+exactly the unchanged 91 library files: 5,449 statements, 4,046 branches,
+978 functions and 4,468 lines, all 100%. Private probe instrumentation did not
+enter that denominator.
+
+Full map `coverage/coverage-final.json` SHA-256:
+`c21b602f7d66b6105fa53a7ba0a5eb879d4b75e7ee560c8869beebdbee20f051`.
+Inventory `coverage/example-dependency-full-results.json` SHA-256:
+`8e2612d78a30ee3ce3bf28201e222bbfff9da21d599c1bff2556a904fa304a24`.
+
+Sequential clean checks after regression passed on Windows / Node 22.21.0:
+
+- Default socket load: 32 clients, 3,200 messages, 6,486.03 messages/second,
+  p99 7.2315 ms, slow consumer contained.
+- Memory: 500 connections, three trials, 1,881.744 bytes of measured framework
+  metadata per connection against the unchanged 2,048-byte limit.
+- HTML load: 200 expired renders, 110 live clients, 7,501,568-byte heap delta.
+- JSX: 10,000 component rows, 52.5 ms, 0.6 MiB retained.
+- Server-focused recovery: `server-steady-v1`, all 7,400 replies exact,
+  all server phases passing (highest 108.4196% of warm). The retained client
+  diagnostic exceeded 110% in later phases; this is not a client-memory fix.
+- Thirty-second / 16-client soak: 4,368 sent, 4,363 received, five missing,
+  99.88553114% delivery, seven samples, all eight trends passing, final registries
+  zero, final heap 99.909556% of warm, handles 1→2. Not lossless or an hour soak.
+- Production dependency audit: zero reported vulnerabilities, with certificate
+  validation retained through the Windows trusted certificate store.
+
+Recovery report `coverage/server-recovery-package-final-20260831/report.json`
+SHA-256: `071e98324524586cd8c8c50b35b68d5623f2f179e1e436076da62d7031055465`.
+Soak report `coverage/soak-package-final-20260831.json` SHA-256:
+`4bd8bd5e95054da8c27f1236ca42335663fde6e303c3a850db3e4a684079b371`.
+
+The senior critic approved all 18 actual changed remote blobs at `551a905`, with
+no remaining scoped finding. Both [PR CI](https://github.com/lakam99/redweb/actions/runs/33373452034)
+and [push CI](https://github.com/lakam99/redweb/actions/runs/33373448945) passed
+every Node 18/20/22/24 and lifecycle/package/browser job at that head. These are
+implementation-head outcomes, not claims about a later evidence-only commit.
+The npm links and frozen files remain unchanged. The historical room-phase
+failure, unresolved throughput benchmark, remaining private-tool coverage and
+publication/site alignment remain separately recorded release work.

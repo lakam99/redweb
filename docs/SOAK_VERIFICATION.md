@@ -141,3 +141,14 @@ soak modules. The separate deterministic room-phase test passed in 0.751 seconds
 The senior critic approved both the bounded reproduction and narrowly preserved
 failure outcome. A complete regression and fresh clean blocking-soak check follow
 this checkpoint; neither is claimed here before it finishes.
+
+That follow-up completed at the `551a905` implementation checkpoint: full local
+regression passed 1,292 tests/126 suites with unchanged library scope/100% coverage,
+and both PR33373452034 and push33373448945 passed every matrix/lifecycle job.
+The single clean 30-second / 16-client gate recorded 4,368 sent, 4,363 received,
+five missing (99.88553114%), seven samples, all eight trends passing, empty final
+registries, final heap 99.909556% and handles 1→2. Raw report
+`coverage/soak-package-final-20260831.json` SHA-256:
+`4bd8bd5e95054da8c27f1236ca42335663fde6e303c3a850db3e4a684079b371`.
+This remains an unchanged-threshold short acceptance result, not lossless delivery,
+a new hour soak or an explanation of the exact earlier CI scheduling sequence.
