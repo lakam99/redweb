@@ -89,8 +89,21 @@ window in each dashboard mode. The unchanged collector's five tests also pass.
 `coverage/starter-source/900bf78d-3e77-40b4-b645-c6599a7b1728/summary.json` SHA-256:
 `8679e03a06e441403f08bbfca069c3e82b56ec2bfdd9a23f427885b0e820f050`.
 
-Full pretest/generated/type checks pass. The complete root regression remains
-in progress at this implementation checkpoint; its result is not presumed.
+Full pretest/generated/type checks pass. The complete root regression selected
+for this increment then passed 1,388 tests across 132 suites in 724.472 seconds,
+with two POSIX-only skips on Windows. Exactly 91 library files retain all-four
+100%: 5,449 statements, 4,046 branches, 978 functions and 4,468 lines. The private
+VM maps did not enlarge that denominator. The subsequent lifecycle-coordinator
+tests were added after selection and are not included in this inventory.
+
+Full report `coverage/coverage-final.json` SHA-256:
+`f9a99527a5d288640750ddab72858dc571e524864d5ed2a4012e34c6ee0df44b`.
+Inventory `coverage/starter-coordinators-full-results.json` SHA-256:
+`a17c022d9c38738bdcbe736496015781abb02a903548e1a52ef27012a1cd7348`.
+
+The critic approved all 13 actual remote changed blobs at `377f029`, including
+the retained full-starter artifacts. Its hosted workflows remain separate and
+in progress; local results do not presume their outcome.
 
 No compiler/runtime behavior, coverage thresholds, frozen evaluation files,
 publication, deployment or performance acceptance changed. V8 compiler-generated

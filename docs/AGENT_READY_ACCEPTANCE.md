@@ -87,8 +87,11 @@ and generated additions remain actual consumer checks. See
   child/filesystem and generated-application mutation tests. The critic approved
   the final source and report identities. Both full six-application CLI workflows
   then completed: 104 actual tests per mode, authored all-four 100% over unchanged
-  counts, 96 retained process maps, diagnostic V8 gaps still visible. Root regression
-  remains separate; see `STARTER_COORDINATOR_VERIFICATION.md`. Both preceding `7a25d48` and
+  counts, 96 retained process maps, diagnostic V8 gaps still visible. Full regression
+  then passed 1,388 tests/132 suites with two POSIX-only skips and all-four 100%
+  over the unchanged 91-file library scope; subsequent lifecycle tests are not
+  included. The critic approved all 13 actual remote blobs at `377f029`; its hosted
+  workflows remain separate. See `STARTER_COORDINATOR_VERIFICATION.md`. Both preceding `7a25d48` and
   `1eddee0` hosted workflows passed. No runtime change or benchmark waiver occurred.
 
 - Starter-report retention follow-up: both coverage runners preserve available

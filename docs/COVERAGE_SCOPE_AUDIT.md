@@ -10,13 +10,14 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,322 tests/128 suites for the source set in `1049ff8`,
+  Latest full local evidence: 1,388 tests/132 suites for the source set in `377f029`,
   with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
-  Exact current full-run and isolated package evidence is in
-  `ACTION_INPUT_VERIFICATION.md`; hosted checks for that head and its evidence follow-up passed.
+  Exact current full-run evidence is in `STARTER_COORDINATOR_VERIFICATION.md`;
+  that head's hosted checks remain in progress. The preceding isolated package
+  evidence is in `ACTION_INPUT_VERIFICATION.md`; its hosted checks and evidence follow-up passed.
   The preceding clean load/memory/recovery/soak/audit checkpoint and passing
   workflows remain in `PACKAGED_EXAMPLE_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
@@ -446,8 +447,8 @@ direct scope: 56 tests/three suites, 180 statements, 34 branches, 25 functions a
 passing tests; native filesystem failures and explicit unit faults verify terminal
 report handling and retained cleanup evidence. These two coordinators are removed
 from the remaining list below. See `STARTER_COORDINATOR_VERIFICATION.md` for exact
-source/report identities and boundaries; the previous full regression does not
-retroactively include these tests.
+source/report identities and boundaries. The subsequent full regression includes
+these cases and passes 1,388 tests/132 suites with the unchanged library scope.
 
 No direct coverage map was found for these remaining active verification/build files:
 
