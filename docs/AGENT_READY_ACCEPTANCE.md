@@ -79,6 +79,30 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Development-verifier follow-through (2026-08-31): nine new fault units
+  reproduced unguarded port errors, lost primary/cleanup failures and skipped
+  releases. Page acquisition now uses the existing bounded owner through late
+  settlement; both templates and controls share it. Final coverage gate combines
+  31 explicit boundary units and four real Chromium/HTTP/WebSocket/process tests:
+  35 passed in 71.327 seconds, 217 statements/39 branch outcomes/38 functions/
+  170 lines at 100%. Native rebuild, input/draft and process-exit assertions remain
+  intact. Independent review approved the corrections; exact scope and hashes
+  are in `COVERAGE_SCOPE_AUDIT.md`. CI retains this coordinator map separately.
+
+- Previous-head `ad1684f` verification: the isolated package gate and production
+  audit passed after canonical regeneration; see ignored receipt
+  `coverage/verification-ad1684f.json`. Its PR Node 24 job passed 1,620 tests/five
+  platform skips/151 suites in 683.299 seconds with all-four 100% library coverage.
+  All four PR matrix jobs passed; the separate lifecycle job was still running
+  at this observation. Downloaded Linux refresh-helper coverage
+  `coverage/ci-browser-ad1684f/refresh-verifier/coverage-final.json` has SHA-256
+  `b1c0984a7dd805f659323c8efbbe2169b005149accb879ee05722fcd71131f21`
+  and retains 395/104/60/297 at 100%. Native Chrome 151 observed cache restoration
+  in both modes. This does not relabel the failed 48 prepack/CI run, the original
+  Linux cleanup failure, or the default throughput failure as passing. Current
+  coordinator changes still require their own hosted checks; site catalogue
+  synchronization and deployment remain separate.
+
 - Post-commit package check of `48b3f3f` failed before packing: the final
   acceptance-log edit changed the canonical `release-status` topic after the
   preceding generator check. This was stale generated documentation, not a

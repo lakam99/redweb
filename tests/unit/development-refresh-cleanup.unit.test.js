@@ -5,6 +5,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { isNativeError } = require('node:util/types');
+const { createInstrumenter } = require('istanbul-lib-instrument');
+const { createCoverageMap } = require('istanbul-lib-coverage');
 const filename = path.resolve(__dirname, '../../scripts/verify-development-refresh-browser.js');
 
 // Explicit launch/process/filesystem boundary units, not native browser IT.
@@ -53,7 +55,7 @@ test.each(['missing-browser', 'mkdir', 'launch', 'launch-null', 'operation-null'
     requireBoundary.resolve = nativeRequire.resolve;
     const context = { require: requireBoundary, module: { exports: {} }, __dirname: path.dirname(filename),
         process: { env: {} }, URL, console };
-    vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
+    vm.runInNewContext(createInstrumenter().instrumentSync(fs.readFileSync(filename, 'utf8'), filename), context, { filename });
     const result = await context.module.exports.main().then(() => ({ passed: true }), error => ({ error }));
     expect(result.passed).toBeUndefined();
     expect(isNativeError(result.error)).toBe(true);
@@ -73,4 +75,10 @@ test.each(['missing-browser', 'mkdir', 'launch', 'launch-null', 'operation-null'
     if (mode === 'stop-null') expect(errors.some(error => error.cause === null)).toBe(true);
     if (['stderr', 'both-releases'].includes(mode)) expect(errors).toContain(pipe);
     if (['unref', 'both-releases'].includes(mode)) expect(errors).toContain(reference);
+    if (process.argv.includes('--collectCoverageFrom=scripts/verify-development-refresh-browser.js')) {
+        const combined = createCoverageMap(globalThis.__coverage__ || {});
+        combined.merge(context.__coverage__);
+        globalThis.__coverage__ ||= {};
+        globalThis.__coverage__[filename] = combined.fileCoverageFor(filename).toJSON();
+    }
 }, 45000); // Includes the actual 15-second shutdown watchdog in the pending unit.

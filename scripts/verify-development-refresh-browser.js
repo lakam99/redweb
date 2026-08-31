@@ -8,10 +8,12 @@ const ProjectInitializer = require('../src/cli/ProjectInitializer');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
 const { browserCommands } = require('./lib/browserCommands');
+const { BrowserPages } = require('./lib/BrowserPages');
 const { npmEntrypoint, spawnManaged, stopProcessTree } = require('./evaluation/process');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, combineFailures } = require('./verify-live-html-browser');
 const { verifyRefreshControls } = require('./lib/verify-refresh-controls');
 const { withTimeout } = require('../tests/helpers/network');
+const bounded = (promise, label) => withTimeout(promise, label, 15000);
 
 async function until(check, label, timeoutMs = 20000) {
     const deadline = Date.now() + timeoutMs;
@@ -29,20 +31,45 @@ async function click(page, expression) {
 }
 
 async function closePage(page, debugPort) {
-    const id = new URL(page.socket.url).pathname.split('/').at(-1);
-    try { await fetch(`http://127.0.0.1:${debugPort}/json/close/${id}`, { signal: AbortSignal.timeout(5000) }); }
-    finally { page.socket.terminate(); }
+    let failure;
+    try {
+        const id = new URL(page.socket.url).pathname.split('/').at(-1);
+        const response = await fetch(`http://127.0.0.1:${debugPort}/json/close/${id}`, { signal: AbortSignal.timeout(5000) });
+        assert.ok(response.ok, 'DevTools page close must succeed');
+        await response.text();
+    } catch (error) { failure = verificationError(error); }
+    try { page.socket.terminate(); }
+    catch (error) { failure = combineFailures(failure, verificationError(error)); }
+    if (failure) throw failure;
 }
 
-async function availablePort() {
+async function availablePort(execution) {
     const reservation = net.createServer();
-    await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
-    const port = reservation.address().port;
-    await new Promise(resolve => reservation.close(resolve));
+    let port, failure;
+    try {
+        await bounded(new Promise((resolve, reject) => {
+            reservation.once('error', reject);
+            reservation.listen(0, '127.0.0.1', resolve);
+        }), 'development port reservation');
+        port = reservation.address().port;
+    } catch (error) { failure = verificationError(error); }
+    try {
+        await bounded(new Promise((resolve, reject) => reservation.close(error => {
+            if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error);
+            else resolve();
+        })), 'development port release');
+    } catch (error) {
+        let cleanup = verificationError(error);
+        try { reservation.unref(); }
+        catch (release) { cleanup = combineFailures(cleanup, verificationError(release)); }
+        execution.cleanupFailure = combineFailures(execution.cleanupFailure, cleanup);
+        failure = combineFailures(failure, cleanup);
+    }
+    if (failure) throw failure;
     return port;
 }
 
-async function verifyTemplate(execution, debugPort, template) {
+async function verifyTemplate(execution, debugPort, template, open) {
     const project = path.join(execution.directory, template);
     const root = path.resolve(__dirname, '..');
     new ProjectInitializer(require('../package.json').version).initialize(project, { template });
@@ -59,12 +86,17 @@ async function verifyTemplate(execution, debugPort, template) {
         <label>Choice<select id="choice"><option>First</option><option>Second</option></select></label>
         <button type="reset" id="reset">Reset draft</button></form></main>`);
     fs.writeFileSync(sourceFile, source);
-    const port = await availablePort();
+    const port = await availablePort(execution);
     const url = `http://127.0.0.1:${port}`;
     const watcher = spawnManaged([npmEntrypoint(), 'run', 'dev'], { cwd: project,
         env: { ...process.env, PORT: String(port), NODE_ENV: 'development' } });
     const closed = new Promise(resolve => watcher.once('close', resolve));
     let output = '', failure;
+    const recordCleanup = value => {
+        const error = verificationError(value);
+        execution.cleanupFailure = combineFailures(execution.cleanupFailure, error);
+        failure = combineFailures(failure, error);
+    };
     watcher.stdout.on('data', chunk => { output = (output + chunk).slice(-65536); });
     watcher.stderr.on('data', chunk => { output = (output + chunk).slice(-65536); });
     const pages = [];
@@ -74,7 +106,7 @@ async function verifyTemplate(execution, debugPort, template) {
             watcher.once('error', reject);
         });
         await until(async () => (await (await fetch(url, { signal: AbortSignal.timeout(2000) })).text()).includes('Generation one'), `${template} initial server`);
-        const initial = await openPage(debugPort, url);
+        const initial = await open(debugPort, url);
         pages.push(initial);
         const browser = browserCommands(initial);
         await until(() => browser.evaluate('Boolean(document.getElementById("__redweb_dev")?.shadowRoot)'), 'development script startup');
@@ -92,7 +124,7 @@ async function verifyTemplate(execution, debugPort, template) {
         await until(() => browser.evaluate('document.querySelector("h1").textContent === "Generation two"'), 'clean automatic refresh (including default select)');
         assert.equal(await browser.evaluate('window.__documentMarker === undefined'), true);
         if (template === 'realtime') {
-            const rawPeer = await openPage(debugPort, url);
+            const rawPeer = await open(debugPort, url);
             pages.push(rawPeer);
             const peer = browserCommands(rawPeer);
             await click(browser, 'document.getElementById("draft")');
@@ -124,22 +156,24 @@ async function verifyTemplate(execution, debugPort, template) {
         await until(() => browser.evaluate('getComputedStyle(document.querySelector(".home")).borderLeftWidth === "7px"'), 'CSS rebuild refresh');
         assert.ok(!output.includes('EADDRINUSE'), output);
         console.log(`${template} refresh passed: real generated watcher, clean TSX/CSS reload, ${template === 'realtime' ? 'root patch, failed build, draft/focus retention, explicit discard and state reset' : 'static served page without live socket runtime'}.`);
-    } catch (error) { failure = new Error(`${error.message}\n${output}`, { cause: error }); }
+    } catch (error) {
+        const primary = verificationError(error);
+        failure = new Error(`${primary.message}\n${output}`, { cause: primary });
+    }
     finally {
         for (const page of pages) {
             try { await closePage(page, debugPort); }
-            catch (error) { failure = combineFailures(failure, error); }
+            catch (error) { failure = combineFailures(failure, verificationError(error)); }
         }
         try {
             await stopProcessTree(watcher);
             await withTimeout(closed, 'development watcher closure', 5000);
         }
         catch (error) {
-            execution.cleanupFailure = error;
-            failure = combineFailures(failure, error);
-            watcher.stdout.destroy();
-            watcher.stderr.destroy();
-            watcher.unref();
+            recordCleanup(error);
+            for (const release of [() => watcher.stdout.destroy(), () => watcher.stderr.destroy(), () => watcher.unref()]) {
+                try { release(); } catch (error) { recordCleanup(error); }
+            }
         }
     }
     if (failure) throw failure;
@@ -151,6 +185,8 @@ async function main() {
         if (!executable) throw new Error('Chromium is required for the development refresh browser gate.');
         const profile = path.join(execution.directory, 'browser');
         fs.mkdirSync(profile);
+        const pages = new BrowserPages(execution, openPage, bounded);
+        const open = (port, url) => pages.open(port, url);
         let browser, failure;
         const recordCleanup = value => {
             const error = verificationError(value);
@@ -162,10 +198,11 @@ async function main() {
             browser = launched.browser;
             const endpoint = launched.endpoint;
             const debugPort = new URL(endpoint).port;
-            for (const template of ['realtime', 'site']) await verifyTemplate(execution, debugPort, template);
-            await verifyRefreshControls(debugPort, execution.directory, { until, click, closePage });
+            for (const template of ['realtime', 'site']) await verifyTemplate(execution, debugPort, template, open);
+            await verifyRefreshControls(debugPort, execution.directory, { until, click, closePage, open });
         } catch (error) { failure = verificationError(error); }
         finally {
+            try { await pages.close(); } catch (error) { recordCleanup(error); }
             try {
                 if (browser) {
                     await withTimeout(stopBrowser(browser.child), 'development refresh browser shutdown', 15000);
@@ -185,4 +222,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { main };
+module.exports = { main, verifyTemplate, availablePort, closePage };

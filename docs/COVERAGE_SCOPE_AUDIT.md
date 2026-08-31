@@ -8,6 +8,44 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Generated-app development verifier follow-up
+
+The development coordinator now reuses `BrowserPages` for bounded acquisition
+and ownership across both templates and standalone refresh controls. Late page
+openings remain owned; an unsettled opening retains workspace uncertainty.
+Port reservation handles listener and close errors and releases its local handle
+after uncertain cleanup. Template failures are normalized before their captured
+output is attached; watcher stdout/stderr/unref releases are independently
+attempted. HTTP page close checks status/body completion and preserves concurrent
+socket-release failures. These changes do not modify generated application/runtime
+code, browser assertions, rebuild workloads or existing acceptance deadlines.
+
+Nine new boundary regressions failed against the preceding implementation.
+The existing fifteen outer-cleanup units had stopped during template setup and
+did not cover these deeper paths. Final verification combines those fifteen with
+sixteen explicit dependency-boundary units and four no-mock integrations: the
+complete generated realtime/site watcher workflow in Chromium, actual port
+rebind, an HTTP 500 with a real WebSocket, and an adverse DevTools peer followed
+by natural subprocess exit and temporary-workspace removal. Late/pending page
+timing is exercised at unit boundaries, not claimed as a native-browser fault.
+
+Windows / Node 22.21.0 / Chrome 152.0.7977.64: 35 tests across three suites passed
+in 71.327 seconds. Authored coverage is 217 statements, 39 branch outcomes,
+38 functions and 170 lines, all 100%; no ignore exclusions. This instruments
+construction, not execution, of browser-expression strings. Actual browser
+checks remain required. The measured command is maintained as
+`npm run verify:development:coverage`; CI uses it in place of the old standalone
+development invocation and preserves its map on success or failure.
+
+Retained map:
+`coverage/development-coordinator-evidence/20260831-1558/coverage-final.json`,
+SHA-256 `845db843f705dd889ef5d22082b07413c13256ed0403c80e1dc0b45752e3082c`.
+Coordinator source SHA-256 (LF-normalized):
+`a23bcd62dddb4fc8aca807682e63beba858e43aa96e8c222cbdd60a04afb7522`.
+Independent review approved the acquisition/cleanup correction and new test
+oracles. This removes the development coordinator from the missing-map inventory,
+not the remaining browser/package coordinators or frozen tooling.
+
 ### Refresh verifier failure and coverage follow-up
 
 `npm run verify:refresh:coverage` now covers both authored refresh helpers and
@@ -621,14 +659,12 @@ this replaces the runtime invocation rather than adding a second one; the
 full regression suite also discovers the new integration test. No new timing
 claim or performance-policy change is introduced.
 
-The development-refresh coordinator has a reviewed launch/cleanup correction and
-15 explicit boundary units, plus the separate actual generated-app browser gate.
-This is not a complete source map and does not remove it from this inventory.
-See `BROWSER_OWNER_VERIFICATION.md` for reproduced failures and exact boundaries.
+The development-refresh coordinator's earlier fifteen-unit partial measurement
+is superseded only for its direct coverage claim by the complete authored map
+above. Earlier failure records remain historical evidence.
 
 ```text
 scripts/verify-browser-coverage.js
-scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
 ```

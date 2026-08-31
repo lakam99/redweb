@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Bound and retain development-verifier page acquisition, handle port reservation errors, and preserve primary failures through independent watcher/page cleanup. Reuse the existing page owner and error helpers; add authored coordinator coverage with real generated-app rebuilds, HTTP/WebSocket faults and natural process-exit checks. Runtime and acceptance workloads remain unchanged.
+
 - Preserve concurrent refresh-verification failures, including rejected non-Error values, page closure, socket release and coverage uploads. Add maintained authored coverage of both private refresh helpers with failure units and real Chromium/HTTP integration; keep rendering runtime, browser assertions and acceptance limits unchanged.
 
 - Preserve the original dashboard verification failure and workspace-retention state when shutdown and handle release both fail. Add maintained direct verifier coverage with explicit fault units, real Chromium/SQLite/authentication checks and adverse-process/filesystem integration; keep application behavior and acceptance limits unchanged.
