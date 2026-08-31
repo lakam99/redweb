@@ -41,6 +41,13 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Packaged-example verification now has bounded acquisition/action/cleanup and
+strict command output, with installed-transport isolation preserved. Its maintained
+three-script scope passes 40 unit/native tests at all-four 100%; the original
+production-only counter, explicitly installed chat validator, development resources
+and generated additions remain actual consumer checks. See
+`PACKAGED_EXAMPLE_VERIFICATION.md` for exact scope, failure history and identities.
+
 - [ ] Reproducible reconnect, disconnect, slow-client, memory, isolation, authentication, and compatibility evidence, with limits and environment recorded.
 - [x] Fresh-agent tasks using only public documentation measure first-pass success and repair effort against objective application checks (one narrowly scoped counter/chat case; not an adoption success rate).
 - [ ] Full 100% statement/branch/function/line coverage, type gates, real-network/browser tests, load/recovery/memory gates, package checks, and audit.

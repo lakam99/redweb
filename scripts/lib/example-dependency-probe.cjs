@@ -3,11 +3,15 @@
 // Copied into an independently installed consumer; never executed from the repository.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { once } = require('node:events');
 const { createRequire } = require('node:module');
 const { start } = require('redweb');
 const packagePath = require.resolve('redweb/package.json');
 const WebSocket = createRequire(packagePath)('ws');
+const { waitFor, closeClient, WebSocket: supportSocket } = require('./probe-support/realtime-harness');
+const { withTimeout } = require('./probe-support/network');
+const { verificationError } = require('./probe-support/lib/verificationError');
+const { performProbeAction } = require('./probe-support/lib/performProbeAction');
+assert.equal(supportSocket, WebSocket, 'Probe support must use the installed Redweb transport.');
 const example = name => path.join(path.dirname(packagePath), 'examples/live-html', name);
 
 async function main() {
@@ -20,9 +24,10 @@ async function main() {
     const Page = chat ? require(example('chatroom.js')).createChatroomPage() : require(example('counter.js')).CounterPage;
     const app = start(Page, { port: 0, bind: '127.0.0.1', logger: null,
         ...(chat ? { development: { inspect: true, refresh: true } } : {}) });
-    let socket;
+    let socket, result;
+    const failures = [];
     try {
-        if (!app.server.listening) await once(app.server, 'listening');
+        if (!app.server.listening) await waitFor(app.server, 'listening');
         const origin = `http://127.0.0.1:${app.server.address().port}`;
         const response = await fetch(origin, { signal: AbortSignal.timeout(5000) });
         assert.equal(response.status, 200);
@@ -38,7 +43,9 @@ async function main() {
         if (!chat) {
             assert.equal(app.inspect(), null);
             assert.ok(!html.includes('__redweb_dev'));
-            assert.equal((await fetch(`${origin}/__redweb/development`, { signal: AbortSignal.timeout(5000) })).status, 404);
+            const development = await fetch(`${origin}/__redweb/development`, { signal: AbortSignal.timeout(5000) });
+            assert.equal(development.status, 404);
+            await development.text();
         }
         if (chat) {
             assert.equal(response.headers.get('cache-control'), 'private, no-store');
@@ -55,21 +62,10 @@ async function main() {
                 assert.ok((await asset.text()).length > 0);
             }
             const config = JSON.parse(html.match(/id="__redweb_page">([^<]+)/)[1]);
-            socket = new WebSocket(`${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`, { headers: { Origin: origin } });
-            await once(socket, 'open');
-            await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error('Packed chat action did not complete.')), 5000);
-                socket.on('message', raw => {
-                    const event = JSON.parse(String(raw));
-                    if (event.requestId !== 'probe') return;
-                    clearTimeout(timeout);
-                    if (event.type === 'redweb:result' && event.payload === true) resolve();
-                    else reject(new Error(`Unexpected packed chat result: ${JSON.stringify(event)}`));
-                });
-                socket.once('error', error => { clearTimeout(timeout); reject(error); });
-                socket.send(JSON.stringify({ v: config.version, requestId: 'probe', type: 'redweb:html',
-                    payload: { kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Packed visitor' }] } }));
-            });
+            socket = new WebSocket(`${origin.replace('http:', 'ws:')}${config.socketPath}?pageId=${config.pageId}&redwebVersion=${encodeURIComponent(config.version)}`,
+                { handshakeTimeout: 5000, headers: { Origin: origin } });
+            await waitFor(socket, 'open');
+            await performProbeAction(socket, config.version);
             const snapshot = app.inspect();
             assert.equal(snapshot.schemaVersion, 1);
             assert.equal(snapshot.pages.available, true);
@@ -81,7 +77,12 @@ async function main() {
             assert.ok(!JSON.stringify(snapshot).includes('Packed visitor'));
             assert.ok(!JSON.stringify(snapshot).includes(config.pageId));
         }
-        console.log(chat ? 'Packed chat, development inspection and refresh resources passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript; inspection and refresh disabled.');
-    } finally { socket?.close(); await app.shutdown(); }
+        result = chat ? 'Packed chat, development inspection and refresh resources passed with explicit application Zod.' : 'Core and counter passed without Zod or TypeScript; inspection and refresh disabled.';
+    } catch (error) { failures.push(verificationError(error)); }
+    for (const cleanup of [() => closeClient(socket), () => withTimeout(app.shutdown(), 'packed example shutdown', 10000)]) {
+        try { await cleanup(); } catch (error) { failures.push(verificationError(error)); }
+    }
+    if (failures.length) throw new AggregateError(failures, failures[0].message, { cause: failures[0] });
+    console.log(result);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

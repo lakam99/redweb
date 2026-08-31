@@ -415,7 +415,14 @@ scripts/diagnostics/recovery-split-worker.cjs
 scripts/verify-recovery.js
 ```
 
-No direct coverage map was found for these active verification/build files:
+The packaged-example probe, its dependency coordinator and guarded action helper
+now have a maintained exact source scope: 40 tests/five suites, 178 statements,
+44 branches, 20 functions and 150 lines, all 100%. Explicit fault units complement
+actual native peers and a clean packed/installed consumer that compiles and runs
+generated additions. The probe VM map is private outside its explicitly selected
+scope; the library denominator is unchanged. See `PACKAGED_EXAMPLE_VERIFICATION.md`.
+
+No direct coverage map was found for these remaining active verification/build files:
 
 ```text
 scripts/measure-starter-coverage.js
@@ -426,11 +433,9 @@ scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
-scripts/lib/example-dependency-probe.cjs
 scripts/lib/verify-action-feedback.js
 scripts/lib/verify-action-input.js
 scripts/lib/verify-dashboard-browser.js
-scripts/lib/verify-example-dependencies.js
 scripts/lib/verify-live-page-ownership.js
 scripts/lib/verify-packed-browser.js
 scripts/lib/verify-refresh-controls.js

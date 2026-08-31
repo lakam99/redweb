@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const assert = require('node:assert/strict');
+const { createRequire } = require('node:module');
 const { npmEntrypoint } = require('../evaluation/process');
 const { verifyInstalledClient } = require('./InstalledClient');
 
@@ -17,14 +19,38 @@ async function verifyExampleDependencies(archive, workspace, validatorVersion, c
     }
     fs.writeFileSync(path.join(consumer, 'package.json'), JSON.stringify(manifest));
     fs.copyFileSync(path.join(__dirname, 'example-dependency-probe.cjs'), path.join(consumer, 'probe.cjs'));
-    const command = (args, environment) => execution.command(args, { cwd: consumer, environment });
+    const support = path.join(consumer, 'probe-support');
+    for (const [source, target] of [['../realtime-harness.js', 'realtime-harness.js'],
+        ['verificationError.js', 'lib/verificationError.js'], ['performProbeAction.js', 'lib/performProbeAction.js'],
+        ['../../tests/helpers/network.js', 'network.js']]) {
+        const destination = path.join(support, target);
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.copyFileSync(path.join(__dirname, source), destination, fs.constants.COPYFILE_EXCL);
+    }
+    fs.mkdirSync(path.join(support, 'node_modules'));
+    let linked = false;
+    const linkTransport = () => {
+        const packagePath = createRequire(path.join(consumer, 'package.json')).resolve('redweb/package.json');
+        const transport = fs.realpathSync(path.dirname(createRequire(packagePath).resolve('ws/package.json')));
+        const relative = path.relative(fs.realpathSync(path.join(consumer, 'node_modules')), transport);
+        assert(relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative), 'Probe transport escaped its installed consumer.');
+        const link = path.join(support, 'node_modules/ws');
+        if (linked) {
+            assert(fs.lstatSync(link).isSymbolicLink(), 'Probe transport link changed.');
+            fs.unlinkSync(link);
+        }
+        fs.symlinkSync(transport, link, 'junction'); linked = true;
+    };
+    const command = (args, environment, timeoutMs = 120000) => execution.command(args, { cwd: consumer, environment, timeoutMs, rejectTruncatedOutput: true });
     const install = args => command([npmEntrypoint(), 'install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', ...args]);
     await install([]);
     const verifyClient = expected => candidate ? candidate.verify(consumer, expected) : verifyInstalledClient(consumer, expected);
     const clientEvidence = verifyClient();
-    const withoutValidator = await command(['probe.cjs', 'core'], { NODE_ENV: 'production' });
+    linkTransport();
+    const withoutValidator = await command(['probe.cjs', 'core'], { NODE_ENV: 'production' }, 90000);
     await install([`zod@${validatorVersion}`]);
-    const withValidator = await command(['probe.cjs', 'chat'], { NODE_ENV: 'development' });
+    linkTransport();
+    const withValidator = await command(['probe.cjs', 'chat'], { NODE_ENV: 'development' }, 90000);
     await command([npmEntrypoint(), 'install', '--include=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--save-dev',
         `typescript@${cliDependencies.typescript}`, `ws@${cliDependencies.ws}`]);
     const cli = path.join(consumer, 'node_modules/redweb/bin/redweb.js');
