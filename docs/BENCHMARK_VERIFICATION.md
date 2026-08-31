@@ -108,7 +108,7 @@ and `4979301a98f41cdbbb89f24e956c11dcf555719d04401652a9fe85cabbc77817`.
 ## Retained default performance results
 
 Windows / Node 22.21.0, published `redweb@0.12.0` installed into a newly owned
-workspace for each comparison, current checkout as candidate. Both runs used the
+workspace for each comparison, then-current checkout as candidate. Both runs used the
 same measured implementation entry hashes and unchanged benchmark limits. No
 smaller workload or selective trial deletion was used.
 

@@ -224,7 +224,7 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
-- Final-head regression/performance checkpoint (Windows, Node22.21.0,
+- `18b1dfd` regression/performance checkpoint (Windows, Node22.21.0,
   2026-08-31): with system certificate authorities and TLS verification retained,
   all178 suites passed:2,017 tests, five platform skips, every pretest/type gate
   and all-four100% maintained library coverage. An earlier run passed2,016 tests
