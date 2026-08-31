@@ -78,6 +78,8 @@ jobs:
         timeout-minutes: 3
       - run: npm run verify:assets:coverage
         timeout-minutes: 1
+      - run: npm run verify:room:coverage
+        timeout-minutes: 3
       - run: npm run verify:memory
       - run: npm run verify:cli
         timeout-minutes: 5

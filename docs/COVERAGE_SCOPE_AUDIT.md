@@ -71,10 +71,9 @@ remain in `CLIENT_POLISH_VERIFICATION.md`, `POLISH_RELEASE_CHECKPOINT.md` and th
 acceptance work log. Integration uses actual networking, processes, files and
 browsers. Explicit unit fault injection is not called mock-free integration.
 
-## First priority: remaining shipped authored sources
+## Shipped-source audit gaps closed
 
-Behavioral tests exist, but the reviewed reports do not yet establish an explicit
-complete authored-source denominator for these files:
+The standalone-example gate now measures these five original authored modules:
 
 ```text
 examples/live-html/cards.ts
@@ -86,8 +85,36 @@ docs/snippets/room-access.tsx
 
 Generated example `.js` files are compiled derivatives of their maintained
 TypeScript, not independent authored implementations. Their compilation and
-runtime behavior still require verification. The next coverage increment should
-reuse the existing original-source collector rather than inventing another one.
+runtime behavior remain verified by the same unchanged real-network suite against
+ordinary and instrumented builds, in standard and legacy decorator modes. The
+existing original-source collector covers 56 statements, 20 branches, 25 functions
+and 47 lines, all 100%. Each run executes 28 tests across three suites; retained
+Jest JSON reports enforce matching inventories, passing statuses and no skips.
+Launcher defaults, signal handlers and authorization truth tables have explicitly
+separate unit stubs. HTTP, sockets, page actions, authentication, joining,
+broadcast and revocation use actual implementations in integration tests.
+
+Final focused matrix: two outer tests pass in 27.915 seconds, Windows/Node22.21.0.
+Reports under `coverage/example-source/<run>/report.json`:
+
+| Mode | Run | SHA-256 |
+| --- | --- | --- |
+| Standard | `87bee699-81ae-47d0-aef4-92eba2efddd8` | `dd708de4786da5beb470b02fd87440be225576290a9f24a7d91bb1d122abdc00` |
+| Legacy | `c1d64975-5ecf-4ebb-bda1-66bb6fa8cedc` | `75eeb3ecaca08efee1e9d79f3bd75d8206105839b437d24963c8906dfe42ca24` |
+
+The shared room verifier was extracted rather than duplicating its integration
+checks. Review uncovered a cleanup flaw: a rejected peer close could skip server
+shutdown and hide the primary error. Both cleanup operations are now attempted
+independently, preserving all failures. Eight unit failure combinations plus the
+real source-free room integration pass. `npm run verify:room:coverage` enforces
+all-four 100% in CI: 47 statements, six branches, five functions and 40 lines.
+Source SHA-256: `5484a90e42a45d51552a5bd80796f2c25e0f71cf999f25055edd461469808094`.
+Report `coverage/room-verifier/coverage-final.json` SHA-256:
+`c1360e5405610039332629493eab4c4aa61b449f96b74b2d1fac7916904830e0`.
+
+Together with asset copying and addition templates, this closes the initial eight
+shipped-source audit gaps. It does not close the private-tool inventory below or
+claim whole-repository coverage.
 
 ## Private tools with existing complete scoped reports
 
@@ -102,6 +129,7 @@ using an old report to certify new edits.
 | `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js` |
 | `browser-collector` | `lib/BrowserCoverage.js` |
 | `application-collector` | `lib/ApplicationCoverage.js` |
+| `room-verifier` | `lib/verify-room-example.js` |
 | `client-check-preflight` | `lib/ClientSourceCoverage.js`, `lib/reportCommand.js` |
 | `compatibility-capture-runtime` | `diagnostics/ClientHeapCapture.cjs` |
 | `code-attribution-native` | `diagnostics/CodeAttribution.cjs`, `diagnostics/HeapCodeComparison.cjs`, `diagnostics/HeapSnapshotGraph.cjs`, `diagnostics/recovery-heap-graph.cjs`, `diagnostics/recovery-heap-summary.cjs` |
@@ -157,7 +185,6 @@ scripts/lib/verify-live-page-ownership.js
 scripts/lib/verify-packed-browser.js
 scripts/lib/verify-refresh-controls.js
 scripts/lib/verify-refresh-coverage.js
-scripts/lib/verify-room-example.js
 scripts/lib/verify-runtime-browser.js
 ```
 
