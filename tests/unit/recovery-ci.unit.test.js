@@ -19,6 +19,12 @@ test('server acceptance stays blocking, bounded and uses the reviewed command', 
     expect(gate).toContain('timeout-minutes: 2');
     expect(gate).not.toContain('continue-on-error');
     expect(scripts['verify:recovery:server']).toBe('node scripts/verify-server-recovery.js');
+    expect(workflow).toContain('run: npm run verify:recovery:coverage');
+    for (const file of ['scripts/lib/ServerRecoveryPolicy.js', 'scripts/lib/ServerRecoveryCandidate.js',
+        'scripts/verify-server-recovery.js']) {
+        expect(scripts['verify:recovery:coverage']).toContain(`--collectCoverageFrom=${file}`);
+    }
+    expect(scripts['verify:recovery:coverage']).not.toContain('--coverageThreshold');
 });
 
 test('original measurement is unchanged, visibly non-blocking and never follows uncertain server cleanup', () => {

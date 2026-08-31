@@ -66,6 +66,23 @@ candidate measurement. Shared worker lifecycle tests remain separate. No mocked
 transport, garbage collector, process or filesystem replaces these integration
 checks.
 
+## Maintained acceptance-tool coverage
+
+`npm run verify:recovery:coverage` now runs the existing coordinator/policy units,
+real worker integrations and three added CLI exit-boundary units together. It
+enforces all four 100% thresholds over `ServerRecoveryPolicy.js`,
+`ServerRecoveryCandidate.js` and `verify-server-recovery.js`, and is required in
+the lifecycle CI job. The command passed 76 tests across five suites in 28.656
+seconds on Windows/Node 22.21.0. The CLI units explicitly substitute the coordinator
+result and stderr to cover pass, budget-failure and rejected-promise exits; they
+are not described as mock-free integration. Actual CLI/worker/socket behavior is
+also exercised by integration tests and the ordinary CI acceptance invocation.
+This closes the earlier thin-CLI coverage gap without claiming coverage of the
+shared diagnostic workers or every private verification tool.
+The report contains 132 statements, 25 branches, 25 functions and 120 lines,
+all covered. `coverage/server-recovery-acceptance/coverage-final.json` SHA-256:
+`0d6ebe45fe2e1f87f2ddcb6afb4fe1960473c40a09c877f4697cf90db2a1ff3c`.
+
 ## Implementation checkpoint
 
 The senior critic approved measurement after environment-case and test-process
