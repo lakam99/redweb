@@ -259,6 +259,8 @@ The isolated browser harness copies its verification helpers explicitly and chec
 
 `npm run verify:evaluation:prepare:coverage` separately checks candidate preparation against actual npm archives, catalogue bytes and Git identity, comparing plain and instrumented CLI execution. Real launch-failure checks supplement explicit subprocess-boundary units. It uses owned temporary directories and does not publish packages or rerun sealed agent trials.
 
+`npm run verify:evaluation:trial:coverage` checks the unchanged trial runner's input hashes, build outcomes and evidence retention. It combines real archive/CLI checks, explicit failure units and the evaluator's actual HTTP/WebSocket browser control on Windows. Synthetic checker fixtures are not new agent trials or substitutes for packed Redweb acceptance. Uncertain cleanup preserves the outer test workspace and its report.
+
 The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. This branch depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md). Redweb itself remains unreleased until its remaining release checks finish.
 
 `npm run measure:browser:client` separately serves the exact installed socket-only module with and without instrumentation through the same real HTTP/WebSocket/browser cases and retains its source hash and counters. It exits unsuccessfully until all four coverage metrics reach 100%; incomplete results are not a passing dependency-coverage claim. Reports are local under `coverage/browser-client` and do not alter the installed dependency or published package.

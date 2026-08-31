@@ -8,6 +8,49 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen trial runner
+
+`verify:evaluation:trial:coverage` passed 21 tests in 10.367s on Windows /
+Node 22.21.0: seven existing real archive/file-lock checks, four real CLI checks,
+five explicit copy/verifier/cleanup boundary units and five filesystem-backed
+outer-wrapper retention units. The successful CLI case executes the unchanged
+evaluator control using real HTTP/WebSockets and three actual Chromium profiles,
+requiring all ten checks, no unrun checks, matching compiled/input hashes and
+normal execution-directory removal. Its synthetic candidate archive is a
+checker fixture, not an actual packed Redweb release or independently authored
+agent submission. The frozen control's protocol code is copied unchanged.
+
+Other native cases require failed npm build status, detection of build-time
+source mutation, and rejection of altered installed bytes before result creation.
+No compiler/process/filesystem/browser/transport APIs are mocked in these native
+tests. Windows-only browser/interface and exclusive-file-lock cases are skipped
+elsewhere; the remaining 19 cases cover the same authored runner scope, with
+boundary units explicitly supplying unavailable platform faults and CLI success.
+Linux CI remains the authority for native Linux execution, not the Windows result.
+
+Authored coverage is 66 statements / 14 branch outcomes / six functions / 53
+lines, all 100%. The initial eleven native checks passed but coverage failed at
+98.48/92.85/100/98.11; missing catch/retention paths were not relabelled complete.
+Retained map `coverage/frozen-trial-evidence/coverage-final.json` has SHA-256
+`a7d323126b4eb8ebab4cf131856a9143fa014162fe0f82740c05f8331708cc42`;
+unchanged LF-normalized source SHA-256
+`9be48fe5153e505e112467bdfbc87b18da539ade5f1bf4b359fc6e600dad7e35`.
+
+Independent review found a source-derived test-wrapper failure: an ordinary CLI
+rejection could let its outer owner delete a deliberately retained execution.
+The shared fixture helper now preserves that owner for recorded cleanup errors,
+retained/unrecorded execution directories or unreadable evidence. Original CLI
+errors survive report-read failures. Actual-filesystem regressions assert this
+before their explicit file-only rescue; this was not an observed native cleanup
+failure. No frozen implementation was changed. Shared fixture extraction keeps
+the existing archive inputs unchanged and is test infrastructure, not silently
+part of the library denominator. Process/sealing regression passed 40 tests with
+one skip in 7.652s; its retained map
+`coverage/frozen-trial-evidence/process-seal-regression.json` remains SHA-256
+`cea882c6209d0dc9c03a28140ce81038cfbd613628ec3a04a8900c487d7f8b75`.
+CI bounds and preserves this runner map separately; historical trial records,
+remaining verifiers and broader release requirements remain untouched.
+
 ### Frozen candidate preparation
 
 `verify:evaluation:prepare:coverage` passed five tests in 12.289s on Windows /
@@ -913,7 +956,6 @@ scripts/verify-live-html-browser.js
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:
 
 ```text
-scripts/evaluation/run-trial.js
 scripts/evaluation/validate.js
 scripts/evaluation/verify.js
 ```

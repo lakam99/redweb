@@ -41,6 +41,16 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Trial-runner coverage follow-up: 21 tests pass in 10.367s at all-four 100% of
+the unchanged runner (66/14/6/53). Native checks cover archives, build failures,
+input/source tampering and the evaluator's actual browser protocol control;
+explicit dependency-boundary and fixture-retention units remain separate.
+The reviewer caught an outer-test cleanup path that could erase retained trial
+evidence; the wrapper now preserves it and the original error, with filesystem
+regressions. The process/sealing regression still passes 40 tests/one skip at
+100%. These are synthetic checker fixtures, not new agent trials or a new
+Redweb release acceptance result. Remaining verifier scopes stay open.
+
 Candidate-preparation coverage follow-up: five tests pass in 12.289s at all-four
 100% of the unchanged preparation tool (25/8/3/21). Real plain/instrumented CLI
 runs produce identical archive/catalogue/commit identities; a real failed npm

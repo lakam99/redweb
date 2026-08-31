@@ -3,30 +3,17 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
-const { execFileSync, spawn } = require('child_process');
+const { spawn } = require('child_process');
 const { filesUnder, seal } = require('../../scripts/evaluation/seal');
 const { verifyInputs, saveResult } = require('../../scripts/evaluation/run-trial');
 const { withTimeout } = require('../helpers/network');
-const hash = (file, algorithm = 'sha256', encoding = 'hex') => crypto.createHash(algorithm).update(fs.readFileSync(file)).digest(encoding);
+const { evaluationFixture, write, hash } = require('../helpers/evaluation-fixture');
 
 describe('evaluation evidence using real files and archives', () => {
     let root, evidence, application;
-    const write = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value)); };
     beforeEach(() => {
         root = fs.mkdtempSync(path.join(os.tmpdir(), 'evaluation-evidence-test-'));
-        evidence = path.join(root, 'evidence'); application = path.join(root, 'application');
-        for (const name of ['assigned-prompt.txt', 'discovery-prompt.txt', 'protocol.md', 'DISCOVERY.md']) write(path.join(evidence, name), name);
-        write(path.join(evidence, 'submission-1/src/app.tsx'), 'export const counter = 0;');
-        write(path.join(root, 'package/index.js'), 'module.exports = { fixture: true };');
-        const archive = path.join(evidence, 'redweb-candidate.tgz');
-        execFileSync('tar', ['-czf', archive, '-C', root, 'package'], { windowsHide: true, timeout: 10000 });
-        write(path.join(evidence, 'input-manifest.json'), { archiveSha256: hash(archive) });
-        write(path.join(evidence, 'submission-1/package-lock.json'), {
-            packages: { 'node_modules/redweb': { integrity: `sha512-${hash(archive, 'sha512', 'base64')}` } },
-        });
-        fs.cpSync(path.join(evidence, 'submission-1'), application, { recursive: true });
-        fs.cpSync(path.join(root, 'package'), path.join(application, 'node_modules/redweb'), { recursive: true });
+        ({ evidence, application } = evaluationFixture(root));
     });
     afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
     test('enumerates nested evidence deterministically and rejects linked directories', () => {
