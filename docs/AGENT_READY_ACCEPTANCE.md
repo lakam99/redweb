@@ -86,7 +86,10 @@ and generated additions remain actual consumer checks. See
   safe-integer counts before any merge. The maintained three-file scope passes
   27 unit/native checks at all-four 100%; real runtime/refresh and linked-client
   authored browser gates retain their unchanged 100% scopes. The isolated harness
-  includes the same helper. See `COVERAGE_COUNTER_VALIDATION.md` for the reproduced
+  includes the same helper. The full isolated-package gate also passes with registry
+  client 0.2.0, source-free consumers and all browser phases; the critic approved
+  all 17 actual remote implementation blobs at `659f638`. See
+  `COVERAGE_COUNTER_VALIDATION.md` for the reproduced
   defect, exact evidence and remaining boundaries; no runtime change or performance
   waiver is implied.
 

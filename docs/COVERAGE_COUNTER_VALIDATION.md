@@ -73,8 +73,28 @@ The client `summary.json` SHA-256 is
 `coverage.json` SHA-256 is
 `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
 
+The complete isolated-package gate then exited successfully. It verified registry
+`redweb-client@0.2.0` and all four matching bundle identities, installed counter/chat,
+dependency isolation, generated additions, authenticated dashboard, browser runtime
+and refresh, all source-free starters, executable docs, compiled actions/rooms and
+static export. No runtime modules were replaced; TLS verification remained enabled.
+
+Tested Redweb archive SHA-256:
+`d66bf453c60bec4bef6a0ea728637131bd014fc8e4e57d6bcc02bafd680c1cf0`.
+This archive predates subsequent evidence-only README/documentation edits.
+The retained report is
+`coverage/packed-browser/d6c4db4d-fc0b-415c-b989-2241255e5e88/report.json`, SHA-256
+`465bdf7c5f6f63dd34ba603bb408b18bf63e3c2ffbb7c39a5379deb04546e0d4`.
+It records the three browser phases passing, 208 package files and 25 unchanged
+harness inputs, with harness SHA-256
+`1a999d87da59cd90e4bbea37e1324c3ab1e7b94fc1932d945c2878ff127651c7`.
+
+The senior critic approved all 17 actual remote blobs at `659f638`, including the
+shared validator, test supervision, attribution wording and evidence identities.
+Pretest/generated/type checks and four documentation units pass.
+
 The preceding full regression passed 1,456 tests/138 suites at `f96ba79`, recorded
-in `367e104`; it does not include this increment's three new cases. The current
-isolated-package gate and subsequent full regression are separate, not presumed
-passed. No npm publication, deployment, benchmark waiver, new long soak or
-whole-repository 100% claim is made.
+in `367e104`; it does not include this increment's three new cases. The subsequent
+full regression and hosted checks remain separate, not presumed passed. No npm
+publication, deployment, benchmark waiver, new long soak or whole-repository 100%
+claim is made.
