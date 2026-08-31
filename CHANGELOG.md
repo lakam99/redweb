@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Remove pending IPC listeners/deadlines when native request serialization throws synchronously. Preserve falsy/non-Error recovery failures with the shared normalizer and provide a nonempty worker error fallback, retaining private-snapshot redaction. Include the helper in input fingerprints; add real-process regressions and explicit error units without changing recovery workloads or limits.
+
 - Compare the original recovery diagnostic's 110% boundary using exact integer bytes, fixing false rejection at equality without changing its workload, displayed ratios or any-cycle limit. Add maintained authored coverage units and real CLI/socket/snapshot regression checks. Observe session release in its real lifecycle callback and test delayed observers, avoiding an assertion that incorrectly required a disconnected session to outlive its TTL. Production socket behavior is unchanged.
 
 - Complete authored coverage of the unchanged Live HTML browser tool using its full real-browser workload and separate process/CDP/application boundary units. Reuse the existing CI workload, preserve coverage evidence, and explicitly characterize legacy cleanup/error limitations rather than claiming coverage fixes them. No frozen source or release thresholds change.

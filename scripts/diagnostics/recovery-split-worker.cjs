@@ -1,8 +1,9 @@
 'use strict';
 
-// Diagnostic only. Keep the acceptance verifier independent and unchanged.
+// Shared transport worker for diagnostics and server-focused recovery acceptance.
 const assert = require('node:assert/strict');
 const v8 = require('node:v8');
+const { verificationError } = require('../lib/verificationError');
 const { silentLogger, waitFor, WebSocket, closeClient } = require('../realtime-harness');
 const role = process.argv[2];
 const tracing = process.execArgv.includes('--trace-gc');
@@ -127,7 +128,8 @@ process.on('message', async message => {
         const result = await dispatch(message);
         process.send({ result });
     } catch (error) {
-        process.send({ error: message.command === 'snapshot' ? 'Private heap capture failed' : error.stack });
+        process.send({ error: message.command === 'snapshot' ? 'Private heap capture failed'
+            : verificationError(error).stack || 'Diagnostic worker failed' });
     }
 });
 // Successful shutdown must drain queued output naturally (POSIX pipes are

@@ -41,6 +41,14 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Split-runner correctness follow-up: three reproduced failure-channel defects are
+corrected using the shared error normalizer and existing request cleanup. Forty-seven
+unit/native regressions pass; one fresh normal server recovery run reconciles
+all 7,400 replies, peaks at 108.18707393318519% of warm server heap and exits
+normally without forced cleanup. Client growth remains diagnostic. This does not
+close the two runner coverage maps or historical release failures; see
+`SPLIT_RECOVERY_ERROR_HANDLING.md`.
+
 Original recovery follow-up: the maintained 45-test scope passes with all-four
 100% authored coverage. Exact integer bytes correct false rejection at the
 110% equality boundary without relaxing the limit, final/intermediate checks,

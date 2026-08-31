@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { inspect } = require('node:util');
+const { verificationError } = require('../lib/verificationError');
 const { spawnManaged, stopProcessTree } = require('../evaluation/process');
 const { withTimeout } = require('../../tests/helpers/network');
 
@@ -73,8 +74,8 @@ class DiagnosticProcess {
             try { if (output) output(role, stream, chunk); }
             catch (error) {
                 if (!this.outputFailure) {
-                    this.outputFailure = error;
-                    this.child.emit('error', error);
+                    this.outputFailure = verificationError(error);
+                    this.child.emit('error', this.outputFailure);
                 }
             }
             this.output += chunk;
@@ -85,7 +86,7 @@ class DiagnosticProcess {
         };
         this.child.stdout.on('data', chunk => capture('stdout', chunk));
         this.child.stderr.on('data', chunk => capture('stderr', chunk));
-        this.child.on('error', error => { this.failure = error; });
+        this.child.on('error', error => { this.failure = verificationError(error); });
         // Explicit IPC disconnect on Windows can omit ChildProcess 'close' even
         // after process exit and both pipes close. Observe the owned resources.
         this.closed = Promise.all([
@@ -118,12 +119,13 @@ class DiagnosticProcess {
                 this.child.once('message', message);
                 this.child.once('exit', exit);
                 this.child.once('error', error);
-                this.child.send({ command, ...data }, failure => { if (failure) error(failure); });
+                try { this.child.send({ command, ...data }, failure => { if (failure) error(failure); }); }
+                catch (failure) { error(failure); }
             });
         } catch (error) {
             // Do not reuse a failed RPC channel: a late reply has no request id.
-            this.failure = error;
-            throw error;
+            this.failure = verificationError(error);
+            throw this.failure;
         } finally { this.pending = false; }
     }
 
@@ -189,8 +191,8 @@ async function run(report, record = () => {}, { mode = 'baseline', output, snaps
         for (const worker of [server, client]) worker.child.disconnect();
         await Promise.all([server, client].map(worker => withTimeout(worker.closed, 'diagnostic graceful exit', 5000)));
     } catch (error) {
-        primary = error;
-        throw error;
+        primary = verificationError(error);
+        throw primary;
     } finally {
         // Both cleanups are attempted even if one fails. Keep failure evidence.
         const workers = [server, client].filter(Boolean);
@@ -216,7 +218,7 @@ function fingerprint() {
         'scripts/diagnostics/DeoptimizationCensus.cjs',
         'scripts/diagnostics/ClientHeapCapture.cjs', 'scripts/diagnostics/HeapSnapshotGraph.cjs',
         'scripts/diagnostics/HeapCodeComparison.cjs', 'scripts/diagnostics/recovery-heap-summary.cjs',
-        'scripts/verify-recovery.js', 'scripts/realtime-harness.js'];
+        'scripts/verify-recovery.js', 'scripts/realtime-harness.js', 'scripts/lib/verificationError.js'];
     const walk = directory => {
         for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
             const name = path.join(directory, entry.name);
@@ -270,10 +272,10 @@ async function main() {
             }
         }
     } catch (error) {
-        primary = error;
-        report.error = describeFailure(error);
+        primary = verificationError(error);
+        report.error = describeFailure(primary);
         report.deliveryAndCleanupPassed = false;
-        throw error;
+        throw primary;
     } finally {
         report.endedAt = new Date().toISOString();
         let outputFailure;
@@ -287,14 +289,14 @@ async function main() {
                 }
             }
         } catch (error) {
-            outputFailure = error;
-            report.outputError = describeFailure(error);
+            outputFailure = verificationError(error);
+            report.outputError = describeFailure(outputFailure);
             report.deliveryAndCleanupPassed = false;
         }
         try {
             fs.writeFileSync(path.join(directory, 'report.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
         } catch (error) {
-            throw new AggregateError([primary, outputFailure, error].filter(Boolean), 'Diagnosis or report preservation failed');
+            throw new AggregateError([primary, outputFailure, verificationError(error)].filter(Boolean), 'Diagnosis or report preservation failed');
         }
         if (outputFailure) throw new AggregateError([primary, outputFailure].filter(Boolean), 'Diagnostic output preservation failed');
     }

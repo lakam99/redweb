@@ -6,6 +6,13 @@ instrumentation hash alone does not prove correspondence with current source.
 No aggregate whole-repository 100% claim is made. This does not waive the open
 coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
+Split-runner failure handling follow-up: real IPC regressions and explicit worker
+units now cover synchronous-send listener cleanup, falsy error retention and
+nonempty worker error replies. The final 47-test selection and one fresh normal
+7,400-reply server acceptance pass. The full authored maps for these two files
+remain pending; the existing 100% server-policy scope does not cover them. See
+`SPLIT_RECOVERY_ERROR_HANDLING.md` for baseline failures and measurement limits.
+
 ## Established scopes
 
 ### Original shared-process recovery verifier

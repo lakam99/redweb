@@ -46,6 +46,7 @@ test('fingerprints the runtime, reference gate, lockfile and linked client repro
     const actual = fingerprint();
     expect(actual).toEqual(fingerprint());
     expect(actual['scripts/verify-recovery.js']).toMatch(/^[a-f0-9]{64}$/);
+    expect(actual['scripts/lib/verificationError.js']).toMatch(/^[a-f0-9]{64}$/);
     expect(actual['package-lock.json']).toMatch(/^[a-f0-9]{64}$/);
     expect(actual['scripts/diagnostics/recovery-code-summary.cjs']).toMatch(/^[a-f0-9]{64}$/);
     expect(Object.keys(actual).some(name => name.includes('BaseSocketServer.js'))).toBe(true);
