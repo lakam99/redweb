@@ -85,5 +85,20 @@ After final scoped tests exited, the corrected 30-second/16-client run passed:
 eight trends stable, zero registries, final heap 99.78205308% and handles 1→2.
 Raw evidence `coverage/soak-corrected-final-20260831.json` has SHA-256
 `9816802b52c68a774b232e23871fed16609baa88cd9c9a7c7e4809ac357f0113`. Neither run is
-lossless. Full regression/hosted checks for this increment remain pending.
+lossless. Hosted checks for this increment remain pending.
 No npm publication, deployment, merge or new 60-minute soak occurred.
+
+The full regression selected at `31fa9b2` passed 1,246 tests/119 suites in
+653.569 seconds, with two POSIX-only skips on Windows. All 91 library files retain
+100% coverage: 5,449 statements, 4,046 branches, 978 functions and 4,468 lines.
+Library and soak-verifier sources remained unchanged throughout. Five later
+application-recorder units passed separately and are not included in 1,246.
+Generated-content/type checks pass, and the critic approved all 15 actual remote
+blobs on PR16. Hosted PR33370390186 and push33370386741 were still running when
+this evidence was recorded; completed lifecycle/package jobs are not a complete
+workflow pass.
+
+Full map `coverage/coverage-final.json` SHA-256:
+`78ffc666b8181154cf5a6c2b9673e82b6f65b50d6c5fbb29d02941c96d598d0e`.
+Inventory `coverage/soak-full-results.json` SHA-256:
+`2ac4d0bc14ec7fee441a38f710ac1234b68ceb7c94d1280523df3acaa9b2304e`.

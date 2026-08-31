@@ -10,7 +10,7 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,152 tests/113 suites selected at `d15b1a3`, including the
+  Latest full local evidence: 1,246 tests/119 suites selected at `31fa9b2`, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
@@ -370,12 +370,22 @@ The local site was synchronized and tested at `caa166f`; nothing was published.
 
 ## Remaining private-tool measurement gaps
 
+The unchanged application recorder now has a direct maintained source scope:
+six selected tests/two suites, six statements, two branches, one function and six
+lines, all 100%. The actual exit/pipeline checks remain separate from the direct
+callback unit. A native converter omitted the anonymous callback from its function
+denominator; that older zero-function map is diagnostic only, not accepted as
+authored function coverage. Source/report identity and scope are documented in
+`APPLICATION_RECORDER_VERIFICATION.md`. Eight unrelated cases are filtered.
+
 The soak correction adds a direct maintained scope: 80 tests/four suites cover
 241 statements, 100 branches, 65 functions and 173 lines at all-four 100% across
 the coordinator, measurement policy and socket owner. Native undersampling
 reproduction, exact reply/ownership checks, preserved acceptance boundaries and
-short-run results are in `SOAK_VERIFICATION.md`. This is not a new one-hour soak
-or a substitute for the unresolved benchmark result and remaining full gates.
+short-run results are in `SOAK_VERIFICATION.md`. Full regression passed 1,246
+tests/119 suites with two POSIX-only skips and unchanged all-four 100% library
+coverage. This is not a new one-hour soak or a substitute for the unresolved
+benchmark result and remaining hosted/release gates.
 
 The next Live HTML load correction closes its direct coverage gap:54 tests/three
 suites, all-four100% across the coordinator, bounded HTTP reader and client owner
@@ -417,7 +427,6 @@ scripts/verify-live-html-package.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
 scripts/lib/example-dependency-probe.cjs
-scripts/lib/record-application-coverage.cjs
 scripts/lib/verify-action-feedback.js
 scripts/lib/verify-action-input.js
 scripts/lib/verify-dashboard-browser.js

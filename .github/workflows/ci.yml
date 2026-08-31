@@ -91,6 +91,17 @@ jobs:
           path: coverage/tool-source/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:recorder:coverage
+        id: recorder-coverage
+        timeout-minutes: 5
+      - name: Preserve application-recorder coverage evidence
+        if: ${{ always() && steps.recorder-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: recorder-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/application-recorder-authored/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:memory:coverage
         id: memory-coverage
         timeout-minutes: 20
