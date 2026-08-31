@@ -26,26 +26,39 @@ These command deadlines allow the feedback driver's existing `finally` to shut d
 its server after a disconnected debugging transport. They do not cancel an underlying
 command or establish page-acquisition ownership. In particular, raw `openPage`
 acquisition from the frozen launcher remains unbounded. No unowned timeout race was
-added there, and no complete-acquisition or whole-driver-coverage claim is made.
+added there, and no complete-acquisition claim is made. The separate native tests
+below now measure all authored feedback-driver paths; complete coverage is not a
+claim that every underlying acquisition operation is bounded.
 
 ## Maintained tests
 
 `npm run verify:feedback:commands` combines nine explicit command-boundary units
-(including labelled fake-clock checks) with four real integration cases. The new
-Chromium case uses actual sockets/timers and checks that the server is no longer
+(including labelled fake-clock checks) with six real integration cases. The closed
+Chromium connection case uses actual sockets/timers and checks that the server is no longer
 listening and has no shared pages **before** rescue cleanup runs. The other three
 cases retain real page-disposal/setup failure coverage. Production shutdown wraps
 disposal rejections in `AggregateError`; this work does not claim a native falsy
 shutdown bug.
 
-The 13-test scope passes in 16.546 seconds with 100% of the small adapter: five statements, five
-lines, three functions and zero branches. Full direct coverage of the feedback
-driver and browser coordinator remains open. The new native test allows 180 seconds
+Two additional Chromium cases run the complete acceptance driver. The successful
+case omits optional callbacks and verifies that its real HTTP listener refuses a
+connection after return. The cleanup-only failure registers an actual decorated
+page whose disposal throws, and verifies error identity, empty shared-page storage,
+listener closure and resolution of an actual pending fixture waiter. No browser,
+server or transport API is replaced. These cases reuse the existing workspace and
+page owners, with a 180-second driver watchdog, independent browser cleanup and a
+bounded drain of the original driver promise. Each has a 360-second outer budget.
+
+The final expanded 15-test/four-suite scope passes in 20.765 seconds with all-four 100%
+coverage: 176 statements, nine branches, 14 functions and 162 lines. The adapter
+accounts for five statements/lines, three functions and zero branches; the complete
+feedback driver accounts for 171 statements, nine branches, 11 functions and 157
+lines. Browser coordinator coverage remains separate. The closed-connection test allows 180 seconds
 for bounded launch, 60-second supervision and independent cleanup. Existing failure
 tests now allow 45 seconds instead of inheriting five while server shutdown can
 take 15. Uncertain browser shutdown retains its workspace and independently releases
 local pipe/reference handles; those releases are not proof of process termination.
-CI allows eight minutes for this scope and retains coverage for 30 days.
+CI allows 20 minutes for the combined outer budgets and retains coverage for 30 days.
 
 | Exact source | SHA-256 |
 | --- | --- |
@@ -54,8 +67,12 @@ CI allows eight minutes for this scope and retains coverage for 30 days.
 | `scripts/verify-browser-coverage.js` | `96325de65161f7d68c6da3ea85700e6fccb85b45ddb34c7645cdf5eaeefe8e06` |
 | `scripts/lib/PackedBrowserHarness.js` | `fd9cf313775b77fbebd73a0097efe0c8f5ec830b17f370451f2ed4f3cae39855` |
 
-`coverage/browser-commands/coverage-final.json` SHA-256:
-`ce488798de6e2aeda9e02153241fb868b815472396684e6338d73a3462b87f62`.
+The final maintained report `coverage/browser-commands/coverage-final.json`
+has SHA-256 `5c04776ecc36f5df1753c94afa388d3b509c54425f179a4454006261dec7f18b`,
+matching the initial expanded-scope report under `coverage/feedback-driver/`.
+The critic approved the corrected native tests after requiring exact error leaves,
+an actual waiter promise and preservation of late driver failures. Pretest,
+generated-documentation and all three type configurations also pass.
 
 ## Native acceptance and remaining gates
 
@@ -102,10 +119,15 @@ It records all three browser phases passing, 210 package files, 26 unchanged
 harness inputs, and harness SHA-256
 `ce81b626e0d87bb50edf1856522a3916bdf983dd1629404b7e1ab1a2052608c3`.
 
-The preceding `9c29a6e` full regression passed 1,459 tests/138 suites with two
-POSIX-only skips and the unchanged 91-file library at all-four 100%. It does not
-include this increment's ten new tests. Both `659f638` and `9c29a6e` hosted
-workflows passed completely. Current full-regression and hosted results remain
-separate and are not presumed passed.
+The full regression for `69dcbf8` passed 1,469 tests/140 suites in 759.054 seconds,
+with two POSIX-only skips and the unchanged 91-file library at all-four 100%
+(5,449 statements, 4,046 branches, 978 functions, 4,468 lines). The two full-driver
+cases were added after discovery and pass separately; they are not included in
+1,469. Retained full result `coverage/feedback-commands-full-results.json` has
+SHA-256 `b4a5bcb06d59d2759e7a6a7190c9100023916beeb70d062d25f6a02e0d749be9`;
+the corresponding `coverage/coverage-final.json` has SHA-256
+`04c2f534616e477c367126cb5009b7e0496fc832b3e1dfb57e9048b64330952f`.
+Both `659f638`, `9c29a6e` and `e3b4902` hosted workflows passed completely. Latest hosted
+results remain separate and are not presumed passed.
 No npm publication, deployment, frozen-file edit, benchmark waiver or new long-soak
 claim is made.

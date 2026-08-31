@@ -79,6 +79,17 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Full feedback-driver follow-up: two additional real Chromium cases verify
+  successful acceptance and an exact cleanup-only rejection, including listener
+  closure and pending-waiter resolution. The maintained scope now passes 15 tests
+  across four suites, covering both the driver and adapter at all-four 100%
+  (176 statements, nine branches, 14 functions, 162 lines). Watchdog-late failures
+  remain visible; no runtime/browser/server API is replaced. The preceding full
+  regression for `69dcbf8` passed 1,469 tests/140 suites with two POSIX-only skips
+  and unchanged all-four 100% library coverage. These two later-added cases pass
+  separately, not retroactively as part of that run. Acquisition ownership and
+  other tooling scopes remain separate; see `FEEDBACK_COMMAND_VERIFICATION.md`.
+
 - Feedback-command follow-up: a real closed Chromium debugging connection left
   the verifier pending and its server listening after 20 seconds. A shared
   15-second command adapter now allows server cleanup without mutating the raw

@@ -10,13 +10,13 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,459 tests/138 suites for the source set in `9c29a6e`,
+  Latest full local evidence: 1,469 tests/140 suites for the source set in `69dcbf8`,
   with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
   Exact current full-run and native linked-client evidence is in
-  `COVERAGE_COUNTER_VALIDATION.md` and `BROWSER_OWNER_VERIFICATION.md`;
+  `FEEDBACK_COMMAND_VERIFICATION.md` and `BROWSER_OWNER_VERIFICATION.md`;
   this head's hosted checks remain separate.
   The preceding `377f029`, `1697f33` and `726b9a3` hosted checks passed. The preceding isolated package
   evidence is in `ACTION_INPUT_VERIFICATION.md`; its hosted checks and evidence follow-up passed.
@@ -140,7 +140,7 @@ using an old report to certify new edits.
 | `memory-tools` | `memory-worker.js`, `verify-memory-overhead.js`, `lib/MemoryMeasurement.js`, `lib/VerificationWorkspace.js` (updated owner; evidence below) |
 | `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js` |
 | `browser-collector` | `lib/BrowserCoverage.js`, `lib/ApplicationCoverage.js`, `lib/assertCoverageFile.js` (current validation evidence in `COVERAGE_COUNTER_VALIDATION.md`) |
-| `browser-commands` | `lib/browserCommands.js` (branch-free adapter; not complete feedback-driver coverage) |
+| `browser-commands` | `lib/browserCommands.js`, `lib/verify-action-feedback.js` (unit and actual Chromium/server cases; see `FEEDBACK_COMMAND_VERIFICATION.md`) |
 | `application-collector` | `lib/ApplicationCoverage.js` |
 | `room-verifier` | `lib/verify-room-example.js` |
 | `tool-source/<run>` | `build-live-html-examples.js`, `generate-docs.js`, `generate-protocol-types.js` (separate reports below) |
@@ -477,7 +477,6 @@ scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
-scripts/lib/verify-action-feedback.js
 scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-live-page-ownership.js
 scripts/lib/verify-refresh-controls.js
