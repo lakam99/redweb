@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Align multiplayer operations and production-readiness guidance with the approved blocking server-recovery command. Keep the original shared-process command and its overrides in a separately labelled diagnostic section; distinguish historical baseline/results from current release acceptance. Add a generated-documentation regression without changing any runtime or verification policy.
+
 - Complete original-source recovery coordinator/worker coverage with shared boundary helpers and the existing real-process/socket tests. Preserve CI coverage artifacts. Retain raw short-soak outcomes before assertions and preserve original reports if artifact writing fails; add failure-time matrix artifacts and real pending-reply rotation controls. Keep the observed hosted delivery failure visible, without changing rotation semantics or acceptance thresholds.
 
 - Remove pending IPC listeners/deadlines when native request serialization throws synchronously. Preserve falsy/non-Error recovery failures with the shared normalizer and provide a nonempty worker error fallback, retaining private-snapshot redaction. Include the helper in input fingerprints; add real-process regressions and explicit error units without changing recovery workloads or limits.

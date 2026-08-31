@@ -12,6 +12,26 @@ const root = path.resolve(__dirname, '../..');
 const { version } = require('../../package.json');
 
 describe('single-source documentation', () => {
+    test('operational guidance distinguishes blocking server recovery from the original diagnostic', () => {
+        const docs = new Documentation(root).build();
+        const operations = docs.pages.find(page => page.id === 'operations').markdown;
+        const [acceptance, diagnostic] = operations.split('## Original recovery diagnostic');
+        expect(acceptance).toContain('npm run verify:recovery:server');
+        expect(acceptance).toContain('server-steady-v1');
+        expect(acceptance).toContain('7,400');
+        expect(acceptance).toContain('client heap is diagnostic');
+        expect(acceptance).toContain('rejects workload overrides');
+        expect(acceptance).not.toContain('REDWEB_RECOVERY_WARM_CONNECTIONS');
+        expect(acceptance).not.toContain('redweb-0.8-baseline');
+        expect(diagnostic).toContain('npm run verify:recovery');
+        expect(diagnostic).toContain('non-blocking');
+        expect(diagnostic).toContain('REDWEB_RECOVERY_WARM_CONNECTIONS');
+        const contract = docs.pages.find(page => page.id === 'production-contract').markdown;
+        expect(contract).toContain('warmed **server** heap');
+        expect(contract).toContain('original shared-process diagnostic');
+        expect(contract).not.toContain('are compared against 0.8 by the performance gate');
+    });
+
     test('match showcase reuses complete session handlers and keeps private rooms separate', () => {
         const docs = new Documentation(root).build();
         const example = docs.examples.find(entry => entry.id === 'rooms-sessions');

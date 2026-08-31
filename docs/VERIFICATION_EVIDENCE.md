@@ -1,5 +1,7 @@
 # 0.9.0 verification evidence
 
+This is historical evidence for the 0.9.0 candidate, not certification of a newer release. Current commands, measurement scopes and unresolved gates are recorded in [operations](MULTIPLAYER_OPERATIONS.md#verification) and the [development release checklist](AGENT_READY_ACCEPTANCE.md).
+
 Release-candidate measurements were taken on Windows x64, Node 22.21.0, and an AMD Ryzen 7 7800X3D. Performance numbers are machine-specific; the scripts and thresholds are the durable contract.
 
 ## Automated correctness

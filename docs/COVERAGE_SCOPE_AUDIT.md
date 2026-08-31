@@ -778,7 +778,7 @@ using an old report to certify new edits.
 | --- | --- |
 | `package-tools` | `lib/ClientCandidate.js`, `lib/InstalledClient.js`, `lib/PackedBrowserHarness.js`, `lib/preservePackedBrowserReport.js`, `lib/verificationError.js`, `lib/compile-consumer.js`, `lib/verify-documentation.js`, `lib/verify-starter.js` |
 | `memory-tools` | `memory-worker.js`, `verify-memory-overhead.js`, `lib/MemoryMeasurement.js`, `lib/VerificationWorkspace.js` (updated owner; evidence below) |
-| `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js` |
+| `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js`, `diagnostics/recovery-split.cjs`, `diagnostics/recovery-split-worker.cjs` (current scope in `SPLIT_RECOVERY_COVERAGE.md`) |
 | `browser-collector` | `lib/BrowserCoverage.js`, `lib/ApplicationCoverage.js`, `lib/assertCoverageFile.js` (current validation evidence in `COVERAGE_COUNTER_VALIDATION.md`) |
 | `browser-commands` | `lib/browserCommands.js`, `lib/verify-action-feedback.js` (unit and actual Chromium/server cases; see `FEEDBACK_COMMAND_VERIFICATION.md`) |
 | `application-collector` | `lib/ApplicationCoverage.js` |

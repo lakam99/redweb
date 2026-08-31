@@ -69,3 +69,15 @@ Library coverage is 5,449 statements / 4,046 branch outcomes / 978 functions /
 - `df58f94` push 33432417846 passed, but PR 33432429300 failed its Node 24 soak delivery assertion. That failure is not superseded by the Windows or push pass; see [soak observation](SOAK_ROTATION_OBSERVATION.md).
 
 No new hour soak, publication, deployment, merge or release approval is claimed.
+
+### Subsequent Linux artifact verification
+
+At `2e6afe9`, PR run 33436490115 completed both the authored recovery coverage
+step and its artifact upload successfully. The downloaded map at
+`coverage/ci-recovery-2e6afe9/coverage-final.json` has SHA-256
+`2647d1734b36ff0384f3d8ee292747a851b946db53d296f17ab9d3a32242d54a`.
+Its exact five-file inventory and serialized statement/function/branch source
+locations match the current authored files. All 457/170/86/388 counters remain
+100%. This is the Linux lifecycle job's Node 22 scope; the full workflow was
+still running when this artifact was inspected. A completed coverage step does
+not certify the unfinished workflow or supersede earlier delivery failures.

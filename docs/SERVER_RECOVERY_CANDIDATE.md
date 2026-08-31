@@ -70,6 +70,14 @@ checks.
 
 ## Maintained acceptance-tool coverage
 
+The current gate also includes the full authored split coordinator/worker:
+161 tests, all-four 100% over five source files. See
+[authored coverage](SPLIT_RECOVERY_COVERAGE.md) for current maps, boundaries and
+the separate full-regression/hosted outcomes. The original three-file checkpoint
+below is historical and does not describe the current command's complete scope.
+
+### Original policy/coordinator/CLI checkpoint
+
 `npm run verify:recovery:coverage` now runs the existing coordinator/policy units,
 real worker integrations and three added CLI exit-boundary units together. It
 enforces all four 100% thresholds over `ServerRecoveryPolicy.js`,
