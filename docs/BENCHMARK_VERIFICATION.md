@@ -145,3 +145,72 @@ Independent review approved the strict-output correction, test time budgets and
 documented coverage/source hashes. It confirmed arithmetic and noted measured
 phases of approximately 463–534 ms; no retained evidence establishes scheduling,
 GC or compilation as the cause. Performance acceptance remains open.
+
+## Next diagnostic boundary
+
+Use a bounded CPU-profile comparison to identify where time is spent before
+changing the successful message path. Node 22 documents process-lifetime CPU
+sampling and profile output on exit in its [CLI reference](https://nodejs.org/download/release/v22.21.0/docs/api/cli.html#--cpu-prof).
+Any extended, instrumented workload is diagnostic only, not a replacement for
+the default uninstrumented acceptance run.
+
+This caution is consistent with [V8's real-world benchmarking discussion](https://v8.dev/blog/real-world-performance)
+and [published VM warm-up research](https://arxiv.org/abs/1602.00602): a synthetic
+score or presumed warm-up period does not alone establish representative stable
+performance. These sources guide the investigation; they do not diagnose this
+specific Redweb result.
+
+The single bounded profile pair completed after the full local suite exited:
+500,000 measured messages, 128 outstanding, 2,000 warm-up, unchanged worker,
+Node 22.21.0 CPU sampling. Both completed exact delivery and normal cleanup.
+Sampled whole-process elapsed attribution was dominated by `writev` (baseline
+5.184s, candidate5.019s) and idle (3.578s,3.506s). Direct Redweb socket-frame self
+samples were0.375s/0.278s and GC0.094s/0.081s. The critic independently found no
+candidate-specific hotspot. About half the `writev` attribution came from client
+requests, half from server replies; this is not pure CPU or syscall service time.
+
+This workload is25 times the default and includes startup, warm-up, sorting and
+cleanup without phase markers. It does not isolate the original short measured
+window, prove the cause, or justify a runtime optimization. Do not repeat long
+profiles or alter batching/GC based on this negative finding. A future targeted
+investigation should observe the original20,000-message phase explicitly.
+Raw profiles in `coverage/benchmark-cpu-diagnostic/` have SHA-256:
+
+- `baseline.cpuprofile`: `34880286661985a48ea30e8c58cbfff861041b2b0baaa6243fc8736761d3b498`.
+- `candidate.cpuprofile`: `2ef3e13fc9834ca707071cdf7e531fe1c8c7e586933c75a174d2a65938c90942`.
+
+## Verified implementation checkpoint
+
+At `43c6d73`, full pretest/type/regression passed1,098 tests/110 suites in614.552s,
+with two POSIX-only skips and all-four100% of the unchanged91-file library scope
+(5,449 statements,4,046 branches,978 functions,4,468 lines). Full coverage report
+SHA-256: `ce878c849923384e0903a0e424a615dfb3be885046e0dd1bbf5131d1d3d7f681`.
+The final source implementation was unchanged during verification; this report's
+research/evidence-only additions followed the implementation commit.
+Both [PR33365382012](https://github.com/lakam99/redweb/actions/runs/33365382012)
+and [push33365378641](https://github.com/lakam99/redweb/actions/runs/33365378641)
+passed all Node18/20/22/24 and lifecycle/package/browser jobs. The critic verified
+all21 actual remote file blobs and approved this increment, not release readiness.
+
+After the local suite and profile workers exited, sequential resource checks
+passed: default load6,643.491 messages/s,6.781ms p99 and contained slow consumer;
+default metadata1,881.648 bytes/connection; server recovery all7,400 replies,
+peak108.6388% and final96.6147% of warm heap. Client112.8972% remains diagnostic.
+HTML load passed200 expired renders/110 clients/8,329,896-byte heap delta; JSX
+10,000rows passed48.1ms/1.3MiB. The30s/16-client soak passed all eight trends with
+4,368 sent/4,365 received (99.9313%, three missing—not lossless), empty final
+registries,100.2593% final warm heap and native handles1→2. This is not a new
+60-minute soak. Audit found zero vulnerabilities with TLS verification retained.
+
+Report hashes:
+
+- `coverage/43c6d73-resource-gates.json`: `20c94f067880295c5cae23beb2df57047f2f17792779af12afbf3f42fd5cc13a`.
+- `coverage/43c6d73-short-soak.json`: `70f396696b05da057e7c0e258d96335fb89e1ba038c4bc7ee27645cc924dcddf`.
+- `coverage/server-recovery-43c6d73/report.json`: `6f82e64382adf0e6c4eebaf17d70460d411dad0862e0ba1d0a093ea0a35334f5`.
+
+Site `caa166f` synchronizes the43c6d73 catalogue locally:98pages/154assets,
+real filesystem rollback/HTTP/link/download checks, six tests and100%
+line/branch/function coverage across seven documentation modules. It used the
+linked checkout while core tests ran, not an isolated published renderer or clean
+performance environment. No publication, deployment or merge occurred. Default
+throughput acceptance and remaining private-tool coverage remain open.

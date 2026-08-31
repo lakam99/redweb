@@ -10,8 +10,8 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,045 tests/105 suites at `d576278`, including the
-  terminal-interruption, generator, memory, load and navigation corrections. Exact
+  Latest full local evidence: 1,098 tests/110 suites at `43c6d73`, including the
+  benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
@@ -357,6 +357,16 @@ precise boundaries and retained performance results: the first default registry
 comparison passed, but the second failed the unchanged3% throughput limit at
 4.7850% regression. This remains an open performance result, not waived by
 coverage, an earlier pass or the separate recovery diagnostic decision.
+
+Final benchmark implementation verification at `43c6d73`: full1,098 tests/110
+suites,614.552s, two POSIX-only skips and all-four100% library coverage. Both
+PR33365382012 and push33365378641 passed every hosted job. Sequential default
+load/memory/server-recovery, HTML/JSX, short-soak and audit checks also passed;
+exact counts/hashes and remaining throughput failure are retained in
+`BENCHMARK_VERIFICATION.md`. The critic approved all21 remote changed-file blobs.
+One bounded diagnostic profile pair found no candidate-specific hotspot and does
+not justify speculative runtime changes or waive the default benchmark failure.
+The local site was synchronized and tested at `caa166f`; nothing was published.
 
 ## Remaining private-tool measurement gaps
 
