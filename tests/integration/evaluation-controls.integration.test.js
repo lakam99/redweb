@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '../..');
 
 test('the real control validator accepts four controls and rejects seven faults, or explicitly refuses unsupported interface inspection', async () => {
     await new VerificationWorkspace().run(async owner => {
-        const coverage = new FrozenCoverage(owner.directory, 'scripts/evaluation/validate.js');
+        const coverage = new FrozenCoverage(owner.directory, ['scripts/evaluation/validate.js', 'scripts/evaluation/verify.js']);
         const reportFile = path.join(owner.directory, 'controls.json');
         try {
             const command = owner.command([path.join(root, 'scripts/evaluation/validate.js'), reportFile], {

@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Extend the frozen control coverage gate to include the browser evaluator without duplicating its native browser matrix. Test real build/startup/HTTP failures and explicit browser/process/cleanup boundaries; preserve exact original-source maps through shared multi-file instrumentation. Require the intended HTTP status failure, not any error at the same check. Frozen code and acceptance limits remain unchanged.
+
 - Add maintained coverage for the unchanged evaluation control validator, with the complete real Windows browser control matrix and separate verifier-result units. Require a clean explicit refusal on unsupported platforms; retain original command errors and owned evidence on unexpected outcomes. Do not overwrite existing control reports or modify frozen evaluation code.
 
 - Add maintained coverage for the unchanged trial runner, including real build/input tampering failures and Windows browser protocol controls. Share archive fixtures and preserve outer test workspaces when trial cleanup is uncertain, a browser profile remains, or evidence is unreadable; frozen checker and historical evaluation files are untouched.

@@ -76,8 +76,12 @@ test('frozen-tool coverage remains separate from behavioral evaluation controls'
     expect(workflow).toMatch(/run: npm run verify:evaluation:trial:coverage\s+id: frozen-trial\s+timeout-minutes: 5/);
     expect(workflow).toContain('coverage/frozen-trial/');
     expect(scripts['verify:evaluation:controls:coverage']).toContain('--collectCoverageFrom=scripts/evaluation/validate.js');
+    expect(scripts['verify:evaluation:controls:coverage']).toContain('--collectCoverageFrom=scripts/evaluation/verify.js');
     expect(scripts['verify:evaluation:controls:coverage']).toContain('tests/integration/evaluation-controls.integration.test.js');
     expect(scripts['verify:evaluation:controls:coverage']).toContain('tests/unit/evaluation-controls-boundaries.unit.test.js');
+    expect(scripts['verify:evaluation:controls:coverage']).toContain('tests/integration/evaluation-verifier.integration.test.js');
+    expect(scripts['verify:evaluation:controls:coverage']).toContain('tests/unit/evaluation-verifier-boundaries.unit.test.js');
     expect(workflow).toMatch(/run: npm run verify:evaluation:controls:coverage\s+id: frozen-controls\s+timeout-minutes: 5/);
     expect(workflow).toContain('coverage/frozen-controls/');
+    expect(workflow).toContain('coverage/frozen-evaluator-native/');
 });

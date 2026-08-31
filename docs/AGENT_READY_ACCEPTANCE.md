@@ -41,6 +41,20 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Browser-evaluator coverage follow-up: the maintained control gate now covers
+both the unchanged validator and its browser evaluator, reusing the original
+eleven-case real Windows browser matrix once. Four new native CLI cases cover
+build/startup/HTTP failures and require the owned application to be gone;
+separate browser/process boundary units cover deadlines, reporting and cleanup
+faults. A status-specific oracle prevents unrelated network failures from
+counting as the expected 404 rejection. Original command errors and owned
+evidence survive unexpected outcomes. See the coverage audit for exact scopes,
+measurements, platform limits and the still-open frozen Live HTML browser tool.
+The combined run passed 44 tests in 67.556s with all-four 100% of the evaluator
+(237/57/41/174) and validator (24/14/4/19); it is not whole-release completion.
+Preparation (five tests), process/sealing (40 tests, one skip) and trial-runner
+(23 tests) regressions also pass with their original 100% map hashes unchanged.
+
 Control-validator coverage follow-up: the unchanged eleven-case protocol matrix
 now runs through a maintained direct-coverage gate. Real Windows Chromium checks
 accept four working controls and reject seven broken variants; explicit unit

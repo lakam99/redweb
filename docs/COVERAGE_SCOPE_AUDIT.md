@@ -8,10 +8,78 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen browser evaluator
+
+`verify:evaluation:controls:coverage` now measures both `validate.js` and
+`verify.js` in one maintained gate. The shared test-only `FrozenCoverage` helper
+accepts multiple selected original filenames, requires exactly one native CLI
+coverage record, verifies every selected source/map and merges only explicitly
+requested scopes. Preparation, trial and sealing tests retain single-file use;
+no frozen source, checker identity or sealed evaluation record is rewritten.
+
+The original eleven-case real Windows browser matrix is reused once. Four new
+native CLI cases exercise actual npm builds, startup parsing/exit, invalid URLs,
+and HTTP rejection. Recorded application PIDs must become absent without a
+second signal; saved reports must match CLI output and contain no additional
+cleanup failure or remaining profile. On Windows, the HTTP case specifically
+requires the actual 404-versus-200 assertion in both the report and failed check,
+with no acquired browser tabs. Elsewhere, it requires the exact unsupported
+interface refusal. Independent review identified why accepting any failure at
+the same check could conceal a different network failure; the stricter oracle
+does not relabel such a failure passing. Unexpected outcomes preserve the
+original captured command error and outer workspace.
+
+Twenty-three explicit VM units supply browser/process boundaries and a controlled
+clock, using real owned files. They are not browser or process integration
+evidence. They cover handshake/data-stream deadlines, interception failure,
+startup/build/CLI paths, listener rejection, independent cleanup attempts,
+aggregate causes, optional reports, and standalone room inspection. The
+high-volume event case verifies 30,030 received-event counts and exercises the
+private buffer's saturation path; it does not directly measure that hidden
+buffer's size. The original native assertions and timing limits are unchanged.
+
+The initial 25-test native/existing-unit selection passed in 67.037s but correctly
+failed coverage: evaluator 91.56% statements / 66.66% branches / 90.24% functions /
+94.82% lines. The first 23 new units passed in 2.906s but still missed failed CLI
+exit status (99.57/98.24/100/100). The four native failure cases completed that
+path; the focused 27-test run passed in 7.894s. Full maintained evidence is
+recorded below; these intermediate results are not whole-release acceptance.
+
+The final unchanged-input maintained run passed 44 tests in 67.556s on Windows /
+Node 22.21.0: five native CLI tests (one executes the eleven original controls)
+and 39 explicit boundary units. Evaluator coverage is 237 statements / 57 branch
+outcomes / 41 functions / 174 lines, all 100%; combined with the validator it is
+261/71/45/193, also all 100%. The real control matrix took 59,742ms.
+Retained evidence under `coverage/frozen-evaluator-evidence/`:
+
+| File | SHA-256 |
+| --- | --- |
+| `coverage-final.json` | `6ea227a33425b26ea1d15552c84784153277cc2c6499cc471838cba6799f063b` |
+| `native-control-report.json` | `d49e012a6a5756aa1d39e3c713bd23c9195a6e20430a084b091898532a97d2aa` |
+| `frozen-evaluator-native/build-failure.json` | `96461915fb820bc1c53c0a773e5800937d9e8c2f1454f80134b2035ed2de60a5` |
+| `frozen-evaluator-native/http-rejection.json` | `8b2ca9e78a6a79fbf9aa85780bdef64f33da131f4fa04b214bdf6625c6b85ae0` |
+| `frozen-evaluator-native/invalid-url.json` | `ad03ab76518f7e05d4b4a8af16f9a0e7cf8ed3c2164a601e33ce42f7e815f8fc` |
+| `frozen-evaluator-native/startup-exit.json` | `877ad0b31df0685cb2bd3de5565fcda737cdadfb94af52c3f079a45b36d05406` |
+
+The unchanged evaluator's LF-normalized source SHA-256 is
+`9008136ae8c7e29b5e05ca06247d84bc6721827abf534ab762dd52ba6aa81b53`;
+validator identity remains the one recorded below. CI preserves the combined map
+and native CLI reports separately from the other verifier scopes. Windows
+evidence does not establish native Linux browser acceptance or resolve the
+historical cleanup observation, throughput failure, or remaining release gates.
+
+Single-file helper regressions also passed: preparation five tests in 13.119s;
+process/sealing 40 tests with one skip in 7.986s; trial runner 23 tests in 9.996s.
+Their copies in the same evidence directory are `preparation-regression.json`,
+`process-seal-regression.json`, and `trial-regression.json`. All retain the exact
+100% map hashes recorded in their individual sections below; the multi-file
+helper refactor did not change those measured scopes.
+
 ### Frozen control validator
 
-`verify:evaluation:controls:coverage` checks the unchanged validator with one
-native CLI test and sixteen explicit verifier-result/reporting-oracle units.
+The validator-only `c4679a5` run of `verify:evaluation:controls:coverage` checked
+the unchanged validator with one native CLI test and sixteen explicit
+verifier-result/reporting-oracle units; the combined gate above retains them.
 On Windows the native test executes all eleven original controls: four working
 variants pass every browser check; seven deliberately broken variants fail at
 their expected check. Actual HTTP/WebSockets, ephemeral interface inspection,
@@ -55,7 +123,8 @@ to its actual CI result, not inferred from the local Windows run.
 
 The initial nine-test run passed in 60.921s before additional
 immutable-report and stricter refusal-oracle units were added. Remaining frozen
-browser/evaluation verifier maps and broader release obligations stay open.
+Live HTML browser coverage and broader release obligations stay open; the
+evaluator's previously open scope is now covered by the combined gate above.
 
 ### Frozen trial runner
 
@@ -1013,11 +1082,9 @@ above. Earlier failure records remain historical evidence.
 scripts/verify-live-html-browser.js
 ```
 
-Frozen evaluation tooling also lacks a complete direct map in the reviewed set:
-
-```text
-scripts/evaluation/verify.js
-```
+The frozen evaluation process, preparation, sealing, trial runner, control
+validator and browser evaluator now have the separate direct maps recorded above.
+The remaining frozen Live HTML browser tool is still open.
 
 Keep frozen source/evidence unchanged. The evaluation fixture, recipe tests,
 shared test networking, repository tests/helpers and fixtures are test

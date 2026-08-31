@@ -112,12 +112,14 @@ jobs:
       - run: npm run verify:evaluation:controls:coverage
         id: frozen-controls
         timeout-minutes: 5
-      - name: Preserve frozen control validator coverage
+      - name: Preserve frozen validator and evaluator coverage
         if: ${{ always() && steps.frozen-controls.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frozen-controls-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/frozen-controls/
+          path: |
+            coverage/frozen-controls/
+            coverage/frozen-evaluator-native/
           if-no-files-found: error
           retention-days: 30
       - run: npm run verify:assets:coverage
