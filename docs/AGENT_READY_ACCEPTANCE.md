@@ -224,6 +224,21 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Final-head regression/performance checkpoint (Windows, Node22.21.0,
+  2026-08-31): with system certificate authorities and TLS verification retained,
+  all178 suites passed:2,017 tests, five platform skips, every pretest/type gate
+  and all-four100% maintained library coverage. An earlier run passed2,016 tests
+  but its first clean-consumer npm install stalled without output at the unchanged
+  120-second deadline; the isolated failure reproduced while a direct registry
+  query also stalled. The isolated and complete reruns passed once Node used the
+  Windows trust store; no source, timeout or assertion changed. Both PR and push
+  CI runs for `18b1dfd` passed every Node18/20/22/24 and lifecycle job. Exactly
+  two preregistered five-pair comparisons against one fresh exact0.12.0 baseline
+  completed exact delivery: throughput/p99 regressions were-0.3677%/-5.3204%
+  and-1.7901%/-8.2032%, within unchanged3%/5% limits. This is a bounded local
+  pass, not a capacity guarantee or explanation of the retained historical
+  4.7850% failure; see `BENCHMARK_VERIFICATION.md`.
+
 - Corrected-hour heartbeat checkpoint (Windows, Node22.21.0, 2026-08-31): the
   immutable `11d1dcc` candidate completed3,600 seconds with64 clients and720
   samples. It delivered2,106,745 of2,106,821 replies (99.9963926693%), finished

@@ -1,8 +1,9 @@
 # Disabled-feature benchmark verification
 
-This is unreleased verification-tool work, not a claim that the current release
-performance gate has passed. Production socket/rendering code is unchanged by
-this increment.
+This is unreleased verification-tool and candidate evidence. The bounded
+`18b1dfd` qualification below passes the current local regression rule; it is not
+a production-capacity or statistical-performance guarantee. Production
+socket/rendering code is unchanged by the evidence increment.
 
 ## Contract and corrections
 
@@ -82,6 +83,28 @@ Report `coverage/memory-tools/coverage-final.json` SHA-256:
 `bc1a2faa8e6cb0b4f5248297d04c4e01212803386dd5adebc3f59c1005d3182d`.
 Earlier owner maps describe earlier source, not this revision.
 
+## Current bounded qualification
+
+After independent review and the complete local regression exited, one fresh
+exact `redweb@0.12.0` installation was reused for exactly two preregistered
+comparisons against immutable `18b1dfd`. Each comparison ran five alternating
+pairs with20,000 measured messages,2,000 warm-up messages and concurrency128.
+All20 workers completed exact warm-up and measured delivery, stable entry/manifest
+identities, normal cleanup and empty stderr. No third or replacement comparison
+ran; no workload, profiling or coverage override was present.
+
+| Comparison | Baseline messages/s | Candidate messages/s | Throughput regression | p99 regression | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 37,525.121 | 37,663.117 | -0.3677% | -5.3204% | Pass |
+| 2 | 37,521.080 | 38,192.750 | -1.7901% | -8.2032% | Pass |
+
+Both are below the unchanged maximum3% throughput and5% p99 regressions, so the
+predeclared decision is a **bounded PASS**. The desktop was not an isolated
+benchmark host. This result does not explain, erase or relabel the historical
+4.78495% failure below. Raw report SHA-256 values are
+`c2b9d26dd703a0f8ef121973331d0d91bf1bb6a8204dd322dc3c95a9f15647f3`
+and `4979301a98f41cdbbb89f24e956c11dcf555719d04401652a9fe85cabbc77817`.
+
 ## Retained default performance results
 
 Windows / Node 22.21.0, published `redweb@0.12.0` installed into a newly owned
@@ -144,7 +167,8 @@ No controls are selectively substituted for the failed release comparison.
 Independent review approved the strict-output correction, test time budgets and
 documented coverage/source hashes. It confirmed arithmetic and noted measured
 phases of approximately 463–534 ms; no retained evidence establishes scheduling,
-GC or compilation as the cause. Performance acceptance remains open.
+GC or compilation as the cause. The historical result remains unresolved even
+though the separately preregistered current qualification above passes.
 
 ## Next diagnostic boundary
 
