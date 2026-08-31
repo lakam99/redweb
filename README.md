@@ -261,4 +261,6 @@ Client verification also retains raw worker files before parsing or cleanup, inc
 
 `npm run verify:dashboard:coverage` measures the dashboard browser verifier separately: failure-boundary units plus actual Chromium, SQLite, sign-in, private card updates, draft preservation and logout checks. Native dashboard tests require the starter's supported Node version; file-lock retention is Windows-specific. The scope is the authored verifier, not internal coverage of its browser-expression strings.
 
+An unresolved Linux CI process-cleanup assertion and the diagnostics added to investigate it are tracked in [process cleanup observations](docs/PROCESS_CLEANUP_OBSERVATION.md). Passing runs do not establish its cause or waive the original failure.
+
 Edit canonical recipes/guides, then run `npm run generate:docs`; do not maintain independent copies of the examples. See [documentation maintenance](docs/DOCUMENTATION.md) and the [full acceptance checklist](docs/AGENT_READY_ACCEPTANCE.md) for verification evidence and remaining release work.
