@@ -41,6 +41,18 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Frozen Live HTML tool coverage follow-up: 52 tests pass in 27.384s with all-four
+100% of the unchanged authored tool (336 statements / 86 branch outcomes /
+47 functions / 282 lines). One native CLI test runs the existing full browser
+workload; 51 explicit boundary units cover rejection and cleanup paths without
+claiming simulated observations are DOM evidence. Windows Node 18 passes the
+51 units and explicitly skips the native dashboard workload under its canonical
+engine requirement; this does not claim Node 18 dashboard support. Native CLI
+exit, its banner and absent known temporary directories do not independently
+prove all descendant termination. Characterized frozen cleanup defects remain
+unchanged and documented in the coverage audit. The last enumerated frozen-tool
+map gap is closed, not the broader release requirements or historical failures.
+
 Browser-evaluator coverage follow-up: the maintained control gate now covers
 both the unchanged validator and its browser evaluator, reusing the original
 eleven-case real Windows browser matrix once. Four new native CLI cases cover
@@ -49,7 +61,7 @@ separate browser/process boundary units cover deadlines, reporting and cleanup
 faults. A status-specific oracle prevents unrelated network failures from
 counting as the expected 404 rejection. Original command errors and owned
 evidence survive unexpected outcomes. See the coverage audit for exact scopes,
-measurements, platform limits and the still-open frozen Live HTML browser tool.
+measurements and platform limits; the subsequent Live HTML tool result is above.
 The combined run passed 44 tests in 67.556s with all-four 100% of the evaluator
 (237/57/41/174) and validator (24/14/4/19); it is not whole-release completion.
 Preparation (five tests), process/sealing (40 tests, one skip) and trial-runner

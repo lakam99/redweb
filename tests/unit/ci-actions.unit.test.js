@@ -85,3 +85,16 @@ test('frozen-tool coverage remains separate from behavioral evaluation controls'
     expect(workflow).toContain('coverage/frozen-controls/');
     expect(workflow).toContain('coverage/frozen-evaluator-native/');
 });
+
+test('Live HTML CI measures the existing native workload once alongside explicit boundary units', () => {
+    const scripts = require('../../package.json').scripts;
+    expect(workflow.match(/run: npm run verify:live-html:browser:coverage/g)).toHaveLength(1);
+    expect(workflow).not.toMatch(/run: npm run verify:live-html:browser\s/);
+    expect(workflow).toMatch(/run: npm run verify:live-html:browser:coverage\s+id: frozen-live-browser\s+timeout-minutes: 5/);
+    expect(workflow).toContain('coverage/frozen-live-browser/');
+    expect(scripts['verify:live-html:browser:coverage']).toContain('--collectCoverageFrom=scripts/verify-live-html-browser.js');
+    for (const file of ['tests/integration/frozen-live-browser.integration.test.js', 'tests/unit/frozen-live-browser.unit.test.js']) {
+        expect(scripts['verify:live-html:browser:coverage']).toContain(file);
+        expect(fs.existsSync(path.resolve(__dirname, '../..', file))).toBe(true);
+    }
+});

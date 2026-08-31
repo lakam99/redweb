@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Complete authored coverage of the unchanged Live HTML browser tool using its full real-browser workload and separate process/CDP/application boundary units. Reuse the existing CI workload, preserve coverage evidence, and explicitly characterize legacy cleanup/error limitations rather than claiming coverage fixes them. No frozen source or release thresholds change.
+
 - Extend the frozen control coverage gate to include the browser evaluator without duplicating its native browser matrix. Test real build/startup/HTTP failures and explicit browser/process/cleanup boundaries; preserve exact original-source maps through shared multi-file instrumentation. Require the intended HTTP status failure, not any error at the same check. Frozen code and acceptance limits remain unchanged.
 
 - Add maintained coverage for the unchanged evaluation control validator, with the complete real Windows browser control matrix and separate verifier-result units. Require a clean explicit refusal on unsupported platforms; retain original command errors and owned evidence on unexpected outcomes. Do not overwrite existing control reports or modify frozen evaluation code.

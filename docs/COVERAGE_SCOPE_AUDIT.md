@@ -8,6 +8,76 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen Live HTML browser tool
+
+`npm run verify:live-html:browser:coverage` runs the unchanged full Live HTML
+browser CLI plus separate process/CDP/application boundary units. Its CI step
+replaces the existing plain browser invocation rather than adding a duplicate
+workload at that step. CI attempts to upload available coverage/native artifacts
+even after failure; `full-native.log` is published only after native success and
+validation. Failed commands retain their outer workspace and report diagnostics
+in test/job output, but that temporary directory is not part of the CI artifact.
+The native test uses real APIs, HTTP/WebSockets and Chromium with
+original-filename in-memory instrumentation; it requires successful command
+completion, the exact workload banner, and absence of known owned profile and
+dashboard-workspace directories. Unexpected command, oracle or coverage failures
+retain the outer workspace. The source and every statement/function/branch map
+are checked against the unchanged original. No frozen file or timing limit was
+edited; the test's outer command timeout is 180 seconds.
+
+The first native run passed its behavior test in 26.790s (25,909ms workload) but
+correctly failed coverage: 85.41% statements / 54.65% branches / 85.10% functions /
+94.32% lines. That partial map is retained, not overwritten by a passing claim.
+The final maintained run passed **52 tests in 27.384s** on Windows Node 22.21.0:
+one full native workload and 51 explicit unit cases. The complete authored scope
+is **336 statements / 86 branch outcomes / 47 functions / 282 lines, all 100%**.
+Actual Windows Node 18.20.8 also passed the 51 units in 1.671s with the same scope
+at 100%; the native test was explicitly skipped using the dashboard's canonical
+Node engine requirement. That skip is not native browser/dashboard acceptance.
+
+The unit harness deliberately does not implement a fake DOM: observations are
+synthetic values used to check specific host errors. It uses one reusable
+boundary class, a controlled clock, owned real files and original-source VM
+instrumentation. Tests cover all failed observation assertions, listener and
+HTTP/socket/CDP errors, launch retries/deadlines, transient and permanent profile
+contention, cleanup aggregation, and generated eventual-expression behavior.
+Embedded browser-string execution is not a hidden part of the authored Node
+coverage denominator; the separate native workload remains necessary.
+
+Independent review found no new test defects and verified all 47 authored
+functions and exact map correspondence. Tests also characterize these existing
+frozen-tool limitations; covering them does **not** fix them:
+
+- Servers are acquired before the main cleanup boundary; partial startup can
+  leave earlier acquisitions and the profile behind.
+- Synchronous socket close, browser stop or shutdown errors can skip later
+  cleanup and replace a primary error. Rejected shutdown promises are ignored.
+- Browser stop can resolve after both waits without confirming exit. Native CLI
+  exit and absent directories are not independent proof of descendant cleanup.
+- Partially opened pages are not closed on errors; pending CDP commands do not
+  reject on socket closure. HTTP/socket/CDP waits lack internal deadlines; the
+  outer test timeout does not repair them.
+- Falsy thrown values can disappear. The success banner precedes cleanup, which
+  is why the native test also requires successful command completion.
+
+These are source-derived, explicitly simulated counterexamples—not observed
+failures of the native run or changes to the newer coordinator's independently
+tested guarantees. Frozen code stays untouched.
+
+Retained evidence under `coverage/frozen-live-browser-evidence/`:
+
+| File | SHA-256 |
+| --- | --- |
+| `coverage-final.json` | `d3aa367c929498d6297f8fce2ad3c538529c94cfe6eb271095dd3f67fb435162` |
+| `full-native.log` | `65e21284bbb593f7c09e7b7bcff89f937cbe5f58e3d8b80dd9b31c54f6b72c2d` |
+| `baseline-coverage.json` | `f106ee7ed870500338560541793d6e2efdd34a7193ec9edda00726ef0dc4939f` |
+
+The frozen source LF-normalized SHA-256 is
+`3159843a23e11cacf83f84631c4697388badd182908864881cb86d9a028057e4`.
+This closes the last enumerated frozen-tool direct-map gap, not whole-repository
+coverage, the default throughput failure, original Linux cleanup observation,
+client diagnostics, final release verification or public package/site alignment.
+
 ### Frozen browser evaluator
 
 `verify:evaluation:controls:coverage` now measures both `validate.js` and
@@ -1017,7 +1087,8 @@ runtime/refresh gates also pass, but do not close that entire coordinator's dire
 coverage gap. No frozen helper was changed. See `BROWSER_OWNER_VERIFICATION.md`
 for unit/native boundaries, retained identities and isolated-package distinctions.
 
-No direct coverage map was found for these remaining active verification/build files:
+The previously identified active verification/build coverage gaps were addressed
+incrementally below and in the newer established-scope entries above:
 
 The client source coordinator is now measured separately by
 `npm run verify:client:coordinator:coverage`: 35 explicit dependency-boundary
@@ -1078,13 +1149,9 @@ The development-refresh coordinator's earlier fifteen-unit partial measurement
 is superseded only for its direct coverage claim by the complete authored map
 above. Earlier failure records remain historical evidence.
 
-```text
-scripts/verify-live-html-browser.js
-```
-
 The frozen evaluation process, preparation, sealing, trial runner, control
 validator and browser evaluator now have the separate direct maps recorded above.
-The remaining frozen Live HTML browser tool is still open.
+The final enumerated frozen Live HTML browser tool now has its direct map above.
 
 Keep frozen source/evidence unchanged. The evaluation fixture, recipe tests,
 shared test networking, repository tests/helpers and fixtures are test
@@ -1093,6 +1160,6 @@ standalone Node-only V8 diagnostic remains a separate known failure; original
 authored-source and browser coverage do not relabel it passing. Coverage work
 does not require restarting the deferred scientific runtime investigation.
 
-Load policy, reply accounting and helper coverage are now recorded above. Remaining
-verification machinery still needs direct coverage; valid historical workload
-results are not silently replaced by smaller coverage fixtures.
+Load policy, reply accounting and the enumerated helper/tool coverage are now
+recorded above. Final scope reconciliation and release gates remain required;
+valid historical workload results are not replaced by smaller coverage fixtures.
