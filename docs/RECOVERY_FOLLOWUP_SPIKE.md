@@ -2,14 +2,15 @@
 
 Status: deferred research, not a resolved defect or a recovery waiver.
 
-The maintainer subsequently authorized developing and reviewing a server-focused
-candidate. Its explicit contract is in `docs/SERVER_RECOVERY_CANDIDATE.md`.
-This permission does not adopt the candidate, change existing CI, or authorize
-repeating the historical bounded comparison. Original failures remain visible.
+The maintainer subsequently authorized development, review and adoption of the
+server-focused check documented in `docs/SERVER_RECOVERY_CANDIDATE.md`. It now
+blocks CI; the original command remains unchanged as a visible non-blocking
+diagnostic. This changes the acceptance contract, not the historical results or
+the unresolved runtime explanation. No historical bounded comparison is repeated.
 
 The one-original/one-split Ubuntu comparison is now complete. See
 [its results and contrary ordinary-CI evidence](RECOVERY_COMPARISON.md).
-The stopping rule is in effect: no repeat measurement; acceptance decision pending.
+The stopping rule remains in effect: no repeat research measurement is needed.
 
 The maintainer prioritized finishing Redweb's release work over further open-ended
 runtime investigation. Exact V8 code-lifetime attribution is therefore a separate

@@ -24,9 +24,46 @@ jobs:
       - run: npm ci
       - run: npm test -- --runInBand --silent
       - run: npm run verify:load
-      - run: npm run verify:recovery
+      - name: Server recovery acceptance (server-steady-v1)
+        run: npm run verify:recovery:server -- "$GITHUB_WORKSPACE/coverage/server-recovery"
+        shell: bash
         id: recovery
+        timeout-minutes: 2
       - run: npm audit --omit=dev
+      - name: Original shared-process recovery (non-blocking diagnostic)
+        # A failed/timed-out owner may have uncertain worker cleanup. Do not
+        # start another measurement unless the server gate confirmed cleanup.
+        if: ${{ !cancelled() && steps.recovery.outcome == 'success' }}
+        id: recovery-original
+        continue-on-error: true
+        timeout-minutes: 2
+        # Explicit bash retains pipefail: tee must not turn a failed check green.
+        shell: bash
+        run: npm run verify:recovery 2>&1 | tee coverage/recovery-original.log
+      - name: Recovery outcome summary
+        if: ${{ always() && steps.recovery.outcome != 'skipped' }}
+        shell: bash
+        env:
+          SERVER_OUTCOME: ${{ steps.recovery.outcome }}
+          ORIGINAL_OUTCOME: ${{ steps.recovery-original.outcome }}
+        run: |
+          printf '## Recovery verification\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'Server-only acceptance (blocking): **%s**\n\n' "$SERVER_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Original shared-process diagnostic (non-blocking): **%s**\n\n' "$ORIGINAL_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'The original diagnostic retains its exit status and logs. A server pass does not resolve historical shared-process failures.\n' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ORIGINAL_OUTCOME" != success ]; then
+            echo '::warning::Original shared-process recovery did not pass; inspect its retained log. This diagnostic is non-blocking by maintainer decision.'
+          fi
+      - name: Preserve recovery evidence on success or failure
+        if: ${{ always() && steps.recovery.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage/server-recovery/
+            coverage/recovery-original.log
+          if-no-files-found: error
+          retention-days: 30
 
   lifecycle-smoke:
     runs-on: ubuntu-latest

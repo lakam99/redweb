@@ -1,9 +1,9 @@
 # Server-focused recovery candidate
 
-Status: development and review authorized by the maintainer; **not adopted as the
-release acceptance gate**. Original `npm run verify:recovery` and CI remain
-unchanged. Historical failures, including the Node 22 PR peak of 110.111615% at
-`3166468`, are not erased by a candidate pass.
+Status: **adopted as the blocking CI recovery check** after independent review,
+five clean cross-runtime results and explicit maintainer authorization to continue.
+Original `npm run verify:recovery` is unchanged and runs in CI as an explicitly
+non-blocking diagnostic. Historical failures are not erased by a server pass.
 
 ## Contract: server-steady-v1
 
@@ -29,15 +29,21 @@ green, instrumentation, snapshots or tuned workload overrides are permitted.
 The reused worker reads V8 statistics after its heap sample; that existing
 observation and split-process scheduling are part of this candidate protocol.
 
-Reports must retain `candidateOnly: true`; `candidatePassed` is not release
-approval. Adoption requires a separate explicit decision after code review and
-actual cross-runtime results. The original measurement remains available with
-its original exit status and failures visible.
+Reports retain the reviewed `candidateOnly: true` / `candidatePassed` field names
+for format compatibility with the collected evidence. CI now adopts the command's
+exit status as this scoped recovery gate; these legacy field names do not mean
+whole-release approval. No workload, threshold, worker or report-schema change
+was needed for adoption. The original measurement keeps its original exit status;
+CI records the raw step outcome, emits a warning on non-success, and retains logs
+alongside server samples, process exits and input/output hashes for 30 days.
+Both commands have two-minute CI deadlines and run sequentially, without retries.
+The diagnostic only starts after a passing server gate confirms worker cleanup;
+after a failed/timed-out server run it is explicitly skipped, not called passing.
 
 ## Run the candidate
 
 From the matching Redweb source checkout (not an installed application), run
-`npm run verify:recovery:server` once after review approves measurement, in a
+`npm run verify:recovery:server` in a
 clean environment. It creates an exclusive directory under `coverage/` and
 prints its location. An optional absolute, nonexistent directory can be supplied
 after `--`. Existing evidence is never overwritten.
@@ -122,7 +128,8 @@ SHA-256 for each `report.json`:
   `26e90708d03537f16a1b73b5ba16c57cbee9743e4fff2c770933118ffdcf032d`.
 
 The temporary collection workflow was removed after completion; no measurement
-rerun occurred. Adoption is still pending an explicit maintainer decision.
+rerun occurred. Adoption was pending at this historical checkpoint and is now
+authorized as described above.
 
 The senior critic independently verified the actual PR commit, all five reports,
 the Ubuntu manifests against 104 committed inputs, delivery/sample/inventory
