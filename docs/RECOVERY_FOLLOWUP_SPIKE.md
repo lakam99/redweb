@@ -2,6 +2,10 @@
 
 Status: deferred research, not a resolved defect or a recovery waiver.
 
+The one-original/one-split Ubuntu comparison is now complete. See
+[its results and contrary ordinary-CI evidence](RECOVERY_COMPARISON.md).
+The stopping rule is in effect: no repeat measurement; acceptance decision pending.
+
 The maintainer prioritized finishing Redweb's release work over further open-ended
 runtime investigation. Exact V8 code-lifetime attribution is therefore a separate
 follow-up spike. It is no longer a prerequisite to finish the implementation.
