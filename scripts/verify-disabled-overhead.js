@@ -1,50 +1,41 @@
-const { spawnSync } = require('child_process');
-const path = require('path');
+'use strict';
 
-const baseline = process.argv[2];
-const candidate = process.argv[3] || path.join(__dirname, '..');
-const messages = process.env.REDWEB_BENCHMARK_MESSAGES || '20000';
-const concurrency = process.env.REDWEB_BENCHMARK_CONCURRENCY || '128';
-const trials = Number(process.env.REDWEB_BENCHMARK_TRIALS || 5);
-const worker = path.join(__dirname, 'benchmark-worker.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { BenchmarkComparison } = require('./lib/BenchmarkComparison');
+const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 
-if (!baseline) {
-    process.stderr.write('Usage: node scripts/verify-disabled-overhead.js <baseline-directory> [candidate-directory]\n');
-    process.exit(2);
-}
-if (!Number.isInteger(trials) || trials < 3) throw new Error('REDWEB_BENCHMARK_TRIALS must be at least 3.');
-
-function run(directory) {
-    const result = spawnSync(process.execPath, [worker, path.resolve(directory), messages, concurrency], {
-        encoding: 'utf8',
-        env: { ...process.env, NODE_PATH: path.join(path.resolve(candidate), 'node_modules') },
+async function main() {
+    if (!process.argv[2]) {
+        process.stderr.write('Usage: node scripts/verify-disabled-overhead.js <baseline-directory> [candidate-directory]\n');
+        process.exitCode = 2;
+        return;
+    }
+    const policy = new BenchmarkComparison();
+    const directories = { baseline: fs.realpathSync(path.resolve(process.argv[2])),
+        candidate: fs.realpathSync(path.resolve(process.argv[3] || path.join(__dirname, '..'))) };
+    const results = await new VerificationWorkspace().run(async owner => {
+        const measurements = { baseline: [], candidate: [] };
+        for (let index = 0; index < policy.trials; index++) {
+            const order = index % 2 ? ['candidate', 'baseline'] : ['baseline', 'candidate'];
+            for (const name of order) {
+                const output = await owner.command([path.join(__dirname, 'benchmark-worker.js'), directories[name],
+                    String(policy.workload.messages), String(policy.workload.concurrency)], {
+                    timeoutMs: 120000, rejectTruncatedOutput: true,
+                    environment: { NODE_PATH: path.join(directories.candidate, 'node_modules') },
+                });
+                measurements[name].push(policy.decode(output, directories[name]));
+            }
+        }
+        return measurements;
     });
-    if (result.status !== 0) throw new Error(result.stderr || `benchmark exited ${result.status}`);
-    return JSON.parse(result.stdout.trim().split(/\r?\n/).pop());
+    const summary = policy.summarize(results);
+    summary.trials = results;
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+    if (!policy.passed(summary)) process.exitCode = 1;
 }
 
-function median(values) {
-    const sorted = [...values].sort((left, right) => left - right);
-    return sorted[Math.floor(sorted.length / 2)];
-}
-
-const results = { baseline: [], candidate: [] };
-for (let index = 0; index < trials; index += 1) {
-    const order = index % 2 ? ['candidate', 'baseline'] : ['baseline', 'candidate'];
-    for (const name of order) results[name].push(run(name === 'baseline' ? baseline : candidate));
-}
-const summary = {
-    baseline: {
-        throughput: median(results.baseline.map(result => result.throughput)),
-        p99Ms: median(results.baseline.map(result => result.p99Ms)),
-    },
-    candidate: {
-        throughput: median(results.candidate.map(result => result.throughput)),
-        p99Ms: median(results.candidate.map(result => result.p99Ms)),
-    },
-};
-summary.throughputRegressionPercent = (summary.baseline.throughput - summary.candidate.throughput) / summary.baseline.throughput * 100;
-summary.p99RegressionPercent = (summary.candidate.p99Ms - summary.baseline.p99Ms) / summary.baseline.p99Ms * 100;
-summary.thresholds = { throughputRegressionPercent: 3, p99RegressionPercent: 5 };
-process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-if (summary.throughputRegressionPercent > 3 || summary.p99RegressionPercent > 5) process.exitCode = 1;
+main().catch(error => {
+    process.stderr.write(`${require('./diagnostics/recovery-split.cjs').describeFailure(error)}\n`);
+    process.exitCode = 1;
+});

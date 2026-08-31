@@ -344,11 +344,19 @@ Site checkpoint `20f56dd` synchronizes canonical docs locally:98pages/154assets,
 all HTTP/link/download and atomic rollback checks, six tests/seven scoped modules
 at100% line/branch/function coverage. No site deployment or npm publication occurred.
 
-Next audited correction: disabled-feature benchmark batches lack bounded waits
-and exact warm-up/measurement reply validation; the coordinator accepts unchecked
-worker values. An explicitly labelled unit subprocess-boundary reproduction
-confirmed null p99 results produce a zero exit with null regression percentages.
-This is not actual-network evidence or a waiver of the benchmark's3%/5% limits.
+The documentation-only `4267db1` follow-through passed both hosted runs:
+PR33363026371 and push33363023458, including every matrix and lifecycle job.
+
+The subsequent disabled-feature benchmark increment closes unchecked worker
+values, unbounded response waits and incomplete reply accounting. Its six-module
+scope reaches all-four100% (204 statements/111 branches/30 functions/174 lines),
+52 unit and actual-network/process tests. The shared strict-output owner now also
+rejects truncation on failed exits; its updated memory-tool scope passes71 tests
+with two POSIX-only skips and all-four100%. See `BENCHMARK_VERIFICATION.md` for
+precise boundaries and retained performance results: the first default registry
+comparison passed, but the second failed the unchanged3% throughput limit at
+4.7850% regression. This remains an open performance result, not waived by
+coverage, an earlier pass or the separate recovery diagnostic decision.
 
 ## Remaining private-tool measurement gaps
 
@@ -364,12 +372,10 @@ scripts/verify-recovery.js
 No direct coverage map was found for these active verification/build files:
 
 ```text
-scripts/benchmark-worker.js
 scripts/measure-starter-coverage.js
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
-scripts/verify-disabled-overhead.js
 scripts/verify-jsx-performance.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-load.js

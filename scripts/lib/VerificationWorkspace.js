@@ -48,10 +48,10 @@ class VerificationWorkspace {
             }
             throw primary;
         }
-        if (launchError || code !== 0) {
-            throw new Error(`Package verification command failed (${code}): ${launchError?.message || ''}\n${stdout}${stderr}`, { cause: launchError });
-        }
-        if (rejectTruncatedOutput && truncated) throw new Error('Package verification command output was truncated.');
+        const commandFailure = launchError || code !== 0
+            ? new Error(`Package verification command failed (${code}): ${launchError?.message || ''}\n${stdout}${stderr}`, { cause: launchError }) : undefined;
+        if (rejectTruncatedOutput && truncated) throw new Error('Package verification command output was truncated.', { cause: commandFailure });
+        if (commandFailure) throw commandFailure;
         return stdout;
     }
 

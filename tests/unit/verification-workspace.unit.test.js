@@ -84,6 +84,14 @@ test('successful cleanup preserves the original check failure', async () => {
     expect(fs.existsSync(execution.directory)).toBe(false);
 });
 
+test('strict failed commands reject oversized output before a valid JSON tail can hide truncation', () => new VerificationWorkspace().run(async execution => {
+    const failure = await execution.command(['-e', `process.stdout.write('discarded prefix' + ' '.repeat(1024 * 1024 + 16) + '{"valid":true}', () => { process.exitCode = 1; });`],
+        { rejectTruncatedOutput: true, timeoutMs: 5000 }).catch(error => error);
+    // Keep a failed assertion bounded too: do not diff a1MiB child-output tail.
+    expect(failure.message === 'Package verification command output was truncated.').toBe(true);
+    expect(failure.cause.message.startsWith('Package verification command failed (1)')).toBe(true);
+}), 25000);
+
 test.each([undefined, null, false, 0, 'primitive verification failure'])('non-Error failures cannot become successful verification (%s)', async thrown => {
     const execution = new VerificationWorkspace();
     const failure = await execution.run(() => { throw thrown; }).catch(error => error);

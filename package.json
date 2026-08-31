@@ -55,6 +55,7 @@
     "example:jsx": "node examples/live-html/jsx-page.js",
     "generate:protocol-types": "node scripts/generate-protocol-types.js",
     "verify:overhead": "node scripts/verify-disabled-overhead.js",
+    "verify:overhead:coverage": "node node_modules/jest/bin/jest.js tests/unit/benchmark-command.unit.test.js tests/integration/benchmark-measurement.integration.test.js tests/unit/benchmark-traffic.unit.test.js tests/unit/benchmark-batch.unit.test.js tests/unit/benchmark-comparison.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/benchmark-worker.js --collectCoverageFrom=scripts/verify-disabled-overhead.js --collectCoverageFrom=scripts/lib/BenchmarkBatch.js --collectCoverageFrom=scripts/lib/BenchmarkComparison.js --collectCoverageFrom=scripts/lib/BenchmarkWorkload.js --collectCoverageFrom=scripts/lib/measureBenchmarkBatch.js --coverageDirectory=coverage/benchmark-tools",
     "verify:soak": "node --expose-gc scripts/verify-soak.js",
     "verify:memory": "node scripts/verify-memory-overhead.js",
     "verify:memory:coverage": "node node_modules/jest/bin/jest.js tests/unit/memory-command.unit.test.js tests/unit/memory-measurement.unit.test.js tests/integration/memory-measurement.integration.test.js tests/unit/verification-workspace.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/memory-worker.js --collectCoverageFrom=scripts/verify-memory-overhead.js --collectCoverageFrom=scripts/lib/MemoryMeasurement.js --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --coverageDirectory=coverage/memory-tools",
