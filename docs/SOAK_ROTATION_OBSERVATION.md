@@ -73,6 +73,12 @@ The reviewed nine-test retention selection also passed independently in 2.266
 seconds with all-four 100% helper coverage. It includes actual child exits and
 filesystem failures, plus explicit application callback faults.
 
+A follow-up bounds each of the three real child-command cases at ten seconds,
+with a 40-second outer test budget allowing independent process/pipe/workspace
+cleanup to finish first. The unchanged nine cases passed again in 0.745 seconds
+at all-four 100% helper coverage; no soak workload was rerun for this test-budget
+correction.
+
 Two ordinary mechanics observations were retained during implementation:
 
 - Before the outer-retention fix: 163 sent / 162 received, 99.38650306748467%,

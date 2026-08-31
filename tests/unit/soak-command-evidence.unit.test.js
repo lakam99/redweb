@@ -18,20 +18,20 @@ const boundary = exercise => new VerificationWorkspace().run(owner => {
 
 test.each([0, 1])('raw evidence precedes parsing and assertions for actual command exit %s', exitCode => boundary(async ({ owner, report, directory, evidence }) => {
     const raw = '{deliberately invalid JSON\n';
-    const command = () => owner.command(['-e', 'require("fs").writeFileSync(process.argv[1],process.argv[2]);process.stdout.write(process.argv[2]);process.exitCode=Number(process.argv[3])', report, raw, String(exitCode)]);
+    const command = () => owner.command(['-e', 'require("fs").writeFileSync(process.argv[1],process.argv[2]);process.stdout.write(process.argv[2]);process.exitCode=Number(process.argv[3])', report, raw, String(exitCode)], { timeoutMs: 10000 });
     const result = await captureSoakCommand(owner, command, report, directory);
     expect(result).toEqual({ output: raw, rawReport: raw, exitCode });
     expect(() => JSON.parse(result.rawReport)).toThrow();
     expect(evidence()).toMatchObject({ output: raw, rawReport: raw, exitCode });
     expect(evidence().commandError === null).toBe(exitCode === 0);
-}));
+}), 40000); // Command deadline plus independent process/pipe/filesystem cleanup.
 
 test('an actual different exit remains a failure with available raw evidence', () => boundary(async ({ owner, report, directory, evidence }) => {
-    await expect(captureSoakCommand(owner, () => owner.command(['-e', 'process.stderr.write("failed before report");process.exitCode=2']), report, directory))
+    await expect(captureSoakCommand(owner, () => owner.command(['-e', 'process.stderr.write("failed before report");process.exitCode=2'], { timeoutMs: 10000 }), report, directory))
         .rejects.toThrow('Package verification command failed (2)');
     expect(evidence()).toMatchObject({ exitCode: null, output: null, rawReport: null });
     expect(evidence().commandError).toContain('failed before report');
-}));
+}), 40000);
 
 test('missing raw output is retained as missing, never fabricated from stdout', () => boundary(async ({ owner, report, directory, evidence }) => {
     expect(await captureSoakCommand(owner, async () => 'output only', report, directory))
