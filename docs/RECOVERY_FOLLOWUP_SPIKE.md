@@ -80,6 +80,39 @@ Existing CI remains unchanged until a replacement protocol is explicitly approve
 No threshold increase, selective rerun, code-byte subtraction or blanket
 `continue-on-error` follows from this deferral.
 
+### Temporary collection host
+
+The local Windows machine has no running Docker Linux engine or Ubuntu WSL
+distribution. A temporary, push-only `recovery-comparison.yml` workflow therefore
+collects the declared pair on a separate Ubuntu 24.04 hosted VM, pinned to Node
+22.23.2. It only triggers when that workflow file changes on `codex/agent-ready`,
+rejects repeated run attempts, and is removed after collection. It does not replace
+or modify `ci.yml`, and its completion does not adopt a new acceptance protocol.
+
+The historical failed runner reported Ubuntu 24.04.4, image `20260823.283.1`
+and runner agent 2.336.0 (run `33322376349`, job `99286494853`). The new run records
+its actual OS/image/kernel and Node/V8, revision, source/lockfile and client hashes.
+The historical log did not independently record its kernel. Matching the image
+label is not a claim of identical hardware or kernel.
+
+Each measured command runs in a transient systemd service with a minimal
+environment and `ExitType=cgroup`, so detached diagnostic worker groups remain
+owned. The 180-second outer cap and five-second termination bound do not change
+the scripts' existing internal deadlines. No resource quota or memory subtraction
+is added. Before either workload, two trivial real Node services exit 0 and 7
+through the same wrapper to verify status propagation and cleanup; these are setup
+probes, not recovery measurements. A failed command remains failed; an empty/removed cgroup must establish
+descendant termination before the split run starts. Systemd containment and clean
+environment differ from the historical direct-shell execution and are disclosed
+in the evidence. Other CI jobs use separate VMs, not necessarily exclusive physical
+hardware. Only explicit safe logs/reports/hashes are retained, never snapshots.
+
+The orchestration follows [systemd's transient-service semantics](https://raw.githubusercontent.com/systemd/systemd/v255/man/systemd-run.xml)
+and the kernel's [recursive cgroup population definition](https://docs.kernel.org/admin-guide/cgroup-v2.html#un-populated-notification).
+Its syntax/review and actual hosted execution are verification evidence, not a
+claim of unit coverage for shell orchestration. Both outcomes and the split server's
+actual warm/storm ratios still require review before the acceptance decision.
+
 ## What remains release-critical
 
 - Actual message delivery, reconnect behavior, bounded queues and empty owned

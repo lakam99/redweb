@@ -1,0 +1,117 @@
+name: bounded recovery comparison
+
+# Temporary collection only: no PR trigger, periodic run or automatic retry.
+# Remove after collecting the one original and one split baseline result.
+on:
+  push:
+    branches: [codex/agent-ready]
+    paths: [.github/workflows/recovery-comparison.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - run: npm ci
+      - name: Record setup and immutable inputs
+        shell: bash
+        run: |
+          mkdir -p coverage/recovery-comparison
+          test "$(node --version)" = v22.23.2
+          test -f /sys/fs/cgroup/cgroup.controllers
+          sudo -n true
+          {
+            git rev-parse HEAD
+            git status --porcelain
+            uname -a
+            lsb_release -a
+            printf 'ImageOS=%s\nImageVersion=%s\n' "$ImageOS" "$ImageVersion"
+            node -p 'JSON.stringify(process.versions)'
+            systemd --version
+            printf 'Measured environment: PATH, HOME, TMPDIR, CI=true only.\n'
+            printf 'Separate hosted VM; exclusive physical hardware is not asserted.\n'
+            printf 'Transient cgroup containment differs from the historical direct-shell runner.\n'
+          } > coverage/recovery-comparison/environment.txt
+          node -e 'process.stdout.write(JSON.stringify(require("./scripts/diagnostics/recovery-split.cjs").fingerprint(), null, 2))' > coverage/recovery-comparison/inputs-before.json
+          sha256sum node_modules/redweb-client/dist/{index.js,index.cjs,live-html.js,live-html.cjs} > coverage/recovery-comparison/client.sha256
+      - name: Run each declared workload once with descendant containment
+        shell: bash
+        run: |
+          # ExitType=cgroup includes detached worker groups, unlike a PGID check.
+          # --wait preserves failure; no coverage, tracing or inherited overrides.
+          run_once() {
+            local name="$1"
+            shift
+            local unit="redweb-comparison-${GITHUB_RUN_ID}-${name}"
+            local code=0
+            sudo -n systemd-run --wait --pipe --service-type=exec --expand-environment=no \
+              --unit="$unit" --property=ExitType=cgroup --property=Restart=no \
+              --property=RuntimeMaxSec=180s --property=TimeoutStopSec=5s \
+              --property=KillMode=control-group --property="User=$(id -un)" \
+              --property="WorkingDirectory=$PWD" \
+              /usr/bin/env -i "PATH=$PATH" "HOME=$HOME" "TMPDIR=$RUNNER_TEMP" CI=true \
+              "$@" > "coverage/recovery-comparison/$name.log" 2>&1 || code=$?
+            printf '%s\n' "$code" > "coverage/recovery-comparison/$name.exit" || return 1
+            sudo systemctl show "$unit" --property=LoadState --property=ActiveState \
+              --property=SubState --property=MainPID --property=ControlPID \
+              --property=Result --property=ExecMainCode --property=ExecMainStatus \
+              > "coverage/recovery-comparison/$name.service" || return 1
+            local state
+            state="$(sudo systemctl show "$unit" --property=ActiveState --value)" || return 1
+            case "$state" in inactive|failed) ;; *) return 1 ;; esac
+            local group="/sys/fs/cgroup/system.slice/$unit.service"
+            if test -d "$group"; then
+              sudo cat "$group/cgroup.events" > "coverage/recovery-comparison/$name.cgroup" || return 1
+              grep -qx 'populated 0' "coverage/recovery-comparison/$name.cgroup" || return 1
+            else
+              printf 'Control group removed; no live descendants.\n' > "coverage/recovery-comparison/$name.cgroup" || return 1
+            fi
+            printf 'confirmed\n' > "coverage/recovery-comparison/$name.cleanup" || return 1
+          }
+          # Cheap real service probes test the wrapper before either recovery run.
+          run_once preflight-success "$(command -v node)" -e 'process.exit(0)' || exit 1
+          test "$(cat coverage/recovery-comparison/preflight-success.exit)" = 0
+          run_once preflight-failure "$(command -v node)" -e 'process.exit(7)' || exit 1
+          test "$(cat coverage/recovery-comparison/preflight-failure.exit)" = 7
+          if ! run_once original "$(command -v node)" --expose-gc scripts/verify-recovery.js; then
+            printf 'Blocked: original descendant cleanup is uncertain.\n' > coverage/recovery-comparison/split.blocked
+            exit 1
+          fi
+          # A nonzero original workload result is retained, not a reason to skip split.
+          run_once split "$(command -v node)" scripts/diagnostics/recovery-split.cjs baseline || exit 1
+          node -e 'process.stdout.write(JSON.stringify(require("./scripts/diagnostics/recovery-split.cjs").fingerprint(), null, 2))' > coverage/recovery-comparison/inputs-after.json
+          cmp coverage/recovery-comparison/inputs-before.json coverage/recovery-comparison/inputs-after.json
+          # This job collects evidence, never promotes the split diagnostic to CI acceptance.
+          test "$(cat coverage/recovery-comparison/original.exit)" = 0
+          test "$(cat coverage/recovery-comparison/split.exit)" = 0
+      - name: Preserve bounded evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-recovery-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            coverage/recovery-comparison/*.txt
+            coverage/recovery-comparison/*.json
+            coverage/recovery-comparison/*.sha256
+            coverage/recovery-comparison/*.log
+            coverage/recovery-comparison/*.exit
+            coverage/recovery-comparison/*.service
+            coverage/recovery-comparison/*.cgroup
+            coverage/recovery-comparison/*.cleanup
+            coverage/recovery-comparison/*.blocked
+            coverage/recovery-split-*/report.json
+            coverage/recovery-split-*/samples.ndjson
+            coverage/recovery-split-*/*.log
