@@ -8,6 +8,19 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Original shared-process recovery verifier
+
+`npm run verify:recovery:original:coverage` combines 28 explicit boundary units
+with the existing 17-test verifier suite, including native CLI/socket/snapshot
+checks. All 45 pass in 35.606s; authored scope is 112 statements / 71 branch
+outcomes / 20 functions / 93 lines, all 100%. Units supply the source-matched
+map; native child behavior is separate evidence, not instrumented coverage or
+the full default memory workload. Equality regressions exposed a false rejection
+at exactly 110%; exact integer-byte comparison fixes it without changing the
+limit or any-cycle rule. The original diagnostic remains non-blocking and its
+historical failures remain visible. See `ORIGINAL_RECOVERY_VERIFICATION.md` for
+baseline failures, hashes, full-suite failures and the real session-test repair.
+
 ### Frozen Live HTML browser tool
 
 `npm run verify:live-html:browser:coverage` runs the unchanged full Live HTML
@@ -1039,7 +1052,6 @@ reports, so historical percentages do not certify current coverage:
 ```text
 scripts/diagnostics/recovery-split.cjs
 scripts/diagnostics/recovery-split-worker.cjs
-scripts/verify-recovery.js
 ```
 
 The packaged-example probe, its dependency coordinator and guarded action helper

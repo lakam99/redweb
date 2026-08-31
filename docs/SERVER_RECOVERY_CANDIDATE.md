@@ -2,8 +2,10 @@
 
 Status: **adopted as the blocking CI recovery check** after independent review,
 five clean cross-runtime results and explicit maintainer authorization to continue.
-Original `npm run verify:recovery` is unchanged and runs in CI as an explicitly
-non-blocking diagnostic. Historical failures are not erased by a server pass.
+Original `npm run verify:recovery` keeps its command and runs in CI as an explicitly
+non-blocking diagnostic. A later [exact-byte boundary correction](ORIGINAL_RECOVERY_VERIFICATION.md)
+fixes false rejection at precisely 110%; its workload and limit are unchanged.
+Historical failures are not erased by a server pass or that rounding correction.
 
 ## Contract: server-steady-v1
 
@@ -33,7 +35,7 @@ Reports retain the reviewed `candidateOnly: true` / `candidatePassed` field name
 for format compatibility with the collected evidence. CI now adopts the command's
 exit status as this scoped recovery gate; these legacy field names do not mean
 whole-release approval. No workload, threshold, worker or report-schema change
-was needed for adoption. The original measurement keeps its original exit status;
+was needed for adoption. The original measurement keeps its own exit status;
 CI records the raw step outcome, emits a warning on non-success, and retains logs
 alongside server samples, process exits and input/output hashes for 30 days.
 Both commands have two-minute CI deadlines and run sequentially, without retries.

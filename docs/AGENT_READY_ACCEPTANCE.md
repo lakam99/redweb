@@ -41,6 +41,16 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Original recovery follow-up: the maintained 45-test scope passes with all-four
+100% authored coverage. Exact integer bytes correct false rejection at the
+110% equality boundary without relaxing the limit, final/intermediate checks,
+or workload. Real socket tests now observe session release at its lifecycle
+boundary and await expiry, including a delayed-observer regression. The earlier
+full Windows run remains failed (two npm certificate-trust timeouts and the
+session assertion); focused passes do not replace full-suite evidence. Both
+hosted runs at the preceding `0e3e257` passed, but predate these changes. See
+`ORIGINAL_RECOVERY_VERIFICATION.md`; split-worker coverage and release remain open.
+
 Frozen Live HTML tool coverage follow-up: 52 tests pass in 27.384s with all-four
 100% of the unchanged authored tool (336 statements / 86 branch outcomes /
 47 functions / 282 lines). One native CLI test runs the existing full browser

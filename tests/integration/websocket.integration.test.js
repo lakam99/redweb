@@ -497,8 +497,9 @@ describe('WebSocket integration without mocks', () => {
         expect(server.routes[0].clients.size).toBe(0);
     });
 
-    test('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks', async () => {
+    test.each([0, 50])('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks (observer delay=%sms)', async observerDelayMs => {
         const metricEvents = [];
+        const closeSnapshots = [];
         let ticks = 0;
         class GameLoop extends FixedStepService {
             constructor() { super('game-loop', 5, 2); }
@@ -541,6 +542,12 @@ describe('WebSocket integration without mocks', () => {
                     logger: silentLogger,
                 });
             }
+            connectionCloseCallback() {
+                // Observe release in its lifecycle callback, before a later
+                // timer turn can legitimately expire the disconnected session.
+                closeSnapshots.push({ clients: this.clients.size, rooms: this.rooms.size,
+                    sessions: this.sessions.size, data: this.sessions.get('opaque-1') });
+            }
         }
         const server = await start({ routes: [MultiplayerRoute] });
         const route = server.routes[0];
@@ -582,9 +589,14 @@ describe('WebSocket integration without mocks', () => {
 
         await closeWebSocket(second);
         clients.delete(second);
+        if (observerDelayMs) await new Promise(resolve => setTimeout(resolve, observerDelayMs));
         await waitForCondition(() => route.rooms.size === 0, 'room cleanup');
-        expect(route.sessions.size).toBe(1);
-        await new Promise(resolve => setTimeout(resolve, 35));
+        await waitForCondition(() => closeSnapshots.length === 2, 'session release callbacks');
+        expect(closeSnapshots).toEqual([
+            { clients: 1, rooms: 1, sessions: 1, data: { score: 9 } },
+            { clients: 0, rooms: 0, sessions: 1, data: { score: 9 } },
+        ]);
+        await waitForCondition(() => route.sessions.size === 0, 'session expiry');
         expect(route.sessions.size).toBe(0);
         expect(route.rooms.size).toBe(0);
         expect(ticks).toBeGreaterThan(0);

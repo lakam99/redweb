@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Compare the original recovery diagnostic's 110% boundary using exact integer bytes, fixing false rejection at equality without changing its workload, displayed ratios or any-cycle limit. Add maintained authored coverage units and real CLI/socket/snapshot regression checks. Observe session release in its real lifecycle callback and test delayed observers, avoiding an assertion that incorrectly required a disconnected session to outlive its TTL. Production socket behavior is unchanged.
+
 - Complete authored coverage of the unchanged Live HTML browser tool using its full real-browser workload and separate process/CDP/application boundary units. Reuse the existing CI workload, preserve coverage evidence, and explicitly characterize legacy cleanup/error limitations rather than claiming coverage fixes them. No frozen source or release thresholds change.
 
 - Extend the frozen control coverage gate to include the browser evaluator without duplicating its native browser matrix. Test real build/startup/HTTP failures and explicit browser/process/cleanup boundaries; preserve exact original-source maps through shared multi-file instrumentation. Require the intended HTTP status failure, not any error at the same check. Frozen code and acceptance limits remain unchanged.

@@ -27,7 +27,7 @@ test('server acceptance stays blocking, bounded and uses the reviewed command', 
     expect(scripts['verify:recovery:coverage']).not.toContain('--coverageThreshold');
 });
 
-test('original measurement is unchanged, visibly non-blocking and never follows uncertain server cleanup', () => {
+test('original command is unchanged, visibly non-blocking and never follows uncertain server cleanup', () => {
     const original = step('Original shared-process recovery (non-blocking diagnostic)');
     expect(scripts['verify:recovery']).toBe('node --expose-gc scripts/verify-recovery.js');
     expect(original).toContain("!cancelled() && steps.recovery.outcome == 'success'");
@@ -36,6 +36,20 @@ test('original measurement is unchanged, visibly non-blocking and never follows 
     expect(original).toContain('shell: bash');
     expect(original).toContain('run: npm run verify:recovery 2>&1 | tee coverage/recovery-original.log');
     expect(original).not.toContain('|| true');
+});
+
+test('original verifier coverage is a separate bounded gate with retained artifacts', () => {
+    const command = scripts['verify:recovery:original:coverage'];
+    expect(command).toContain('tests/unit/original-recovery.unit.test.js');
+    expect(command).toContain('tests/integration/recovery-verifier.integration.test.js');
+    expect(command).toContain('--collectCoverageFrom=scripts/verify-recovery.js');
+    expect(command).not.toContain('--coverageThreshold');
+    expect(workflow).toContain('run: npm run verify:recovery:original:coverage\n        id: original-recovery-coverage\n        timeout-minutes: 5');
+    const artifact = step('Preserve original recovery verifier coverage');
+    expect(artifact).toContain("always() && steps.original-recovery-coverage.outcome != 'skipped'");
+    expect(artifact).toContain('path: coverage/original-recovery/');
+    expect(artifact).toContain('if-no-files-found: error');
+    expect(artifact).toContain('retention-days: 30');
 });
 
 test('raw outcomes and evidence remain visible on failure, not just successful runs', () => {

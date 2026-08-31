@@ -162,7 +162,9 @@ async function main() {
             ...(diagnostics ? { diagnostics: { warm: warmDiagnostics, ...cycleDiagnostics, recovered: recoveredDiagnostics } } : {}),
         };
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-        if (cycles.some(cycle => cycle.recoveredHeapPercentOfWarm > 110)) {
+        // Decide from integer bytes: the displayed percentage can round above
+        // 110 at exact equality. The strict limit and any-cycle rule are unchanged.
+        if (cycles.some(cycle => BigInt(cycle.heap) * 100n > BigInt(warmedHeap) * 110n)) {
             throw new Error('Reconnect recovery exceeded its cleanup or retained-heap budget.');
         }
     } finally {
