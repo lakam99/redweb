@@ -56,3 +56,13 @@ test('browser CI combines coordinator and helper scopes without duplicating nati
     expect(workflow).toContain('coverage/browser-client/');
     expect(workflow).not.toContain('REDWEB_VERIFY_CLIENT_SOURCE');
 });
+
+test('frozen-tool coverage remains separate from behavioral evaluation controls', () => {
+    const scripts = require('../../package.json').scripts;
+    expect(scripts['verify:agents:controls']).toBe('node scripts/evaluation/validate.js');
+    expect(scripts['verify:evaluation:process:coverage']).toContain('--collectCoverageFrom=scripts/evaluation/process.js');
+    expect(scripts['verify:evaluation:process:coverage']).toContain('--collectCoverageFrom=scripts/evaluation/seal.js');
+    expect(scripts['verify:evaluation:process:coverage']).toContain('tests/integration/evaluation-frozen.integration.test.js');
+    expect(workflow).toMatch(/run: npm run verify:evaluation:process:coverage\s+id: frozen-process-seal\s+timeout-minutes: 5/);
+    expect(workflow).toContain('coverage/frozen-process-seal/');
+});

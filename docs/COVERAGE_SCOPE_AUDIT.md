@@ -8,6 +8,40 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen evaluation process and sealing tools
+
+`npm run verify:evaluation:process:coverage` measures the existing process and
+sealing implementations without rewriting either source or any sealed evaluation.
+The final Windows / Node 22.21.0 selection passed 40 tests with one platform skip
+in 7.634 seconds: 23 explicit OS/process-boundary units and 17 real process,
+filesystem/archive, CLI and listener checks. The existing 15 tests had passed
+behavior but measured only 84% statements, 59.37% branches, 100% functions and
+91.07% lines; that baseline coverage command failed and remains distinct.
+
+Both authored files now have all-four 100%: process 52 statements / 25 branch
+outcomes / 12 functions / 36 lines; seal 23 / 7 / 7 / 20. The reviewer independently
+matched all 19 AST functions and complete map inventories to unchanged source,
+with no coverage-ignore directives. The maintained command repeats the tested
+selection; CI retains its map separately from actual agent-evaluation results.
+
+A small test-only CommonJS preload substitutes instrumented source in memory,
+preserving the real CLI filename, `require.main`, dependency resolution and
+filesystem paths. The native sealing test checks that recorded checker identity
+matches the original file, validates the emitted map's original-source locations,
+and proves a second invocation cannot overwrite the first seal. Its synthetic
+archive is only byte-sealing input, not a valid npm package or new agent trial.
+The test loader is test infrastructure, not silently part of the library scope.
+Native interface inspection runs only on Windows; other platforms check explicit
+rejection. Platform-boundary doubles are not claims of native cross-platform faults.
+
+Retained map: `coverage/frozen-process-seal-evidence/20260831-1657/coverage-final.json`,
+SHA-256 `cea882c6209d0dc9c03a28140ce81038cfbd613628ec3a04a8900c487d7f8b75`.
+Unchanged source SHA-256 identities:
+process `8bfbf3ad3887b7f215b14414cc9433c1a1f0776f109c41cf2f5c7a6d02ed340b`;
+seal `46bf4a65fef83f43ab9a7ec9250c2eeada06d35ffb19acefd4f6d4cac87ce09e`.
+This closes these two direct-map gaps, not the other frozen tools, original Linux
+cleanup observation, client/throughput diagnostics or release alignment.
+
 ### Browser coordinator terminal evidence and direct coverage
 
 The coordinator reuses `finishVerificationSummary` to preserve primary errors and
@@ -771,9 +805,7 @@ Frozen evaluation tooling also lacks a complete direct map in the reviewed set:
 
 ```text
 scripts/evaluation/prepare.js
-scripts/evaluation/process.js
 scripts/evaluation/run-trial.js
-scripts/evaluation/seal.js
 scripts/evaluation/validate.js
 scripts/evaluation/verify.js
 ```

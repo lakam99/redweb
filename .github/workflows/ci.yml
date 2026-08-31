@@ -76,6 +76,17 @@ jobs:
       - run: npm ci
       - run: npm run verify:recovery:coverage
         timeout-minutes: 3
+      - run: npm run verify:evaluation:process:coverage
+        id: frozen-process-seal
+        timeout-minutes: 5
+      - name: Preserve frozen process and seal coverage
+        if: ${{ always() && steps.frozen-process-seal.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frozen-process-seal-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/frozen-process-seal/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:assets:coverage
         timeout-minutes: 1
       - run: npm run verify:room:coverage

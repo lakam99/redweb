@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Add maintained direct coverage for the unchanged evaluation process and evidence-sealing tools. Combine real CLI/subprocess/filesystem/listener checks with explicit platform-failure units; instrument selected modules in memory without rewriting frozen source or sealed evaluations. This is verification coverage, not a new agent trial or a resolution of historical cleanup failures.
+
 - Reuse shared terminal-report handling in browser verification to preserve retained-workspace identity and retry late recording failures with failed status. Correction is best-effort: persistent write failures may leave stale evidence, but the command still fails. Release the application listener's handle after uncertain shutdown without claiming successful cleanup. Combine maintained coordinator/helper coverage with unchanged native browser workloads; keep incomplete installed-client coverage visibly failed and linked-source testing explicitly opt-in.
 
 - Preserve package-verification failures even when dependencies reject without an Error. Close every acquired example server independently after partial startup or render failures, retain uncertain cleanup, and announce success only after workspace cleanup. Add maintained authored coverage with unit fault checks and the complete real isolated-package/browser workflow; consumer assertions remain unchanged.

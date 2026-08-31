@@ -41,6 +41,15 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Frozen-tool coverage follow-up: the unchanged evaluation process and byte-sealing
+tools now have maintained all-four 100% direct coverage (52/25/12/36 and
+23/7/7/20 respectively). Forty tests passed with one platform skip in 7.634 seconds,
+combining explicit OS-boundary units with actual process/filesystem/CLI/listener
+checks. Test-only in-memory instrumentation preserves original checker identity;
+neither frozen sources nor sealed evaluations changed. This is not a new agent
+trial or resolution of the original Linux cleanup failure. Exact source/map
+identities and remaining frozen-tool gaps are in `COVERAGE_SCOPE_AUDIT.md`.
+
 Browser-coordinator follow-up: shared terminal-report handling corrects late
 publication failures and preserves retained-workspace identity; failed application
 shutdown releases its listener reference while retaining cleanup uncertainty.
