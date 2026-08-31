@@ -173,7 +173,19 @@ jobs:
           path: coverage/packed-browser/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:soak:coverage
+        id: soak-coverage
+        timeout-minutes: 20
+      - name: Preserve soak verifier coverage evidence
+        if: ${{ always() && steps.soak-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/soak-tools/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:soak
+        timeout-minutes: 2
         env:
           REDWEB_SOAK_SECONDS: 30
           REDWEB_SOAK_CLIENTS: 16

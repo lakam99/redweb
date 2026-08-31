@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Harden soak verification with exact per-socket reply accounting, unexpected-disconnect failures, immediate socket ownership, guarded traffic/sample timers and independent cleanup. Reject undersampled runs and unsafe timer/counter capacities; preserve original traffic, sampling and acceptance limits. Compare the 99% delivery and 110% heap boundaries with exact integer arithmetic, retain missing replies and raw reported ratios, and add maintained unit/native verification-tool coverage.
+
 - Validate every row and enclosing tag in the JSX performance gate, not just row counts and one escaped label. Preserve the timed workload and memory limits, add external CI supervision, and maintain separate unit/real-CLI coverage of the verifier at all-four 100%.
 
 - Bound Live HTML load-verification HTTP responses and connection/close waits; require explicit GC, validate bootstrap/patch data, and retain actual sockets through confirmed cleanup. Preserve concurrent protocol/request/cleanup failures and report success only after server shutdown. Keep the 200 expired renders, 110 live clients, sampling sequence and 24 MiB limit; HTTP verification now owns non-pooled connections. Add maintained unit/native HTTP/WebSocket/process coverage without changing rendering runtime code.

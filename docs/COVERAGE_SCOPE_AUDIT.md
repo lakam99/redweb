@@ -370,6 +370,13 @@ The local site was synchronized and tested at `caa166f`; nothing was published.
 
 ## Remaining private-tool measurement gaps
 
+The soak correction adds a direct maintained scope: 80 tests/four suites cover
+241 statements, 100 branches, 65 functions and 173 lines at all-four 100% across
+the coordinator, measurement policy and socket owner. Native undersampling
+reproduction, exact reply/ownership checks, preserved acceptance boundaries and
+short-run results are in `SOAK_VERIFICATION.md`. This is not a new one-hour soak
+or a substitute for the unresolved benchmark result and remaining full gates.
+
 The next Live HTML load correction closes its direct coverage gap:54 tests/three
 suites, all-four100% across the coordinator, bounded HTTP reader and client owner
 (195 statements,49 branches,52 functions,139 lines). Exact source/report hashes,
@@ -407,7 +414,6 @@ scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
-scripts/verify-soak.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
 scripts/lib/example-dependency-probe.cjs
