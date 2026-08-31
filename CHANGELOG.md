@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bound Live HTML load-verification HTTP responses and connection/close waits; require explicit GC, validate bootstrap/patch data, and retain actual sockets through confirmed cleanup. Preserve concurrent protocol/request/cleanup failures and report success only after server shutdown. Keep the 200 expired renders, 110 live clients, sampling sequence and 24 MiB limit; HTTP verification now owns non-pooled connections. Add maintained unit/native HTTP/WebSocket/process coverage without changing rendering runtime code.
+
 - Harden disabled-feature benchmarks with exact warm-up/measured reply accounting, finite-result and stable input-identity checks, bounded workers, and independently attempted socket/server cleanup. Preserve the 20,000-message/128-window/five-trial defaults and 3%/5% limits; retain every trial. Add separate unit and real-network/process coverage at all-four 100% across six benchmark modules. Strict subprocess output now rejects truncation on unsuccessful exits too. Coverage success does not waive a failed performance comparison.
 
 - Reject non-finite load limits and unknown, duplicate or cross-client replies. Preserve the default workload and performance limits, wait for owned socket closure, attempt all cleanup after partial acquisition, and retain combined verification failures. Add maintained unit/real-network coverage and preserve load/package CI evidence. Fix browser readiness checks that dereferenced a heading before it existed during navigation, with native-browser regression checks.

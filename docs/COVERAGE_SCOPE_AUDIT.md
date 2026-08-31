@@ -370,6 +370,15 @@ The local site was synchronized and tested at `caa166f`; nothing was published.
 
 ## Remaining private-tool measurement gaps
 
+The next Live HTML load correction closes its direct coverage gap:54 tests/three
+suites, all-four100% across the coordinator, bounded HTTP reader and client owner
+(195 statements,49 branches,52 functions,139 lines). Exact source/report hashes,
+native malformed-JSON reproduction, fixture correction and unchanged acceptance
+limits are in `LIVE_HTML_LOAD_VERIFICATION.md`. Clean default load passed200
+renders/110 clients with6,824,576-byte heap growth. The critic approved the scoped
+correction; broader full/hosted verification remains pending. This does not waive
+the separate unresolved benchmark throughput result.
+
 Only partial historical maps were found for these files; they changed after some
 reports, so historical percentages do not certify current coverage:
 
@@ -388,7 +397,6 @@ scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-jsx-performance.js
 scripts/verify-live-html-browser.js
-scripts/verify-live-html-load.js
 scripts/verify-live-html-package.js
 scripts/verify-soak.js
 scripts/verify-starter-lifecycle.js

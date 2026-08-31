@@ -138,6 +138,18 @@ jobs:
       - run: npm run verify:development:browser
         timeout-minutes: 10
       - run: npm run verify:live-html:load
+        timeout-minutes: 4
+      - run: npm run verify:live-html:load:coverage
+        id: html-load-coverage
+        timeout-minutes: 20
+      - name: Preserve HTML load coverage evidence
+        if: ${{ always() && steps.html-load-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-load-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/live-html-load-tools/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:jsx:performance
       - run: npm run verify:live-html:package
         id: packed-browser
