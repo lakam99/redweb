@@ -8,6 +8,55 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen control validator
+
+`verify:evaluation:controls:coverage` checks the unchanged validator with one
+native CLI test and sixteen explicit verifier-result/reporting-oracle units.
+On Windows the native test executes all eleven original controls: four working
+variants pass every browser check; seven deliberately broken variants fail at
+their expected check. Actual HTTP/WebSockets, ephemeral interface inspection,
+Chromium processes and filesystem operations are not mocked. Successful variants
+require three browser versions and no unrun checks; all outcomes require no
+additional cleanup errors or aggregate causes and no leftover owned profile.
+This is evaluator validation, not a packed Redweb release or a new agent trial.
+
+Elsewhere, the native test requires an ordinary CLI exit 1 with the exact
+structured unsupported-interface refusal and failed loopback check. It does not
+claim browser acceptance on Linux. Independent review found that matching only
+the unsupported-platform message could accept a supervisor timeout or additional
+cleanup failure. The stricter oracle rejects those outcomes and preserves the
+original command error, including its captured stderr, alongside the assertion
+failure. Unit regressions require that exact error identity. Unexpected native
+failures conservatively retain the outer workspace, even if the frozen validator
+failed before creating its final report. These are source-derived oracle
+corrections, not observations of a native timeout or cleanup failure.
+
+Boundary units separately cover import/CLI execution, optional report output,
+the complete ordered matrix, verifier rejection, wrong pass/check results,
+cleanup uncertainty, missing browser identity, and an actual existing report
+that must remain byte-identical after `EEXIST`. Their supplied verifier results
+are explicitly not browser evidence. A shared test-only outcome table keeps the
+native and boundary assertions consistent without modifying the frozen control
+matrix. Test infrastructure is not silently included in the library denominator.
+
+Authored validator scope is 24 statements / 14 branch outcomes / four functions /
+19 lines, all 100%. The final unchanged-input maintained run passed all 17 tests
+in 60.969s on Windows / Node 22.21.0 / Chrome 152.0.7977.64. Its eleven native
+controls took 59,549ms in total. Retained map
+`coverage/frozen-controls-evidence/coverage-final.json` has SHA-256
+`65e9475ba8a17ba6c0fbc2c20206a488b58c5f8da8043d4a200aa8f98588f4ae`;
+native report `coverage/frozen-controls-evidence/native-control-report.json`
+has SHA-256
+`66106142dee8b9b54e6ab87cad4afa9bfb6e26a6d210e19c42aca2f549427f5c`.
+The unchanged validator's LF-normalized source SHA-256 is
+`ae50f008dce0dd72533c07eb0cb9b6ffb71055263acc992423af667bb0126955`.
+CI bounds and retains this map separately; native Linux behavior remains subject
+to its actual CI result, not inferred from the local Windows run.
+
+The initial nine-test run passed in 60.921s before additional
+immutable-report and stricter refusal-oracle units were added. Remaining frozen
+browser/evaluation verifier maps and broader release obligations stay open.
+
 ### Frozen trial runner
 
 `verify:evaluation:trial:coverage` passed 21 tests in 10.367s on Windows /
@@ -967,7 +1016,6 @@ scripts/verify-live-html-browser.js
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:
 
 ```text
-scripts/evaluation/validate.js
 scripts/evaluation/verify.js
 ```
 

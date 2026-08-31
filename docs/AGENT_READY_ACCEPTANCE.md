@@ -41,6 +41,17 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Control-validator coverage follow-up: the unchanged eleven-case protocol matrix
+now runs through a maintained direct-coverage gate. Real Windows Chromium checks
+accept four working controls and reject seven broken variants; explicit unit
+faults cover report creation, immutable output, and failed result validation.
+Unsupported platforms must exit normally with the exact interface refusal, not
+a timeout or cleanup error containing the same text. Unexpected outcomes retain
+both the original command error and owned workspace. The validator's authored
+24/14/4/19 scope is 100% (17 tests, 60.969s); this is not new Redweb release/agent acceptance or a
+resolution of historical Linux cleanup and throughput failures. See the coverage
+audit for measured evidence and remaining frozen-verifier gaps.
+
 Trial-wrapper browser-profile follow-up: two additional filesystem regressions
 reproduced deletion of a leftover profile, with and without a saved report. The
 wrapper now preserves the evaluator's known profile directory as well as its
