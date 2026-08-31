@@ -17,17 +17,22 @@ class BoundedOperation {
 
     async run(operation, signal) {
         if (signal?.aborted) throw new OperationInterrupted('cancelled');
-        let timer, abort;
+        let timer, abort, interruption;
         const controller = new AbortController();
         const started = performance.now();
         const checkpoint = () => {
-            if (signal?.aborted) throw new OperationInterrupted('cancelled');
-            if (performance.now() - started >= this.timeoutMs) throw new OperationInterrupted('timeout');
+            if (interruption) throw interruption;
+            if (signal?.aborted) throw (interruption = new OperationInterrupted('cancelled'));
+            if (performance.now() - started >= this.timeoutMs) throw (interruption = new OperationInterrupted('timeout'));
         };
         try {
             const interrupted = new Promise((_, reject) => {
                 const interrupt = reason => {
-                    reject(new OperationInterrupted(reason));
+                    // Timer delivery is itself terminal, even if clock sampling
+                    // has not yet reached the nominal deadline. Latch before
+                    // abort listeners can reenter a checkpoint.
+                    interruption ||= new OperationInterrupted(reason);
+                    reject(interruption);
                     controller.abort();
                 };
                 timer = setTimeout(() => interrupt('timeout'), this.timeoutMs);
@@ -42,7 +47,10 @@ class BoundedOperation {
             });
             return await Promise.race([work, interrupted]);
         } catch (error) {
-            if (error instanceof OperationInterrupted) controller.abort();
+            if (error instanceof OperationInterrupted) {
+                interruption ||= error;
+                controller.abort();
+            }
             throw error;
         } finally {
             clearTimeout(timer);

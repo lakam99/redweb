@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep the first timeout or cancellation terminal across later admission/authorization checkpoints, including reentrant abort listeners. A delivered timeout can no longer permit a later stage just because a clock sample remains below the nominal deadline. Retain pending-work capacity until actual settlement.
+
+- Require complete authored-source coverage for incremental page/component/socket templates and standalone rendering/room examples, using unchanged real-network acceptance against normal and instrumented builds. Preserve verification failures while independently attempting socket and server cleanup.
+
 - Adopt the independently reviewed server-focused recovery check as blocking CI acceptance, with fixed 7,400-exchange workload, 110% server budget and exact delivery/cleanup checks. Retain the unchanged shared-process measurement as an explicitly non-blocking diagnostic with raw outcomes and evidence; historical failures are not relabelled as resolved.
 
 - Fix private diagnostic compatibility with older Node trace flags and legacy heap-snapshot streams. Reject code logging when source metadata cannot be suppressed; retain existing recovery thresholds and privacy checks. Snapshot output-limit tests now use a small owned process.
