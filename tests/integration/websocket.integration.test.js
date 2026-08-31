@@ -497,6 +497,31 @@ describe('WebSocket integration without mocks', () => {
         expect(server.routes[0].clients.size).toBe(0);
     });
 
+    test('does not blame a responsive peer for a delayed server heartbeat tick', async () => {
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class HeartbeatRoute extends SocketRoute {
+            constructor() {
+                super({ path: '/heartbeat-delay', handlers: [NoopHandler],
+                    heartbeat: { intervalMs: 50, timeoutMs: 50 }, logger: silentLogger });
+            }
+        }
+        const server = await start({ routes: [HeartbeatRoute] });
+        const client = await trackedConnect(address(server, '/heartbeat-delay'));
+        const peer = [...server.routes[0].clients.values()][0];
+        const ping = peer.ping.bind(peer);
+        let delayed = false;
+        peer.ping = (...args) => {
+            ping(...args);
+            if (!delayed) { delayed = true; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120); }
+        };
+        await new Promise(resolve => setTimeout(resolve, 250));
+        expect(delayed).toBe(true);
+        expect(client.readyState).toBe(WebSocket.OPEN);
+    });
+
     test.each([0, 50])('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks (observer delay=%sms)', async observerDelayMs => {
         const metricEvents = [];
         const closeSnapshots = [];

@@ -93,3 +93,38 @@ Both are under `coverage/soak-tools/smoke-reports/`. The prior fixture's explici
 room-phase allowance is unchanged: a mechanics-test pass can retain command
 exit 1 and is not soak acceptance. Neither observation is lossless, neither
 supersedes the hosted sub-99% failure, and neither is a new hour soak.
+
+## Current-head long-run failure and heartbeat correction
+
+At `1bb61c3`, a fresh default hour began at 21:07:04Z under a one-shot Windows
+Scheduled Task with independently reviewed child ownership. The workload exited1
+after about nine minutes with `Soak client disconnected unexpectedly.` No report
+was created, so it provides no partial delivery, resource-trend or acceptance
+measurement. The owner exited normally, did not force termination, retained its
+1,520-byte stderr and terminal outcome, and did not retry. The exact task was
+removed only after terminal validation. Outcome SHA-256:
+`53083685f019d82d5f62421faaa80dd15f16d06a3d85ff6b3b08e3546982e258`;
+stderr SHA-256:
+`951a06f05779be74031fb2f7736645557593b1cc6f1b750736b77a8348241131`.
+
+The old soak client discarded the native close code and reason. It now preserves
+both; unit and real-WebSocket checks cover framework policy and transport closes,
+including absent codes, without changing delivery accounting. The maintained
+soak gate passes93 tests at all-four100% across its existing four-file scope.
+
+A separate no-mock regression deterministically reproduced one possible false
+disconnect: a responsive same-process client automatically pongs, while one
+server-side ping callback stalls the event loop beyond the heartbeat deadline.
+Previously the next timer terminated that healthy client before its already
+dispatched pong handling could win. Heartbeat expiry now owns one deduplicated,
+unreferenced `Immediate` per expired socket. The deferred check terminates a peer
+that is still silent; pong handling, detach/reattach, or monitor shutdown makes
+the stale check harmless. No allocation occurs on healthy ticks and no timeout is
+reset. Connection/queue limits remain the resource bounds.
+
+The focused heartbeat scope passes71 unit and real-socket tests at100% statements,
+branches, functions and lines. The senior critic required and approved silent-peer,
+deduplication, detach/reattach and shutdown ownership cases. This establishes a
+real possible mechanism and its correction, **not the cause of the failed hour**:
+that run's missing close code cannot be recovered. Node-matrix and corrected-hour
+outcomes remain required before stronger compatibility or acceptance claims.

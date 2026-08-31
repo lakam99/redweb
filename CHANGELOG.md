@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Heartbeat timeout enforcement now defers termination to the event-loop check phase, allowing already-dispatched pong handling to win after a server stall. Silent peers remain bounded and are terminated by the deferred check. Soak failures now preserve the native WebSocket close code and reason for diagnosis.
+
 Next package version: `0.13.0` (not yet published).
 
 - Align multiplayer operations and production-readiness guidance with the approved blocking server-recovery command. Keep the original shared-process command and its overrides in a separately labelled diagnostic section; distinguish historical baseline/results from current release acceptance. Add a generated-documentation regression without changing any runtime or verification policy.

@@ -39,7 +39,12 @@ class SoakClients {
             } catch (error) { this.fail(error); }
         };
         record.error = error => { if (!record.closing) this.fail(error); };
-        record.closed = () => { if (!record.closing) this.fail(new Error('Soak client disconnected unexpectedly.')); };
+        record.closed = (code, reason) => {
+            if (record.closing) return;
+            const detail = Buffer.isBuffer(reason) ? reason.toString('utf8') : String(reason ?? '');
+            const suffix = detail ? `: ${detail}` : '';
+            this.fail(new Error(`Soak client disconnected unexpectedly (code ${code ?? 'unknown'}${suffix}).`));
+        };
         socket.on('message', record.message); socket.on('error', record.error); socket.on('close', record.closed);
         await waitFor(socket, 'open');
         this.slots[slot] = record;

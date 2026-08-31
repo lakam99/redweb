@@ -70,3 +70,16 @@ test.each(['error', 'close'])('soak latches unexpected %s events', event => with
     await clients.openInitial(); sockets[0].emit(event, 'unit transport error');
     expect(fail).toHaveBeenCalledTimes(1); expect(() => clients.check()).toThrow();
 }));
+
+test('soak unexpected close preserves the native close code and reason', () => withTransport('pass', async (clients, sockets, fail) => {
+    await clients.openInitial();
+    sockets[0].emit('close', 1013, Buffer.from('Slow consumer'));
+    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code 1013: Slow consumer).');
+    expect(fail).toHaveBeenCalledTimes(1);
+}));
+
+test('soak close diagnostics handle an absent code and non-buffer reason', () => withTransport('pass', async (clients, sockets) => {
+    await clients.openInitial();
+    sockets[0].emit('close', undefined, 'plain reason');
+    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code unknown: plain reason).');
+}));

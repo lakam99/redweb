@@ -20,6 +20,13 @@ WebSocket provides an ordered byte stream while a connection remains healthy. Re
 ## Roadmap gates
 
 1. **Bounded transport:** pre-upgrade admission, origin policy, rate limits, slow-consumer enforcement, bounded ordered processing, payload limits, and route-level heartbeat.
+
+Heartbeat expiry is deferred to the event-loop check phase before terminating a
+peer, allowing already-dispatched pong handling to win after a server stall; an
+actually silent peer is terminated by the deferred check.
+`timeoutMs` is therefore a liveness threshold subject to event-loop scheduling,
+not a hard wall-clock resource limit. The deferral owns at most one pending check
+per expired connection; bound connections and queues independently.
 2. **Multiplayer grouping:** route-scoped rooms, atomic membership cleanup, bounded session resumption, fixed-step services, and vendor-neutral metrics.
 3. **Horizontal composition:** draining/readiness, adapter lifecycle, loop prevention, bounded validation, placement hooks, and documented partition behavior.
 4. **Protocol and clients:** version negotiation, stable envelopes and error codes, generated client-facing types, binary replication hooks, and operational examples.

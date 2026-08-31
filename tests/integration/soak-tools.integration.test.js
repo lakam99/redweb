@@ -55,6 +55,7 @@ test.each(['malformed', 'duplicate', 'unsent', 'server-error', 'disconnect'])
     await clients.openInitial(); clients.sendTick(0);
     await waitForCondition(() => clients.failure !== null, 'latched native soak failure');
     expect(() => clients.check()).toThrow(clients.failure);
+    if (mode === 'disconnect') expect(clients.failure.message).toContain('code 1005');
     expect(clients.received).toBeLessThanOrEqual(clients.sent);
 }), 40000);
 
