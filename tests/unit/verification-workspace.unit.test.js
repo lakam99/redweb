@@ -52,6 +52,16 @@ test('verbose children cannot grow captured output without bound', async () => {
     });
 });
 
+test('strict commands reject truncated stdout or stderr even with a valid successful JSON tail', async () => {
+    await new VerificationWorkspace().run(async context => {
+        for (const stream of ['stdout', 'stderr']) {
+            await expect(context.command(['-e', `process.${stream}.write('discarded-prefix' + ' '.repeat(2*1024*1024)); process.stdout.write('{"passed":true}');`],
+                { rejectTruncatedOutput: true, timeoutMs: 5000 })).rejects.toThrow('output was truncated');
+        }
+        expect(await context.command(['-e', 'process.stdout.write("{}");'], { rejectTruncatedOutput: true, timeoutMs: 5000 })).toBe('{}');
+    });
+}, 40000);
+
 test('timeout terminates the real command and its descendant before directory cleanup', async () => {
     const execution = new VerificationWorkspace();
     let descendant;

@@ -91,7 +91,10 @@ jobs:
           path: coverage/tool-source/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:memory:coverage
+        timeout-minutes: 20
       - run: npm run verify:memory
+        timeout-minutes: 7
       - run: npm run verify:cli
         timeout-minutes: 5
       - run: npm run verify:recovery:diagnostics

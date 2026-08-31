@@ -15,13 +15,18 @@ class VerificationWorkspace {
         this.cleanupFailure = null;
     }
 
-    async command(args, { cwd = this.directory, environment = {}, timeoutMs = 120000, executable = process.execPath } = {}) {
+    async command(args, { cwd = this.directory, environment = {}, timeoutMs = 120000, executable = process.execPath, rejectTruncatedOutput = false } = {}) {
         if (this.cleanupFailure) throw this.cleanupFailure;
         const child = spawn(executable, args, { cwd, env: { ...process.env, NODE_PATH: '', ...environment }, shell: false,
             stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32' });
-        let stdout = '', stderr = '', launchError;
-        child.stdout.on('data', chunk => { stdout = (stdout + chunk).slice(-1024 * 1024); });
-        child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-1024 * 1024); });
+        let stdout = '', stderr = '', launchError, truncated = false;
+        const retain = (current, chunk) => {
+            const output = current + chunk;
+            if (output.length > 1024 * 1024) truncated = true;
+            return output.slice(-1024 * 1024);
+        };
+        child.stdout.on('data', chunk => { stdout = retain(stdout, chunk); });
+        child.stderr.on('data', chunk => { stderr = retain(stderr, chunk); });
         child.once('error', error => { launchError = error; });
         const closed = new Promise(resolve => child.once('close', resolve));
         let code;
@@ -46,6 +51,7 @@ class VerificationWorkspace {
         if (launchError || code !== 0) {
             throw new Error(`Package verification command failed (${code}): ${launchError?.message || ''}\n${stdout}${stderr}`, { cause: launchError });
         }
+        if (rejectTruncatedOutput && truncated) throw new Error('Package verification command output was truncated.');
         return stdout;
     }
 

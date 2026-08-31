@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject invalid memory-measurement workloads and malformed, mismatched or truncated worker results. Bound worker execution, retain partially connected clients for cleanup, and report success only after owned cleanup completes. Preserve default sampling, trial order and acceptance limits; retain nested cleanup errors in diagnostics.
+
 - Fix example-build verification accepting invalid compiler options or configurations that emit no runnable JavaScript. Normalize Windows diagnostic paths and report skipped output clearly. Require complete original-source coverage for the example, protocol-type and documentation generators through real compiler/CLI/filesystem checks.
 
 - Keep the first timeout or cancellation terminal across later admission/authorization checkpoints, including reentrant abort listeners. A delivered timeout can no longer permit a later stage just because a clock sample remains below the nominal deadline. Retain pending-work capacity until actual settlement.

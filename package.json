@@ -57,6 +57,7 @@
     "verify:overhead": "node scripts/verify-disabled-overhead.js",
     "verify:soak": "node --expose-gc scripts/verify-soak.js",
     "verify:memory": "node scripts/verify-memory-overhead.js",
+    "verify:memory:coverage": "node node_modules/jest/bin/jest.js tests/unit/memory-command.unit.test.js tests/unit/memory-measurement.unit.test.js tests/integration/memory-measurement.integration.test.js tests/unit/verification-workspace.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/memory-worker.js --collectCoverageFrom=scripts/verify-memory-overhead.js --collectCoverageFrom=scripts/lib/MemoryMeasurement.js --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --coverageDirectory=coverage/memory-tools",
     "verify:load": "node scripts/verify-load.js",
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
     "verify:recovery:server": "node scripts/verify-server-recovery.js",
