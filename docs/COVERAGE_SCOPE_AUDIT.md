@@ -10,9 +10,9 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 951 tests/95 suites at `ba4a0bc`, including the
-  terminal-interruption correction and generator checks. Exact generator/full-run
-  results are below; the preceding runtime/resource/package checkpoint remains
+  Latest full local evidence: 1,001 tests/98 suites at `7e94e99`, including the
+  terminal-interruption, generator and memory-verification corrections. Exact
+  scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
 - Six starter applications and shared `run-app.ts`: original-TypeScript gate,
@@ -128,7 +128,8 @@ using an old report to certify new edits.
 
 | Report under `coverage/` | Files (under `scripts/`) |
 | --- | --- |
-| `package-tools` | `lib/ClientCandidate.js`, `lib/InstalledClient.js`, `lib/PackedBrowserHarness.js`, `lib/preservePackedBrowserReport.js`, `lib/VerificationWorkspace.js`, `lib/verificationError.js`, `lib/compile-consumer.js`, `lib/verify-documentation.js`, `lib/verify-starter.js` |
+| `package-tools` | `lib/ClientCandidate.js`, `lib/InstalledClient.js`, `lib/PackedBrowserHarness.js`, `lib/preservePackedBrowserReport.js`, `lib/verificationError.js`, `lib/compile-consumer.js`, `lib/verify-documentation.js`, `lib/verify-starter.js` |
+| `memory-tools` | `memory-worker.js`, `verify-memory-overhead.js`, `lib/MemoryMeasurement.js`, `lib/VerificationWorkspace.js` (updated owner; evidence below) |
 | `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js` |
 | `browser-collector` | `lib/BrowserCoverage.js` |
 | `application-collector` | `lib/ApplicationCoverage.js` |
@@ -193,9 +194,72 @@ passed all 951 tests/95 suites in 517.317s, including normal pretest/generated/t
 checks. Library counts remain those listed above, all-four 100%.
 `coverage/coverage-final.json` SHA-256:
 `24b22792ad69ee6460f2282814046ccb6c53796be25008bb11b0c9389d62e456`.
-Hosted PR33358575524 and push33358573729 were still running when this evidence
-was recorded. No new runtime/resource/long-soak result, npm publication, deployment
+Hosted PR33358575524 and push33358573729 subsequently passed, as did the evidence
+follow-up `3c4010e` PR33359014962 and push33359012472. No new runtime/resource/long-soak result, npm publication, deployment
 or merge is claimed by this build-tool increment.
+
+## Memory verifier correction: 7e94e99
+
+An actual zero-client command previously exited zero with null per-connection
+values and zero computed metadata. The correction validates positive safe counts,
+derived capacity/trial arithmetic and finite budgets before launching workers.
+Complete worker JSON must match the requested mode/count, contain a safe signed
+heap delta and a finite per-connection value equal to that delta divided by count.
+Invalid/duplicate JSON, missing trials and non-finite comparisons cannot pass.
+
+The existing workspace owner runs sequential workers with 60-second deadlines.
+Its new opt-in strict-output flag rejects a truncated stdout or stderr stream;
+ordinary callers retain the existing bounded-tail behavior. Real child tests
+prove that oversized junk followed by a valid JSON tail still fails strict mode.
+Each worker owns peers before waiting for connection, attempts every peer/server
+cleanup independently, and prints success only after cleanup. The existing nested
+error formatter preserves primary and cleanup failures at the CLI boundary.
+Defaults (500 clients, three alternating trials, 2,048-byte limit), batches,
+sampling points, GC sequence, upper median and signed deltas are unchanged.
+
+The actual uninstrumented default run passed: legacy 8,901.888, enabled 10,783.68,
+and computed metadata 1,881.7919999999995 bytes/connection, below 2,048.
+Small four-client integration fixtures verify mechanics, not this acceptance
+budget. They launch real processes/sockets/GC for all nine feature modes and
+invalid CLI inputs; no integration API mocks are used. Launcher, configuration,
+report and injected cleanup-failure units are explicitly separate.
+
+The initial scoped gate passed 68 tests/four suites in 41.838s. Full Windows
+regression then passed all 1,001 tests/98 suites in 506.606s, including pretest and
+type gates, with all-four 100% library coverage. Report SHA-256:
+`761a9158ddd829a3aed9f81f8e3dd21aaa02f58bcea440daaf293c6e11f4cab3`.
+All Node18/20/22/24 jobs passed in both [PR CI](https://github.com/lakam99/redweb/actions/runs/33359772699)
+and [push CI](https://github.com/lakam99/redweb/actions/runs/33359769989).
+Both lifecycle jobs failed coverage: Linux passed all 66 selected tests but skipped
+two Windows-only file-lock cases, leaving the shared owner's removal-error branch
+uncovered. Later lifecycle/package/browser steps were skipped, not passed.
+
+The follow-up keeps the 100% threshold and adds two portable deletion-failure unit
+cases plus two real POSIX nonempty/non-writable-directory cases. Root skips the
+permission cases because its privileges bypass them; portable unit cases remain
+active. Permission restoration and unit-spy restoration precede test cleanup.
+The revised Windows gate passes 70 tests/four suites in 40.634s with two explicitly
+skipped POSIX cases. These new cases are not retroactively included in 1,001 above;
+hosted verification of the correction is pending. CI now retains memory coverage
+maps on success or failure. The critic approved both actual code and this correction.
+
+The maintained `npm run verify:memory:coverage` Jest/Istanbul scope is all-four100%:
+163 statements, 93 branches, 30 functions and 139 lines across four files.
+`coverage/memory-tools/coverage-final.json` SHA-256:
+`30d70e08956b46e13bb4c004c60eed30a4f12ba56f47c1cfc20c18827980c395`.
+
+| Source (under `scripts/`) | SHA-256 |
+| --- | --- |
+| `memory-worker.js` | `ad949d7061081df8b32f2e650d3c861f1e32aafaac1efef7bd164cb633a9441c` |
+| `verify-memory-overhead.js` | `5f5aa797a68c0591695a39fcd497ab9b6590c7f0012dd5f457e16ccc21fb64f0` |
+| `lib/MemoryMeasurement.js` | `f71d11dd56e18f8ab0e0a3252620d05bdd60f1f84864a39d0c9fe16809e3b1ae` |
+| `lib/VerificationWorkspace.js` | `21ba3dea77089ef6ba90ae2cf5c93671ad5822251a014a4548ef04506ec6407c` |
+
+An exploratory native c8 map was partial and is not represented as complete native
+coverage. The above scope combines explicitly instrumented unit coverage with
+separate actual process/socket integration. It does not replace the remaining
+private-tool inventory, certify older owner maps against its new strict-output
+code, or claim a new long soak/publication/deployment/merge.
 
 ## Remaining private-tool measurement gaps
 
@@ -213,7 +277,6 @@ No direct coverage map was found for these active verification/build files:
 ```text
 scripts/benchmark-worker.js
 scripts/measure-starter-coverage.js
-scripts/memory-worker.js
 scripts/realtime-harness.js
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js
@@ -224,7 +287,6 @@ scripts/verify-live-html-browser.js
 scripts/verify-live-html-load.js
 scripts/verify-live-html-package.js
 scripts/verify-load.js
-scripts/verify-memory-overhead.js
 scripts/verify-soak.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
@@ -259,10 +321,9 @@ standalone Node-only V8 diagnostic remains a separate known failure; original
 authored-source and browser coverage do not relabel it passing. Coverage work
 does not require restarting the deferred scientific runtime investigation.
 
-Next concrete correction: an actual `REDWEB_MEMORY_CLIENTS=0` run of
-`verify-memory-overhead.js` exited zero with zero connections, null per-connection
-values and zero computed metadata cost. This invalid-input false pass does not
-describe the earlier recorded 500-client measurements. The worker/coordinator
-need validated counts/results and bounded, failure-preserving ownership before
-their tool coverage gap can be closed. Defaults, sampling and thresholds must
-remain unchanged; legitimate negative GC deltas must not be clamped.
+Next concrete correction: an actual two-client/one-message-per-client load run
+accepted `NaN` for both latency and throughput limits and exited zero. Inspection
+also found that unknown, duplicate or foreign-client reply IDs are not strictly
+reconciled. The load verifier needs finite configuration, exact per-client reply
+accounting and failure-safe cleanup while preserving its default workload and
+limits. This malformed-input result does not replace recorded valid load runs.

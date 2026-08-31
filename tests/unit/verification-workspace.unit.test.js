@@ -110,6 +110,55 @@ test('failure normalization never invokes object coercion and retains cross-real
     }
 });
 
+test.each([true, false])('unit fault: directory deletion preserves primary=%s and cleanup failure on every platform', async primaryFails => {
+    const execution = new VerificationWorkspace();
+    const primary = new Error('unit primary failure');
+    const cleanup = new Error('unit directory deletion failure');
+    const remove = jest.spyOn(fs.promises, 'rm').mockRejectedValue(cleanup);
+    try {
+        const failure = await execution.run(async () => { if (primaryFails) throw primary; }).catch(error => error);
+        expect(remove).toHaveBeenCalledTimes(1);
+        expect(failure.retainedWorkspace).toBe(execution.directory);
+        expect(fs.existsSync(execution.directory)).toBe(true);
+        if (primaryFails) {
+            expect(failure).toBeInstanceOf(AggregateError);
+            expect(failure.errors).toEqual([primary, cleanup]);
+            expect(failure.cause).toBe(primary);
+        } else expect(failure).toBe(cleanup);
+    } finally {
+        remove.mockRestore();
+        fs.rmSync(execution.directory, { recursive: true, force: true });
+    }
+});
+
+// Root can delete despite directory permissions. Portable unit cases above
+// remain active there; actual denied-removal coverage runs as a normal POSIX user.
+(process.platform !== 'win32' && process.getuid?.() !== 0 ? test : test.skip).each([true, false])(
+    'an actual non-writable directory reports retained workspace and primary failure (%s)', async primaryFails => {
+        const execution = new VerificationWorkspace();
+        const directory = path.join(execution.directory, 'non-writable');
+        fs.mkdirSync(directory);
+        fs.writeFileSync(path.join(directory, 'retained.txt'), 'actual protected content');
+        const primary = new Error('primary permission check failed');
+        try {
+            fs.chmodSync(directory, 0o500);
+            expect(() => fs.accessSync(directory, fs.constants.W_OK)).toThrow();
+            const failure = await execution.run(async () => { if (primaryFails) throw primary; }).catch(error => error);
+            expect(failure.retainedWorkspace).toBe(execution.directory);
+            expect(fs.existsSync(directory)).toBe(true);
+            const cleanup = primaryFails ? failure.errors[1] : failure;
+            expect(['EACCES', 'EPERM']).toContain(cleanup.code);
+            if (primaryFails) {
+                expect(failure).toBeInstanceOf(AggregateError);
+                expect(failure.errors[0]).toBe(primary);
+                expect(failure.cause).toBe(primary);
+            }
+        } finally {
+            fs.chmodSync(directory, 0o700);
+            fs.rmSync(execution.directory, { recursive: true, force: true });
+        }
+    }, 10000);
+
 (process.platform === 'win32' ? test : test.skip).each([true, false])(
     'an actual file lock reports retained workspace and preserves primary failure (%s)', async primaryFails => {
         const execution = new VerificationWorkspace();
