@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
-const { RevisionPeer, verifyRefreshControls } = require('./verify-refresh-controls');
+const { RevisionPeer, verifyRefreshControls, headingReady } = require('./verify-refresh-controls');
 const { withTimeout } = require('../../tests/helpers/network');
 const { combineFailures } = require('../verify-live-html-browser');
 
@@ -24,6 +24,11 @@ window.addEventListener('pagehide', () => {
     }
 
     respond(request, response) {
+        if (request.url === '/heading-readiness') {
+            response.setHeader('Content-Type', 'text/html');
+            response.end('<body><p id="heading-readiness">A real document before its heading exists.</p></body>');
+            return;
+        }
         if (request.url === '/supplement') {
             response.setHeader('Content-Security-Policy', "script-src 'self'; style-src 'self'; object-src 'none'");
             response.setHeader('Content-Type', 'text/html');
@@ -100,6 +105,22 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
         for (const type of ['mousePressed', 'mouseReleased']) await tab.command('Input.dispatchMouseEvent', { type, ...point, button: 'left', clickCount: 1 });
     };
     await verifyRefreshControls(debugPort, directory, { peer, open, until, click, closePage, afterChecks: async () => {
+        await usingPage(peer.url + '/heading-readiness', async tab => {
+            await until(() => tab.evaluate('Boolean(document.getElementById("heading-readiness"))'), 'heading readiness fixture');
+            // Reproduce the concrete missing-heading defect without pretending
+            // the saved CI log captured the original browser exception details.
+            const previous = await tab.command('Runtime.evaluate', { expression: 'document.querySelector("h1").textContent === "Away"' });
+            assert.match(previous.exceptionDetails?.exception?.description, /TypeError.*textContent/);
+            for (const text of ['Away', 'Revision fixture']) assert.equal(await tab.evaluate(headingReady(text)), false);
+            await assert.rejects(tab.evaluate('(() => { throw new Error("readiness negative control"); })()'), /Uncaught/);
+            await tab.command('Page.navigate', { url: peer.url + '/away' });
+            await until(() => tab.evaluate(headingReady('Away')), 'readiness actual away heading');
+            assert.equal(await tab.evaluate(headingReady('Revision fixture')), false);
+            await tab.command('Page.navigate', { url: peer.url });
+            await until(() => tab.evaluate(headingReady('Revision fixture')), 'readiness actual restored heading');
+            assert.equal(await tab.evaluate(headingReady('Away')), false);
+            await until(() => tab.evaluate('Boolean(document.getElementById("__redweb_dev")?.shadowRoot)'), 'readiness refresh module');
+        });
         peer.kind = 'input';
         peer.revision = randomUUID();
         await usingPage(peer.url, async clean => {
@@ -141,7 +162,7 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
         });
     } });
     if (peer.failures.length) throw new AggregateError(peer.failures, 'Refresh coverage collection failed');
-    run[instrumented ? 'instrumentedCases' : 'plainCases'] = { controls: true, cleanReload: true, invalidConfiguration: true, explicitDiscard: true, stoppedPollUnitCheck: true };
+    run[instrumented ? 'instrumentedCases' : 'plainCases'] = { controls: true, headingReadiness: true, cleanReload: true, invalidConfiguration: true, explicitDiscard: true, stoppedPollUnitCheck: true };
 }
 
 module.exports = { verifyRefreshCoverage, CoverageRevisionPeer };

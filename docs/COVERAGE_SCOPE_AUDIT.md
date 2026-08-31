@@ -240,7 +240,7 @@ permission cases because its privileges bypass them; portable unit cases remain
 active. Permission restoration and unit-spy restoration precede test cleanup.
 The revised Windows gate passes 70 tests/four suites in 40.634s with two explicitly
 skipped POSIX cases. These new cases are not retroactively included in 1,001 above;
-hosted verification of the correction is pending. CI now retains memory coverage
+hosted verification of the correction passed in both `e035657` runs. CI now retains memory coverage
 maps on success or failure. The critic approved both actual code and this correction.
 
 The maintained `npm run verify:memory:coverage` Jest/Istanbul scope is all-four100%:
@@ -261,6 +261,57 @@ separate actual process/socket integration. It does not replace the remaining
 private-tool inventory, certify older owner maps against its new strict-output
 code, or claim a new long soak/publication/deployment/merge.
 
+## Load verification and navigation follow-up
+
+The `e035657` push [33360581687](https://github.com/lakam99/redweb/actions/runs/33360581687)
+passed every job. Its PR [33360585345](https://github.com/lakam99/redweb/actions/runs/33360585345)
+passed memory coverage and all Node18/20/22/24 jobs, but failed the packed refresh
+browser phase at a heading-readiness expression with `Uncaught`; soak was skipped.
+The saved log does not retain the underlying browser exception. Two exploratory
+streamed-document probes timed out before reaching that predicate and cleaned up;
+they are not successful reproductions. A maintained real-HTTP/native-browser case
+now establishes that the old expression throws a TypeError when the heading is
+absent, while the shared null-safe predicate returns false until the exact heading
+exists. Unrelated evaluation errors remain fatal. Both ordinary and instrumented
+refresh runs pass (report `07037c8f-d4d9-4e22-9af6-1d2c921f6b7e`), retaining all-four
+100% of the unchanged generated refresh source. CI retains packed-browser reports
+on success and failure. The original CI failure is not relabelled passing.
+
+An actual load run accepted `NaN` latency/throughput limits and exited zero. The
+corrected policy rejects invalid limits before opening sockets, consumes exact
+per-client outstanding IDs once, and requires finite complete results. Workload
+defaults remain 32 clients, 100 messages each, 250ms p99 and 500 messages/second;
+one request per client, JSON parsing before latency completion, the 30s response
+deadline and original slow-consumer probe remain. Partial acquisitions settle
+before cleanup. Socket close now waits for actual CLOSED state after termination;
+a real paused-peer test failed before this fix. Synchronous close failures cannot
+skip termination or abandon observers, and probe/cleanup failures remain visible.
+
+`npm run verify:load:coverage` passes 41 tests/six suites in 40.628s on Windows,
+Node22.21.0: 213 statements, 99 branches, 41 functions and 160 lines, all100% across
+four files. Explicit coordinator/transport boundary units are separate from actual
+WebSocket/CLI/timeout integration; no API mocks occur in those integration cases.
+The coverage run is not the clean performance measurement. Report SHA-256:
+`07c1e9e492ea88262c594114d62d73d1579d74fcbd2b23f3701da6ed465ab8be`.
+
+| Source (under `scripts/`) | SHA-256 |
+| --- | --- |
+| `verify-load.js` | `551e318a275658d3cc70343ce26d838fe4ca45692c79038d2e05020e1555e8ef` |
+| `lib/LoadMeasurement.js` | `4c6b23311a7db539c971df5676cd0df133f99861b042e6c4fbc3667dee6a36e2` |
+| `lib/measureLoadTraffic.js` | `8e68504a61efcf21813779e37d413b5e8bd4b8692af6cc31469a478ae1351370` |
+| `realtime-harness.js` | `12e5905b576cc861017a1a18393bac347d122db5a19e22a7804dbd65031add22` |
+
+Before the critic's final synchronous-failure refinements, default load passed
+6,659.875 messages/second and 6.4039ms p99; memory passed1,881.744 bytes/connection.
+Server recovery delivered all7,400 replies, peaked109.0175% and finished97.1814%
+of warm heap. The30s/16-client soak passed all eight trends, with4,352 sent and4,348
+received (99.9081%, not lossless), zero final registries and100.3442% final warm heap.
+The original shared-process recovery diagnostic failed its110% limit at111.4056%
+despite finishing97.9749%; that remains visible and non-blocking by the approved
+contract. These interim measurements do not certify the final helper hash above
+or constitute a new60-minute soak. Final clean regression/hosted follow-up remains
+pending; no publication, deployment or merge is claimed.
+
 ## Remaining private-tool measurement gaps
 
 Only partial historical maps were found for these files; they changed after some
@@ -277,7 +328,6 @@ No direct coverage map was found for these active verification/build files:
 ```text
 scripts/benchmark-worker.js
 scripts/measure-starter-coverage.js
-scripts/realtime-harness.js
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
@@ -286,7 +336,6 @@ scripts/verify-jsx-performance.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-load.js
 scripts/verify-live-html-package.js
-scripts/verify-load.js
 scripts/verify-soak.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
@@ -321,9 +370,6 @@ standalone Node-only V8 diagnostic remains a separate known failure; original
 authored-source and browser coverage do not relabel it passing. Coverage work
 does not require restarting the deferred scientific runtime investigation.
 
-Next concrete correction: an actual two-client/one-message-per-client load run
-accepted `NaN` for both latency and throughput limits and exited zero. Inspection
-also found that unknown, duplicate or foreign-client reply IDs are not strictly
-reconciled. The load verifier needs finite configuration, exact per-client reply
-accounting and failure-safe cleanup while preserving its default workload and
-limits. This malformed-input result does not replace recorded valid load runs.
+Load policy, reply accounting and helper coverage are now recorded above. Remaining
+verification machinery still needs direct coverage; valid historical workload
+results are not silently replaced by smaller coverage fixtures.

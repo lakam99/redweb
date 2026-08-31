@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject non-finite load limits and unknown, duplicate or cross-client replies. Preserve the default workload and performance limits, wait for owned socket closure, attempt all cleanup after partial acquisition, and retain combined verification failures. Add maintained unit/real-network coverage and preserve load/package CI evidence. Fix browser readiness checks that dereferenced a heading before it existed during navigation, with native-browser regression checks.
+
 - Reject invalid memory-measurement workloads and malformed, mismatched or truncated worker results. Bound worker execution, retain partially connected clients for cleanup, and report success only after owned cleanup completes. Preserve default sampling, trial order and acceptance limits; retain nested cleanup errors in diagnostics.
 
 - Fix example-build verification accepting invalid compiler options or configurations that emit no runnable JavaScript. Normalize Windows diagnostic paths and report skipped output clearly. Require complete original-source coverage for the example, protocol-type and documentation generators through real compiler/CLI/filesystem checks.

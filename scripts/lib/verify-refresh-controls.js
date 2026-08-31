@@ -10,6 +10,9 @@ const refreshBrowser = require('../../src/development/refreshBrowser');
 const styles = require('../../src/development/refreshStyles');
 const { withTimeout, waitForListening } = require('../../tests/helpers/network');
 
+// A committed navigation need not have parsed its heading yet.
+const headingReady = text => `document.querySelector("h1")?.textContent === ${JSON.stringify(text)}`;
+
 // A real HTTP peer for browser transport/lifecycle failure injection. No fetch,
 // DOM, timer or WebSocket implementation is replaced by the test.
 class RevisionPeer {
@@ -123,10 +126,10 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
         const history = await browser.command('Page.getNavigationHistory');
         const entry = history.entries[history.currentIndex].id;
         await click(browser, 'document.getElementById("away")');
-        await until(() => browser.evaluate('document.querySelector("h1").textContent === "Away"'), 'real away navigation');
+        await until(() => browser.evaluate(headingReady('Away')), 'real away navigation');
         const beforeBack = peer.calls;
         await browser.command('Page.navigateToHistoryEntry', { entryId: entry });
-        await until(() => browser.evaluate('document.querySelector("h1").textContent === "Revision fixture"'), 'history restoration');
+        await until(() => browser.evaluate(headingReady('Revision fixture')), 'history restoration');
         await until(() => peer.calls > beforeBack, 'polling resumes after history navigation');
         const restored = await browser.evaluate('window.__restores.includes(true)');
         console.log(`Refresh history navigation passed; actual back-forward-cache restoration observed: ${restored}.`);
@@ -192,4 +195,4 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
     if (failure) throw failure;
 }
 
-module.exports = { verifyRefreshControls, RevisionPeer };
+module.exports = { verifyRefreshControls, RevisionPeer, headingReady };

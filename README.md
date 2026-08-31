@@ -201,6 +201,8 @@ See [replacing the executable HTMX sandbox and configuring TSX](docs/MIGRATION.m
 
 Run `npm test` for unit tests, actual HTTP/HTTPS/WS/WSS integration tests, type checks and enforced 100% instrumented-library statement/branch/function/line coverage. Browser, package, performance and tool verification have separate gates; this is not a claim of exhaustive repository or application coverage.
 
+`npm run verify:load` checks the default 32-client/3,200-message workload, p99 latency, throughput and slow-client containment. Its separate `npm run verify:load:coverage` gate combines unit failure tests with real malformed-message, disconnect and timeout integration tests and enforces all-four 100% coverage of the load policy, coordinator, traffic driver and shared socket helper. Coverage runs do not replace clean performance measurements. See the [scope audit](docs/COVERAGE_SCOPE_AUDIT.md) for exact evidence and remaining gaps.
+
 Run `npm run verify:cli` to test the actual initializer, doctor and incremental-add commands and enforce 100% coverage of the shipped CLI entrypoint across subprocesses. This complements, rather than replaces, the library's CLI implementation coverage.
 
 Run `npm run verify:recovery:server` from this source checkout for the blocking CI recovery contract: 7,400 exact exchanges with a separately measured server, empty registries, normal worker exits and every storm within 110% of warmed server heap. The original `npm run verify:recovery` retains its unchanged exit status as a visible non-blocking CI diagnostic; its historical failures are not resolved by this measurement change. CI preserves both results and logs. See the [reviewed recovery contract and evidence](docs/SERVER_RECOVERY_CANDIDATE.md).
