@@ -153,8 +153,21 @@ has SHA-256 `01d047163d0569b30c0769231486ab815b33b4fac6bc6519bb081f8a18296e39`.
 It records 210 package files and 26 unchanged copied harness inputs, with harness
 SHA-256 `0a0cdf39fa16c8e995de1474fae0d70773594eb96552423cd5215c96a43232b4`.
 The critic approved all eleven actual remote files at implementation commit
-`82156ee`, their evidence identities and all 66 generated pages. The latest full
-regression and hosted outcomes remain separate; no prior pass is relabelled current.
+`82156ee`, their evidence identities and all 66 generated pages. The critic also
+approved the three actual remote package-evidence files at `7a0297e`.
+
+The full regression at `7a0297e` then passed 1,488 tests across 142 suites in
+794.914 seconds, with two POSIX-only skips. The unchanged 91-file library retained
+all-four 100% coverage: 5,449 statements, 4,046 branches, 978 functions and 4,468
+lines. Full result `coverage/refresh-commands-full-results.json` has SHA-256
+`7cba49a5fed554ceafbcba91e888b2e00a3ed4d541bb1e2ef216b086fff98e65`;
+its `coverage/coverage-final.json` has SHA-256
+`275f82a20c7ed1389b65ef7d2b3752006926ae85c8dc4800d5dc9c07173cb1ac`.
+The client type check also passed, and a fresh production dependency audit
+reported zero vulnerabilities with TLS verification retained. Later documentation
+corrections and their additional tests are not included in this full-run count.
+Both PR and push workflows for `82156ee` and `7a0297e` subsequently passed.
+Later-head hosted outcomes remain separate; no prior pass is relabelled current.
 
 ## Earlier native acceptance and remaining gates
 

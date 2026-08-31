@@ -4,6 +4,11 @@ This is a WebSocket service, not an HTML page. Connect to `ws://localhost:8181/m
 The URL selects the match route; `type` selects its individual `Join`, `Move`, or `Resume` handler.
 There are no socket decorators or secondary `message.action` dispatchers.
 
+Read `src/contract.ts`, `src/app.tsx`, and `src/handlers.ts` together: they define
+the wire contract, route/server configuration, and join/move/resume handlers.
+The displayed handlers depend on those other generated files; initialize the
+complete recipe first. Session ownership is separate from room fan-out.
+
 `src/contract.ts` declares the wire payloads once using Zod, a Standard Schema validator. Both the server and a bundled browser/Node client can import it for runtime validation and inferred TypeScript types:
 
 ```ts

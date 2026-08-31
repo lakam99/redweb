@@ -79,6 +79,22 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Public example correction: independent review and an actual-socket probe found
+  that the older match example joined a room but then failed on its missing
+  authenticated principal (sanitized error and close 1011); it also never issued
+  a session for resume. The stable example URL now renders the canonical typed
+  socket handlers. The socket guide links their contract/route and the separate
+  working private-room example; the generated README uses its actual `src/` paths.
+  No duplicate handler implementation or runtime change was
+  added. Deployment guidance distinguishes published client 0.2.0 from unreleased
+  Redweb. Two new content regressions failed before correction; a third caught
+  broken source-relative links in generated README output during review. All seven
+  documentation units and two selected real source-free socket/room integration
+  cases pass. The complete preceding `7a0297e` regression passed 1,488 tests/142
+  suites with 91-file library coverage at all-four 100%; the three new units are
+  additional, not included in that count. See `FEEDBACK_COMMAND_VERIFICATION.md`
+  for the full-run identities. Hosted and final release acceptance remain separate.
+
 - Refresh command follow-up: the real disconnected-browser regression reproduced
   a command hang through the 60-second supervisory watchdog. Generated-app refresh
   and refresh controls now reuse the shared 15-second adapter, with weak identity

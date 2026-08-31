@@ -135,6 +135,6 @@ Published `redweb-client@0.2.0` supplies both required entry points; version 0.1
 does not. The 0.2.0 archive's runtime bundles match the previously source-tested
 build, and the clean registry-installed package gate passes without an override.
 The developer link can remain in place because registry checks own independent
-temporary consumers. Latest-head CI, the recovery decision and Redweb's own
+temporary consumers. Latest-head CI, the documented release gates and Redweb's own
 versioned release still remain required; this is not approval to merge or publish.
 No publishing or deployment is part of this local workflow.

@@ -1,5 +1,12 @@
 # Release-polish checkpoint
 
+This document preserves the historical `3166468` checkpoint, including its failed
+CI result. It is not the current release decision: the server-focused recovery
+gate was subsequently adopted, while the original measurement remains a visible
+non-blocking diagnostic. See [the reviewed recovery policy](SERVER_RECOVERY_CANDIDATE.md)
+and [the current acceptance checklist](AGENT_READY_ACCEPTANCE.md) for later work
+and remaining gates. The historical failure below is not relabelled as resolved.
+
 These are verified checkpoints, not release approval. Redweb's runtime at
 `3166468` was tested with published `redweb-client@0.2.0` on Windows,
 Node 22.21.0 and Chrome 152.0.7977.64. Later candidate-verifier development changes
@@ -55,7 +62,7 @@ soak script were unchanged; candidate tooling edits do not enter the soak proces
 - Script SHA-256:
   `ce30f8abcda0e018b8c586bd53dba775aebdaaaaf5275aa8bdf2b2f8d9b1d22b`.
 
-## CI remains a release blocker
+## Historical CI failure at `3166468`
 
 At the same `3166468` revision, the
 [push run](https://github.com/lakam99/redweb/actions/runs/33347952379) passed
@@ -77,7 +84,8 @@ its seven declared modules. Catalogue SHA-256:
 `8b4d805a7f845af30175423eebc4da610e579b9a51a74ccd8e6f56a5e0d4fa73`.
 This is not whole-site coverage or a hosting deployment.
 
-The maintainer has now authorized development/review of a server-focused
-candidate, not its adoption. Its protocol and results must be assessed separately.
+At this checkpoint, the maintainer had authorized development/review of a
+server-focused candidate, not yet its adoption. Its protocol and results required
+separate assessment.
 Redweb publication, released-site alignment, final requirement audit and merge
 remain pending. The original gate and failed results remain intact.

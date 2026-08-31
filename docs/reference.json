@@ -1141,14 +1141,19 @@
     {
       "id": "rooms-sessions",
       "label": "Players",
-      "title": "Rooms and resumable ownership",
-      "summary": "Give the match its own socket route, then let handlers dispatch join, move, and resume messages by type. Redweb owns cleanup; your application owns credential issuance and data size.",
+      "language": "ts",
+      "title": "Match handlers and resumable ownership",
+      "summary": "Give the match its own socket route, then dispatch join, move and resume by type. These canonical socket-starter handlers create and recover server-owned player sessions; they are not a room-broadcast or account-authentication example.",
       "notes": [
-        "Each handler replaces a manual message-type branch.",
-        "Joins, leaves, and disconnect cleanup are idempotent.",
-        "A takeover closes the previous owner atomically."
+        "Initialize the complete socket recipe: src/contract.ts defines validated payloads and src/app.tsx configures /match, session capacity and transport limits. This file is not a standalone server.",
+        "Join issues a random bearer session token. Move requires an existing player; resume restores that player on a new connection and replaces the previous owner.",
+        "Keep the state response and session token private. Add account authentication and application movement rules before production; sessions remain in memory and expire 30 seconds after disconnect.",
+        "For authenticated group delivery, use the separate One identity for a page and a protected room example. The shared socket contracts guide links its complete source and the room-authorization guide."
       ],
-      "code": "const { BaseHandler, SocketRoute } = require('redweb')\n\nclass JoinMatchHandler extends BaseHandler {\n  constructor() { super('join') }\n\n  onMessage(socket, message) {\n    socket.sendJson({ joined: socket.joinRoom(message.roomId) })\n  }\n}\n\nclass MoveMatchHandler extends BaseHandler {\n  constructor() { super('move') }\n\n  onMessage(socket, message) {\n    socket.roomBroadcast(message.roomId, {\n      type: 'player:moved',\n      playerId: socket.context.principal.playerId,\n      position: message.position,\n    }, { except: socket })\n  }\n}\n\nclass ResumeMatchHandler extends BaseHandler {\n  constructor() { super('resume') }\n\n  onMessage(socket, message) {\n    socket.sendJson({ state: socket.resumeSession(message.sessionId) })\n  }\n}\n\nclass MatchRoute extends SocketRoute {\n  constructor() {\n    super({\n      path: '/match',\n      handlers: [JoinMatchHandler, MoveMatchHandler, ResumeMatchHandler],\n      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },\n      sessions: { ttlMs: 30000, maxSessions: 10000 },\n    })\n  }\n}"
+      "recipe": {
+        "template": "socket",
+        "file": "src/handlers.ts"
+      }
     },
     {
       "id": "fixed-step",

@@ -12,6 +12,51 @@ const root = path.resolve(__dirname, '../..');
 const { version } = require('../../package.json');
 
 describe('single-source documentation', () => {
+    test('match showcase reuses complete session handlers and keeps private rooms separate', () => {
+        const docs = new Documentation(root).build();
+        const example = docs.examples.find(entry => entry.id === 'rooms-sessions');
+        expect(example.recipe).toEqual({ template: 'socket', file: 'src/handlers.ts' });
+        expect(example.language).toBe('ts');
+        const recipe = docs.pages.find(entry => entry.id === 'recipes/socket');
+        expect(example.code).toBe(recipe.files.find(file => file.path === 'src/handlers.ts').content);
+        expect(example.code).toContain('socket.createSession');
+        expect(example.code).toContain('socket.resumeSession');
+        expect(example.code).not.toContain('socket.context.principal.playerId');
+        expect(docs.pages.find(entry => entry.id === 'examples/rooms-sessions').markdown)
+            .toContain('](/docs/reference/unreleased/recipes/socket.md)');
+        const guide = docs.pages.find(entry => entry.id === 'socket-contracts').markdown;
+        for (const file of ['contract.ts', 'app.tsx', 'handlers.ts']) {
+            expect(guide).toContain(`](/docs/reference/unreleased/recipes/socket/files/src/${file})`);
+        }
+        expect(guide).toContain('](/docs/reference/unreleased/room-authorization.md)');
+        expect(guide).toContain('](/docs/reference/unreleased/examples/room-access.md)');
+        const rooms = docs.examples.filter(entry => entry.codeSource === 'docs/snippets/room-access.tsx');
+        expect(rooms).toHaveLength(1);
+        expect(rooms[0].code).toBe(fs.readFileSync(path.join(root, rooms[0].codeSource), 'utf8').replace(/\r\n/g, '\n'));
+    });
+
+    test('generated socket README references its emitted source files without broken local links', () => {
+        const files = projectFiles(version, 'socket');
+        const readme = files.find(file => file.path === 'README.md').content;
+        const paths = files.map(file => file.path);
+        for (const [, target] of readme.matchAll(/\]\(([^\s)]+)\)/g)) {
+            if (/^(?:https?:|#)/.test(target)) continue;
+            expect(paths).toContain(path.posix.normalize(target.split('#')[0]));
+        }
+        for (const file of ['contract.ts', 'app.tsx', 'handlers.ts']) {
+            expect(readme).toContain(`\`src/${file}\``);
+            expect(paths).toContain(`src/${file}`);
+        }
+    });
+
+    test('deployment guidance distinguishes the published client from unreleased Redweb', () => {
+        const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
+        expect(guide).toContain('`redweb-client@0.2.0` is published');
+        expect(guide).toContain('Unreleased Redweb changes still require the matching tested tarball');
+        expect(guide).toContain('a clean production install does not preserve that link');
+        expect(guide).not.toContain('as though the matching client were already published');
+    });
+
     test('builds deterministic versioned content and exact initializer files', () => {
         const builder = new Documentation(root);
         const docs = builder.build();

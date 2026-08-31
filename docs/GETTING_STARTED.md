@@ -47,7 +47,7 @@ For private raw socket subscriptions, see [room authorization and shared request
 
 Build first. Deploy `dist/`, the package manifest, and the lockfile, then install runtime dependencies with `npm ci --omit=dev`. The starters are tested with `src/` unavailable after compilation. Configure HTTPS/WSS and a proxy that supports WebSocket upgrades when using a reverse proxy.
 
-These deployment commands require a verified release pair. The prerelease `npm link` workflow is local development only: a clean production install does not preserve that link. Do not deploy it as though the matching client were already published.
+These deployment commands require a verified release pair. `redweb-client@0.2.0` is published and installs automatically through the matching Redweb dependency. Unreleased Redweb changes still require the matching tested tarball until their own release is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
 
 Before public access, add authentication, authorization, trusted-origin policy, input/rate limits, application persistence where needed, and bounded shutdown. Treat reconnect/session tokens as credentials. Do not promise exactly-once delivery or durable sessions from an in-memory starter. See [operations](MULTIPLAYER_OPERATIONS.md) and [guarantees and limits](PRODUCTION_READINESS.md).
 

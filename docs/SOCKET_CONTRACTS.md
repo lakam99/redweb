@@ -6,6 +6,10 @@ A contract declares message payloads once. The same schema supplies runtime vali
 
 Start with `npx redweb init my-match --template socket` after installing a release containing this feature. During development, use the checked-out CLI or packed artifact instead of the published 0.12.0 command. The complete maintained example lives in [the socket recipe](../recipes/socket/README.md): [contract](../recipes/socket/contract.ts), [handlers](../recipes/socket/handlers.ts), [server](../recipes/socket/app.tsx), and [real-network tests](../recipes/socket/app.test.cjs).
 
+Session ownership is separate from room fan-out. For authenticated group delivery,
+see [room authorization](ROOM_AUTHORIZATION.md) and the complete
+[shared page/private-room example](snippets/room-access.tsx).
+
 ## One schema, two sides
 
 Import `defineSocketContract` from `redweb/contract` for a shared module, or from `redweb` in server-only code. The standalone entry does not import the HTTP server or Node socket listener. Browser consumers need a bundler capable of consuming the CommonJS package; this is not a native browser script URL or a React integration.
