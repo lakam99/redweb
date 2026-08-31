@@ -79,6 +79,17 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Lifecycle-verifier follow-up: a real generated source-free run passed 13 tests
+  while c8 produced an empty report. The gate now requires the exact deployed
+  helper, nonempty metrics and all-four 100%. It measures emitted JavaScript by
+  removing only the temporary trailing source-map comment, preserving original
+  and measured bytes; authored-TypeScript coverage is unchanged. Twenty-six
+  unit/native checks pass at all-four 100% of the coordinator, and the ordinary
+  CLI passes all 13 lifecycle tests with complete nonempty emitted coverage.
+  The critic approved the metadata-only correction. These cases follow the
+  1,388-test full inventory; see `STARTER_LIFECYCLE_VERIFICATION.md` for exact
+  identities, failure history and Windows signal-test boundaries.
+
 - Starter-coordinator follow-up: measurement fingerprints inputs before execution
   and rejects mutations afterward; both runners share bounded best-effort terminal
   reporting that preserves failure and uncertain-cleanup metadata. The maintained

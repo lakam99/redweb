@@ -118,6 +118,21 @@ jobs:
             coverage/starter-source/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:starters:lifecycle:coverage
+        id: starter-lifecycle-coverage
+        timeout-minutes: 8
+      - run: npm run verify:starters:lifecycle
+        timeout-minutes: 5
+      - name: Preserve lifecycle coordinator and emitted-JavaScript evidence
+        if: ${{ always() && steps.starter-lifecycle-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: starter-lifecycle-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage/starter-lifecycle-coordinator/
+            coverage/starter-lifecycle/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:build:coverage
         id: build-coverage
         timeout-minutes: 20
@@ -179,8 +194,6 @@ jobs:
           retention-days: 30
       - run: npm run verify:recovery:diagnostics
         timeout-minutes: 2
-      - run: npm run verify:starters:lifecycle
-        timeout-minutes: 5
       - run: npm run verify:live-html:browser
       - run: npm run verify:browser:coverage
         timeout-minutes: 5

@@ -450,6 +450,15 @@ from the remaining list below. See `STARTER_COORDINATOR_VERIFICATION.md` for exa
 source/report identities and boundaries. The subsequent full regression includes
 these cases and passes 1,388 tests/132 suites with the unchanged library scope.
 
+The lifecycle coordinator now has a maintained direct scope: 26 tests/two suites,
+42 statements, six branches, four functions and 39 lines, all-four 100%. A real
+empty-map false-green was corrected; the source-free emitted-JavaScript gate now
+requires a nonempty exact module and complete metrics. Only its temporary trailing
+source-map comment changes, with original/measured bytes retained. The CLI passes
+13 real tests and all-four 100% over 57 emitted statements/lines, 20 branches and
+four functions. See `STARTER_LIFECYCLE_VERIFICATION.md`; these later tests are not
+part of the preceding 1,388-test full inventory.
+
 No direct coverage map was found for these remaining active verification/build files:
 
 ```text
@@ -458,7 +467,6 @@ scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
-scripts/verify-starter-lifecycle.js
 scripts/lib/verify-action-feedback.js
 scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-live-page-ownership.js
