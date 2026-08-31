@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { verificationError } = require('./verificationError');
+const { assertCoverageFile } = require('./assertCoverageFile');
 const { createInstrumenter } = require('istanbul-lib-instrument');
 const { createCoverageMap } = require('istanbul-lib-coverage');
 
@@ -22,11 +23,7 @@ class BrowserCoverage {
 
     collect(coverage) {
         assert.deepEqual(Object.keys(coverage), [this.filename], 'Expected exactly the instrumented browser module');
-        const initial = this.map.fileCoverageFor(this.filename);
-        const candidate = coverage[this.filename];
-        for (const field of ['statementMap', 'fnMap', 'branchMap']) {
-            assert.deepEqual(candidate[field], initial[field], `Browser coverage ${field} differs from emitted source`);
-        }
+        assertCoverageFile(coverage[this.filename], this.map.fileCoverageFor(this.filename).toJSON(), 'Browser');
         this.map.merge(coverage);
     }
 

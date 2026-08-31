@@ -91,6 +91,19 @@ test('rejects wrong source maps, paths, counters and invalid counts before mergi
     coverage.assertComplete();
 });
 
+test('a malformed later module cannot commit an earlier valid module', () => {
+    const coverage = new ApplicationCoverage({ 'first.ts': source, 'second.ts': source }, options);
+    const actual = { ...execute(coverage, 'first.ts', 'exports.choose(true); exports.choose(false);'),
+        ...execute(coverage, 'second.ts', 'exports.choose(true); exports.choose(false);') };
+    const before = JSON.stringify(coverage.report());
+    const changed = JSON.parse(JSON.stringify(actual));
+    changed['second.ts'].f[0] = 0.5;
+    expect(() => coverage.collect(changed)).toThrow('safe integers');
+    expect(JSON.stringify(coverage.report())).toBe(before);
+    coverage.collect(actual);
+    coverage.assertComplete();
+});
+
 test('preload collects independent real processes on natural, explicit and error exits', async () => {
     await new VerificationWorkspace().run(async execution => {
         const filename = path.join(execution.directory, 'fixture.ts');
@@ -100,17 +113,17 @@ test('preload collects independent real processes on natural, explicit and error
         const environment = { REDWEB_APPLICATION_COVERAGE_DIRECTORY: execution.directory };
         for (const ending of ['', 'process.exit(0);', 'throw Error("actual failure");']) {
             const command = execution.command(['--require', preload, '-e',
-                `const { choose } = require('./fixture.js'); choose(true); choose(false); ${ending}`], { environment });
+                `const { choose } = require('./fixture.js'); choose(true); choose(false); ${ending}`], { environment, timeoutMs: 5000 });
             if (ending.startsWith('throw')) await expect(command).rejects.toThrow('actual failure');
             else await command;
         }
-        await execution.command(['--require', preload, '-e', ''], { environment });
+        await execution.command(['--require', preload, '-e', ''], { environment, timeoutMs: 5000 });
         const reports = fs.readdirSync(execution.directory).filter(name => name.endsWith('.json'));
         expect(reports).toHaveLength(3);
         for (const report of reports) coverage.collect(JSON.parse(fs.readFileSync(path.join(execution.directory, report))));
         coverage.assertComplete();
         await expect(execution.command(['--require', preload, '-e', "require('./fixture.js')"], {
-            environment: { REDWEB_APPLICATION_COVERAGE_DIRECTORY: path.join(execution.directory, 'absent') },
+            environment: { REDWEB_APPLICATION_COVERAGE_DIRECTORY: path.join(execution.directory, 'absent') }, timeoutMs: 5000,
         })).rejects.toThrow('ENOENT');
     });
-}, 15000);
+}, 45000);

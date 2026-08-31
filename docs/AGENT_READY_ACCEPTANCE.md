@@ -79,6 +79,17 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Coverage-counter follow-up: independent review identified the validation gap;
+  a local probe reproduced fractional counters manufacturing a complete browser
+  report. Both collectors now share
+  the authored validator, checking paths/maps/keys/branch arity and nonnegative
+  safe-integer counts before any merge. The maintained three-file scope passes
+  27 unit/native checks at all-four 100%; real runtime/refresh and linked-client
+  authored browser gates retain their unchanged 100% scopes. The isolated harness
+  includes the same helper. See `COVERAGE_COUNTER_VALIDATION.md` for the reproduced
+  defect, exact evidence and remaining boundaries; no runtime change or performance
+  waiver is implied.
+
 - Browser-owner follow-up: both browser coordinators share ownership of original
   page-opening promises and late tabs, retain uncertain cleanup and independently
   attempt every cleanup/fallback action. Falsy primary failures remain failures.

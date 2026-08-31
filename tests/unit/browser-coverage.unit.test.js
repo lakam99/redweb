@@ -54,6 +54,47 @@ describe('exact generated-source coverage collector', () => {
         coverage.assertComplete();
     });
 
+    test('rejects invalid counter reports without mutating previously collected evidence', () => {
+        const coverage = new BrowserCoverage('fixture.js', source);
+        coverage.collect(snapshot(coverage, 'choose(true);'));
+        const before = JSON.stringify(coverage.report());
+        const actual = snapshot(coverage, 'choose(true); choose(false);');
+        const mutations = [
+            value => { value.path = 'wrong.js'; },
+            ...['s', 'f', 'b'].flatMap(field => [
+                value => { delete value[field][0]; },
+                value => { value[field].extra = 0; },
+            ]),
+            value => { value.b[0] = 1; },
+            value => { value.b[0] = []; },
+            value => { value.b[0].push(1); },
+            ...[-1, 0.5, NaN, Infinity, '1', null, Number.MAX_SAFE_INTEGER + 1].flatMap(count => [
+                value => { value.s[0] = count; },
+                value => { value.f[0] = count; },
+                value => { value.b[0][0] = count; },
+            ]),
+        ];
+        for (const mutate of mutations) {
+            const changed = JSON.parse(JSON.stringify(actual));
+            mutate(changed['fixture.js']);
+            expect(() => coverage.collect(changed)).toThrow();
+            expect(JSON.stringify(coverage.report())).toBe(before);
+        }
+        coverage.collect(actual);
+        coverage.assertComplete();
+    });
+
+    test('fractional counters cannot manufacture complete browser coverage', () => {
+        const coverage = new BrowserCoverage('fixture.js', source);
+        const report = JSON.parse(JSON.stringify(coverage.report().coverage));
+        const candidate = report['fixture.js'];
+        for (const field of ['s', 'f']) for (const key of Object.keys(candidate[field])) candidate[field][key] = 0.5;
+        for (const key of Object.keys(candidate.b)) candidate.b[key] = candidate.b[key].map(() => 0.5);
+        expect(() => coverage.collect(report)).toThrow('safe integers');
+        expect(coverage.report().summary.statements.pct).toBe(0);
+        expect(() => coverage.assertComplete()).toThrow();
+    });
+
     test('finalizes status after the full operation and coverage checks settle', async () => {
         const coverage = new BrowserCoverage('fixture.js', source);
         const incomplete = await coverage.verify(async () => {});

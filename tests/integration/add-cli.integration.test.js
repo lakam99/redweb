@@ -50,7 +50,7 @@ test.each([['commonjs', false], ['module', false], ['commonjs', true], ['module'
             const preload = path.join(root, 'scripts/lib/record-application-coverage.cjs');
             const inputFiles = Object.fromEntries([report.source, report.test, 'package.json', 'tsconfig.json']
                 .map(file => [file, path.join(project, file)]));
-            for (const file of [template, 'config/tsconfig.json', 'scripts/lib/ApplicationCoverage.js',
+            for (const file of [template, 'config/tsconfig.json', 'scripts/lib/ApplicationCoverage.js', 'scripts/lib/assertCoverageFile.js',
                 'scripts/lib/record-application-coverage.cjs']) inputFiles[`redweb/${file}`] = path.join(root, file);
             const inputs = () => Object.fromEntries(Object.entries(inputFiles).map(([name, file]) => [name, hash(fs.readFileSync(file))]));
             const before = inputs();

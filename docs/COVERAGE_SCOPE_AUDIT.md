@@ -138,7 +138,7 @@ using an old report to certify new edits.
 | `package-tools` | `lib/ClientCandidate.js`, `lib/InstalledClient.js`, `lib/PackedBrowserHarness.js`, `lib/preservePackedBrowserReport.js`, `lib/verificationError.js`, `lib/compile-consumer.js`, `lib/verify-documentation.js`, `lib/verify-starter.js` |
 | `memory-tools` | `memory-worker.js`, `verify-memory-overhead.js`, `lib/MemoryMeasurement.js`, `lib/VerificationWorkspace.js` (updated owner; evidence below) |
 | `server-recovery-acceptance` | `lib/ServerRecoveryCandidate.js`, `lib/ServerRecoveryPolicy.js`, `verify-server-recovery.js` |
-| `browser-collector` | `lib/BrowserCoverage.js` |
+| `browser-collector` | `lib/BrowserCoverage.js`, `lib/ApplicationCoverage.js`, `lib/assertCoverageFile.js` (current validation evidence in `COVERAGE_COUNTER_VALIDATION.md`) |
 | `application-collector` | `lib/ApplicationCoverage.js` |
 | `room-verifier` | `lib/verify-room-example.js` |
 | `tool-source/<run>` | `build-live-html-examples.js`, `generate-docs.js`, `generate-protocol-types.js` (separate reports below) |

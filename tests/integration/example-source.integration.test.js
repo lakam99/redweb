@@ -41,7 +41,7 @@ test.each([false, true])('standalone examples retain behavior and complete autho
         const { rootDir, outDir, ...compilerOptions } = parsed.options;
         const coverage = new ApplicationCoverage(sources, compilerOptions);
         const inputPaths = [...Object.keys(sources), ...assets.map(name => path.join(root, 'examples/live-html', name)),
-            'config/tsconfig.json', 'scripts/lib/ApplicationCoverage.js', 'tests/integration/live-html.integration.test.js',
+            'config/tsconfig.json', 'scripts/lib/ApplicationCoverage.js', 'scripts/lib/assertCoverageFile.js', 'tests/integration/live-html.integration.test.js',
             'tests/fixtures/example-entrypoints.cjs', 'tests/fixtures/record-example-coverage.cjs',
             'tests/fixtures/room-source.cjs', 'scripts/lib/verify-room-example.js']
             .map(file => path.resolve(root, file));

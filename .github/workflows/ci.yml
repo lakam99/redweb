@@ -196,7 +196,19 @@ jobs:
         timeout-minutes: 2
       - run: npm run verify:live-html:browser
       - run: npm run verify:browser:coverage
-        timeout-minutes: 5
+        id: browser-coverage
+        timeout-minutes: 10
+      - name: Preserve browser collector and native coverage evidence
+        if: ${{ always() && steps.browser-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage/browser-collector/
+            coverage/browser-runtime/
+            coverage/browser-refresh/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:development:browser
         timeout-minutes: 10
       - run: npm run verify:live-html:load

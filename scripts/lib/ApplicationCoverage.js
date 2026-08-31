@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { createInstrumenter } = require('istanbul-lib-instrument');
 const { createCoverageMap } = require('istanbul-lib-coverage');
 const ts = require('typescript');
+const { assertCoverageFile } = require('./assertCoverageFile');
 
 /** Instruments authored TypeScript before compiler-generated decorator helpers exist. */
 class ApplicationCoverage {
@@ -34,24 +35,7 @@ class ApplicationCoverage {
     collect(report) {
         for (const [filename, candidate] of Object.entries(report)) {
             assert.ok(Object.hasOwn(this.sources, filename), 'Unexpected application coverage module');
-            const expected = this.map.fileCoverageFor(filename).toJSON();
-            assert.equal(candidate.path, filename, 'Application coverage path differs');
-            for (const field of ['statementMap', 'fnMap', 'branchMap']) {
-                assert.deepEqual(candidate[field], expected[field], `Application coverage ${field} differs from source`);
-            }
-            for (const field of ['s', 'f', 'b']) {
-                assert.deepEqual(Object.keys(candidate[field]), Object.keys(expected[field]), 'Application coverage counters differ');
-                for (const key of Object.keys(expected[field])) {
-                    const count = candidate[field][key];
-                    if (field === 'b') {
-                        assert.ok(Array.isArray(count), 'Branch counters must be arrays');
-                        assert.equal(count.length, expected[field][key].length, 'Branch counter arity differs');
-                    }
-                    for (const value of field === 'b' ? count : [count]) {
-                        assert.ok(Number.isSafeInteger(value) && value >= 0, 'Coverage counters must be nonnegative safe integers');
-                    }
-                }
-            }
+            assertCoverageFile(candidate, this.map.fileCoverageFor(filename).toJSON(), 'Application');
         }
         // Validate the complete report before committing any of its counters.
         this.map.merge(report);

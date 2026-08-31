@@ -33,7 +33,7 @@ async function verifyScript({ script, testFile, prepare, exercise }) {
     const preload = path.join(root, 'scripts/lib/record-application-coverage.cjs');
     const toolingFiles = [filename, testFile, __filename, preload,
         path.join(root, 'scripts/lib/ApplicationCoverage.js'), path.join(root, 'scripts/lib/VerificationWorkspace.js'),
-        path.join(root, 'scripts/lib/verificationError.js')];
+        path.join(root, 'scripts/lib/verificationError.js'), path.join(root, 'scripts/lib/assertCoverageFile.js')];
     const tooling = () => Object.fromEntries(toolingFiles.map(file => [path.relative(root, file), hash(fs.readFileSync(file))]));
     const result = { script, passed: false, node: process.version, platform: process.platform,
         typescript: ts.version, compilerOptions, tooling: tooling(), commands: {},
