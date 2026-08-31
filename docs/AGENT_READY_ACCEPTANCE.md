@@ -224,6 +224,19 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Corrected-hour heartbeat checkpoint (Windows, Node22.21.0, 2026-08-31): the
+  immutable `11d1dcc` candidate completed3,600 seconds with64 clients and720
+  samples. It delivered2,106,745 of2,106,821 replies (99.9963926693%), finished
+  heap at97.6036274356% of warm, passed all eight trends, emptied every final
+  registry and stayed within the one-handle allowance. The owned one-shot task
+  exited0 without forced cleanup, all112 raw inputs and the independently
+  recomputed582-file digest matched, stdout equalled the report bytes, and stderr
+  was empty. The task was removed only after independent validation. The critic
+  then required stronger second-ping, pending-at-shutdown and escaped-close
+  diagnostics regressions;71 heartbeat tests and94 soak-tool tests pass their
+  maintained all-four100% scopes. That later review increment changes a soak tool,
+  so the hour is attributed only to `11d1dcc`; see `SOAK_ROTATION_OBSERVATION.md`.
+
 - Development-verifier follow-through (2026-08-31): nine new fault units
   reproduced unguarded port errors, lost primary/cleanup failures and skipped
   releases. Page acquisition now uses the existing bounded owner through late

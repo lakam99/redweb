@@ -128,5 +128,33 @@ The focused heartbeat scope passes71 unit and real-socket tests at100% statement
 branches, functions and lines. The senior critic required and approved silent-peer,
 deduplication, detach/reattach and shutdown ownership cases. This establishes a
 real possible mechanism and its correction, **not the cause of the failed hour**:
-that run's missing close code cannot be recovered. Node-matrix and corrected-hour
-outcomes remain required before stronger compatibility or acceptance claims.
+that run's missing close code cannot be recovered.
+
+## Corrected-hour outcome
+
+An immutable `11d1dcc` candidate then completed a fresh default hour from
+2026-08-31T21:39:31.146Z to 22:39:35.639Z on Windows and Node22.21.0. A one-shot,
+no-trigger Scheduled Task owned the hidden process. No competing local verification
+workload ran. The task finished ready with result0, the child exited0 without
+forced termination or cleanup error, stderr was empty, and the exact task was
+removed only after independent validation.
+
+- 3,600 seconds,64 clients and720 samples.
+- 2,106,821 messages sent;2,106,745 received;76 missing:99.9963926693%
+  delivery against the unchanged99% requirement. This is not lossless delivery.
+- Warm heap11,570,488 bytes; peak12,129,384; final11,293,216:97.6036274356%
+  of warm against the unchanged110% limit.
+- All eight resource trends passed; final client, room, session and in-flight
+  registries were empty. Handles moved0→1, within the allowed one.
+- The report and stdout match byte-for-byte at SHA-256
+  `0ab7b67adfa23469cbccd546782102650206a2052c2952b3bf21556cecb802b8`;
+  stderr contains zero bytes.
+- All112 raw runtime/dependency/soak inputs matched their recorded hashes after
+  execution. An independent recomputation also matched the582-file tracked-tree
+  digest `39d0b28ae6554467f6b7737c1ada246a51e1cf85dc672e8406796b7ca86983b3`.
+  The launcher itself did not recompute that aggregate digest.
+
+Report: `coverage/soak-11d1dcc-scheduled-20260831.json`. The subsequent
+`136bbaf` review increment strengthens proof and diagnostics without changing the
+production heartbeat implementation. Because it changes one soak-owned diagnostic
+input, this hour remains evidence for `11d1dcc`, not a final-head soak claim.
