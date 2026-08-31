@@ -3,8 +3,19 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { runBuild, npmEntrypoint, stopProcessTree, listenerAddresses } = require('../../scripts/evaluation/process');
+const { runBuild, npmEntrypoint, spawnManaged, stopProcessTree, listenerAddresses } = require('../../scripts/evaluation/process');
 const { startApplication } = require('../../scripts/evaluation/verify');
+const { waitForCondition } = require('../helpers/network');
+
+async function expectDescendantGone(pid, timeoutMs = 5000) {
+    // Root exit is not a descendant-reaping notification. Do not accept a
+    // zombie or send another signal: the original cleanup must reach ESRCH.
+    await waitForCondition(() => {
+        try { process.kill(pid, 0); return false; }
+        catch (error) { if (error.code === 'ESRCH') return true; throw error; }
+    }, `descendant ${pid} to be reaped`, timeoutMs);
+    expect(() => process.kill(pid, 0)).toThrow();
+}
 
 describe('evaluation process runner with actual subprocesses', () => {
     let root;
@@ -43,8 +54,8 @@ describe('evaluation process runner with actual subprocesses', () => {
         const result = await runBuild(root, 2000);
         expect(result.error).toContain('Timed out waiting for production build');
         const pid = Number(fs.readFileSync(path.join(root, 'child.pid'), 'utf8'));
-        expect(() => process.kill(pid, 0)).toThrow();
-    }, 12000);
+        await expectDescendantGone(pid);
+    }, 20000); // Build timeout + existing kill/close bounds + 5s reaping observation.
     test.each(['success', 'invalid-url'])('cleans managed application descendants after %s', async mode => {
         fs.writeFileSync(path.join(root, 'app.cjs'), `const child = require('child_process').spawn(process.execPath,
             ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', detached: ${process.platform === 'win32'} });
@@ -56,8 +67,17 @@ describe('evaluation process runner with actual subprocesses', () => {
             await stopProcessTree(app.child);
         } else await expect(startApplication(root, {}, 'app.cjs')).rejects.toThrow('ephemeral loopback HTTP URL');
         const pid = Number(fs.readFileSync(path.join(root, 'child.pid'), 'utf8'));
-        expect(() => process.kill(pid, 0)).toThrow();
-    }, 12000);
+        await expectDescendantGone(pid);
+    }, 30000); // Existing 15s startup + bounded tree cleanup + 5s observation.
+    test('descendant observation fails for a real surviving process without killing it', async () => {
+        const child = spawnManaged(['-e', 'setInterval(() => {}, 1000)']);
+        try {
+            expect(() => process.kill(child.pid, 0)).not.toThrow();
+            await expect(expectDescendantGone(child.pid, 50)).rejects.toThrow('to be reaped');
+            expect(() => process.kill(child.pid, 0)).not.toThrow();
+        } finally { await stopProcessTree(child); }
+        await expectDescendantGone(child.pid);
+    }, 20000);
     test('rejects invalid listener inspection arguments before invoking a shell', () => {
         expect(() => listenerAddresses(0)).toThrow('Invalid listener port');
         expect(() => listenerAddresses('12; exit')).toThrow('Invalid listener port');
