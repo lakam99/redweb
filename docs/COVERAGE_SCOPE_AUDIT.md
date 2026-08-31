@@ -10,8 +10,8 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,001 tests/98 suites at `7e94e99`, including the
-  terminal-interruption, generator and memory-verification corrections. Exact
+  Latest full local evidence: 1,045 tests/105 suites at `d576278`, including the
+  terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
@@ -310,7 +310,45 @@ The original shared-process recovery diagnostic failed its110% limit at111.4056%
 despite finishing97.9749%; that remains visible and non-blocking by the approved
 contract. These interim measurements do not certify the final helper hash above
 or constitute a new60-minute soak. Final clean regression/hosted follow-up remains
-pending; no publication, deployment or merge is claimed.
+pending at that interim checkpoint; no publication, deployment or merge is claimed.
+
+Final `d576278` verification (Windows, Node22.21.0): the full command including
+pretest/types passed1,045 tests/105 suites in570.020s, with two POSIX-only skips
+and all-four100% of the unchanged91-file library scope. Full report SHA-256:
+`b350add1cf03432f77ad0a8f0844195c25a56dabd1656ef4564d2f3e5c82746e`.
+Both [PR33362263127](https://github.com/lakam99/redweb/actions/runs/33362263127)
+and [push33362261457](https://github.com/lakam99/redweb/actions/runs/33362261457)
+passed every Node18/20/22/24 and lifecycle job, including packed refresh, retained
+coverage artifacts and the short soak. No selective retry hid the prior failure.
+
+After other local test/package jobs exited, sequential uninstrumented checks
+passed: default load5,683.736 messages/second,7.1724ms p99 and contained slow peer;
+default500-client/three-trial metadata1,881.744 bytes/connection; server recovery
+all7,400 replies, peak108.5190% and final96.9803% of warm heap, with empty registries.
+Client113.0027% remains diagnostic, not server acceptance. HTML load passed200
+expired renders/110 clients with8,058,856-byte heap delta; JSX10,000rows passed in
+56.7ms with1.3MiB retained. The30s/16-client soak passed all eight resource trends,
+4,368 sent/4,364 received (99.9084%, four missing—not lossless), zero final registries,
+100.3000% final warm heap and handles1→2. This does not replace the historical60min
+soak. Production audit reports zero vulnerabilities with certificate validation on.
+
+The completed local package gate verified publishedclient0.2.0, all generated and
+source-free consumers plus native browser acceptance/runtime/refresh. Archive hash
+`0fb2dce8fdd6b51ed5b607e5bdb47bc2c5f893f96a823a40295fd06356aa6415` predates this
+increment's README/evidence-only edits; runtime/harness fixes match the checkpoint.
+Packed report `75975202-ee63-4880-ab92-91f6cf1e65ee`, SHA-256
+`fc53aaedc67693c7b42774af7c7255761222ae7cb70f3f201465cb06cd4d2653`.
+Hosted package checks above cover the committed documentation too. The senior
+critic approved all20 remote changed-file blobs with no remaining findings.
+Site checkpoint `20f56dd` synchronizes canonical docs locally:98pages/154assets,
+all HTTP/link/download and atomic rollback checks, six tests/seven scoped modules
+at100% line/branch/function coverage. No site deployment or npm publication occurred.
+
+Next audited correction: disabled-feature benchmark batches lack bounded waits
+and exact warm-up/measurement reply validation; the coordinator accepts unchecked
+worker values. An explicitly labelled unit subprocess-boundary reproduction
+confirmed null p99 results produce a zero exit with null regression percentages.
+This is not actual-network evidence or a waiver of the benchmark's3%/5% limits.
 
 ## Remaining private-tool measurement gaps
 
