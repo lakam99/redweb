@@ -202,8 +202,22 @@ test('successful worker stop drains queued stdout before process exit', () =>
         }
     }), 20000);
 
-test.each(['client-code', 'client-deopt'])('native %s log brackets real traffic without source text or server instrumentation', mode =>
+test.each(['client-code', 'client-deopt'])('native %s protects source data or rejects an unsupported runtime before logging', mode =>
     new VerificationWorkspace().run(async workspace => {
+        if (Number(process.versions.node.split('.')[0]) < 20) {
+            const outputRoot = path.resolve(__dirname, '../../coverage');
+            const reports = () => fs.existsSync(outputRoot)
+                ? fs.readdirSync(outputRoot).filter(name => name.startsWith('recovery-split-')).sort() : [];
+            const before = reports();
+            for (const role of ['server', 'client']) {
+                expect(() => new DiagnosticProcess(role, { mode })).toThrow('Code logging requires Node 20');
+            }
+            await expect(workspace.command([path.resolve(__dirname, '../../scripts/diagnostics/recovery-split.cjs'), mode]))
+                .rejects.toThrow('Code logging requires Node 20');
+            expect(fs.readdirSync(workspace.directory)).toEqual([]);
+            expect(reports()).toEqual(before);
+            return;
+        }
         const output = outputRecorder(workspace.directory);
         const options = { mode, output: output.write, coverageDirectory: process.env.NODE_V8_COVERAGE };
         const server = new DiagnosticProcess('server', options);
@@ -226,7 +240,7 @@ test.each(['client-code', 'client-deopt'])('native %s log brackets real traffic 
         const bytes = fs.readFileSync(path.join(workspace.directory, 'client.stdout.log'));
         expect(output.summary()['client.stdout.log']).toEqual({ bytes: bytes.length, complete: true,
             sha256: createHash('sha256').update(bytes).digest('hex') });
-        expect(bytes.toString()).not.toMatch(/^(script-source|code-source-info|code-disassemble|feedback-vector),/m);
+        expect(/^(script-source|code-source-info|code-disassemble|feedback-vector),/m.test(bytes.toString())).toBe(false);
         const summarize = () => require('../../scripts/diagnostics/recovery-code-summary.cjs').summarize(bytes.toString());
         if (process.versions.v8 === '12.4.254.21-node.33') {
             const census = summarize();

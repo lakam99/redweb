@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix private diagnostic compatibility with older Node trace flags and legacy heap-snapshot streams. Reject code logging when source metadata cannot be suppressed; retain existing recovery thresholds and privacy checks. Snapshot output-limit tests now use a small owned process.
+
 - Simplify unreleased quickstarts to install the matching Redweb tarball with its published client dependency. Verify the printed commands through real isolated npm installation; retain a separately tested optional contributor-link workflow. Versioned release instructions remain unchanged.
 
 - Extend explicit packed client/server verification to reuse the unchanged full browser acceptance suite and frontend/refresh coverage drivers. Keep runtime dependencies inside the isolated consumer, fingerprint copied test inputs and original package files, and retain reports after workspace cleanup. External test tools are linked individually; this does not change ordinary registry installation or claim full original-client-source coverage.

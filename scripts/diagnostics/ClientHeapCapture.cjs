@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const v8 = require('node:v8');
 const { randomUUID, createHash } = require('node:crypto');
-const { Transform } = require('node:stream');
+const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const MAX_BYTES = 64 * 1024 * 1024;
 const phases = ['warm', 'storm-5'];
@@ -39,7 +39,12 @@ class ClientHeapCapture {
         // Open exclusively BEFORE requesting V8's synchronous generation.
         const file = await fs.promises.open(path.join(this.directory, filename), 'wx', 0o600);
         try {
-            await pipeline(v8.getHeapSnapshot(), limiter, file.createWriteStream());
+            const snapshot = v8.getHeapSnapshot();
+            // Legacy snapshot implementations declare no destroy callback and
+            // never complete it (Node #58846). Adapt that signature only; modern
+            // implementations must retain their own completion semantics.
+            await pipeline(snapshot._destroy.length === 0 ? Readable.wrap(snapshot) : snapshot,
+                limiter, file.createWriteStream());
         } finally { await file.close(); }
         this.next++;
         this.failed = false;

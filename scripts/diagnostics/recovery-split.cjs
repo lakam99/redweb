@@ -8,10 +8,13 @@ const { inspect } = require('node:util');
 const { spawnManaged, stopProcessTree } = require('../evaluation/process');
 const { withTimeout } = require('../../tests/helpers/network');
 
-function workerFlags(role, mode = 'baseline') {
+function workerFlags(role, mode = 'baseline', nodeMajor = Number(process.versions.node.split('.')[0])) {
     assert(['server', 'client'].includes(role), 'Unknown diagnostic role');
     assert(['baseline', 'trace', 'client-jitless', 'client-code', 'client-deopt', 'client-heap'].includes(mode), 'Unknown diagnostic mode');
-    return ['--expose-gc', ...(mode === 'trace' ? ['--trace-gc', '--trace-flush-code'] : []),
+    if (['client-code', 'client-deopt'].includes(mode) && nodeMajor < 20) {
+        throw new Error('Code logging requires Node 20 or newer to suppress source-position and feedback data');
+    }
+    return ['--expose-gc', ...(mode === 'trace' ? ['--trace-gc', nodeMajor >= 22 ? '--trace-flush-code' : '--trace-flush-bytecode'] : []),
         ...(mode === 'client-jitless' && role === 'client' ? ['--jitless'] : []),
         ...(['client-code', 'client-deopt'].includes(mode) && role === 'client' ? ['--log-code', '--no-log-source-code',
             '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-'] : []),

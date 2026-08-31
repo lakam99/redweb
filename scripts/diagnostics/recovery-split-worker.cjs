@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const v8 = require('node:v8');
 const { silentLogger, waitFor, WebSocket, closeClient } = require('../realtime-harness');
 const role = process.argv[2];
-const tracing = process.execArgv.includes('--trace-flush-code');
+const tracing = process.execArgv.includes('--trace-gc');
 const loggingCode = process.execArgv.includes('--log-code');
 const heapCapture = role === 'client' && process.argv[3]
     ? new (require('./ClientHeapCapture.cjs').ClientHeapCapture)(process.argv[3]) : null;

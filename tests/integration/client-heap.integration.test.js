@@ -9,7 +9,6 @@ const path = require('node:path');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 const { DiagnosticProcess, workerFlags } = require('../../scripts/diagnostics/recovery-split.cjs');
 const { compareFiles } = require('../../scripts/diagnostics/HeapCodeComparison.cjs');
-const { ClientHeapCapture } = require('../../scripts/diagnostics/ClientHeapCapture.cjs');
 const { assertPortReusable } = require('../helpers/port-reusable');
 const { withTimeout } = require('../helpers/network');
 
@@ -91,11 +90,9 @@ test('real client snapshots bracket exact network delivery and verify identity, 
 
 test('actual capture enforces disk limit, poisons failed sessions and never overwrites evidence', () =>
     new VerificationWorkspace().run(async workspace => {
-        const capture = new ClientHeapCapture(workspace.directory, 1);
-        await expect(capture.capture('warm')).rejects.toThrow('Heap capture output limit exceeded');
-        await expect(capture.capture('warm')).rejects.toThrow('Invalid heap capture sequence');
-        expect(fs.statSync(path.join(workspace.directory, 'client-warm.heapsnapshot')).size).toBe(0);
-        await expect(new ClientHeapCapture(workspace.directory).capture('warm')).rejects.toThrow(/EEXIST/);
+        const fixture = path.resolve(__dirname, '../fixtures/heap-capture-limit.cjs');
+        expect(await workspace.command([fixture, workspace.directory], { timeoutMs: 10000 }))
+            .toContain('Capture limit, poisoned session and exclusive output verified.');
         expect(fs.statSync(path.join(workspace.directory, 'client-warm.heapsnapshot')).size).toBe(0);
     }), 30000);
 

@@ -2,15 +2,33 @@
 
 const { phases, fingerprint, describeFailure, workerFlags } = require('../../scripts/diagnostics/recovery-split.cjs');
 
-test.each(['server', 'client'])('diagnostic flags are explicit and isolated for %s', role => {
+test.each([18, 20, 22, 24])('diagnostic flags match Node %s without changing the baseline', nodeMajor => {
+    for (const role of ['server', 'client']) {
+        const flags = (mode = 'baseline') => workerFlags(role, mode, nodeMajor);
+        expect(flags()).toEqual(['--expose-gc']);
+        expect(flags('client-heap')).toEqual(['--expose-gc']);
+        expect(flags('trace')).toEqual(['--expose-gc', '--trace-gc', nodeMajor >= 22 ? '--trace-flush-code' : '--trace-flush-bytecode']);
+        if (nodeMajor < 20) {
+            for (const mode of ['client-code', 'client-deopt']) expect(() => flags(mode)).toThrow('Code logging requires Node 20');
+            continue;
+        }
+        expect(flags('client-code')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc',
+            '--log-code', '--no-log-source-code', '--no-log-source-position',
+            '--no-logfile-per-isolate', '--logfile=-']);
+        expect(flags('client-deopt')).toEqual(role === 'server' ? ['--expose-gc'] : [...flags('client-code'), '--log-deopt']);
+    }
+});
+
+test.each(['server', 'client'])('diagnostic defaults use the current Node flags for %s', role => {
     expect(workerFlags(role)).toEqual(['--expose-gc']);
     expect(workerFlags(role, 'baseline')).toEqual(['--expose-gc']);
     expect(workerFlags(role, 'client-heap')).toEqual(['--expose-gc']);
-    expect(workerFlags(role, 'trace')).toEqual(['--expose-gc', '--trace-gc', '--trace-flush-code']);
+    expect(workerFlags(role, 'trace')).toEqual(workerFlags(role, 'trace', Number(process.versions.node.split('.')[0])));
     expect(workerFlags(role, 'client-jitless')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc', '--jitless']);
-    expect(workerFlags(role, 'client-code')).toEqual(role === 'server' ? ['--expose-gc'] : ['--expose-gc',
-        '--log-code', '--no-log-source-code', '--no-log-source-position', '--no-logfile-per-isolate', '--logfile=-']);
-    expect(workerFlags(role, 'client-deopt')).toEqual(role === 'server' ? ['--expose-gc'] : [...workerFlags(role, 'client-code'), '--log-deopt']);
+    if (Number(process.versions.node.split('.')[0]) >= 20) {
+        expect(workerFlags(role, 'client-code')).toEqual(workerFlags(role, 'client-code', Number(process.versions.node.split('.')[0])));
+        expect(workerFlags(role, 'client-deopt')).toEqual(role === 'server' ? ['--expose-gc'] : [...workerFlags(role, 'client-code'), '--log-deopt']);
+    } else expect(() => workerFlags(role, 'client-code')).toThrow('Code logging requires Node 20');
     expect(() => workerFlags(role, '--arbitrary-flag')).toThrow('Unknown diagnostic mode');
 });
 
