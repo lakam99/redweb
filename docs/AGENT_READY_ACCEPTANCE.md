@@ -41,6 +41,19 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Browser-coordinator follow-up: shared terminal-report handling corrects late
+publication failures and preserves retained-workspace identity; failed application
+shutdown releases its listener reference while retaining cleanup uncertainty.
+Ten reporting regressions failed before the fix. The final combined gate passed
+109 unit/native tests in 81.961 seconds at all-four 100% across the coordinator
+and four runtime/refresh helpers; the coordinator alone is 187/69/35/143. Runtime
+and refresh browser maps remain complete. The installed-client-only diagnostic
+still fails its own incomplete coverage gate; its regression now requires a fresh
+report and no additional error. Linked-source CLI integration is explicit opt-in
+and passed locally; ordinary registry CI does not require unpublished checkout
+files. See `COVERAGE_SCOPE_AUDIT.md` for exact identities, scope distinctions and
+the earlier failed measurements. Remaining release requirements stay unchecked.
+
 Package-coordinator follow-up: sixteen regressions reproduced swallowed rejection
 values, incomplete server cleanup and premature success output. The fixes reuse
 shared error handling and one small local server owner. The maintained package

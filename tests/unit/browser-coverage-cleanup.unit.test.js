@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
+const { createInstrumenter } = require('istanbul-lib-instrument');
+const { createCoverageMap } = require('istanbul-lib-coverage');
 const filename = path.resolve(__dirname, '../../scripts/verify-browser-coverage.js');
 
-// Targeted coordinator fault units. Complete emitted-runtime acceptance runs
-// separately in Chromium; these do not claim full coordinator-source coverage.
+// Explicit coordinator fault units. Native browser integration is separate.
 test.each(['undefined', 'null', 'false', 'zero', 'empty', 'object', 'tab', 'peer', 'peer-unref', 'stderr', 'unref'])
 ('browser coverage never loses %s failures or skips remaining cleanup', async mode => {
     const failures = { undefined, null: null, false: false, zero: 0, empty: '', object: Object.create(null) };
@@ -42,8 +43,12 @@ test.each(['undefined', 'null', 'false', 'zero', 'empty', 'object', 'tab', 'peer
     requireBoundary.resolve = nativeRequire.resolve;
     const context = { require: requireBoundary, module: { exports: {} }, __dirname: path.dirname(filename),
         process: { env: {} }, URL, console };
-    vm.runInNewContext(fs.readFileSync(filename, 'utf8'), context, { filename });
+    vm.runInNewContext(createInstrumenter().instrumentSync(fs.readFileSync(filename, 'utf8'), filename), context, { filename });
     const result = await context.module.exports.runBrowserChecks({ mode: 'refresh', coverage: {}, run: {} }).catch(error => error);
+    if (process.argv.includes('--collectCoverageFrom=scripts/verify-browser-coverage.js')) {
+        const map = createCoverageMap(globalThis.__coverage__ || {}); map.merge(context.__coverage__);
+        globalThis.__coverage__ ||= {}; globalThis.__coverage__[filename] = map.fileCoverageFor(filename).toJSON();
+    }
     expect(require('node:util').types.isNativeError(result)).toBe(true);
     expect(events).toEqual(expect.arrayContaining(['tab', 'peer', 'stop']));
     const leaves = error => Array.isArray(error.errors) ? error.errors.flatMap(leaves) : [error];

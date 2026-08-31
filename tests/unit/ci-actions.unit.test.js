@@ -43,3 +43,16 @@ test('package CI runs the authored coverage gate once and retains both evidence 
     expect(scripts['verify:package:coordinator:coverage']).toContain('--collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js');
     expect(scripts['verify:package:coordinator:coverage']).toContain('--coverageDirectory=coverage/package-coordinator');
 });
+
+test('browser CI combines coordinator and helper scopes without duplicating native workloads', () => {
+    const scripts = require('../../package.json').scripts;
+    expect(scripts['verify:browser:coverage']).toContain('&& npm run verify:browser:coordinator:coverage');
+    expect(scripts['verify:browser:coverage']).not.toMatch(/npm run verify:(browser:supplements|refresh:coverage)/);
+    for (const file of ['scripts/verify-browser-coverage.js', 'scripts/lib/verify-live-page-ownership.js',
+        'scripts/lib/verify-runtime-browser.js', 'scripts/lib/verify-refresh-controls.js', 'scripts/lib/verify-refresh-coverage.js']) {
+        expect(scripts['verify:browser:coordinator:coverage']).toContain('--collectCoverageFrom=' + file);
+    }
+    expect(workflow).toContain('coverage/browser-coordinator/');
+    expect(workflow).toContain('coverage/browser-client/');
+    expect(workflow).not.toContain('REDWEB_VERIFY_CLIENT_SOURCE');
+});

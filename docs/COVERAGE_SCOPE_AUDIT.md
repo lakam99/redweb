@@ -8,6 +8,66 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Browser coordinator terminal evidence and direct coverage
+
+The coordinator reuses `finishVerificationSummary` to preserve primary errors and
+retained-workspace identity, normalize rejected values, and retry terminal report
+publication once with failed status. Correction is best-effort: persistent writes
+can leave stale/partial evidence, but the command still rejects. Ten new report regressions failed on the
+preceding implementation. Application shutdown failure now attempts guarded
+listener unref, preserving uncertainty rather than claiming termination. Redundant
+mode/launch flags were removed after checking their reachable states; no browser
+assertions, collection scopes, cleanup deadlines or performance limits changed.
+
+The maintained `verify:browser:coordinator:coverage` combines the coordinator with
+the four already-covered runtime/refresh helpers, replacing the two separate
+native invocations inside the umbrella browser gate. Final Windows / Node 22.21.0 /
+Chrome 152.0.7977.64 execution passed 109 tests in 81.961 seconds: 101 units and
+eight native integrations, with the linked-source case explicitly enabled. The
+separate collector selection passed 27 tests in 3.931 seconds. All five authored
+files are 100% statements/branches/functions/lines: coordinator 187/69/35/143;
+page owner 32/2/5/29; runtime helper 58/0/5/55; refresh controls 206/60/26/165;
+refresh coverage helper 189/44/34/132. Embedded browser-expression execution is
+not measured by this host map; separate frontend/refresh maps remain required.
+
+Evidence: `coverage/browser-coordinator-evidence/20260831-1636/`.
+The exact authored map SHA-256 is
+`846afe1d2aa625c7250cbe41670ad6732cab341acfdda7ef759cce1d6a7a5e15`;
+coordinator LF-normalized source SHA-256 is
+`3086c58d65701eda7639fc526a3d5c675df5cb939d4c1846477ce7a45bbef645`.
+Retained runtime report SHA-256:
+`56f8c564e2f7546789a7f7f973fda967f717e7c0afb75a6f166086a9425a6cb5`;
+refresh report:
+`ba82d45ef3dc52014954230387bdf885401984d73b5f27b009c6621fe83d6a41`.
+Runtime remains 426/262/64/351 and refresh 82/44/12/71, all 100%; both refresh
+modes observed actual back-forward-cache restoration.
+
+The installed-client-only diagnostic remains **failed**, at 93.76% statements,
+89.57% branches, 100% functions and 96.04% lines. Its retained report SHA-256 is
+`22d56f5d24daa3d732fb557021771e65b98573dd629854c4178a1934021bb104`.
+The native regression requires a fresh report, completed protocol/network/selection
+checks and exactly the coverage assertion failure; an additional reporting failure
+cannot pass under the same primary message. This is not client coverage acceptance.
+The separately enabled source CLI passed its actual client tests, source builds,
+browser checks and 791/521/125/659 original-source scope at 100%. It requires
+`REDWEB_VERIFY_CLIENT_SOURCE=1`, a linked checkout and development dependencies;
+ordinary registry-only CI skips that extra case (108 tests plus one skip).
+The standalone source gate is unchanged.
+
+Failure history is retained: the first native baseline had three passing cases,
+the known incomplete-client failure, and a new test-driver realm mismatch when
+calling the source CLI within Jest. Running the actual CLI in its native process
+corrected the driver without weakening source inventory assertions. Baseline host
+coverage was 81.67/67.07/79.41/90.41%. A later 54-test run passed behavior but failed
+97.36% coordinator branch coverage; the first 109-test combined run likewise
+failed at 99.43% aggregate branches. Its map is retained under
+`coverage/browser-coordinator-evidence/20260831-1635-partial/`. Removing unreachable
+state and exercising signal termination completed the direct map; none of those
+earlier commands is relabeled passing. Independent review corrected the source
+test's CI prerequisites and the diagnostic's aggregate-error oracle before the
+final run. Frozen tooling, original performance/Linux cleanup findings, and
+publication alignment remain open.
+
 ### Package coordinator failure and coverage follow-up
 
 The package coordinator now normalizes rejected values at browser/harness/report
@@ -704,7 +764,6 @@ is superseded only for its direct coverage claim by the complete authored map
 above. Earlier failure records remain historical evidence.
 
 ```text
-scripts/verify-browser-coverage.js
 scripts/verify-live-html-browser.js
 ```
 

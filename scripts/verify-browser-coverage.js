@@ -7,6 +7,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const BrowserCoverage = require('./lib/BrowserCoverage');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
+const { finishVerificationSummary } = require('./lib/finishVerificationSummary');
 const { BrowserPages } = require('./lib/BrowserPages');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, eventual } = require('./verify-live-html-browser');
 const { withTimeout, waitForListening } = require('../tests/helpers/network');
@@ -68,7 +69,7 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
         app.get('/__redweb/test-client.js', (_request, response) => response.type('text/javascript').send(
             mode === 'source' ? frontends.transport[instrumented ? 'instrumented' : 'plain'] :
                 instrumented ? coverage.instrumented : coverage.source));
-    } else if (mode !== 'source') assert.equal(frontend.split(coverage.source).length, 2, 'Covered frontend must occur exactly once in the shipped module');
+    } else assert.equal(frontend.split(coverage.source).length, 2, 'Covered frontend must occur exactly once in the shipped module');
     app.get('/__redweb/client.js', (_request, response) => response.type('text/javascript').send(
         mode === 'source' && instrumented ? frontends.instrumented :
             mode === 'runtime' && instrumented ? frontend.replace(coverage.source, () => coverage.instrumented) : frontend));
@@ -95,11 +96,9 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
                 catch (error) { return { ok: false, error: error.stack }; }
             })()`);
             assert.ok(result.ok, result.error);
-            if (mode === 'runtime' || mode === 'client' || mode === 'source') {
-                result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
-                result.cases.ownership = await verifyLivePageOwnership(tab, context, eventual);
-                result.cases.morph = await runCases(tab);
-            }
+            result.cases.runtime = await verifyRuntimeBrowser(tab, context, eventual);
+            result.cases.ownership = await verifyLivePageOwnership(tab, context, eventual);
+            result.cases.morph = await runCases(tab);
             if (mode === 'client' || mode === 'source') {
                 const peer = new BrowserClientPeer();
                 onPeer(peer);
@@ -145,27 +144,23 @@ async function main(mode = process.argv[2] || 'runtime') {
     const outcome = await coverage.verify(() => runBrowserChecks({ coverage, mode, run }));
     const report = { ...outcome.report, ...run, endedAt: new Date().toISOString() };
     const destination = path.resolve(__dirname, '../coverage/browser-' + mode);
-    try {
+    finishVerificationSummary(report, () => {
         fs.mkdirSync(destination, { recursive: true });
         fs.writeFileSync(path.join(destination, coverage.filename), coverage.source);
         fs.writeFileSync(path.join(destination, 'report.json'), JSON.stringify(report, null, 2) + '\n');
         console.log(JSON.stringify({ ...report, coverage: undefined }, null, 2));
-    } catch (error) {
-        throw outcome.failure ? new AggregateError([outcome.failure, error], outcome.failure.message, { cause: outcome.failure }) : error;
-    }
-    if (outcome.failure) throw outcome.failure;
+    }, outcome.failure, 'passed');
 }
 
 async function runBrowserChecks({ coverage, mode, run, frontends }) {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     return new VerificationWorkspace().run(async execution => {
-        let browser, coveredTab, application, refreshPeer, clientPeer, failure, launchAttempted = false;
+        let browser, coveredTab, application, refreshPeer, clientPeer, failure;
         const pages = new BrowserPages(execution, openPage, bounded);
         const recordFailure = value => { const error = verificationError(value); failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
         const recordCleanup = error => { execution.cleanupFailure = verificationError(error); recordFailure(error); };
         try {
-            launchAttempted = true;
             const launched = await launchBrowserWithRetry(executable, execution.directory);
             browser = launched.browser;
             const debugPort = new URL(launched.endpoint).port;
@@ -199,7 +194,10 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
             }
             try { await pages.close(); } catch (error) { recordCleanup(error); }
             try { if (application) await bounded(application.shutdown(), 'live server shutdown'); }
-            catch (error) { recordCleanup(error); }
+            catch (error) {
+                recordCleanup(error);
+                try { application.server.unref(); } catch (error) { recordCleanup(error); }
+            }
             try { if (refreshPeer) await bounded(refreshPeer.pause(), 'revision peer cleanup'); }
             catch (error) {
                 recordCleanup(error);
@@ -214,7 +212,7 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
                 if (browser) {
                     await bounded(stopBrowser(browser.child), 'browser shutdown');
                     assert.ok(browser.child.exitCode !== null || browser.child.signalCode !== null, 'Browser termination remains uncertain');
-                } else if (launchAttempted) throw new Error('Browser launch cleanup could not be independently verified');
+                } else throw new Error('Browser launch cleanup could not be independently verified');
             } catch (error) {
                 recordCleanup(error);
                 for (const release of [() => browser?.child?.stderr?.destroy(), () => browser?.child?.unref()]) {

@@ -227,10 +227,10 @@ jobs:
           name: browser-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             coverage/browser-collector/
-            coverage/browser-supplements-authored/
+            coverage/browser-coordinator/
             coverage/browser-runtime/
             coverage/browser-refresh/
-            coverage/refresh-verifier/
+            coverage/browser-client/
           if-no-files-found: error
           retention-days: 30
       - run: npm run verify:development:coverage
