@@ -85,8 +85,10 @@ and generated additions remain actual consumer checks. See
   the owned workspace. Both source-free decorator modes and all twelve original
   action checks remain. Forty-two scoped unit/native tests pass at all-four 100%;
   the final maintained rerun includes corrected outer Jest budgets and the critic
-  approved the source/tests/CI supervision. The complete isolated package gate
-  passes against published client 0.2.0; full regression remains in progress.
+  approved all eleven actual remote changed blobs at `1049ff8`. The complete
+  isolated package gate passes against published client 0.2.0. Full regression
+  passes 1,322 tests/128 suites in 706.908 seconds, with two POSIX-only skips and
+  unchanged all-four 100% across 91 library files. Hosted checks remain in progress.
   Exact scope and failure boundaries are recorded in
   `ACTION_INPUT_VERIFICATION.md`; no runtime/client API or acceptance limit changed.
 

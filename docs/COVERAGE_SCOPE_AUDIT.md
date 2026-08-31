@@ -10,13 +10,15 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,292 tests/126 suites for the source set in `449a369`
-  and `551a905`, with two POSIX-only skips, including the
+  Latest full local evidence: 1,322 tests/128 suites for the source set in `1049ff8`,
+  with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
-  The latest clean package/load/memory/recovery/soak/audit checkpoint and both
-  passing implementation-head workflows are in `PACKAGED_EXAMPLE_VERIFICATION.md`.
+  Exact current full-run and isolated package evidence is in
+  `ACTION_INPUT_VERIFICATION.md`; hosted checks for that head remain in progress.
+  The preceding clean load/memory/recovery/soak/audit checkpoint and passing
+  workflows remain in `PACKAGED_EXAMPLE_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
 - Six starter applications and shared `run-app.ts`: original-TypeScript gate,
   104 tests per mode, 600 statements, 299 branches, 160 functions and 472 lines,
@@ -430,8 +432,8 @@ across three suites cover 63 statements, eight branches, nine functions and
 53 lines at all-four 100%. Both source-free decorator compiler modes and the
 original action/context/revocation assertions remain in the native integration
 flow. Outer test budgets and cleanup were corrected without changing the inner
-limits. The final scope and isolated package gates pass; full regression remains
-in progress. See `ACTION_INPUT_VERIFICATION.md`.
+limits. The final scope, isolated package and full regression gates pass.
+See `ACTION_INPUT_VERIFICATION.md`.
 
 No direct coverage map was found for these remaining active verification/build files:
 

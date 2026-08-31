@@ -68,7 +68,29 @@ resolving the local client link. Package archive SHA-256:
 Retained browser evidence:
 `coverage/packed-browser/0877c282-b38a-4473-8b12-8348f7503c11`.
 This identifies the tested archive before subsequent evidence-only documentation
-edits, not a published package. The full regression run remains in progress.
+edits, not a published package.
+
+## Full regression checkpoint
+
+The full run for the `1049ff8` source set passed 1,322 tests across 128 suites in
+706.908 seconds, with two POSIX-only skips on Windows. All pretest/generated/type
+checks passed. Exactly 91 library files retain all-four 100%: 5,449 statements,
+4,046 branches, 978 functions and 4,468 lines. The private action-verifier scope
+above is measured separately, not added to that library denominator.
+
+Library report `coverage/coverage-final.json` SHA-256:
+`1beb6601914963e9bf1e968f69aafe4b4d0a64e71eb3ed89b8250391d29300a0`.
+Full inventory `coverage/action-verifier-full-results.json` SHA-256:
+`64f46d6be30c692883651379a4c0f0ce8b2259ec7d6fd1ed2d5f3affe6a77996`.
+The critic approved all eleven actual remote changed blobs in draft PR #16 at
+`1049ff8be650dd4c3a3d1d9d6afda3600f84eb6c`, including source/report identities and
+retained package evidence. Its hosted PR/push runs `33376138162` / `33376134932`
+remain in progress at this evidence checkpoint. Prior `fc59aa3` PR/push runs
+`33374615045` / `33374612826` both passed completely.
+
+The preceding clean load/memory/recovery/short-soak/audit measurements remain
+recorded in `PACKAGED_EXAMPLE_VERIFICATION.md`; this private verifier change does
+not relabel those measurements as fresh runs or repeat the unresolved benchmark.
 
 No whole-repository coverage, runtime performance improvement, publication or
 release approval is claimed. The historical throughput benchmark remains open.
