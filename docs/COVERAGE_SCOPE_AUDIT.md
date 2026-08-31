@@ -8,6 +8,53 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Isolated browser harness dependency correction
+
+Both 665be56 workflows failed ([PR](https://github.com/lakam99/redweb/actions/runs/33415303095),
+[push](https://github.com/lakam99/redweb/actions/runs/33415299477)). PR Node 22/24
+and lifecycle logs identify `Cannot find module './lib/finishVerificationSummary'`:
+the browser coordinator gained a shared dependency absent from the explicit
+copied harness. Local browser-only success did not exercise that copy boundary.
+b2ca53a also contains that omission; its earlier tool-coverage result is not a
+passing isolated-package result.
+
+The correction adds the unchanged helper to the copied set (26 to 27 files).
+A TypeScript AST-based unit regression resolves every literal relative import
+into `scripts/` or `tests/` from the real copied files and requires membership
+in the fingerprinted input set. It fails on the preceding list. It does not
+claim dynamic-import completeness or turn synthetic runtime-resolution fixtures
+into integration tests. All 12 harness units pass in 1.483s, covering 53 statements,
+11 branch outcomes, nine functions and 49 lines at 100%; the existing maintained
+`verify:package:tools` command already includes this file and test selection.
+
+The full `verify:package:coordinator:coverage` rerun passed 71 tests in 266.225s
+on Windows / Node 22.21.0: the actual isolated package/registry-client workflow,
+two real listener-cleanup cases and 68 explicit unit/filesystem cases. Normal TLS
+verification used the system CA store; the environment override was restored.
+Coordinator 173/69/12/162 and report helper 21/6/3/16 remain all-four 100%.
+The owned temporary package workspace was removed normally. Runtime coverage
+426/262/64/351 and refresh coverage 82/44/12/71 are complete; both refresh modes
+observed actual back-forward-cache restoration. Real counter/chat, reconnect,
+disconnect, authenticated dashboard and source-free generated applications passed.
+
+Retained evidence:
+
+- `coverage/package-harness-correction/harness-coverage.json`, SHA-256
+  `c5b127f32a3bd382328e157e51b249871c9850db2d9d7af278c7a61be1e8cccc`.
+- `coverage/package-harness-correction/package-coverage.json`, SHA-256
+  `199e25f0d8f67c35119dbcd86e227ba6dace836aea14fe29e8d4f20d99791faa`.
+- `coverage/packed-browser/2d7c8451-791e-4f36-9513-43f6fe67df54/report.json`, SHA-256
+  `7598586fece41f5ae55f187932ad25a281cae6361259681d22629b5c26901552`.
+- Packed archive SHA-256
+  `c21f55ab86f74970a5cca9d4a93953e99d50ba17658e592b408807664c361f12`;
+  211 package files / 27 unchanged harness inputs, registry client 0.2.0 without
+  candidate override. The archive predates this evidence/documentation update,
+  and the browser report is phase-specific, not a transcript of the whole gate.
+
+Independent review approved the dependency correction and regression boundary.
+Original throughput/client/Linux-cleanup diagnostics remain open. No new hour
+soak, publication, deployment, merge or whole-repository 100% is claimed.
+
 ### Frozen evaluation process and sealing tools
 
 `npm run verify:evaluation:process:coverage` measures the existing process and

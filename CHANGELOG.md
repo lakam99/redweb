@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Copy the shared browser-report helper into the isolated package-verification harness. Add a regression that resolves literal relative harness dependencies from the copied inputs; real packed-consumer verification remains required. This corrects the missing-module CI failure introduced by the browser-coordinator follow-up, without changing runtime code or acceptance limits.
+
 - Add maintained direct coverage for the unchanged evaluation process and evidence-sealing tools. Combine real CLI/subprocess/filesystem/listener checks with explicit platform-failure units; instrument selected modules in memory without rewriting frozen source or sealed evaluations. This is verification coverage, not a new agent trial or a resolution of historical cleanup failures.
 
 - Reuse shared terminal-report handling in browser verification to preserve retained-workspace identity and retry late recording failures with failed status. Correction is best-effort: persistent write failures may leave stale evidence, but the command still fails. Release the application listener's handle after uncertain shutdown without claiming successful cleanup. Combine maintained coordinator/helper coverage with unchanged native browser workloads; keep incomplete installed-client coverage visibly failed and linked-source testing explicitly opt-in.

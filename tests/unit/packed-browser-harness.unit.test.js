@@ -2,6 +2,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const ts = require('typescript');
 const { PackedBrowserHarness } = require('../../scripts/lib/PackedBrowserHarness');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
 
@@ -31,12 +33,33 @@ test('copies the unchanged required harness, preserves package bytes and isolate
     const harness = new PackedBrowserHarness(root, sourceRoot);
     const report = harness.verify();
     expect(report.packageFiles).toBe(1);
-    expect(report.harnessFiles).toBe(26);
+    expect(report.harnessFiles).toBe(27);
     expect(report.harnessSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(fs.readFileSync(path.join(root, 'scripts/verify-live-html-browser.js')))
         .toEqual(fs.readFileSync(path.join(sourceRoot, 'scripts/verify-live-html-browser.js')));
     for (const name of report.tools) expect(fs.lstatSync(path.join(dependencies, name)).isSymbolicLink()).toBe(true);
     expect(fs.existsSync(path.join(root, 'scripts/verify-soak.js'))).toBe(false);
+}));
+
+test('every literal relative harness dependency resolves inside the copied input set', () => fixture(({ root }) => {
+    const harness = new PackedBrowserHarness(root, sourceRoot);
+    for (const relative of Object.keys(harness.inputs)) {
+        const filename = path.join(root, relative);
+        const parsed = ts.createSourceFile(filename, fs.readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+        const inspect = node => {
+            if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require' &&
+                node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) {
+                const specifier = node.arguments[0].text;
+                const target = path.relative(root, path.resolve(path.dirname(filename), specifier));
+                if (specifier.startsWith('.') && /^(scripts|tests)[\\/]/.test(target)) {
+                    const resolved = createRequire(filename).resolve(specifier);
+                    expect(Object.hasOwn(harness.inputs, path.relative(root, resolved).replaceAll('\\', '/'))).toBe(true);
+                }
+            }
+            ts.forEachChild(node, inspect);
+        };
+        inspect(parsed);
+    }
 }));
 
 test.each(['src/runtime.js', 'tests/fixtures/feedback-page.js'])(

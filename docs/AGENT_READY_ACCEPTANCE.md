@@ -41,6 +41,18 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Isolated-harness correction: both 665be56 CI workflows failed; Node 22/24 and
+lifecycle logs identified the missing `finishVerificationSummary` helper in the
+copied browser harness. The fix adds that unchanged helper, not a checkout
+fallback. A new literal-relative dependency regression failed before the fix;
+all 12 harness tests now pass (1.483s), with 53/11/9/49 at all-four 100%.
+The complete isolated-package gate also passed 71 tests in 266.225s, using registry
+client 0.2.0, real Chromium/HTTP/WebSockets and source-free generated applications.
+Its coordinator/report-helper maps remain all-four 100%; the browser report
+identifies 211 package files and 27 unchanged harness inputs. Exact identities
+and the prior failures are preserved in `COVERAGE_SCOPE_AUDIT.md`. These are local
+correction results, not certification of pending CI or broader release completion.
+
 Frozen-tool coverage follow-up: the unchanged evaluation process and byte-sealing
 tools now have maintained all-four 100% direct coverage (52/25/12/36 and
 23/7/7/20 respectively). Forty tests passed with one platform skip in 7.634 seconds,
