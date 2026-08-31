@@ -103,11 +103,36 @@ harness SHA-256 `f7066e63ead88c38d34d773df6e86114b223bec3ad9db39f3b02c9e0f0e5481
 
 The senior critic approved the ownership/aggregation design, shared use, budgets,
 documentation and exact source/report identities. Pretest/generated/type checks
-and four documentation units pass. The complete root regression is still running
-at this implementation checkpoint; its outcome is not presumed.
-The previous 1,388-test inventory does not include these 42 cases or the 26 later
-lifecycle cases. Both hosted workflows for the preceding `377f029` and `1697f33`
-checkpoints passed; that does not establish a hosted result for this new increment.
+and four documentation units pass. The completed root regression for `f96ba79`
+passes 1,456 tests across 138 suites in 754.054 seconds, with two POSIX-only skips.
+It includes the 42 browser-owner and 26 lifecycle cases absent from the preceding
+1,388-test inventory. Exactly 91 library files remain all-four 100%: 5,449
+statements, 4,046 branches, 978 functions and 4,468 lines.
+
+| Full regression evidence | SHA-256 |
+| --- | --- |
+| `coverage/browser-owner-full-results.json` | `6b446101550f58a23eef75af9cea6b8df2318c9812eba1e4f7595906a51d941b` |
+| `coverage/coverage-final.json` | `b7ddd801caa759a33ebe5a5fb7a5175792eb97defb7c65ff33b6184b6425e6cd` |
+
+The linked-client authored-source gate also passes: 77 tests in each ordinary and
+instrumented mode, five worker reports, and matching native Chromium inventories
+including 58 protocol and 43 client-network assertions per mode. Its exact scope
+remains 791 statements, 521 branches, 125 functions and 659 lines, all 100%.
+The source-built ordinary bundles match the linked production build. The separate
+26-test collector/preflight/report suite passes at its two-file 100% scope.
+
+Run `efd9784b-b6d9-4f9e-affe-18080e6cb2cf` under `coverage/client-source/` retains:
+
+| Client evidence | SHA-256 |
+| --- | --- |
+| `summary.json` | `b59f08ab081699532d5d17e2643113c2ebe9122167028d4d52bdbacc9eddbaa4` |
+| `coverage.json` | `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009` |
+
+These runs use Windows / Node 22.21.0 / Chrome 152.0.7977.64. They do not relabel
+the separate Node-only V8 diagnostic as passing. The existing npm links and the
+user's client version edit are unchanged. Both hosted workflows for preceding
+`377f029`, `1697f33` and `726b9a3` passed; `f96ba79` hosted results were still
+running when this evidence was recorded and are not presumed passed.
 
 No npm publication, deployment, benchmark waiver, new long soak or whole-repository
 100% claim is made. Remaining direct coordinator/browser-helper coverage and the

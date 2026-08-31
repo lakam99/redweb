@@ -10,13 +10,14 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,388 tests/132 suites for the source set in `377f029`,
+  Latest full local evidence: 1,456 tests/138 suites for the source set in `f96ba79`,
   with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
-  Exact current full-run evidence is in `STARTER_COORDINATOR_VERIFICATION.md`;
-  both of that head's hosted checks passed. The preceding isolated package
+  Exact current full-run and native linked-client evidence is in
+  `BROWSER_OWNER_VERIFICATION.md`; this head's hosted checks remain separate.
+  The preceding `377f029`, `1697f33` and `726b9a3` hosted checks passed. The preceding isolated package
   evidence is in `ACTION_INPUT_VERIFICATION.md`; its hosted checks and evidence follow-up passed.
   The preceding clean load/memory/recovery/soak/audit checkpoint and passing
   workflows remain in `PACKAGED_EXAMPLE_VERIFICATION.md`.

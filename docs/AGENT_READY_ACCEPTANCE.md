@@ -88,9 +88,13 @@ and generated additions remain actual consumer checks. See
   unchanged all-four 100%. The critic approved the shared ownership design.
   The full isolated-package gate also passed with registry client 0.2.0 and matching
   bundle identities, including all source-free starters and executable docs.
-  Checkout and installed-package evidence remain distinct; full regression is
-  separate. See `BROWSER_OWNER_VERIFICATION.md`. Both preceding `377f029` and
-  `1697f33` hosted workflows passed; no runtime changes or performance waiver occurred.
+  Checkout and installed-package evidence remain distinct. The completed root
+  regression passes 1,456 tests/138 suites, with two POSIX-only skips and all-four
+  100% over the unchanged 91-file library scope. The linked-client gate passes
+  77 tests per mode plus native browser acceptance at authored all-four 100%.
+  See `BROWSER_OWNER_VERIFICATION.md` for exact report identities. Preceding
+  `377f029`, `1697f33` and `726b9a3` hosted workflows passed; this head's hosted
+  result remains separate. No runtime changes or performance waiver occurred.
 
 - Lifecycle-verifier follow-up: a real generated source-free run passed 13 tests
   while c8 produced an empty report. The gate now requires the exact deployed
