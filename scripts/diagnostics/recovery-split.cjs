@@ -154,13 +154,15 @@ const phases = Object.freeze([
     ...Array.from({ length: 5 }, (_, index) => [`storm-${index + 1}`, 1200]),
 ]);
 
-async function run(report, record = () => {}, { mode = 'baseline', output, snapshotDirectory } = {}) {
+async function run(report, record = () => {}, { mode = 'baseline', output, snapshotDirectory, onWorker = () => {} } = {}) {
     let server;
     let client;
     let primary;
     try {
         server = new DiagnosticProcess('server', { mode, output, snapshotDirectory });
+        onWorker('server', server.child.pid);
         client = new DiagnosticProcess('client', { mode, output, snapshotDirectory });
+        onWorker('client', client.child.pid);
         const { url } = await server.request('start');
         let start = 0;
         for (const [phase, count] of phases) {
@@ -192,7 +194,12 @@ async function run(report, record = () => {}, { mode = 'baseline', output, snaps
     } finally {
         // Both cleanups are attempted even if one fails. Keep failure evidence.
         const workers = [server, client].filter(Boolean);
+        const forcedCleanupNeeded = workers.map(worker => worker.child.exitCode === null && worker.child.signalCode === null);
         const results = await Promise.allSettled(workers.map(worker => worker.close()));
+        report.workerExits = workers.map((worker, index) => ({ role: worker === server ? 'server' : 'client',
+            pid: worker.child.pid, exitCode: worker.child.exitCode, signalCode: worker.child.signalCode,
+            forcedCleanupNeeded: forcedCleanupNeeded[index], stdoutClosed: worker.child.stdout.closed,
+            stderrClosed: worker.child.stderr.closed }));
         report.workerOutput = { server: server?.output, client: client?.output,
             truncated: Boolean(server?.outputTruncated || client?.outputTruncated) };
         const failures = results.filter(result => result.status === 'rejected');

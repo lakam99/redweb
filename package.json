@@ -59,6 +59,7 @@
     "verify:memory": "node scripts/verify-memory-overhead.js",
     "verify:load": "node scripts/verify-load.js",
     "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
+    "verify:recovery:server": "node scripts/verify-server-recovery.js",
     "verify:recovery:diagnostics": "c8 --all --include=scripts/diagnostics/recovery-heap-graph.cjs --include=scripts/diagnostics/recovery-heap-summary.cjs --reporter=text --reporter=json --reports-dir=coverage/recovery-native-exact --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node --test tests/unit/recovery-heap-graph.unit.test.js",
     "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
     "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",

@@ -2,6 +2,11 @@
 
 Status: deferred research, not a resolved defect or a recovery waiver.
 
+The maintainer subsequently authorized developing and reviewing a server-focused
+candidate. Its explicit contract is in `docs/SERVER_RECOVERY_CANDIDATE.md`.
+This permission does not adopt the candidate, change existing CI, or authorize
+repeating the historical bounded comparison. Original failures remain visible.
+
 The one-original/one-split Ubuntu comparison is now complete. See
 [its results and contrary ordinary-CI evidence](RECOVERY_COMPARISON.md).
 The stopping rule is in effect: no repeat measurement; acceptance decision pending.

@@ -1,0 +1,39 @@
+name: server-recovery-candidate
+
+# Temporary evidence collection only. Does not replace ci.yml or release checks.
+# Remove after this single matrix completes; no selective reruns until green.
+on:
+  push:
+    branches: [codex/agent-ready]
+    paths: [.github/workflows/server-recovery-candidate.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18.20.8, 20.20.2, 22.23.2, 24.19.0]
+    steps:
+      - name: Refuse repeated measurement attempts
+        run: test "$GITHUB_RUN_ATTEMPT" = "1"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Measure candidate once without competing tests
+        run: node scripts/verify-server-recovery.js "$RUNNER_TEMP/server-recovery-candidate"
+      - name: Preserve candidate evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-recovery-${{ matrix.node }}-${{ github.sha }}
+          path: ${{ runner.temp }}/server-recovery-candidate/
+          if-no-files-found: error
+          retention-days: 30
