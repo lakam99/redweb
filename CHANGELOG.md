@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Adopt the independently reviewed server-focused recovery check as blocking CI acceptance, with fixed 7,400-exchange workload, 110% server budget and exact delivery/cleanup checks. Retain the unchanged shared-process measurement as an explicitly non-blocking diagnostic with raw outcomes and evidence; historical failures are not relabelled as resolved.
+
 - Fix private diagnostic compatibility with older Node trace flags and legacy heap-snapshot streams. Reject code logging when source metadata cannot be suppressed; retain existing recovery thresholds and privacy checks. Snapshot output-limit tests now use a small owned process.
 
 - Simplify unreleased quickstarts to install the matching Redweb tarball with its published client dependency. Verify the printed commands through real isolated npm installation; retain a separately tested optional contributor-link workflow. Versioned release instructions remain unchanged.

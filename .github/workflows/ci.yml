@@ -52,7 +52,7 @@ jobs:
           printf 'Original shared-process diagnostic (non-blocking): **%s**\n\n' "$ORIGINAL_OUTCOME" >> "$GITHUB_STEP_SUMMARY"
           printf 'The original diagnostic retains its exit status and logs. A server pass does not resolve historical shared-process failures.\n' >> "$GITHUB_STEP_SUMMARY"
           if [ "$ORIGINAL_OUTCOME" != success ]; then
-            echo '::warning::Original shared-process recovery did not pass; inspect its retained log. This diagnostic is non-blocking by maintainer decision.'
+            echo '::warning::Original shared-process recovery did not pass; inspect its step outcome and any available log (skipped steps have no log). This diagnostic is non-blocking by maintainer decision.'
           fi
       - name: Preserve recovery evidence on success or failure
         if: ${{ always() && steps.recovery.outcome != 'skipped' }}
