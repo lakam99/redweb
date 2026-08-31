@@ -104,6 +104,6 @@ The unchanged 91-file library scope remains all-four 100%: 5,449 statements,
 | `coverage/coverage-final.json` | `e3eff8cc021eb82fd323867a079c983c72abb5fe07f83255b302850684dda29e` |
 
 Both preceding `f96ba79` and `367e104` hosted workflows passed completely.
-Hosted checks for this validator increment remain separate, not presumed passed.
+Both `659f638` and `9c29a6e` hosted workflows also passed completely.
 No npm publication, deployment, benchmark waiver, new long soak or whole-repository
 100% claim is made.

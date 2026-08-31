@@ -84,6 +84,9 @@ and generated additions remain actual consumer checks. See
   15-second command adapter now allows server cleanup without mutating the raw
   tab or duplicating the coverage caller's adapter. Thirteen unit/native checks
   pass with 100% of the branch-free adapter; runtime/refresh browser gates pass.
+  Linked-client authored coverage and the complete isolated-package gate also
+  pass, including source-free consumers and all copied browser phases. The critic
+  approved all 16 actual remote implementation blobs at `e3b4902`.
   Raw page acquisition remains a separate open boundary. See
   `FEEDBACK_COMMAND_VERIFICATION.md`; no application-socket defect is claimed.
 

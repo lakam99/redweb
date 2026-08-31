@@ -83,10 +83,29 @@ Node-only V8 diagnostic remains separate and is not relabelled passing.
 
 Pretest/generated/type checks and four documentation units pass. The critic approved
 the adapter, native test, independent fallback releases, budgets and scoped evidence.
+The actual-PR review approved all 16 remote blobs at `e3b4902`.
+
+The complete isolated-package gate then passed with registry `redweb-client@0.2.0`
+and matching identities for all four bundles. It exercised installed counter/chat,
+dependency isolation, generated additions, authenticated dashboard, copied browser
+acceptance/runtime/refresh, all source-free starters, executable docs, compiled
+action/room consumers and static export. No runtime modules were replaced, and
+TLS verification remained enabled.
+
+Tested archive SHA-256:
+`c2589e8fff6c4247b98b5aa0de47c2244feaefb79351bc0abf4ff4f8c0cbbdcd`.
+This archive predates subsequent evidence-only documentation edits. The retained
+browser phase report is
+`coverage/packed-browser/369c631b-7c8b-4986-9e23-8e8bba9b6a68/report.json`, SHA-256
+`c43cdc79bc50645e8f07d715f29982ce99b15946e2b23714ee17d1c4df0dd237`.
+It records all three browser phases passing, 210 package files, 26 unchanged
+harness inputs, and harness SHA-256
+`ce81b626e0d87bb50edf1856522a3916bdf983dd1629404b7e1ab1a2052608c3`.
 
 The preceding `9c29a6e` full regression passed 1,459 tests/138 suites with two
 POSIX-only skips and the unchanged 91-file library at all-four 100%. It does not
-include this increment's ten new tests. Current installed-package,
-full-regression and hosted results remain separate and are not presumed passed.
+include this increment's ten new tests. Both `659f638` and `9c29a6e` hosted
+workflows passed completely. Current full-regression and hosted results remain
+separate and are not presumed passed.
 No npm publication, deployment, frozen-file edit, benchmark waiver or new long-soak
 claim is made.
