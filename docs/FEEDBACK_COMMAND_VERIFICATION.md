@@ -140,6 +140,22 @@ and `coverage.json` SHA-256
 `8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
 Both npm links and the client's pre-existing version edit remain untouched.
 
+The complete isolated-package gate subsequently passed with registry
+`redweb-client@0.2.0` and matching identities for all four production bundles.
+Installed counter/chat/reconnect/disconnect, dependency isolation, generated
+additions, authenticated dashboard, all three copied browser phases, source-free
+starters, executable docs, compiled consumers and static export passed. TLS
+verification remained enabled. Tested archive SHA-256:
+`97ab4789755132d66bcdd219b2390879ea4c4657fb273fafe2c8326edf975ee3`.
+This archive predates the final evidence-only documentation additions.
+Report `coverage/packed-browser/ed6f21ed-4300-4645-94e5-6a6842765e4f/report.json`
+has SHA-256 `01d047163d0569b30c0769231486ab815b33b4fac6bc6519bb081f8a18296e39`.
+It records 210 package files and 26 unchanged copied harness inputs, with harness
+SHA-256 `0a0cdf39fa16c8e995de1474fae0d70773594eb96552423cd5215c96a43232b4`.
+The critic approved all eleven actual remote files at implementation commit
+`82156ee`, their evidence identities and all 66 generated pages. The latest full
+regression and hosted outcomes remain separate; no prior pass is relabelled current.
+
 ## Earlier native acceptance and remaining gates
 
 The complete ordinary/instrumented browser-runtime and development-refresh gates

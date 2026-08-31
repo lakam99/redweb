@@ -85,6 +85,9 @@ and generated additions remain actual consumer checks. See
   tracking to prevent duplicate wrappers. All 17 maintained unit/native cases pass
   at all-four 100% for the adapter and feedback driver; unchanged runtime/refresh
   native coverage also passes. Actual peer cleanup is checked before rescue.
+  Linked-client authored coverage, generated-app refresh and the complete
+  isolated-package gate with registry client 0.2.0 pass. The critic approved all
+  eleven actual remote implementation files at `82156ee`.
   Raw acquisition and complete refresh-helper coverage remain separate. See
   `FEEDBACK_COMMAND_VERIFICATION.md` for hashes, scope and budgets.
 
