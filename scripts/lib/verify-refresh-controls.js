@@ -9,6 +9,7 @@ const { openPage, combineFailures } = require('../verify-live-html-browser');
 const refreshBrowser = require('../../src/development/refreshBrowser');
 const styles = require('../../src/development/refreshStyles');
 const { withTimeout, waitForListening } = require('../../tests/helpers/network');
+const { browserCommands } = require('./browserCommands');
 
 // A committed navigation need not have parsed its heading yet.
 const headingReady = text => `document.querySelector("h1")?.textContent === ${JSON.stringify(text)}`;
@@ -93,8 +94,9 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
     let failure;
     try {
         await peer.listen();
-        const browser = await open(debugPort, 'about:blank');
-        pages.push(browser);
+        const initial = await open(debugPort, 'about:blank');
+        pages.push(initial);
+        const browser = browserCommands(initial);
         await browser.command('Page.addScriptToEvaluateOnNewDocument', { source: `window.__restores=[]; window.addEventListener('pageshow',event=>window.__restores.push(event.persisted));` });
         await browser.command('Page.navigate', { url: peer.url });
         await until(() => browser.evaluate('Boolean(document.getElementById("__redweb_dev")?.shadowRoot)'), 'control module');
@@ -142,8 +144,9 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
             peer.kind = kind;
             peer.holdScript = true;
             peer.revision = randomUUID();
-            const delayed = await open(debugPort, 'about:blank');
-            pages.push(delayed);
+            const raw = await open(debugPort, 'about:blank');
+            pages.push(raw);
+            const delayed = browserCommands(raw);
             await delayed.command('Page.addScriptToEvaluateOnNewDocument', { source: `window.__cspViolations=[]; document.addEventListener('securitypolicyviolation',event=>window.__cspViolations.push(event.violatedDirective));` });
             await delayed.command('Page.navigate', { url: peer.url });
             await until(() => delayed.evaluate('Boolean(document.getElementById("field"))'), 'HTML before delayed module');

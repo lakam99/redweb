@@ -30,9 +30,9 @@ added there, and no complete-acquisition claim is made. The separate native test
 below now measure all authored feedback-driver paths; complete coverage is not a
 claim that every underlying acquisition operation is bounded.
 
-## Maintained tests
+## Feedback coverage milestone (`9897924`)
 
-`npm run verify:feedback:commands` combines nine explicit command-boundary units
+At this checkpoint, `npm run verify:feedback:commands` combined nine explicit command-boundary units
 (including labelled fake-clock checks) with six real integration cases. The closed
 Chromium connection case uses actual sockets/timers and checks that the server is no longer
 listening and has no shared pages **before** rescue cleanup runs. The other three
@@ -49,7 +49,7 @@ server or transport API is replaced. These cases reuse the existing workspace an
 page owners, with a 180-second driver watchdog, independent browser cleanup and a
 bounded drain of the original driver promise. Each has a 360-second outer budget.
 
-The final expanded 15-test/four-suite scope passes in 20.765 seconds with all-four 100%
+That 15-test/four-suite scope passed in 20.765 seconds with all-four 100%
 coverage: 176 statements, nine branches, 14 functions and 162 lines. The adapter
 accounts for five statements/lines, three functions and zero branches; the complete
 feedback driver accounts for 171 statements, nine branches, 11 functions and 157
@@ -58,7 +58,7 @@ for bounded launch, 60-second supervision and independent cleanup. Existing fail
 tests now allow 45 seconds instead of inheriting five while server shutdown can
 take 15. Uncertain browser shutdown retains its workspace and independently releases
 local pipe/reference handles; those releases are not proof of process termination.
-CI allows 20 minutes for the combined outer budgets and retains coverage for 30 days.
+That checkpoint allowed 20 minutes in CI and retained coverage for 30 days.
 
 | Exact source | SHA-256 |
 | --- | --- |
@@ -67,14 +67,80 @@ CI allows 20 minutes for the combined outer budgets and retains coverage for 30 
 | `scripts/verify-browser-coverage.js` | `96325de65161f7d68c6da3ea85700e6fccb85b45ddb34c7645cdf5eaeefe8e06` |
 | `scripts/lib/PackedBrowserHarness.js` | `fd9cf313775b77fbebd73a0097efe0c8f5ec830b17f370451f2ed4f3cae39855` |
 
-The final maintained report `coverage/browser-commands/coverage-final.json`
+That checkpoint's report `coverage/browser-commands/coverage-final.json`
 has SHA-256 `5c04776ecc36f5df1753c94afa388d3b509c54425f179a4454006261dec7f18b`,
 matching the initial expanded-scope report under `coverage/feedback-driver/`.
 The critic approved the corrected native tests after requiring exact error leaves,
 an actual waiter promise and preservation of late driver failures. Pretest,
 generated-documentation and all three type configurations also pass.
 
-## Native acceptance and remaining gates
+## Refresh command reuse follow-up
+
+The same native disconnected-DevTools test now also runs the actual refresh
+control driver against its real revision peer. Before correction, it remained
+pending until the 60-second supervisory watchdog fired; the expected command
+deadline was never reached. No browser/server/timer method was replaced.
+Pre-fix refresh-control source SHA-256:
+`0573ef0f8f589f49cc64849285ed61967869e8085dd344246bf8566fca2a8275`.
+
+Generated-app refresh and its shared control driver now reuse `browserCommands`.
+Raw tabs are registered before wrapping. A private WeakSet recognizes already
+bounded facades, so the coverage caller can reuse the same adapter without
+stacking timers or keeping tabs alive. Its duplicate inline adapter was removed;
+coverage cleanup still receives bounded commands, and generated-app cleanup
+continues to use bounded DevTools HTTP requests.
+
+The maintained command now passes 17 tests/four suites in 36.407 seconds: ten
+explicit command-boundary units and seven real integration cases. Both disconnected
+native paths reach their 15-second command deadline and verify actual listener
+cleanup before rescue. The refresh test also verifies empty pending/script sets.
+All-four coverage of the adapter and complete feedback driver remains 100%:
+181 statements, 11 branches, 14 functions and 166 lines. The adapter contributes
+10 statements, two branches, three functions and nine lines. This is not complete
+direct coverage of refresh helpers or either browser coordinator.
+
+Current report `coverage/browser-commands/coverage-final.json` SHA-256:
+`5a4be585d836f0510a4ec80c0fef0a32dbbff3e41330af19af1f158709b45e21`.
+CI allows 25 minutes for the added native case and all declared failure budgets;
+individual command deadlines are unchanged. The critic approved the shared
+wrapper, raw ownership ordering, bounded cleanup and expanded budget.
+
+| Corrected source | SHA-256 |
+| --- | --- |
+| `scripts/lib/browserCommands.js` | `bb2d1de242289f543680e97493cb04fe99ae2f35c89b4e276e1862a1e21336e3` |
+| `scripts/lib/verify-refresh-controls.js` | `a05a1145e636a8e4f7750fff3dd8036aab54fa3ee22bbb6d8bdb068dbca104b2` |
+| `scripts/lib/verify-refresh-coverage.js` | `7062f23e3fcac0273b2c9d41858ad7e95dd519daaa0d70a60e10695930f1d6e9` |
+| `scripts/verify-development-refresh-browser.js` | `ccb01383ef684cb59bc07bcd87e576e7fb08d2c734abfabdb2c047d957449e0e` |
+
+The unchanged native runtime/refresh scopes also pass: 426/262/64/351 and
+82/44/12/71 statements/branches/functions/lines, respectively. Actual case
+inventories match between plain/instrumented runs; back-forward-cache restoration
+was observed. Runtime run: `f5943d26-64ae-4ea1-b754-c917996ccb8b`; refresh run:
+`732f7c31-bfeb-402d-bf2c-4446fb5c26d6`. No public runtime, frozen helper or
+acceptance threshold changed. Raw page acquisition remains a separate open
+boundary; command deadlines do not cancel its underlying operations.
+
+The corresponding runtime/refresh report SHA-256 values are
+`f0067f98198760a5ed07b5536c6ae9a0b8253b65e75e1b998f80dc5c57a42b86`
+and `7392a9a0d69d40bff5cfdf85ae1e21b6699ca60c2f485c38afc8948cdbbdb418`.
+The complete generated-app development gate also passes real TypeScript/CSS
+rebuilds, failed-build recovery, draft/focus retention, explicit discard and state
+reset, plus the shared outage/recovery and input guards. Actual back-forward-cache
+restoration was observed. Pretest, all three type configurations and the four
+documentation units pass for this increment.
+
+The refreshed linked-client authored gate passes its 26 collector/preflight/report
+tests, five worker reports and matching ordinary/instrumented native browser cases.
+All-four authored coverage remains 100% over 791 statements, 521 branches, 125
+functions and 659 lines. Its ordinary browser/transport bundles retain their
+production identities. Run `0248026f-dadf-42fe-bb9a-1bc287f4fbb5` under
+`coverage/client-source/` retains `summary.json` SHA-256
+`c876bc77f0261fff6e7b1f8761cbcd09e26053d802246a44eec431e4387fd876`
+and `coverage.json` SHA-256
+`8673e236f675d741cb0f55d4f4bf630f2e2a50c2f2f76f856622558491ac8009`.
+Both npm links and the client's pre-existing version edit remain untouched.
+
+## Earlier native acceptance and remaining gates
 
 The complete ordinary/instrumented browser-runtime and development-refresh gates
 pass with matching case inventories and unchanged all-four 100% emitted-code scopes.

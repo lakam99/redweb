@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const { RevisionPeer, verifyRefreshControls, headingReady } = require('./verify-refresh-controls');
 const { withTimeout } = require('../../tests/helpers/network');
 const { combineFailures } = require('../verify-live-html-browser');
+const { browserCommands } = require('./browserCommands');
 
 class CoverageRevisionPeer extends RevisionPeer {
     constructor(coverage, instrumented) {
@@ -71,7 +72,7 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
     const open = async (_port, url) => {
         const tab = await visit(url);
         run.browser = await bounded(tab.command('Browser.getVersion'), 'browser version');
-        return { ...tab, evaluate: expression => bounded(tab.evaluate(expression), 'refresh evaluation'), command: (method, params) => bounded(tab.command(method, params), method) };
+        return browserCommands(tab);
     };
     const collect = async tab => {
         if (instrumented) {

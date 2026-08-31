@@ -79,6 +79,15 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Refresh command follow-up: the real disconnected-browser regression reproduced
+  a command hang through the 60-second supervisory watchdog. Generated-app refresh
+  and refresh controls now reuse the shared 15-second adapter, with weak identity
+  tracking to prevent duplicate wrappers. All 17 maintained unit/native cases pass
+  at all-four 100% for the adapter and feedback driver; unchanged runtime/refresh
+  native coverage also passes. Actual peer cleanup is checked before rescue.
+  Raw acquisition and complete refresh-helper coverage remain separate. See
+  `FEEDBACK_COMMAND_VERIFICATION.md` for hashes, scope and budgets.
+
 - Original-phase performance diagnostic: after the `bf01c2a` full regression
   passed 1,486 tests/142 suites with unchanged all-four 100% library coverage,
   one fixed ten-worker profiling series used the original 20,000-message phase.

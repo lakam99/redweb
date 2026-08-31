@@ -2,6 +2,13 @@
 
 const { browserCommands } = require('../../scripts/lib/browserCommands');
 
+test('reusing a bounded facade never adds another command deadline', () => {
+    const raw = { socket: {} };
+    const bounded = browserCommands(raw);
+    expect(browserCommands(bounded)).toBe(bounded);
+    expect(Object.keys(raw)).toEqual(['socket']);
+});
+
 // Explicit command-boundary units, including fake-clock deadline checks.
 // The disconnected-Chromium integration test uses real timers and sockets.
 test('preserves receivers, arguments, socket identity and the original tab methods', async () => {

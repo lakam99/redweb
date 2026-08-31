@@ -197,7 +197,7 @@ jobs:
       - run: npm run verify:live-html:browser
       - run: npm run verify:feedback:commands
         id: feedback-commands
-        timeout-minutes: 20
+        timeout-minutes: 25
       - name: Preserve feedback driver and command deadline coverage
         if: ${{ always() && steps.feedback-commands.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4

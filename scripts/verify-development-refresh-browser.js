@@ -7,6 +7,7 @@ const path = require('path');
 const ProjectInitializer = require('../src/cli/ProjectInitializer');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
+const { browserCommands } = require('./lib/browserCommands');
 const { npmEntrypoint, spawnManaged, stopProcessTree } = require('./evaluation/process');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, combineFailures } = require('./verify-live-html-browser');
 const { verifyRefreshControls } = require('./lib/verify-refresh-controls');
@@ -73,8 +74,9 @@ async function verifyTemplate(execution, debugPort, template) {
             watcher.once('error', reject);
         });
         await until(async () => (await (await fetch(url, { signal: AbortSignal.timeout(2000) })).text()).includes('Generation one'), `${template} initial server`);
-        const browser = await openPage(debugPort, url);
-        pages.push(browser);
+        const initial = await openPage(debugPort, url);
+        pages.push(initial);
+        const browser = browserCommands(initial);
         await until(() => browser.evaluate('Boolean(document.getElementById("__redweb_dev")?.shadowRoot)'), 'development script startup');
         await browser.evaluate('window.__documentMarker = "original"; window.__developmentHost = document.getElementById("__redweb_dev"); true');
         let revisionResponses = 0;
@@ -90,8 +92,9 @@ async function verifyTemplate(execution, debugPort, template) {
         await until(() => browser.evaluate('document.querySelector("h1").textContent === "Generation two"'), 'clean automatic refresh (including default select)');
         assert.equal(await browser.evaluate('window.__documentMarker === undefined'), true);
         if (template === 'realtime') {
-            const peer = await openPage(debugPort, url);
-            pages.push(peer);
+            const rawPeer = await openPage(debugPort, url);
+            pages.push(rawPeer);
+            const peer = browserCommands(rawPeer);
             await click(browser, 'document.getElementById("draft")');
             await browser.command('Input.insertText', { text: 'Keep my unsent draft' });
             await browser.evaluate('window.__documentMarker = "edited"; window.__developmentHost = document.getElementById("__redweb_dev"); true');

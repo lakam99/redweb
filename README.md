@@ -219,7 +219,7 @@ Run `npm run verify:cli` to test the actual initializer, doctor and incremental-
 
 Browser and authored-source coverage share strict source-map and execution-counter validation. Malformed reports are rejected before merging; see [coverage validation evidence](docs/COVERAGE_COUNTER_VALIDATION.md) for the unit and real-browser checks.
 
-Feedback verification also bounds browser commands so a disconnected debugging socket reaches server cleanup. [Native failure evidence](docs/FEEDBACK_COMMAND_VERIFICATION.md) records the fix, full driver coverage using actual Chromium/server cases, and the remaining acquisition boundary.
+Feedback and development-refresh verification share bounded browser commands so a disconnected debugging socket reaches cleanup. [Native failure evidence](docs/FEEDBACK_COMMAND_VERIFICATION.md) records the fixes, exact coverage scopes using actual Chromium/server cases, and the remaining acquisition boundary.
 
 Development-refresh checks retain uncertain browser-launch cleanup and preserve shutdown failures. [Verification boundaries](docs/BROWSER_OWNER_VERIFICATION.md#development-refresh-launch-cleanup-follow-up) distinguish these fault tests from real generated-app/browser acceptance.
 
