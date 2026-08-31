@@ -36,8 +36,9 @@ its original exit status and failures visible.
 
 ## Run the candidate
 
-After the review approves measurement, run `npm run verify:recovery:server` once
-in a clean environment. It creates an exclusive directory under `coverage/` and
+From the matching Redweb source checkout (not an installed application), run
+`npm run verify:recovery:server` once after review approves measurement, in a
+clean environment. It creates an exclusive directory under `coverage/` and
 prints its location. An optional absolute, nonexistent directory can be supplied
 after `--`. Existing evidence is never overwritten.
 
@@ -84,3 +85,67 @@ measurement, runs no competing tests, and uploads candidate evidence on failure
 as well as success. Remove the workflow after collection. This new candidate
 protocol is not a rerun of the historical original/split comparison and does not
 modify the ordinary acceptance workflow.
+
+## Collected candidate results at 15c5a4e
+
+The [single Ubuntu matrix](https://github.com/lakam99/redweb/actions/runs/33352534392)
+completed successfully on all four pinned runtimes. A separate single Windows
+Node 22.21.0 run also passed. These were clean candidate invocations, not the
+instrumented behavioral runs described above. Each verified all 7,400 exact
+replies, phase registries, unchanged inputs, complete logs and normal worker
+exits. Downloaded sample streams, worker inventories and every log's bytes/hash
+were independently reconciled with the saved reports.
+
+| Environment | Server peak % of warm | Server final % of warm | Client peak % of warm |
+| --- | ---: | ---: | ---: |
+| Ubuntu / Node 18.20.8 | 102.738879 | 101.936032 | 107.220473 |
+| Ubuntu / Node 20.20.2 | 106.724670 | 104.968229 | 111.411540 |
+| Ubuntu / Node 22.23.2 | 108.491002 | 97.235712 | 112.873352 |
+| Ubuntu / Node 24.19.0 | 100.817681 | 100.817681 | 101.139821 |
+| Windows / Node 22.21.0 | 109.253735 | 95.525155 | 113.270161 |
+
+Only the server column has the candidate's 110% budget. The client measurements
+above 110% are explicit, not subtracted or represented as passing that budget.
+One run per environment demonstrates these executions, not repeatability or
+production capacity. The original shared-process CI failures remain unchanged.
+
+Ubuntu artifacts are retained locally under
+`coverage/server-recovery-matrix-33352534392/`; hosted retention is 30 days.
+Each artifact is named `server-recovery-<node>-15c5a4eef60a7a544745a9382bf9f517c02a30f8`.
+SHA-256 for each `report.json`:
+
+- Node 18.20.8: `9899ea2201724957fc1aba88d0eb901cea0a0e7e17f43ebc3e21a7593cdca9c4`.
+- Node 20.20.2: `8b0949c154e905122091ba6a0e37019d404c1a21266406ce00b23b6c73464860`.
+- Node 22.23.2: `41f55fb4fbb1b90079d624f4602a3a4d5441391dd112c992fabdef5b720f523b`.
+- Node 24.19.0: `e7ec1c25a3c94aa6b48d30382cf044f8425fab01a09dd548fd0285e06544733e`.
+- Windows `coverage/server-recovery-local-15c5a4e/report.json`:
+  `26e90708d03537f16a1b73b5ba16c57cbee9743e4fff2c770933118ffdcf032d`.
+
+The temporary collection workflow was removed after completion; no measurement
+rerun occurred. Adoption is still pending an explicit maintainer decision.
+
+The senior critic independently verified the actual PR commit, all five reports,
+the Ubuntu manifests against 104 committed inputs, delivery/sample/inventory
+reconciliation and log hashes. The reviewer recommends presenting adoption for
+the maintainer's decision without another experiment. The justification is
+isolating server retention from the load generator, not proving the original
+failures harmless or claiming their cause was fixed.
+
+## Full regression and unchanged CI at 15c5a4e
+
+Windows `npm test -- --runInBand --silent` completed successfully: 918 tests in
+86 suites, 447.46 seconds, including the normal generated-content/type pretest.
+The configured library scope remains all-four 100%: 5,445 statements, 4,044
+branches, 978 functions and 4,464 lines. The coverage report
+`coverage/coverage-final.json` has SHA-256
+`961dd4e6bc2e90df001df71281622140f153024ae71e4295e7b2ed92d49cb045`.
+The candidate tooling coverage is the separate scoped result above.
+
+Ordinary [push CI](https://github.com/lakam99/redweb/actions/runs/33352534344)
+passed. Ordinary [PR CI](https://github.com/lakam99/redweb/actions/runs/33352536964)
+failed only the unchanged Node 22 shared-process recovery check: storm 4 reached
+110.530483% of warm against the 110% limit; final heap was 97.045378%, with empty
+registries. Its tests and load check passed; its subsequent audit was skipped.
+Node 18/20/24 and the lifecycle/browser/package job passed. No retry occurred.
+These results preserve the distinction between a passing candidate and the
+still-failing existing acceptance contract; this is not merge approval.
