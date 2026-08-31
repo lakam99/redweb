@@ -10,7 +10,7 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,098 tests/110 suites at `43c6d73`, including the
+  Latest full local evidence: 1,152 tests/113 suites selected at `d15b1a3`, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
@@ -376,8 +376,18 @@ suites, all-four100% across the coordinator, bounded HTTP reader and client owne
 native malformed-JSON reproduction, fixture correction and unchanged acceptance
 limits are in `LIVE_HTML_LOAD_VERIFICATION.md`. Clean default load passed200
 renders/110 clients with6,824,576-byte heap growth. The critic approved the scoped
-correction; broader full/hosted verification remains pending. This does not waive
+correction. The full regression then passed 1,152 tests/113 suites in 631.578s
+with two POSIX-only skips and all-four 100% library coverage; source/report
+identity is retained in that document. Hosted verification remains pending. This does not waive
 the separate unresolved benchmark throughput result.
+
+The JSX performance verifier now has a maintained direct scope: 14 tests/two
+suites cover 27 statements, eight branches, four functions and 23 lines, all 100%.
+Exact markup validation replaces the demonstrated false-pass predicate, while
+timing and memory limits remain unchanged. Native CLI checks and explicit boundary
+units are separate; the critic approved the correction. See
+`JSX_PERFORMANCE_VERIFICATION.md` for hashes and measurement boundaries. These new
+tests are not retroactively included in the preceding full regression inventory.
 
 Only partial historical maps were found for these files; they changed after some
 reports, so historical percentages do not certify current coverage:
@@ -395,7 +405,6 @@ scripts/measure-starter-coverage.js
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
-scripts/verify-jsx-performance.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
 scripts/verify-soak.js

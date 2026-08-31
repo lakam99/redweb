@@ -151,6 +151,18 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - run: npm run verify:jsx:performance
+        timeout-minutes: 2
+      - run: npm run verify:jsx:coverage
+        id: jsx-coverage
+        timeout-minutes: 3
+      - name: Preserve JSX verifier coverage evidence
+        if: ${{ always() && steps.jsx-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jsx-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/jsx-performance-tools/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:live-html:package
         id: packed-browser
       - name: Preserve packed browser evidence

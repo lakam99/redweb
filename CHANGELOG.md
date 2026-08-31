@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Validate every row and enclosing tag in the JSX performance gate, not just row counts and one escaped label. Preserve the timed workload and memory limits, add external CI supervision, and maintain separate unit/real-CLI coverage of the verifier at all-four 100%.
+
 - Bound Live HTML load-verification HTTP responses and connection/close waits; require explicit GC, validate bootstrap/patch data, and retain actual sockets through confirmed cleanup. Preserve concurrent protocol/request/cleanup failures and report success only after server shutdown. Keep the 200 expired renders, 110 live clients, sampling sequence and 24 MiB limit; HTTP verification now owns non-pooled connections. Add maintained unit/native HTTP/WebSocket/process coverage without changing rendering runtime code.
 
 - Harden disabled-feature benchmarks with exact warm-up/measured reply accounting, finite-result and stable input-identity checks, bounded workers, and independently attempted socket/server cleanup. Preserve the 20,000-message/128-window/five-trial defaults and 3%/5% limits; retain every trial. Add separate unit and real-network/process coverage at all-four 100% across six benchmark modules. Strict subprocess output now rejects truncation on unsuccessful exits too. Coverage success does not waive a failed performance comparison.

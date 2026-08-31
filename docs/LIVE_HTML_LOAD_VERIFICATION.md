@@ -38,7 +38,8 @@ delivery, not ordering; the verification label now says that precisely.
 - 110 live clients; initial patches, joins, all-client presence, capped visible
   membership, and one broadcast delivered to every client.
 - Session TTL1,000ms, maxSessions500, the same three GC calls and50ms settling
-  pause, disconnected-session expiry and24MiB post-cleanup heap budget.
+  pause, disconnected-session expiry and a 24 MiB heap budget sampled after
+  client closure/session expiry, before server shutdown.
 
 No workload, production option or acceptance threshold was relaxed. Native tests
 separately establish ownership mechanics; they do not replace clean measurements.
@@ -65,7 +66,8 @@ fixture now consumes the FIN and ends its own half-open writable side; it does
 not answer the upgrade or weaken the assertion about client ownership. HTTP and
 WebSocket test budgets include acquisition, operation and all cleanup phases.
 
-The critic approved both corrections and the final scope. Source SHA-256:
+The critic approved both corrections and the final scope, then verified all 14
+remote blobs on actual PR head `d15b1a3`. Source SHA-256:
 
 | Source | SHA-256 |
 | --- | --- |
@@ -76,6 +78,21 @@ The critic approved both corrections and the final scope. Source SHA-256:
 Report `coverage/live-html-load-tools/coverage-final.json` SHA-256:
 `7d3ca3f938dc7dca75919add49808f538cebbb53ecef2539ed1cf24d9985b049`.
 After the focused suites exited, one clean default run passed200 renders/110
-clients with6,824,576-byte post-cleanup heap growth against24MiB. This is a scoped
-increment, not final release approval or a replacement for the remaining full
-regression/hosted/package gates. No publication, deployment or merge occurred.
+clients with 6,824,576-byte heap growth after client closure/session expiry and
+before server shutdown, against 24 MiB. This is a scoped
+increment, not final release approval or a replacement for remaining hosted/package
+gates. No publication, deployment or merge occurred.
+
+The full regression selected at `d15b1a3` subsequently passed 1,152 tests across
+113 suites in 631.578 seconds, with two POSIX-only skips on Windows. All 91 library
+files retain 100% coverage: 5,449 statements, 4,046 branches, 978 functions and
+4,468 lines. Library and HTML-verifier sources remained unchanged throughout.
+The 14 later JSX-verifier tests were added after inventory selection and passed
+separately; they are not included in 1,152. Generated-content/type checks pass.
+
+Full report `coverage/coverage-final.json` SHA-256:
+`ae7eca89c22dbb9cc9b7adacf8789921a37f2f835b6b537374a40830f52119dd`.
+Inventory `coverage/html-load-full-results.json` SHA-256:
+`cb36a54b43a27d2e458e4c65da0ae077f9880369f97e836094a48544740daff6`.
+Hosted runs PR33367978260 and push33367973847 were still running when this
+evidence was recorded; partial job success is not a full workflow pass.

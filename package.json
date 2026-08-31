@@ -81,6 +81,7 @@
     "verify:live-html:load": "node scripts/build-live-html-examples.js --check && node --expose-gc scripts/verify-live-html-load.js",
     "verify:live-html:load:coverage": "node node_modules/jest/bin/jest.js tests/unit/live-html-load-command.unit.test.js tests/unit/live-html-load-tools.unit.test.js tests/integration/live-html-load-tools.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-live-html-load.js --collectCoverageFrom=scripts/lib/readLiveHtmlPage.js --collectCoverageFrom=scripts/lib/LiveHtmlLoadClient.js --coverageDirectory=coverage/live-html-load-tools",
     "verify:jsx:performance": "node --expose-gc scripts/verify-jsx-performance.js",
+    "verify:jsx:coverage": "node node_modules/jest/bin/jest.js tests/unit/jsx-performance-command.unit.test.js tests/integration/jsx-performance.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-jsx-performance.js --coverageDirectory=coverage/jsx-performance-tools",
     "verify:live-html:package": "node scripts/verify-live-html-package.js",
     "verify:client:link": "node --test tests/integration/npm-link.integration.test.cjs",
     "test": "npx jest"
