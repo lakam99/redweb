@@ -9,6 +9,7 @@ const { npmEntrypoint } = require('./evaluation/process');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
 const { reportCommand } = require('./lib/reportCommand');
+const { finishVerificationSummary } = require('./lib/finishVerificationSummary');
 const { linkApplication } = require('./lib/verify-starter');
 const { projectFiles, TEMPLATES } = require('../src/cli/templates');
 const ApplicationCoverage = require('./lib/ApplicationCoverage');
@@ -30,6 +31,7 @@ async function main() {
     persist();
     let failure, incomplete;
     try { await new VerificationWorkspace().run(async execution => {
+        assert.ok(TEMPLATES.length, 'Starter inventory must not be empty');
         for (const template of TEMPLATES) {
             const project = path.join(execution.directory, template);
             const target = path.join(runDirectory, template);
@@ -88,12 +90,9 @@ async function main() {
         if (failure.retainedWorkspace) summary.retainedWorkspace = failure.retainedWorkspace;
     }
     if (!failure && incomplete) { failure = incomplete; summary.error = failure.message; }
-    summary.status = failure ? 'failed' : 'passed';
-    summary.finishedAt = new Date().toISOString();
-    try { persist(); }
-    catch (error) { failure = failure ? new AggregateError([failure, error], 'Verification and evidence recording failed') : error; }
-    if (failure) throw failure;
+    finishVerificationSummary(summary, persist, failure, 'passed');
     console.log('All six original-TypeScript coverage gates passed; compiler-generated code remains measured separately by c8.');
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { main };
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

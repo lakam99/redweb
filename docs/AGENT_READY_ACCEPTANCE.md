@@ -79,6 +79,18 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Starter-coordinator follow-up: measurement fingerprints inputs before execution
+  and rejects mutations afterward; both runners share bounded best-effort terminal
+  reporting that preserves failure and uncertain-cleanup metadata. The maintained
+  direct scope passes 56 tests/three suites at all-four 100% over 180 statements,
+  34 branches, 25 functions and 148 lines. Explicit unit faults complement actual
+  child/filesystem and generated-application mutation tests. The critic approved
+  the final source and report identities. Both full six-application CLI workflows
+  then completed: 104 actual tests per mode, authored all-four 100% over unchanged
+  counts, 96 retained process maps, diagnostic V8 gaps still visible. Root regression
+  remains separate; see `STARTER_COORDINATOR_VERIFICATION.md`. Both preceding `7a25d48` and
+  `1eddee0` hosted workflows passed. No runtime change or benchmark waiver occurred.
+
 - Starter-report retention follow-up: both coverage runners preserve available
   raw reports before parsing/collection and temporary workspace removal. The
   authored runner retains all individual process maps. A shared helper reserves

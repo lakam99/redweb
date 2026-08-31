@@ -16,7 +16,7 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
   Exact current full-run and isolated package evidence is in
-  `ACTION_INPUT_VERIFICATION.md`; hosted checks for that head remain in progress.
+  `ACTION_INPUT_VERIFICATION.md`; hosted checks for that head and its evidence follow-up passed.
   The preceding clean load/memory/recovery/soak/audit checkpoint and passing
   workflows remain in `PACKAGED_EXAMPLE_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
@@ -435,23 +435,29 @@ flow. Outer test budgets and cleanup were corrected without changing the inner
 limits. The final scope, isolated package and full regression gates pass.
 See `ACTION_INPUT_VERIFICATION.md`.
 
-The starter measurement/authored coordinators below now retain available raw
+The starter measurement/authored coordinators now retain available raw
 reports before parsing or workspace cleanup. Their shared `reportCommand` helper
 has a maintained 15-test scope at all-four 100% (16 statements, eight branches,
-one function, 14 lines). This does not remove either coordinator from the remaining
-direct-coverage list. See `STARTER_REPORT_RETENTION.md`.
+one function, 14 lines). See `STARTER_REPORT_RETENTION.md`.
+
+Both coordinators and `lib/finishVerificationSummary.js` now also have a maintained
+direct scope: 56 tests/three suites, 180 statements, 34 branches, 25 functions and
+148 lines, all-four 100%. Actual copied applications reject source mutation after
+passing tests; native filesystem failures and explicit unit faults verify terminal
+report handling and retained cleanup evidence. These two coordinators are removed
+from the remaining list below. See `STARTER_COORDINATOR_VERIFICATION.md` for exact
+source/report identities and boundaries; the previous full regression does not
+retroactively include these tests.
 
 No direct coverage map was found for these remaining active verification/build files:
 
 ```text
-scripts/measure-starter-coverage.js
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js
 scripts/verify-starter-lifecycle.js
-scripts/verify-starter-source-coverage.js
 scripts/lib/verify-action-feedback.js
 scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-live-page-ownership.js

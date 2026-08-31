@@ -102,6 +102,22 @@ jobs:
           path: coverage/command-report/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:starter-coordinators:coverage
+        id: starter-coordinator-coverage
+        timeout-minutes: 90
+      - run: npm run measure:starters:coverage && npm run verify:starters:source-coverage
+        timeout-minutes: 65
+      - name: Preserve starter coordinator and application evidence
+        if: ${{ always() && steps.starter-coordinator-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: starter-coordinator-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            coverage/starter-coordinators/
+            coverage/starters/
+            coverage/starter-source/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:build:coverage
         id: build-coverage
         timeout-minutes: 20
