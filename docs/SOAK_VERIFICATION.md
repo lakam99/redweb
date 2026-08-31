@@ -102,3 +102,42 @@ Full map `coverage/coverage-final.json` SHA-256:
 `78ffc666b8181154cf5a6c2b9673e82b6f65b50d6c5fbb29d02941c96d598d0e`.
 Inventory `coverage/soak-full-results.json` SHA-256:
 `2ac4d0bc14ec7fee441a38f710ac1234b68ceb7c94d1280523df3acaa9b2304e`.
+
+## Subsequent hosted room-phase failure
+
+Both workflows at `31fa9b2` eventually completed successfully. At `d29be8c`,
+push run 33371370687 passed, but [PR run 33371374433](https://github.com/lakam99/redweb/actions/runs/33371374433)
+failed its Node 20 ten-second/two-client mechanics fixture. That failed result
+is not replaced by the passing sibling: 198 sent/198 received, no missing replies,
+11 samples, zero final registries and final heap 103.71149824% of warm. The sole
+failed trend was rooms: early 1, late 2, delta 1, peak 2, allowance 0, monotonically
+increasing. The saved summary lacks phase samples, so the exact CI timing cannot
+be reconstructed.
+
+A new deterministic native test uses real Redweb room handling and `SoakClients`:
+two clients join separate rooms; rotating one removes its sole-member room; the
+replacement connects while the room count remains one; its next tick recreates
+the room. All four replies are exact and final clients/rooms are zero. This proves
+the observable 2→1→2 phase exists, not that the historical CI run followed that
+precise sequence. Its first local fixture omitted room configuration and failed;
+after supplying the actual soak's room settings, the deterministic test passed.
+
+The ten-second test now checks measurement mechanics and the unchanged policy's
+actual exit code. It permits only that exact 1→2 room-trend failure; all other
+trends, delivery, final heap, handles and empty-registry assertions remain strict.
+Launch, timeout, malformed output, stderr and cleanup failures still fail the test.
+Its report and actual exit code are retained in
+`coverage/soak-tools/smoke-reports/` as **mechanics-only**, including in CI artifacts.
+A passing mechanics test does not relabel its nonzero measurement as acceptance.
+
+No runtime, traffic, rotation, sampling, trend budget or policy source changed.
+The separate blocking CI soak remains 30 seconds / 16 clients, and the default
+one-hour workload and all acceptance thresholds are unchanged. Neither the
+historical short failure nor the open throughput benchmark is waived.
+
+The corrected mechanics fixture passed within the maintained 80-test/four-suite
+soak coverage run (14.414 seconds), retaining all-four 100% of the unchanged three
+soak modules. The separate deterministic room-phase test passed in 0.751 seconds.
+The senior critic approved both the bounded reproduction and narrowly preserved
+failure outcome. A complete regression and fresh clean blocking-soak check follow
+this checkpoint; neither is claimed here before it finishes.
