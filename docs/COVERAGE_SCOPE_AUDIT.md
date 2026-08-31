@@ -8,6 +8,45 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Package coordinator failure and coverage follow-up
+
+The package coordinator now normalizes rejected values at browser/harness/report
+boundaries and owns each example server immediately after acquisition. A small
+local owner is shared by the example group and smoke example; every shutdown is
+attempted independently and bounded, with uncertain cleanup retained. Render
+waits are bounded. Success is printed only after workspace cleanup completes.
+Consumer assertions, isolated registry-client resolution and browser workloads
+are unchanged. Private exports are test seams, not public npm APIs.
+
+Sixteen new regressions failed on the preceding implementation. Final Windows /
+Node 22.21.0 / Chrome 152.0.7977.64 verification passed 71 tests in 265.812 seconds:
+68 unit/filesystem cases and three native integration cases. Explicit dependency
+doubles are unit tests, not no-mock integration. Native cases run the full packed
+consumer/browser workflow and prove two real HTTP listeners are closed after a
+later constructor or acceptance failure, before rescue cleanup. The full consumer
+case follows the dashboard's Node floor and is skipped on unsupported Node versions;
+native ownership cases still run there.
+
+`npm run verify:package:coordinator:coverage` maintains 100% statements, branches,
+functions and lines: coordinator 173/69/12/162, report helper 21/6/3/16. Retained map
+`coverage/package-coordinator-final/coverage-final.json`, SHA-256
+`199e25f0d8f67c35119dbcd86e227ba6dace836aea14fe29e8d4f20d99791faa`.
+The baseline consumer passed, but its direct coverage command failed at
+85.71/66.19/87.5/87.16%; it is not relabeled a passing command. The earlier unit-only
+measurement also failed coverage before adding CLI and native consumer execution.
+
+Packed report: `coverage/packed-browser/6579e832-9946-489c-b1cc-77c5bae47cda/report.json`.
+The tested archive SHA-256 is
+`d0a9795a7e35456105af26a5a36dcf9c44d2f20a3fcbfad44889b8e2acadc60f`;
+it used registry redweb-client 0.2.0 without a candidate override. Acceptance,
+runtime and refresh phases passed, with 211 package files and 26 harness files.
+Generated frontend coverage remains 426/262/64/351 and refresh 82/44/12/71,
+all 100%; both refresh modes observed actual cache restoration. This archive
+predates the subsequent documentation/CI edits, not a final release artifact.
+CI replaces the standalone package invocation and retains both authored and
+packed-browser evidence. Remaining browser/frozen scopes and failed performance
+diagnostics are not waived.
+
 ### Generated-app development verifier follow-up
 
 The development coordinator now reuses `BrowserPages` for bounded acquisition
@@ -44,7 +83,8 @@ Coordinator source SHA-256 (LF-normalized):
 `a23bcd62dddb4fc8aca807682e63beba858e43aa96e8c222cbdd60a04afb7522`.
 Independent review approved the acquisition/cleanup correction and new test
 oracles. This removes the development coordinator from the missing-map inventory,
-not the remaining browser/package coordinators or frozen tooling.
+not the remaining browser coordinators or frozen tooling. The package coordinator
+was subsequently covered above.
 
 ### Refresh verifier failure and coverage follow-up
 
@@ -666,7 +706,6 @@ above. Earlier failure records remain historical evidence.
 ```text
 scripts/verify-browser-coverage.js
 scripts/verify-live-html-browser.js
-scripts/verify-live-html-package.js
 ```
 
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:

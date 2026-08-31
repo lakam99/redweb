@@ -41,6 +41,18 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Package-coordinator follow-up: sixteen regressions reproduced swallowed rejection
+values, incomplete server cleanup and premature success output. The fixes reuse
+shared error handling and one small local server owner. The maintained package
+coverage gate passed 71 unit/filesystem/native tests in 265.812 seconds, with
+100% authored coverage of the coordinator (173/69/12/162) and report helper
+(21/6/3/16). The native workflow uses the actual packed consumer, registry
+redweb-client 0.2.0, Chromium and source-free applications; separate real-listener
+tests assert cleanup before rescue. See `COVERAGE_SCOPE_AUDIT.md` for identities,
+platform bounds and the earlier failed coverage measurements. CI retains both
+maps and packed-browser evidence without a duplicate standalone invocation.
+This does not close remaining coverage, performance or release-alignment items.
+
 Packaged-example verification now has bounded acquisition/action/cleanup and
 strict command output, with installed-transport isolation preserved. Its maintained
 three-script scope passes 40 unit/native tests at all-four 100%; the original

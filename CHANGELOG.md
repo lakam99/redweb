@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Preserve package-verification failures even when dependencies reject without an Error. Close every acquired example server independently after partial startup or render failures, retain uncertain cleanup, and announce success only after workspace cleanup. Add maintained authored coverage with unit fault checks and the complete real isolated-package/browser workflow; consumer assertions remain unchanged.
+
 - Bound and retain development-verifier page acquisition, handle port reservation errors, and preserve primary failures through independent watcher/page cleanup. Reuse the existing page owner and error helpers; add authored coordinator coverage with real generated-app rebuilds, HTTP/WebSocket faults and natural process-exit checks. Runtime and acceptance workloads remain unchanged.
 
 - Preserve concurrent refresh-verification failures, including rejected non-Error values, page closure, socket release and coverage uploads. Add maintained authored coverage of both private refresh helpers with failure units and real Chromium/HTTP integration; keep rendering runtime, browser assertions and acceptance limits unchanged.

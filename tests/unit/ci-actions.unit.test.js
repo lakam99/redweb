@@ -25,3 +25,21 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
     expect(workflow).not.toContain('pull_request_target:');
     expect(workflow).not.toContain('ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION');
 });
+
+test('package CI runs the authored coverage gate once and retains both evidence scopes', () => {
+    const scripts = require('../../package.json').scripts;
+    expect(workflow.match(/run: npm run verify:package:coordinator:coverage/g)).toHaveLength(1);
+    expect(workflow).not.toMatch(/run: npm run verify:live-html:package\s/);
+    expect(workflow).toMatch(/run: npm run verify:package:coordinator:coverage\s+id: packed-browser\s+timeout-minutes: 20/);
+    expect(workflow).toMatch(/path: \|\s+coverage\/packed-browser\/\s+coverage\/package-coordinator\//);
+    for (const file of ['tests/unit/package-coordinator.unit.test.js',
+        'tests/unit/packed-browser-report.unit.test.js',
+        'tests/unit/packed-browser-report-failures.unit.test.js',
+        'tests/integration/package-coordinator.integration.test.js']) {
+        expect(scripts['verify:package:coordinator:coverage']).toContain(file);
+        expect(fs.existsSync(path.resolve(__dirname, '../..', file))).toBe(true);
+    }
+    expect(scripts['verify:package:coordinator:coverage']).toContain('--collectCoverageFrom=scripts/verify-live-html-package.js');
+    expect(scripts['verify:package:coordinator:coverage']).toContain('--collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js');
+    expect(scripts['verify:package:coordinator:coverage']).toContain('--coverageDirectory=coverage/package-coordinator');
+});

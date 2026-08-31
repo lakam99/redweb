@@ -303,14 +303,17 @@ jobs:
           path: coverage/packed-browser-verifier/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:live-html:package
+      - run: npm run verify:package:coordinator:coverage
         id: packed-browser
+        timeout-minutes: 20
       - name: Preserve packed browser evidence
         if: ${{ always() && steps.packed-browser.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packed-browser-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/packed-browser/
+          path: |
+            coverage/packed-browser/
+            coverage/package-coordinator/
           if-no-files-found: error
           retention-days: 30
       - run: npm run verify:soak:coverage

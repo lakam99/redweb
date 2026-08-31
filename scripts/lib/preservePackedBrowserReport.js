@@ -2,10 +2,12 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { verificationError } = require('./verificationError');
 
 /** Keep available evidence independently of copying or report-write failures. */
 function preservePackedBrowserReport(report, directory, coverageDirectory, failure) {
     const record = error => {
+        error = verificationError(error);
         failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error;
     };
     const updateStatus = () => {

@@ -15,11 +15,33 @@ const { createHash, randomUUID } = require('node:crypto');
 const { verifyPackedBrowser } = require('./lib/verify-packed-browser');
 const { PackedBrowserHarness } = require('./lib/PackedBrowserHarness');
 const { preservePackedBrowserReport } = require('./lib/preservePackedBrowserReport');
+const { verificationError } = require('./lib/verificationError');
+const { combineFailures } = require('./verify-live-html-browser');
+const { withTimeout } = require('../tests/helpers/network');
+const bounded = (promise, label) => withTimeout(promise, label, 15000);
+
+// Register each returned instance before the next constructor or render runs.
+// Both example batches and individual smoke servers use the same cleanup owner.
+async function withServers(execution, operation) {
+    const servers = [];
+    let failure;
+    try { await operation(server => { servers.push(server); return server; }); }
+    catch (error) { failure = verificationError(error); }
+    for (const server of servers) {
+        try { await bounded(server.shutdown(), 'packed smoke server shutdown'); }
+        catch (error) {
+            const cleanup = verificationError(error);
+            execution.cleanupFailure = combineFailures(execution.cleanupFailure, cleanup);
+            failure = combineFailures(failure, cleanup);
+        }
+    }
+    if (failure) throw failure;
+}
 
 async function main() {
     const root = path.resolve(__dirname, '..');
     const candidate = process.env.REDWEB_CLIENT_CANDIDATE ? new ClientCandidate(process.env.REDWEB_CLIENT_CANDIDATE) : undefined;
-    await new VerificationWorkspace().run(async execution => {
+    const filename = await new VerificationWorkspace().run(async execution => {
         const workspace = execution.directory;
         const pack = JSON.parse(await execution.command([npmEntrypoint(), 'pack', '--json', '--pack-destination', workspace], { cwd: root }));
         const archive = path.join(workspace, pack[0].filename);
@@ -45,9 +67,9 @@ async function main() {
             console.log(JSON.stringify(dependencyChecks.clientEvidence));
             let browser, failure;
             try { browser = await verifyPackedBrowser(path.join(dependencyChecks.consumer, 'node_modules/redweb'), execution); }
-            catch (error) { failure = error; }
+            catch (error) { failure = verificationError(error); }
             try { dependencyChecks.verifyClient(dependencyChecks.clientEvidence); }
-            catch (error) { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; }
+            catch (error) { failure = combineFailures(failure, verificationError(error)); }
             if (failure) throw failure;
             console.log(JSON.stringify({ candidateOnly: Boolean(candidate), packedBrowser: browser }));
         }
@@ -81,11 +103,11 @@ async function main() {
                 const runtime = JSON.parse(fs.readFileSync(path.join(packageRoot, 'coverage/browser-runtime/report.json'), 'utf8'));
                 if (runtime.bundleSha256 !== report.client.bundles['live-html.js']) throw new Error('Browser report measured a different client candidate');
                 report.status = 'passed';
-            } catch (error) { failure = error; }
+            } catch (error) { failure = verificationError(error); }
             try {
                 report.inputs = harness.verify();
                 dependencyChecks.verifyClient(dependencyChecks.clientEvidence);
-            } catch (error) { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; }
+            } catch (error) { failure = combineFailures(failure, verificationError(error)); }
             failure = preservePackedBrowserReport(report, reportDirectory, path.join(packageRoot, 'coverage'), failure);
             console.log(JSON.stringify({ candidateOnly: Boolean(candidate), packedRegressions: report, reportDirectory }));
             if (failure) {
@@ -130,25 +152,26 @@ async function main() {
         const { CardsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'cards.js'));
         const { ComponentsPage } = require(path.join(packageRoot, 'examples', 'live-html', 'components.js'));
         const { JsxPage } = require(path.join(packageRoot, 'examples', 'live-html', 'jsx-page.js'));
-        const examples = [
-            installed.start(CounterPage, { listen: false }),
-            installed.start(createChatroomPage(), { listen: false }),
-            installed.start(CardsPage, { listen: false }),
-            installed.start(ComponentsPage, { listen: false }),
-            installed.start(JsxPage, { listen: false }),
-        ];
-        const packedCards = examples[2].manager.records.get('/');
-        const renderedCards = await examples[2].manager.render(packedCards, { params: {}, query: {}, body: undefined });
-        if ((renderedCards.match(/<article class="card">/g) || []).length !== 2 || !renderedCards.includes('rw-each="cards"')) {
-            throw new Error('Packed card collection did not render standard @view metadata.');
-        }
-        const packedComponents = examples[3].manager.records.get('/');
-        const renderedComponents = await examples[3].manager.render(packedComponents, { params: {}, query: {}, body: undefined });
-        if ((renderedComponents.match(/data-rw-component="primary"/g) || []).length !== 2 ||
-            !renderedComponents.includes('data-rw-component="secondary"')) {
-            throw new Error('Packed reusable components did not render isolated instances.');
-        }
-        await Promise.all(examples.map(server => server.shutdown()));
+        await withServers(execution, async own => {
+            const examples = [
+                own(installed.start(CounterPage, { listen: false })),
+                own(installed.start(createChatroomPage(), { listen: false })),
+                own(installed.start(CardsPage, { listen: false })),
+                own(installed.start(ComponentsPage, { listen: false })),
+                own(installed.start(JsxPage, { listen: false })),
+            ];
+            const packedCards = examples[2].manager.records.get('/');
+            const renderedCards = await bounded(examples[2].manager.render(packedCards, { params: {}, query: {}, body: undefined }), 'packed card rendering');
+            if ((renderedCards.match(/<article class="card">/g) || []).length !== 2 || !renderedCards.includes('rw-each="cards"')) {
+                throw new Error('Packed card collection did not render standard @view metadata.');
+            }
+            const packedComponents = examples[3].manager.records.get('/');
+            const renderedComponents = await bounded(examples[3].manager.render(packedComponents, { params: {}, query: {}, body: undefined }), 'packed component rendering');
+            if ((renderedComponents.match(/data-rw-component="primary"/g) || []).length !== 2 ||
+                !renderedComponents.includes('data-rw-component="secondary"')) {
+                throw new Error('Packed reusable components did not render isolated instances.');
+            }
+        });
         const jsxRuntime = require(path.join(packageRoot, 'jsx-runtime.js'));
         const jsxDevRuntime = require(path.join(packageRoot, 'jsx-dev-runtime.js'));
         if (typeof jsxRuntime.jsx !== 'function' || typeof jsxRuntime.jsxs !== 'function' ||
@@ -190,16 +213,17 @@ async function main() {
         }
         installed.state()(SmokePage.prototype, 'message');
         installed.page('/')(SmokePage);
-        const server = new installed.LiveHtmlServer({ pages: [SmokePage], listen: false });
-        const runtime = server.manager.records.get('/');
-        if (!runtime || !require.resolve('redweb-client', { paths: [packageRoot] })) {
-            throw new Error('Packed Live HTML runtime or client dependency is missing.');
-        }
-        const rendered = await server.manager.render(runtime, { params: {}, query: {}, body: undefined });
-        if (!rendered.includes('data-rw-state="message">packed</span>')) {
-            throw new Error('Packed Live HTML server did not render decorated state.');
-        }
-        await server.shutdown();
+        await withServers(execution, async own => {
+            const server = own(new installed.LiveHtmlServer({ pages: [SmokePage], listen: false }));
+            const runtime = server.manager.records.get('/');
+            if (!runtime || !require.resolve('redweb-client', { paths: [packageRoot] })) {
+                throw new Error('Packed Live HTML runtime or client dependency is missing.');
+            }
+            const rendered = await bounded(server.manager.render(runtime, { params: {}, query: {}, body: undefined }), 'packed smoke rendering');
+            if (!rendered.includes('data-rw-state="message">packed</span>')) {
+                throw new Error('Packed Live HTML server did not render decorated state.');
+            }
+        });
         const composed = installed.codeBlock(
             installed.each(['API'], item => installed.html`<a id="${installed.attribute('api')}" href="${installed.url('#api')}">${item}</a>`),
             { language: 'html' }
@@ -218,11 +242,14 @@ async function main() {
             throw new Error('Packed static exporter did not emit a standalone document.');
         }
         dependencyChecks.verifyClient(dependencyChecks.clientEvidence);
-        console.log(`Live HTML package gate passed: ${pack[0].filename} extracted, loaded, and rendered in isolation${candidate ? ' (explicit local client candidate; not registry-release evidence)' : ''}.`);
+        return pack[0].filename;
     });
+    console.log(`Live HTML package gate passed: ${filename} extracted, loaded, and rendered in isolation${candidate ? ' (explicit local client candidate; not registry-release evidence)' : ''}.`);
 }
 
-main().catch(error => {
+if (require.main === module) main().catch(error => {
     console.error(error);
     process.exitCode = 1;
 });
+
+module.exports = { main, withServers };
