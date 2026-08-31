@@ -9,8 +9,10 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 ## Established scopes
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
-  5,445 statements, 4,044 branches, 978 functions and 4,464 lines, all 100%.
-  Latest full local evidence: 918 tests/86 suites at `15c5a4e`.
+  5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
+  Latest full local evidence: 940 tests/92 suites at `6018807`, including the
+  terminal-interruption correction. Exact results and report identity are in
+  `ADMISSION_TIMEOUT_VERIFICATION.md`; older checkpoints below remain historical.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
 - Six starter applications and shared `run-app.ts`: original-TypeScript gate,
   104 tests per mode, 600 statements, 299 branches, 160 functions and 472 lines,
