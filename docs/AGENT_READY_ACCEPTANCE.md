@@ -41,6 +41,14 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Shutdown coverage follow-up: the b2ca53a PR Node 18 job passed 1,770 tests but
+failed the global coverage gate, missing the render-drain timeout path in
+`PageManager`. New zero-budget unit and real-HTTP cases assert that specific
+cause, alongside the unchanged 20ms scenario. No runtime or timer APIs changed.
+The complete focused selection passed 125 tests on actual Windows Node 18.20.8
+and 22.21.0, with all-four 100% of PageManager (462/303/87/372). Exact evidence
+and the limits of the timing explanation are in `COVERAGE_SCOPE_AUDIT.md`.
+
 Isolated-harness correction: both 665be56 CI workflows failed; Node 22/24 and
 lifecycle logs identified the missing `finishVerificationSummary` helper in the
 copied browser harness. The fix adds that unchanged helper, not a checkout

@@ -8,6 +8,36 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Explicit zero-budget page shutdown
+
+The b2ca53a PR Node 18 [job](https://github.com/lakam99/redweb/actions/runs/33416866879/job/99569507960)
+passed 1,770 tests with ten skips, but failed aggregate coverage at
+99.92/99.97/99.89/99.91. Missing PageManager lines 532–534 and 540 identify render
+drain timeout/reporting and outstanding render-page disposal. The existing native
+test gives shutdown and aborted-render cleanup competing 20ms deadlines; either
+can finish first. That explains a plausible coverage race, not proof of the
+historical run's precise timer order or a runtime shutdown defect.
+
+A focused unit uses real PageManager/LivePage ownership and controlled application
+promises, with no timer/API mocks. Zero shutdown budget requires both timeout
+causes and empty registries; application promises are released afterward. The
+real-HTTP test now covers both zero and the existing 20ms budget, requiring the
+nested render-timeout cause only for zero. Runtime source and limits are unchanged.
+
+The full focused selection (all `tests/htmx`, `tests/unit/page-access.unit.test.js`,
+and the page-access, live-html, reactive and runtime-diagnostics integration files)
+passed 125 tests on Windows Node 18.20.8 in 11.199s and Node 22.21.0 in 10.285s.
+PageManager covers 462 statements / 303 branches / 87 functions / 372 lines, all
+100%. Both `coverage/page-shutdown-complete-node18/coverage-final.json` and
+`coverage/page-shutdown-complete-node22/coverage-final.json` have SHA-256
+`0e2653a6978178246aa8a73cefb1f5465bdd97713a93f034281fa9865335b344`;
+unchanged LF-normalized source SHA-256
+`8917ac1cb84cc6b5535c6aee95990842e374db06cb033e4d69e2a57ce3d47520`.
+Earlier 38-test and 90-test partial selections passed behavior but failed coverage
+because they omitted other existing PageManager paths; they are not acceptance
+runs. The new tests are included by ordinary full-suite discovery. CI confirmation
+and the broader release conjunction remain separate; no historical failure is erased.
+
 ### Isolated browser harness dependency correction
 
 Both 665be56 workflows failed ([PR](https://github.com/lakam99/redweb/actions/runs/33415303095),

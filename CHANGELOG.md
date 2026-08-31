@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Test zero-budget shutdown explicitly with real page ownership and HTTP requests, alongside the existing positive-budget cancellation case. Assert the nested render-timeout cause so coverage does not rely on competing timers settling in a particular order; runtime behavior and coverage limits are unchanged.
+
 - Copy the shared browser-report helper into the isolated package-verification harness. Add a regression that resolves literal relative harness dependencies from the copied inputs; real packed-consumer verification remains required. This corrects the missing-module CI failure introduced by the browser-coordinator follow-up, without changing runtime code or acceptance limits.
 
 - Add maintained direct coverage for the unchanged evaluation process and evidence-sealing tools. Combine real CLI/subprocess/filesystem/listener checks with explicit platform-failure units; instrument selected modules in memory without rewriting frozen source or sealed evaluations. This is verification coverage, not a new agent trial or a resolution of historical cleanup failures.

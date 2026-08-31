@@ -198,16 +198,21 @@ describe('protected pages and revocation over real HTTP/WebSockets', () => {
         expect(server.manager.lifetimes.size).toBe(0);
     });
 
-    test('shutdown remains bounded when both loading and disposal ignore cancellation', async () => {
+    test.each([0, 20])('shutdown remains bounded when loading and disposal ignore cancellation (budget %ims)', async shutdownTimeoutMs => {
         let entered = false;
         class Page { loading() { entered = true; return new Promise(() => {}); } disposed() { return new Promise(() => {}); } render() { return '<p>never</p>'; } }
         page('/')(Page);
-        await boot(Page, { shutdownTimeoutMs: 20 });
+        await boot(Page, { shutdownTimeoutMs });
         const pending = get().catch(error => error);
         await waitForCondition(() => entered, 'loading');
         const stopping = server; server = undefined;
         const began = Date.now();
-        await expect(stopping.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        const failure = await stopping.shutdown().catch(error => error);
+        expect(failure.message).toBe('Live HTML shutdown failed.');
+        if (shutdownTimeoutMs === 0) {
+            expect(failure.errors.some(error => error.errors?.some(cause =>
+                cause.code === 'LIVE_HTML_SHUTDOWN_TIMEOUT' && cause.message === 'Live HTML render cleanup exceeded shutdownTimeoutMs.'))).toBe(true);
+        }
         expect(Date.now() - began).toBeLessThan(1000);
         await pending;
         expect(stopping.server.listening).toBe(false);
