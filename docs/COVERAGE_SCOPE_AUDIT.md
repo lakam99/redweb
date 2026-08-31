@@ -471,6 +471,11 @@ for unit/native boundaries, retained identities and isolated-package distinction
 
 No direct coverage map was found for these remaining active verification/build files:
 
+The development-refresh coordinator has a reviewed launch/cleanup correction and
+15 explicit boundary units, plus the separate actual generated-app browser gate.
+This is not a complete source map and does not remove it from this inventory.
+See `BROWSER_OWNER_VERIFICATION.md` for reproduced failures and exact boundaries.
+
 ```text
 scripts/verify-browser-coverage.js
 scripts/verify-client-source-coverage.js

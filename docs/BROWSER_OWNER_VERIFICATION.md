@@ -137,3 +137,48 @@ running when this evidence was recorded and are not presumed passed.
 No npm publication, deployment, benchmark waiver, new long soak or whole-repository
 100% claim is made. Remaining direct coordinator/browser-helper coverage and the
 separate performance acceptance remain open.
+
+## Development-refresh launch cleanup follow-up
+
+Independent audit found that the generated-app refresh coordinator acquired
+Chromium before entering its cleanup block. If acquisition rejected, it did not
+mark cleanup uncertain, so the workspace owner could remove the browser profile
+without independently verified process termination. Its fallback pipe/reference
+releases could also replace the original error or skip the next release.
+
+Seven of thirteen initial explicit boundary units failed before correction.
+These were injected launch/process/filesystem faults, not a claim that a native
+Chromium leak or falsy shutdown rejection had been observed in a normal run.
+
+The coordinator now acquires inside its existing guarded lifecycle. A launch
+without a returned browser marks the workspace for retention; confirmed ordinary
+or signal exit remains clean. Shutdown has a 15-second deadline. The existing
+coercion-free error normalizer preserves falsy failures, and pipe/reference
+releases are attempted independently while retaining every error. No new owner
+class or public API was added; frozen helpers remain unchanged.
+
+The expanded unit suite has 15 cases, including a pending shutdown using the real
+15-second deadline, an absent stderr pipe, both fallback failures, signal exit,
+pre-acquisition failures and falsy errors. It passes in 15.828 seconds. Its
+45-second per-case allowance includes the shutdown deadline. The critic approved
+the scope, ownership and test boundaries. These units do not establish complete
+direct coverage of the coordinator; that file remains in the coverage audit.
+
+The actual `npm run verify:development:browser` workflow separately exercises
+generated realtime/site applications, real watchers and Chromium: TSX/CSS rebuilds,
+failed-build recovery, draft/focus retention, explicit discard, state reset,
+outage/reconnect, malformed/redirect/partial responses and delayed-script draft
+guards under self-only CSP. The final-source run passed all of these checks on
+Windows / Node 22.21.0 / Chrome 152.0.7977.64, including observed actual
+back-forward-cache restoration. Pretest, generated docs, three type configurations
+and four documentation units pass. It already runs in CI with a ten-minute outer limit.
+The existing raw page/command acquisition and inner template/helper cleanup paths
+remain a separate audit boundary; this correction does not claim they are all
+bounded. Pipe/reference release is not proof of process termination.
+
+Corrected coordinator SHA-256:
+`7309fde16234bcdea8ae3cbe2870d181b1e5ad7a359f5c37dc0818b9c7cf5402`.
+The preceding complete regression at `69dcbf8` passed 1,469 tests/140 suites,
+with two POSIX-only skips and all-four 100% of the 91-file library scope. Its
+two hosted workflows passed completely. New cases are not retroactively added
+to that count; current full-regression and hosted results remain separate.

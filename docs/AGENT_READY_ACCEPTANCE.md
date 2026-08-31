@@ -79,6 +79,14 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Development-refresh ownership follow-up: guarded browser acquisition now retains
+  uncertain launch cleanup, bounds shutdown to 15 seconds and independently
+  preserves fallback failures. Seven initial explicit boundary units reproduced
+  failures before correction; all 15 expanded units pass afterward, including the
+  real shutdown watchdog. Native generated-app refresh remains a separate gate.
+  No public API/frozen helper changed; full direct coordinator coverage and inner
+  template/helper ownership remain open. See `BROWSER_OWNER_VERIFICATION.md`.
+
 - Full feedback-driver follow-up: two additional real Chromium cases verify
   successful acceptance and an exact cleanup-only rejection, including listener
   closure and pending-waiter resolution. The maintained scope now passes 15 tests

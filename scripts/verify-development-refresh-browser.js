@@ -6,6 +6,7 @@ const net = require('net');
 const path = require('path');
 const ProjectInitializer = require('../src/cli/ProjectInitializer');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
+const { verificationError } = require('./lib/verificationError');
 const { npmEntrypoint, spawnManaged, stopProcessTree } = require('./evaluation/process');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, combineFailures } = require('./verify-live-html-browser');
 const { verifyRefreshControls } = require('./lib/verify-refresh-controls');
@@ -147,24 +148,33 @@ async function main() {
         if (!executable) throw new Error('Chromium is required for the development refresh browser gate.');
         const profile = path.join(execution.directory, 'browser');
         fs.mkdirSync(profile);
-        const { browser, endpoint } = await launchBrowserWithRetry(executable, profile);
-        let failure;
+        let browser, failure;
+        const recordCleanup = value => {
+            const error = verificationError(value);
+            execution.cleanupFailure = combineFailures(execution.cleanupFailure, error);
+            failure = combineFailures(failure, error);
+        };
         try {
+            const launched = await launchBrowserWithRetry(executable, profile);
+            browser = launched.browser;
+            const endpoint = launched.endpoint;
             const debugPort = new URL(endpoint).port;
             for (const template of ['realtime', 'site']) await verifyTemplate(execution, debugPort, template);
             await verifyRefreshControls(debugPort, execution.directory, { until, click, closePage });
-        } catch (error) { failure = error; }
+        } catch (error) { failure = verificationError(error); }
         finally {
             try {
-                await stopBrowser(browser.child);
-                if (browser.child.exitCode === null && browser.child.signalCode === null) {
-                    throw new Error('Development refresh browser did not exit; retaining its workspace.');
-                }
+                if (browser) {
+                    await withTimeout(stopBrowser(browser.child), 'development refresh browser shutdown', 15000);
+                    if (browser.child.exitCode === null && browser.child.signalCode === null) {
+                        throw new Error('Development refresh browser did not exit; retaining its workspace.');
+                    }
+                } else throw new Error('Development refresh browser launch cleanup could not be independently verified.');
             } catch (error) {
-                execution.cleanupFailure = combineFailures(execution.cleanupFailure, error);
-                failure = combineFailures(failure, error);
-                browser.child.stderr?.destroy();
-                browser.child.unref();
+                recordCleanup(error);
+                for (const release of [() => browser?.child.stderr?.destroy(), () => browser?.child.unref()]) {
+                    try { release(); } catch (error) { recordCleanup(error); }
+                }
             }
         }
         if (failure) throw failure;

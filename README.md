@@ -221,6 +221,8 @@ Browser and authored-source coverage share strict source-map and execution-count
 
 Feedback verification also bounds browser commands so a disconnected debugging socket reaches server cleanup. [Native failure evidence](docs/FEEDBACK_COMMAND_VERIFICATION.md) records the fix, full driver coverage using actual Chromium/server cases, and the remaining acquisition boundary.
 
+Development-refresh checks retain uncertain browser-launch cleanup and preserve shutdown failures. [Verification boundaries](docs/BROWSER_OWNER_VERIFICATION.md#development-refresh-launch-cleanup-follow-up) distinguish these fault tests from real generated-app/browser acceptance.
+
 `npm run verify:live-html:load` checks 200 expired renders, 110 connected clients, presence/broadcast delivery and heap growth after client closure/session expiry, before server shutdown. Its separate `verify:live-html:load:coverage` command tests the verifier's HTTP/socket ownership, malformed responses, real timeouts and failure handling with unit and native integration tests. It requires all-four 100% coverage of the three verifier modules; instrumented tests do not replace clean memory measurements.
 
 `npm run verify:jsx:performance` renders 10,000 component rows and validates their complete markup outside the timed render. CI supervises the command externally; the five-second performance limit cannot itself interrupt synchronous code. `npm run verify:jsx:coverage` separately checks malformed output, measurement limits and the actual CLI, requiring all-four 100% coverage of this verifier.
