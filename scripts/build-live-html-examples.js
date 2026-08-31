@@ -5,15 +5,19 @@ const path = require('path');
 const ts = require('typescript');
 
 const examples = path.resolve(__dirname, '..', 'examples', 'live-html');
-const configFile = ts.readConfigFile(path.join(examples, 'tsconfig.json'), ts.sys.readFile);
+// TypeScript diagnostics use slash-normalized filenames, including on Windows.
+const configFile = ts.readConfigFile(path.join(examples, 'tsconfig.json').replaceAll('\\', '/'), ts.sys.readFile);
 if (configFile.error) throw new Error(ts.formatDiagnostic(configFile.error, formatHost()));
 const config = ts.parseJsonConfigFileContent(configFile.config, ts.sys, examples);
+if (config.errors.length) throw new Error(ts.formatDiagnostics(config.errors, formatHost()));
 const program = ts.createProgram(config.fileNames, config.options);
 const diagnostics = ts.getPreEmitDiagnostics(program);
 if (diagnostics.length) throw new Error(ts.formatDiagnostics(diagnostics, formatHost()));
 const outputs = new Map();
 const emitted = program.emit(undefined, (fileName, content) => outputs.set(path.resolve(fileName), content));
-if (emitted.emitSkipped) throw new Error(ts.formatDiagnostics(emitted.diagnostics, formatHost()));
+if (emitted.emitSkipped || ![...outputs.keys()].some(file => /\.[cm]?js$/.test(file))) {
+    throw new Error(`Example compilation did not emit JavaScript output.\n${ts.formatDiagnostics(emitted.diagnostics, formatHost())}`);
+}
 
 const stale = [];
 outputs.forEach((content, output) => {

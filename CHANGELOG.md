@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix example-build verification accepting invalid compiler options or configurations that emit no runnable JavaScript. Normalize Windows diagnostic paths and report skipped output clearly. Require complete original-source coverage for the example, protocol-type and documentation generators through real compiler/CLI/filesystem checks.
+
 - Keep the first timeout or cancellation terminal across later admission/authorization checkpoints, including reentrant abort listeners. A delivered timeout can no longer permit a later stage just because a clock sample remains below the nominal deadline. Retain pending-work capacity until actual settlement.
 
 - Require complete authored-source coverage for incremental page/component/socket templates and standalone rendering/room examples, using unchanged real-network acceptance against normal and instrumented builds. Preserve verification failures while independently attempting socket and server cleanup.

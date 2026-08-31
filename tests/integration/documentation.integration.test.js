@@ -1,7 +1,6 @@
 'use strict';
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { verifyDocumentation } = require('../../scripts/lib/verify-documentation');
@@ -9,6 +8,7 @@ const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspa
 const { verifyRoomExample } = require('../../scripts/lib/verify-room-example');
 const { copyDocumentationSource } = require('../helpers/documentation');
 const { TEMPLATES } = require('../../src/cli/templates');
+const { verifyScript } = require('../helpers/script-coverage');
 
 const root = path.resolve(__dirname, '../..');
 
@@ -39,23 +39,28 @@ describe('documented applications without mocks', () => {
         expect(run(['--check']).stdout).toBe('');
         expect(run(['--check', '--check']).status).toBe(1);
         expect(run(['--unknown']).stderr).toContain('Usage:');
-        expect(run(['--release', '--check']).stderr).toContain('Move unreleased changes');
     });
 
-    test('release snapshots are immutable and drift fails the actual check command', () => {
-        const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-docs-command-'));
-        try {
+    test('release snapshots are immutable and drift fails the actual check command', async () => {
+        const { version } = require('../../package.json');
+        await verifyScript({ script: 'scripts/generate-docs.js', testFile: __filename,
+          prepare(workspace) {
             copyDocumentationSource(root, workspace);
-            const { version } = require('../../package.json');
+            fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n- Pending.\n');
+          },
+          async exercise(workspace, run) {
+            for (const args of [['--unknown'], ['--check', '--check']]) {
+                await expect(run(args)).rejects.toThrow('Usage:');
+            }
+            await expect(run(['--release', '--check'])).rejects.toThrow('Move unreleased changes');
             fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), `# Changelog\n\n## ${version}\n\n- Released.\n`);
-            const run = args => spawnSync(process.execPath, [path.join(workspace, 'scripts/generate-docs.js'), ...args], { cwd: workspace, encoding: 'utf8', timeout: 10000, windowsHide: true });
-            expect(run(['--release']).status).toBe(0);
+            expect(await run(['--release'])).toBe('');
             const snapshot = fs.readFileSync(path.join(workspace, `docs/releases/${version}.json`), 'utf8');
             expect(JSON.parse(snapshot).channel).toBe(version);
             // Git on Windows can restore the same generated file with CRLF line endings.
             fs.writeFileSync(path.join(workspace, `docs/releases/${version}.json`), snapshot.replace(/\n/g, '\r\n'));
-            expect(run(['--release']).status).toBe(0);
-            expect(run(['--check']).status).toBe(0);
+            expect(await run(['--release'])).toBe('');
+            expect(await run(['--check'])).toBe('');
             const readmeFile = path.join(workspace, 'README.md');
             const originalReadme = fs.readFileSync(readmeFile, 'utf8');
             const catalogueFile = path.join(workspace, 'docs/generated.json');
@@ -67,9 +72,7 @@ describe('documented applications without mocks', () => {
                     .replace(after, after + '\n<!-- redweb:setup:end -->');
                 for (const args of [[], ['--release'], ['--check']]) {
                     fs.writeFileSync(readmeFile, invalid);
-                    const result = run(args);
-                    expect(result.status).toBe(1);
-                    expect(result.stderr).toContain('must not overlap or nest');
+                    await expect(run(args)).rejects.toThrow('must not overlap or nest');
                     expect(fs.readFileSync(readmeFile, 'utf8')).toBe(invalid);
                     expect(fs.readFileSync(catalogueFile, 'utf8')).toBe(originalCatalogue);
                     expect(fs.readFileSync(snapshotFile, 'utf8')).toBe(originalSnapshot);
@@ -80,8 +83,8 @@ describe('documented applications without mocks', () => {
             expect(originalReadme).toContain(`cd my-realtime\nnpm install --save-exact redweb@${version}`);
             expect(originalReadme).not.toContain('TARBALL');
             fs.writeFileSync(readmeFile, originalReadme.replace('increment() { this.count += 1; }', 'increment() { this.count += 2; }'));
-            expect(run(['--check']).stderr).toContain('README recipe is stale');
-            expect(run(['--release']).status).toBe(0);
+            await expect(run(['--check'])).rejects.toThrow('README recipe is stale');
+            expect(await run(['--release'])).toBe('');
             for (const name of ['setup', 'realtime', 'http-ws']) {
                 const start = `<!-- redweb:${name}:start -->`;
                 const end = `<!-- redweb:${name}:end -->`;
@@ -92,30 +95,29 @@ describe('documented applications without mocks', () => {
                     originalReadme + `\n${start}\n${end}`,
                 ]) {
                     fs.writeFileSync(readmeFile, invalid);
-                    const result = run(['--check']);
-                    expect(result.status).toBe(1);
-                    expect(result.stderr).toContain(`exactly one ${name} recipe region`);
+                    await expect(run(['--check'])).rejects.toThrow(`exactly one ${name} recipe region`);
                 }
                 fs.writeFileSync(readmeFile, originalReadme.replace(start, start + '\nStale content'));
-                expect(run(['--check']).stderr).toContain('README recipe is stale');
+                await expect(run(['--check'])).rejects.toThrow('README recipe is stale');
             }
             fs.writeFileSync(readmeFile, 'A README with no generated region.');
-            expect(run(['--check']).stderr).toContain('exactly one realtime recipe region');
+            await expect(run(['--check'])).rejects.toThrow('exactly one realtime recipe region');
             fs.writeFileSync(readmeFile, originalReadme);
             const guide = path.join(workspace, 'docs/GETTING_STARTED.md');
             fs.appendFileSync(guide, '\nAdditional documented behavior.\n');
-            expect(run(['--check']).stderr).toContain('Generated documentation is stale');
-            expect(run(['--release']).stderr).toContain('immutable');
+            await expect(run(['--check'])).rejects.toThrow('Generated documentation is stale');
+            await expect(run(['--release'])).rejects.toThrow('immutable');
             expect(fs.readFileSync(path.join(workspace, `docs/releases/${version}.json`), 'utf8').replace(/\r\n/g, '\n')).toBe(snapshot);
-            expect(run([]).status).toBe(0);
+            expect(await run([])).toBe('');
             expect(JSON.parse(fs.readFileSync(path.join(workspace, 'docs/generated.json'), 'utf8')).channel).toBe('unreleased');
             const developmentReadme = fs.readFileSync(readmeFile, 'utf8');
             expect(developmentReadme).toContain('npx --yes --package TARBALL redweb init my-realtime --template realtime');
             expect(developmentReadme).toContain('cd my-realtime\nnpm install --save-exact TARBALL');
             expect(developmentReadme).not.toContain(`npx --yes redweb@${version}`);
-            expect(run(['--check']).status).toBe(0);
+            expect(await run(['--check'])).toBe('');
             fs.unlinkSync(path.join(workspace, 'docs/generated.json'));
-            expect(run(['--check']).stderr).toContain('Generated documentation is stale');
-        } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
-    });
+            await expect(run(['--check'])).rejects.toThrow('Generated documentation is stale');
+          },
+        });
+    }, 600000); // Both modes include all invalid-region cases, each with bounded owned cleanup.
 });

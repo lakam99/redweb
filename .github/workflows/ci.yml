@@ -80,6 +80,17 @@ jobs:
         timeout-minutes: 1
       - run: npm run verify:room:coverage
         timeout-minutes: 3
+      - run: npm run verify:build:coverage
+        id: build-coverage
+        timeout-minutes: 20
+      - name: Preserve generator coverage evidence
+        if: ${{ always() && steps.build-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: generator-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/tool-source/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:memory
       - run: npm run verify:cli
         timeout-minutes: 5
