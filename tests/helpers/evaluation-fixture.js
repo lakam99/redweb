@@ -34,8 +34,9 @@ function retainTrialFailure(owner, evidence, error) {
     try {
         const result = path.join(evidence, 'independent-submission-1.json');
         const report = fs.existsSync(result) ? JSON.parse(fs.readFileSync(result, 'utf8')) : null;
-        const executionRemains = fs.readdirSync(owner.directory).some(name => name.startsWith('evaluation-run-'));
-        if (report?.cleanupError || report?.retainedExecutionDirectory || executionRemains) owner.cleanupFailure = error;
+        const ownedWorkRemains = fs.readdirSync(owner.directory).some(name =>
+            name.startsWith('evaluation-run-') || name.startsWith('framework-acceptance-browser-'));
+        if (report?.cleanupError || report?.retainedExecutionDirectory || ownedWorkRemains) owner.cleanupFailure = error;
     } catch (recordError) {
         error = new AggregateError([error, recordError], error.message, { cause: error });
         owner.cleanupFailure = error;

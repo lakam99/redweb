@@ -51,6 +51,17 @@ one skip in 7.652s; its retained map
 CI bounds and preserves this runner map separately; historical trial records,
 remaining verifiers and broader release requirements remain untouched.
 
+Trial-wrapper follow-up: the evaluator routes browser/profile cleanup failures
+through `error` and sometimes `causes`, not application `cleanupError`. Therefore
+the frozen runner can remove its execution directory while its browser profile
+remains. Two new filesystem regressions failed on the original wrapper, both
+with an error/causes report and without any report. The leftover-directory guard
+now also recognizes `framework-acceptance-browser-*`; it preserves the original
+CLI error and profile bytes without classifying message text. All 23 maintained
+tests pass in 9.559s, retaining the identical runner map above. The two added
+tests are file-only wrapper units, not observations of a native browser failure.
+Frozen cleanup behavior and historical evaluations are unchanged.
+
 ### Frozen candidate preparation
 
 `verify:evaluation:prepare:coverage` passed five tests in 12.289s on Windows /

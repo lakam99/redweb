@@ -71,7 +71,8 @@ test.each(['passed', 'copy-error', 'verifier-error', 'cleanup-error', 'retained-
     });
 });
 
-test.each(['cleanup-error', 'retained-execution', 'unrecorded-execution', 'invalid-report', 'ordinary'])
+test.each(['cleanup-error', 'retained-execution', 'unrecorded-execution', 'invalid-report', 'ordinary',
+    'browser-profile-report', 'browser-profile-no-report'])
 ('native-fixture failure retention preserves %s evidence before outer cleanup', async mode => {
     const owner = new VerificationWorkspace();
     const primary = new Error('original CLI failure');
@@ -84,6 +85,10 @@ test.each(['cleanup-error', 'retained-execution', 'unrecorded-execution', 'inval
             if (mode === 'unrecorded-execution') fs.mkdirSync(path.join(owner.directory, 'evaluation-run-fixture'));
             if (mode === 'invalid-report') write(result, '{broken report');
             if (mode === 'ordinary') write(result, { passed: false, error: 'build failed' });
+            if (mode.startsWith('browser-profile')) {
+                write(path.join(owner.directory, 'framework-acceptance-browser-fixture/Default/owned.txt'), 'retained profile fixture');
+                if (mode === 'browser-profile-report') write(result, { passed: false, error: 'browser assertion failed', causes: ['browser assertion failed', 'profile cleanup failed'] });
+            }
             throw retainTrialFailure(owner, evidence, primary);
         }).catch(error => error);
         expect(failure.message).toBe(primary.message);
@@ -95,6 +100,7 @@ test.each(['cleanup-error', 'retained-execution', 'unrecorded-execution', 'inval
         expect(fs.existsSync(owner.directory)).toBe(mode !== 'ordinary');
         expect(failure.retainedWorkspace).toBe(mode === 'ordinary' ? undefined : owner.directory);
         if (mode === 'cleanup-error') expect(JSON.parse(fs.readFileSync(path.join(evidence, 'independent-submission-1.json'), 'utf8')).cleanupError).toBe('uncertain cleanup');
+        if (mode.startsWith('browser-profile')) expect(fs.readFileSync(path.join(owner.directory, 'framework-acceptance-browser-fixture/Default/owned.txt'), 'utf8')).toBe('retained profile fixture');
     } finally {
         // These are synthetic file-only faults: no live process is being rescued.
         await fs.promises.rm(owner.directory, { recursive: true, force: true });

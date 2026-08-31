@@ -41,6 +41,13 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Trial-wrapper browser-profile follow-up: two additional filesystem regressions
+reproduced deletion of a leftover profile, with and without a saved report. The
+wrapper now preserves the evaluator's known profile directory as well as its
+execution directory; it does not infer cleanup from error-message text. The full
+trial gate passes 23 tests in 9.559s with the unchanged 100% runner map. This
+source-derived wrapper correction leaves the frozen evaluator untouched.
+
 Trial-runner coverage follow-up: 21 tests pass in 10.367s at all-four 100% of
 the unchanged runner (66/14/6/53). Native checks cover archives, build failures,
 input/source tampering and the evaluator's actual browser protocol control;
