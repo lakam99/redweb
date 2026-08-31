@@ -8,6 +8,7 @@ const ts = require('typescript');
 const { npmEntrypoint } = require('./evaluation/process');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
+const { reportCommand } = require('./lib/reportCommand');
 const { linkApplication } = require('./lib/verify-starter');
 const { projectFiles, TEMPLATES } = require('../src/cli/templates');
 const ApplicationCoverage = require('./lib/ApplicationCoverage');
@@ -31,14 +32,19 @@ async function main() {
     try { await new VerificationWorkspace().run(async execution => {
         for (const template of TEMPLATES) {
             const project = path.join(execution.directory, template);
+            const target = path.join(runDirectory, template);
+            fs.mkdirSync(target);
             await execution.command([path.join(root, 'bin/redweb.js'), 'init', project, '--template', template, '--json']);
             const files = projectFiles(require('../package.json').version, template);
             const inputs = Object.fromEntries(files.map(file => [file.path, hash(fs.readFileSync(path.join(project, file.path)))]));
             const manifest = JSON.parse(fs.readFileSync(path.join(project, 'package.json'), 'utf8'));
             linkApplication(root, project, template, manifest);
             // A real tsc build and the unchanged shipped test command pass first.
-            const plain = await execution.command([npmEntrypoint(), 'run', 'test:coverage'], { cwd: project });
-            const v8Report = fs.readFileSync(path.join(project, 'coverage/coverage-final.json'), 'utf8');
+            const retainedV8 = path.join(target, 'v8-coverage.json');
+            const plain = await reportCommand(execution, [npmEntrypoint(), 'run', 'test:coverage'], { cwd: project },
+                path.join(project, 'coverage/coverage-final.json'), retainedV8);
+            fs.writeFileSync(path.join(target, 'plain.txt'), plain);
+            const v8Report = fs.readFileSync(retainedV8, 'utf8');
             const config = ts.getParsedCommandLineOfConfigFile(path.join(project, 'tsconfig.json'), {}, {
                 ...ts.sys, onUnRecoverableConfigFileDiagnostic: error => { throw new Error(ts.flattenDiagnosticMessageText(error.messageText, '\n')); },
             });
@@ -54,22 +60,19 @@ async function main() {
             const reports = path.join(project, 'source-coverage');
             fs.mkdirSync(reports);
             const preload = path.join(root, 'scripts/lib/record-application-coverage.cjs');
-            const instrumented = await execution.command(['--test', 'test/app.test.cjs', 'test/run-app.test.cjs',
+            const retainedWorkers = path.join(target, 'process-reports');
+            const instrumented = await reportCommand(execution, ['--test', 'test/app.test.cjs', 'test/run-app.test.cjs',
                 ...(template === 'dashboard' ? ['test/rate-window.test.cjs'] : [])], { cwd: project, environment: {
                     NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${JSON.stringify(preload)}`,
                     REDWEB_APPLICATION_COVERAGE_DIRECTORY: reports,
-                } });
-            const reportFiles = fs.readdirSync(reports).sort();
+                } }, reports, retainedWorkers);
+            fs.writeFileSync(path.join(target, 'instrumented.txt'), instrumented);
+            const reportFiles = fs.readdirSync(retainedWorkers).sort();
             if (!reportFiles.length) throw new Error(`${template}: no actual process coverage reports`);
-            for (const filename of reportFiles) coverage.collect(JSON.parse(fs.readFileSync(path.join(reports, filename), 'utf8')));
+            for (const filename of reportFiles) coverage.collect(JSON.parse(fs.readFileSync(path.join(retainedWorkers, filename), 'utf8')));
             const report = JSON.stringify({ ...coverage.report(), compilerOptions: config.options,
                 instrumentedSha256: Object.fromEntries(Object.entries(coverage.compiled).map(([filename, source]) => [filename, hash(source)])) }, null, 2);
-            const target = path.join(runDirectory, template);
-            fs.mkdirSync(target);
             fs.writeFileSync(path.join(target, 'coverage.json'), report);
-            fs.writeFileSync(path.join(target, 'plain.txt'), plain);
-            fs.writeFileSync(path.join(target, 'instrumented.txt'), instrumented);
-            fs.writeFileSync(path.join(target, 'v8-coverage.json'), v8Report);
             assert.deepEqual(Object.fromEntries(files.map(file => [file.path, hash(fs.readFileSync(path.join(project, file.path)))])), inputs,
                 'Plain and instrumented runs must retain identical application and test inputs');
             summary.applications[template] = { coverage: coverage.report().summary, reportSha256: hash(report),

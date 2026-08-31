@@ -435,6 +435,12 @@ flow. Outer test budgets and cleanup were corrected without changing the inner
 limits. The final scope, isolated package and full regression gates pass.
 See `ACTION_INPUT_VERIFICATION.md`.
 
+The starter measurement/authored coordinators below now retain available raw
+reports before parsing or workspace cleanup. Their shared `reportCommand` helper
+has a maintained 15-test scope at all-four 100% (16 statements, eight branches,
+one function, 14 lines). This does not remove either coordinator from the remaining
+direct-coverage list. See `STARTER_REPORT_RETENTION.md`.
+
 No direct coverage map was found for these remaining active verification/build files:
 
 ```text

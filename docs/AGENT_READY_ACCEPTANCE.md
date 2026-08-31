@@ -79,6 +79,18 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Starter-report retention follow-up: both coverage runners preserve available
+  raw reports before parsing/collection and temporary workspace removal. The
+  authored runner retains all individual process maps. A shared helper reserves
+  exclusive destinations and preserves command plus copy failures without
+  certifying partial bytes as complete. Fifteen unit/native checks pass at
+  all-four 100% of that helper; 31 collector-compatibility checks also pass.
+  Both actual six-application runners complete: V8 measurement remains diagnostic,
+  while authored-source coverage passes 104 tests per mode at unchanged all-four
+  100%, with all 96 process maps retained. See `STARTER_REPORT_RETENTION.md`.
+  These ten added cases are separate from the preceding full regression count;
+  whole-coordinator coverage and broader release gates remain open.
+
 - Action-input verifier follow-up: bounded listening/upgrade, immediate native
   socket ownership, disabled probe reconnect, preserved client errors and
   independent confirmed cleanup reuse existing helpers. Uncertain cleanup retains

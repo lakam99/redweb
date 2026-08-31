@@ -91,6 +91,17 @@ jobs:
           path: coverage/action-verifier/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:reports:coverage
+        id: report-retention-coverage
+        timeout-minutes: 7
+      - name: Preserve report-retention coverage evidence
+        if: ${{ always() && steps.report-retention-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-retention-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/command-report/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:build:coverage
         id: build-coverage
         timeout-minutes: 20

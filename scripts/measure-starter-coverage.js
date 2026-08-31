@@ -6,6 +6,7 @@ const { createHash, randomUUID } = require('node:crypto');
 const { createCoverageMap } = require('istanbul-lib-coverage');
 const { npmEntrypoint } = require('./evaluation/process');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
+const { reportCommand } = require('./lib/reportCommand');
 const { linkApplication } = require('./lib/verify-starter');
 const { projectFiles, TEMPLATES } = require('../src/cli/templates');
 
@@ -27,13 +28,18 @@ async function main() {
     try { await new VerificationWorkspace().run(async execution => {
         for (const template of TEMPLATES) {
             const project = path.join(execution.directory, template);
+            const target = path.join(runDirectory, template);
+            fs.mkdirSync(target);
             await execution.command([path.join(root, 'bin/redweb.js'), 'init', project, '--template', template, '--json']);
             const manifest = JSON.parse(fs.readFileSync(path.join(project, 'package.json'), 'utf8'));
             linkApplication(root, project, template, manifest);
             // Execute the actual generated command while TypeScript source is present.
             // The existing package gate separately verifies source-free deployment.
-            const testOutput = await execution.command([npmEntrypoint(), 'run', 'test:coverage'], { cwd: project });
-            const report = fs.readFileSync(path.join(project, 'coverage/coverage-final.json'), 'utf8');
+            const retainedReport = path.join(target, 'coverage-final.json');
+            const testOutput = await reportCommand(execution, [npmEntrypoint(), 'run', 'test:coverage'], { cwd: project },
+                path.join(project, 'coverage/coverage-final.json'), retainedReport);
+            fs.writeFileSync(path.join(target, 'test-output.txt'), testOutput);
+            const report = fs.readFileSync(retainedReport, 'utf8');
             const map = createCoverageMap(JSON.parse(report));
             const expected = projectFiles(require('../package.json').version, template)
                 .filter(file => /^src\/.*\.tsx?$/.test(file.path))
@@ -43,10 +49,6 @@ async function main() {
                 !Object.keys(map.fileCoverageFor(file).statementMap).length)) {
                 throw new Error(`${template}: coverage must contain every generated TypeScript module and no unrelated modules.`);
             }
-            const target = path.join(runDirectory, template);
-            fs.mkdirSync(target, { recursive: true });
-            fs.writeFileSync(path.join(target, 'coverage-final.json'), report);
-            fs.writeFileSync(path.join(target, 'test-output.txt'), testOutput);
             const hash = value => createHash('sha256').update(value).digest('hex');
             summary.applications[template] = { coverage: map.getCoverageSummary().toJSON(), reportSha256: hash(report),
                 testOutputSha256: hash(testOutput),
