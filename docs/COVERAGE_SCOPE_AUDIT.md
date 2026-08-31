@@ -30,7 +30,27 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
   tests and requires all-four 100% in CI. Nested CSS/HTML copying, excluded source
   files, existing compiled-code preservation, stylesheet replacement and a missing
   source failure are checked without mocks. This closes one of the initial eight
-  shipped-source gaps; seven remain below.
+  shipped-source gaps.
+- Both `recipes/add` authored templates: the existing addition matrix now runs
+  each generated page, component and socket route normally and instrumented,
+  using actual HTTP/WebSocket tests in CJS/ESM and standard/legacy decorator modes.
+  All twelve generated artifacts require complete original-source coverage.
+  Unit coverage of template generation remains in the library scope.
+
+Addition evidence: all six enclosing tests passed in 87.697 seconds on Windows,
+Node 22.21.0 / TypeScript 5.9.3. Each page/component covers three statements/lines
+and two functions; each socket route covers four statements/lines and two
+functions (no authored branches). All four metrics are 100% for each artifact.
+Reports under `coverage/addition-source/` retain pre-build source/test/template/
+compiler-config and collector fingerprints, plain/instrumented outcomes and raw
+child maps, including failure evidence outside disposable workspaces. Run IDs:
+`851bfab5-4ebf-45e9-917e-07935946a060` (CJS standard),
+`8a047f5d-5c49-4371-b6be-5b20d5f461d6` (ESM standard),
+`5d36acc9-7a40-4a06-a46b-2de3069103cd` (CJS legacy),
+`c11c44cf-656d-4f45-8d56-e493d8444c11` (ESM legacy).
+The independent critic approved the source correspondence, failure reporting,
+module-format handling and bounded process cleanup. Both CI runs at `0ca4a7f`
+also passed; the addition extension above follows that checkpoint.
 
 Asset-copier evidence (Windows/Node 22.21.0): two integration tests pass; all eight
 statements/lines, three branches and one function are covered. Original source
@@ -62,8 +82,6 @@ examples/live-html/components.ts
 examples/live-html/counter.ts
 examples/live-html/jsx-page.tsx
 docs/snippets/room-access.tsx
-recipes/add/live.tsx
-recipes/add/socket-route.ts
 ```
 
 Generated example `.js` files are compiled derivatives of their maintained
