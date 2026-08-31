@@ -76,6 +76,8 @@ jobs:
       - run: npm ci
       - run: npm run verify:recovery:coverage
         timeout-minutes: 3
+      - run: npm run verify:assets:coverage
+        timeout-minutes: 1
       - run: npm run verify:memory
       - run: npm run verify:cli
         timeout-minutes: 5

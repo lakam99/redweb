@@ -25,6 +25,26 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 - Server recovery policy/coordinator/CLI: maintained CI coverage command,
   76 tests/five suites, 132 statements, 25 branches, 25 functions and 120 lines,
   all 100%. See `SERVER_RECOVERY_CANDIDATE.md` for exact report identity.
+- Shipped `recipes/shared/copy-assets.cjs`: `npm run verify:assets:coverage`
+  now measures the original source under c8 through actual subprocess/filesystem
+  tests and requires all-four 100% in CI. Nested CSS/HTML copying, excluded source
+  files, existing compiled-code preservation, stylesheet replacement and a missing
+  source failure are checked without mocks. This closes one of the initial eight
+  shipped-source gaps; seven remain below.
+
+Asset-copier evidence (Windows/Node 22.21.0): two integration tests pass; all eight
+statements/lines, three branches and one function are covered. Original source
+SHA-256: `5e340377eec8a59b64e0dc0d5791de0826dec8b82d40c3502b67eda6f7aaefee`.
+Report `coverage/recipe-assets/coverage-final.json` SHA-256:
+`bc857afaed89d95aea1bfa448641f5ac2433467e8eed75afbeec99d2ad12c280`.
+
+The subsequent complete local regression at `db9e469` passed 925 tests/88 suites
+in 455.485 seconds with all-four 100% library coverage; report SHA-256:
+`38aec4ec3b394f15fa96bfc11d87683a1da83ff9c0fd37f8b21a7a47815e0cab`.
+Both [PR CI](https://github.com/lakam99/redweb/actions/runs/33354236822) and
+[push CI](https://github.com/lakam99/redweb/actions/runs/33354234299) passed all
+Node 18/20/22/24 and lifecycle jobs. The asset-copier tests above were added after
+that full run and passed separately; they are not retroactively included in 925.
 
 The exact historical package/client/browser/starter identities and mock boundaries
 remain in `CLIENT_POLISH_VERIFICATION.md`, `POLISH_RELEASE_CHECKPOINT.md` and the
@@ -44,7 +64,6 @@ examples/live-html/jsx-page.tsx
 docs/snippets/room-access.tsx
 recipes/add/live.tsx
 recipes/add/socket-route.ts
-recipes/shared/copy-assets.cjs
 ```
 
 Generated example `.js` files are compiled derivatives of their maintained
