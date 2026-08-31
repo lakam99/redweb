@@ -42,7 +42,7 @@ class SoakClients {
         record.closed = (code, reason) => {
             if (record.closing) return;
             const detail = Buffer.isBuffer(reason) ? reason.toString('utf8') : String(reason ?? '');
-            const suffix = detail ? `: ${detail}` : '';
+            const suffix = detail ? `, reason ${JSON.stringify(detail)}` : '';
             this.fail(new Error(`Soak client disconnected unexpectedly (code ${code ?? 'unknown'}${suffix}).`));
         };
         socket.on('message', record.message); socket.on('error', record.error); socket.on('close', record.closed);

@@ -107,10 +107,12 @@ removed only after terminal validation. Outcome SHA-256:
 stderr SHA-256:
 `951a06f05779be74031fb2f7736645557593b1cc6f1b750736b77a8348241131`.
 
-The old soak client discarded the native close code and reason. It now preserves
-both; unit and real-WebSocket checks cover framework policy and transport closes,
-including absent codes, without changing delivery accounting. The maintained
-soak gate passes93 tests at all-four100% across its existing four-file scope.
+The old soak client discarded the native close code and reason. Unexpected close
+events now preserve both, with reasons escaped for unambiguous line-oriented logs;
+unit and real-WebSocket checks cover framework policy and transport closes,
+including absent codes, without changing delivery accounting. An earlier error
+remains the primary failure if its event arrives before close. The maintained
+soak gate passes94 tests at all-four100% across its existing four-file scope.
 
 A separate no-mock regression deterministically reproduced one possible false
 disconnect: a responsive same-process client automatically pongs, while one
@@ -119,7 +121,7 @@ Previously the next timer terminated that healthy client before its already
 dispatched pong handling could win. Heartbeat expiry now owns one deduplicated,
 unreferenced `Immediate` per expired socket. The deferred check terminates a peer
 that is still silent; pong handling, detach/reattach, or monitor shutdown makes
-the stale check harmless. No allocation occurs on healthy ticks and no timeout is
+the stale check harmless. No deferred-check allocation occurs on healthy ticks and no timeout is
 reset. Connection/queue limits remain the resource bounds.
 
 The focused heartbeat scope passes71 unit and real-socket tests at100% statements,

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Heartbeat timeout enforcement now defers termination to the event-loop check phase, allowing already-dispatched pong handling to win after a server stall. Silent peers remain bounded and are terminated by the deferred check. Soak failures now preserve the native WebSocket close code and reason for diagnosis.
+- Heartbeat timeout enforcement now defers termination to the event-loop check phase, allowing already-dispatched pong handling to win after a server stall. Silent peers remain bounded and are terminated by the deferred check. Unexpected soak close events now preserve the native WebSocket close code and an escaped reason for diagnosis.
 
 Next package version: `0.13.0` (not yet published).
 

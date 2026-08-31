@@ -512,12 +512,13 @@ describe('WebSocket integration without mocks', () => {
         const client = await trackedConnect(address(server, '/heartbeat-delay'));
         const peer = [...server.routes[0].clients.values()][0];
         const ping = peer.ping.bind(peer);
-        let delayed = false;
+        let delayed = false, pings = 0;
         peer.ping = (...args) => {
+            pings++;
             ping(...args);
             if (!delayed) { delayed = true; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120); }
         };
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await waitForCondition(() => pings >= 2, 'responsive peer pong recovery', 1000);
         expect(delayed).toBe(true);
         expect(client.readyState).toBe(WebSocket.OPEN);
     });

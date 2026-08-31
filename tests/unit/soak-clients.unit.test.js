@@ -74,12 +74,21 @@ test.each(['error', 'close'])('soak latches unexpected %s events', event => with
 test('soak unexpected close preserves the native close code and reason', () => withTransport('pass', async (clients, sockets, fail) => {
     await clients.openInitial();
     sockets[0].emit('close', 1013, Buffer.from('Slow consumer'));
-    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code 1013: Slow consumer).');
+    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code 1013, reason "Slow consumer").');
     expect(fail).toHaveBeenCalledTimes(1);
 }));
 
-test('soak close diagnostics handle an absent code and non-buffer reason', () => withTransport('pass', async (clients, sockets) => {
+test('soak close diagnostics escape controls and handle an absent code', () => withTransport('pass', async (clients, sockets) => {
     await clients.openInitial();
-    sockets[0].emit('close', undefined, 'plain reason');
-    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code unknown: plain reason).');
+    sockets[0].emit('close', undefined, 'line one\nline two\t');
+    expect(() => clients.check()).toThrow('Soak client disconnected unexpectedly (code unknown, reason "line one\\nline two\\t").');
+}));
+
+test('soak preserves an earlier transport error when close metadata arrives later', () => withTransport('pass', async (clients, sockets, fail) => {
+    await clients.openInitial();
+    const primary = new Error('primary transport failure');
+    sockets[0].emit('error', primary);
+    sockets[0].emit('close', 1013, Buffer.from('later close reason'));
+    expect(() => clients.check()).toThrow(primary);
+    expect(fail).toHaveBeenCalledTimes(1);
 }));

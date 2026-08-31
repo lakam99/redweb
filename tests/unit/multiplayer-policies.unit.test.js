@@ -354,9 +354,15 @@ describe('production multiplayer policies', () => {
         stalledMonitor.attach(reattached);
         await deferred();
         expect(reattached.terminate).not.toHaveBeenCalled();
+
+        const pendingAtStop = new EventEmitter();
+        pendingAtStop.ping = jest.fn(); pendingAtStop.terminate = jest.fn();
+        stalledMonitor.attach(pendingAtStop); stalledMonitor.tick();
+        stalledNow = 25; stalledMonitor.tick();
         stalledMonitor.stop();
         await deferred();
         expect(reattached.terminate).not.toHaveBeenCalled();
+        expect(pendingAtStop.terminate).not.toHaveBeenCalled();
     });
 
     test.each([
