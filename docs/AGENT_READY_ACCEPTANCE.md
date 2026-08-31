@@ -79,6 +79,14 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Post-commit package check of `48b3f3f` failed before packing: the final
+  acceptance-log edit changed the canonical `release-status` topic after the
+  preceding generator check. This was stale generated documentation, not a
+  consumer/runtime failure. The catalogue is regenerated from canonical content;
+  a new package run must pass before package verification is claimed for this
+  increment. The preceding successful generated/type check is not relabelled as
+  a post-edit check. Site content remains a separate local sync/deployment step.
+
 - Refresh verification follow-through (2026-08-31): corrected three reproduced
   failure-boundary defects using shared error handling: swallowed falsy errors,
   release errors replacing earlier failures, and upload errors lost when controls
