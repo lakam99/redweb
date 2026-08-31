@@ -16,8 +16,8 @@ jobs:
         # 18/20 retain legacy compatibility checks; they are end-of-life upstream.
         node: [18, 20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -56,7 +56,7 @@ jobs:
           fi
       - name: Preserve recovery evidence on success or failure
         if: ${{ always() && steps.recovery.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: recovery-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -68,8 +68,8 @@ jobs:
   lifecycle-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -85,7 +85,7 @@ jobs:
         timeout-minutes: 45
       - name: Preserve action-input verifier coverage evidence
         if: ${{ always() && steps.action-verifier-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: action-verifier-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/action-verifier/
@@ -96,7 +96,7 @@ jobs:
         timeout-minutes: 7
       - name: Preserve report-retention coverage evidence
         if: ${{ always() && steps.report-retention-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: report-retention-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/command-report/
@@ -109,7 +109,7 @@ jobs:
         timeout-minutes: 65
       - name: Preserve starter coordinator and application evidence
         if: ${{ always() && steps.starter-coordinator-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: starter-coordinator-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -125,7 +125,7 @@ jobs:
         timeout-minutes: 5
       - name: Preserve lifecycle coordinator and emitted-JavaScript evidence
         if: ${{ always() && steps.starter-lifecycle-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: starter-lifecycle-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -138,7 +138,7 @@ jobs:
         timeout-minutes: 20
       - name: Preserve generator coverage evidence
         if: ${{ always() && steps.build-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generator-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/tool-source/
@@ -149,7 +149,7 @@ jobs:
         timeout-minutes: 5
       - name: Preserve application-recorder coverage evidence
         if: ${{ always() && steps.recorder-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: recorder-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/application-recorder-authored/
@@ -160,7 +160,7 @@ jobs:
         timeout-minutes: 20
       - name: Preserve memory coverage evidence
         if: ${{ always() && steps.memory-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: memory-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/memory-tools/
@@ -173,7 +173,7 @@ jobs:
         timeout-minutes: 12
       - name: Preserve load coverage evidence
         if: ${{ always() && steps.load-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: load-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/load-tools/
@@ -186,7 +186,7 @@ jobs:
         timeout-minutes: 35
       - name: Preserve benchmark coverage evidence
         if: ${{ always() && steps.benchmark-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/benchmark-tools/
@@ -200,7 +200,7 @@ jobs:
         timeout-minutes: 25
       - name: Preserve feedback driver and command deadline coverage
         if: ${{ always() && steps.feedback-commands.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-commands-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/browser-commands/
@@ -211,7 +211,7 @@ jobs:
         timeout-minutes: 10
       - name: Preserve browser collector and native coverage evidence
         if: ${{ always() && steps.browser-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: browser-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -229,7 +229,7 @@ jobs:
         timeout-minutes: 20
       - name: Preserve HTML load coverage evidence
         if: ${{ always() && steps.html-load-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: html-load-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/live-html-load-tools/
@@ -242,7 +242,7 @@ jobs:
         timeout-minutes: 3
       - name: Preserve JSX verifier coverage evidence
         if: ${{ always() && steps.jsx-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jsx-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/jsx-performance-tools/
@@ -253,7 +253,7 @@ jobs:
         timeout-minutes: 30
       - name: Preserve packaged-example verifier coverage evidence
         if: ${{ always() && steps.example-dependency-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: example-dependency-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/example-dependency-tools/
@@ -264,7 +264,7 @@ jobs:
         timeout-minutes: 15
       - name: Preserve browser page-owner and verifier coverage
         if: ${{ always() && steps.packed-browser-verifier-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packed-browser-verifier-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/packed-browser-verifier/
@@ -274,7 +274,7 @@ jobs:
         id: packed-browser
       - name: Preserve packed browser evidence
         if: ${{ always() && steps.packed-browser.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packed-browser-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/packed-browser/
@@ -285,7 +285,7 @@ jobs:
         timeout-minutes: 20
       - name: Preserve soak verifier coverage evidence
         if: ${{ always() && steps.soak-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: soak-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: coverage/soak-tools/
