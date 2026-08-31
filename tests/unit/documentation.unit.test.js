@@ -32,13 +32,15 @@ describe('single-source documentation', () => {
             for (const file of files) expect(recipe.markdown).toContain(file.content.trimEnd());
             expect(recipe.markdown).toContain(`--template ${template}`);
             expect(recipe.markdown).toContain('npm install --save-exact TARBALL');
-            expect(recipe.markdown).toContain('npm ci\nnpm run build\nnpm link --ignore-scripts');
-            expect(recipe.markdown).toContain('npm install --save-exact TARBALL\nnpm link redweb-client --no-save --ignore-scripts');
+            expect(builder.setup(template)).not.toContain('npm link');
+            expect(builder.setup(template)).toContain('no separate client checkout or linking is required');
             expect(recipe.markdown).toContain('development-only');
             expect(recipe.markdown).toContain('npm test');
-            expect(recipe.markdown).toContain('No mocks');
+            expect(recipe.markdown).toMatch(/No mocks|Integration tests use no mocks/);
             expect(recipe.markdown).toContain(builder.setup(template));
         }
+        expect(docs.pages.find(page => page.id === 'recipes/dashboard').markdown)
+            .toContain('A separately labelled unit test injects a cleanup error');
         const api = docs.pages.find(page => page.id === 'api-types').markdown;
         expect(api).toMatch(/export (?:interface|type) LiveHtmlServerOptions\b/);
         expect(api).toContain('SocketContract');
@@ -62,7 +64,7 @@ describe('single-source documentation', () => {
             expect(guide.markdown).toContain("## Explain it like I'm five");
             expect(guide.markdown).toContain('## Check that it works');
         }
-        expect(builder.setup('dashboard')).toContain('npm link redweb-client --no-save --ignore-scripts\nnpm run add-user -- alice\nnpm test\nnpm run dev');
+        expect(builder.setup('dashboard')).toContain('npm install --save-exact TARBALL\nnpm run add-user -- alice\nnpm test\nnpm run dev');
     });
 
     test('resolves source-relative links without rewriting code examples', () => {

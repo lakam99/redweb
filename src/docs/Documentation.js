@@ -73,7 +73,7 @@ class Documentation {
 
     notice() {
         return this.channel === 'unreleased'
-            ? `> Unreleased development documentation. Package metadata is ${this.manifest.version}, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball and linked redweb-client checkout described in the recipe setup; do not install latest and assume compatibility.`
+            ? `> Unreleased development documentation. Package metadata is ${this.manifest.version}, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.`
             : `> Documentation for Redweb ${this.channel}. Install that exact version when following these examples.`;
     }
 
@@ -82,11 +82,9 @@ class Documentation {
         const acceptance = `${template === 'dashboard' ? 'npm run add-user -- alice\n' : ''}npm test\nnpm run dev`;
         return this.channel === 'unreleased'
             ? [
-                'These prerelease instructions require both matching Redweb and redweb-client checkouts. The published redweb-client does not yet contain this renderer. From the matching redweb-client checkout, prepare its build and register the local link once:',
-                fence('npm ci\nnpm run build\nnpm link --ignore-scripts', 'sh'),
-                'Then return to the directory where you want to create the application. Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. Link the prepared client into the new application after installation:',
-                fence(`npx --yes --package TARBALL redweb init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact TARBALL\nnpm link redweb-client --no-save --ignore-scripts\n${acceptance}`, 'sh'),
-                'Rebuild redweb-client after editing it. Later `npm install` or `npm ci` can replace the local link with the registry dependency; repeat the link command afterward. This linked setup is development-only, not deployable registry-release evidence. Without both matching checkouts, use an available versioned release guide instead.',
+                'Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:',
+                fence(`npx --yes --package TARBALL redweb init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact TARBALL\n${acceptance}`, 'sh'),
+                'This prerelease Redweb artifact is development-only until its release checks finish. For released applications, use an available versioned release guide.',
             ].join('\n\n')
             : fence(`npx --yes redweb@${this.channel} init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact redweb@${this.channel}\n${acceptance}`, 'sh');
     }

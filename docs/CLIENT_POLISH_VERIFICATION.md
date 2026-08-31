@@ -4,6 +4,66 @@ This release-polish increment fixes a demonstrated lifecycle bug and closes the
 remaining combined original-client-source branch gap. It does not resume the
 [deferred runtime investigation](RECOVERY_FOLLOWUP_SPIKE.md) or waive any release gate.
 
+## Published client integration: current checkpoint
+
+The maintainer published `redweb-client@0.2.0`. Its actual registry archive now
+contains both root and `./live-html` exports with ESM, CommonJS and declarations.
+Redweb commit `f3c91e9` selects `^0.2.0` and locks the published archive. This
+supersedes the historical client-publication blockers recorded below; Redweb's
+new implementation itself is still unreleased.
+
+- Registry archive: `https://registry.npmjs.org/redweb-client/-/redweb-client-0.2.0.tgz`.
+- Archive SHA-256: `89cc32946cb787aa921b5f383c91201890208d9099da741f0d2571b927b9fa95`.
+- Integrity: `sha512-0bC8j/wJ2WXGuYom5ewijM+sgzRdD5bccnQaQVWqNQBWOkeHH4oXBQTW+3YY2LpnBPT0Hlcxj/OHLCXzD/cZ9Q==`.
+- All four published runtime bundles exactly match the locally tested client build.
+
+The complete default package gate passed without a client override or local link
+in its isolated consumer. Registry and candidate modes now share installed-client
+containment/export/hash verification and the full existing browser harness. The
+registry mode additionally checks the version, URL and integrity against Redweb's
+lockfile. Developer links and the client's user-edited version manifest were preserved.
+
+- Packed Redweb SHA-256: `e773a5270bf66719cb0c83f499301d5a6a19fda2b9a8e24b673519dc7ac8af8a`.
+- Report: `coverage/packed-browser/3b890ae9-2b40-4bfd-8df1-f58c0fb9eb65/report.json`,
+  SHA-256 `cb8055893ed906b4d6739a54913bc25e45063040924d5136099c2265eba4ff19`.
+- `candidateOnly` is false; 190 original package files, 23 harness files and four
+  explicitly external development tools passed identity checks.
+- Actual counter/chat, reconnect/disconnect, full browser acceptance, all six
+  starters, executable recipes and source-free consumer execution passed.
+- Runtime run `46c7aa29-bd08-4aac-aee1-13e1acc01843`: all-four 100% over
+  426 statements, 262 branches, 64 functions and 351 lines.
+- Refresh run `6a1a3e5c-707f-428e-a454-f4fd15141cd9`: all-four 100% over
+  82 statements, 44 branches, 12 functions and 71 lines, including real bfcache restoration.
+- Eleven filesystem unit tests cover both client verification helpers at all-four
+  100%; `coverage/registry-client-helper/coverage-final.json` SHA-256
+  `c40ccac1581f7fef467b9b0af6ae9792743baccc243505b4abc9a3be510ce363`.
+
+After that archive was verified, the unreleased quickstart was simplified to
+install the matching Redweb tarball and obtain its published client automatically.
+The printed commands passed a separate clean-install integration test, with no
+client checkout, override or symlink. The optional contributor workflow also passed
+actual isolated `npm ci`, build and `npm link`, preserving developer inputs. Both
+generated realtime applications passed their 14 HTTP/WebSocket/process tests;
+the two workflow tests passed in 47.631 seconds. The interactive development
+watcher is intentionally covered by its separate lifecycle gate, not these tests.
+Four documentation unit tests passed with all-four 100% coverage of
+`Documentation.js`; report `coverage/registry-setup-docs/coverage-final.json`
+SHA-256 `6172507dae191592c5b9002f0d69848150e3be6317ad2a9d3d8b98a57c884345`.
+Generation freshness and all three TypeScript configurations passed. These later
+quickstart/prose changes are not claimed to be inside the earlier full-gate archive.
+
+The final scoped package-tool regression passed 76 tests in nine suites (201.158
+seconds), with all-four 100% coverage across its nine helpers, including the new
+shared installed-client verifier. Report: `coverage/package-tools/coverage-final.json`,
+SHA-256 `6dd5988e3f00ada240a7ba590c41dfa2159845e198ec00f043616688650cab5f`.
+The senior critic approved the implementation and evidence after stale coverage
+and blanket mock-free claims were corrected. Integration remains mock-free;
+the dashboard cleanup fault injection is explicitly identified as a unit test.
+
+The environment remains Windows, Node 22.21.0 and Chromium 152.0.7977.64.
+Latest-head CI, website alignment, Redweb publication and the bounded Ubuntu
+recovery decision remain open. No failed recovery threshold was waived.
+
 ## Runtime change
 
 A disposed `RedwebClient` with outbound queue capacity previously accepted new

@@ -9,28 +9,19 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Unreleased development documentation. Package metadata is 0.12.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball and linked redweb-client checkout described in the recipe setup; do not install latest and assume compatibility.
+> Unreleased development documentation. Package metadata is 0.12.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
 
-These prerelease instructions require both matching Redweb and redweb-client checkouts. The published redweb-client does not yet contain this renderer. From the matching redweb-client checkout, prepare its build and register the local link once:
-
-```sh
-npm ci
-npm run build
-npm link --ignore-scripts
-```
-
-Then return to the directory where you want to create the application. Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. Link the prepared client into the new application after installation:
+Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:
 
 ```sh
 npx --yes --package TARBALL redweb init my-realtime --template realtime
 cd my-realtime
 npm install --save-exact TARBALL
-npm link redweb-client --no-save --ignore-scripts
 npm test
 npm run dev
 ```
 
-Rebuild redweb-client after editing it. Later `npm install` or `npm ci` can replace the local link with the registry dependency; repeat the link command afterward. This linked setup is development-only, not deployable registry-release evidence. Without both matching checkouts, use an available versioned release guide instead.
+This prerelease Redweb artifact is development-only until its release checks finish. For released applications, use an available versioned release guide.
 <!-- redweb:setup:end -->
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
@@ -222,7 +213,7 @@ Every generated starter also has `npm run test:coverage`: real application tests
 
 Run `npm run verify:browser:coverage` for native Chromium tests of the complete emitted Live HTML runtime and development-refresh script. The gate enforces 100% statement/branch/function/line coverage and runs the same cases without instrumentation. Actual HTTP/WebSocket checks cover actions, forms, state updates, reconnection and selection preservation. Refresh checks cover real reloads, draft guards, failed HTTP peers, history restoration and explicit discard under a self-only script policy; instrumentation requires no dynamic code evaluation.
 
-The unreleased frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. Use the [linked client development workflow](docs/CLIENT_DEVELOPMENT.md): published `redweb-client@0.1.0` lacks this new entry, so this branch requires the matching local client until release/version/lockfile integration is complete.
+The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. This branch depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md). Redweb itself remains unreleased until its remaining release checks finish.
 
 `npm run measure:browser:client` separately serves the exact installed socket-only module with and without instrumentation through the same real HTTP/WebSocket/browser cases and retains its source hash and counters. It exits unsuccessfully until all four coverage metrics reach 100%; incomplete results are not a passing dependency-coverage claim. Reports are local under `coverage/browser-client` and do not alter the installed dependency or published package.
 

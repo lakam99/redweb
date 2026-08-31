@@ -16,7 +16,7 @@ npm run dev
 
 The provisioning command displays a randomly generated password once. Save it securely; there are no default accounts or passwords. Open **http://127.0.0.1:8181/login**, sign in, and add a card. A second signed-in tab updates immediately. Restart the app: your cards and unexpired credentials remain valid. Sign out all sessions to close every connected tab for that account and invalidate all its cookies.
 
-`npm test` provisions temporary test accounts and a real temporary database, then exercises HTTP, WebSockets, isolation, restart, and session expiry. It never modifies your application database. No mocks are used.
+`npm test` provisions temporary test accounts and a real temporary database, then exercises HTTP, WebSockets, isolation, restart, and session expiry. It never modifies your application database. Integration tests use no mocks. A separately labelled unit test injects a cleanup error after closing a real SQLite database to verify rejection handling; it does not simulate a real operating-system failure.
 
 `npm run test:coverage` measures the TypeScript application through source maps, separately from Redweb's own instrumented-library coverage. It also waits through the actual one-minute login admission window without mocking the clock. The report includes TypeScript-generated decorator accessor functions; inspect that distinction rather than assuming a library coverage figure applies to this recipe. The generated npm configuration enforces this recipe's Node engine requirement before installation.
 

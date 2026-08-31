@@ -1,6 +1,9 @@
 # Developing Redweb with redweb-client
 
-The unreleased Live HTML implementation is maintained in `redweb-client/live-html`.
+The Live HTML implementation is maintained in published `redweb-client/live-html`
+starting with client 0.2.0. This Redweb development branch requires `^0.2.0`;
+normal application installation retrieves it automatically. The linking workflow
+below is optional for contributors editing both repositories.
 Redweb serves that module and emits only its import and `mountLivePage()` call.
 DOM reconciliation, reactive updates, delegated actions, form feedback and page
 disposal belong to the client. The root `redweb-client` entry remains socket-only.
@@ -25,8 +28,8 @@ installation is needed. The link is local development configuration, not a saved
 dependency or a change to either lockfile. Running `npm ci` in Redweb replaces it
 with the locked registry dependency; repeat the link command afterward.
 
-The unreleased README and recipe setup also link the prepared client after
-installing the matching Redweb tarball. To check that printed setup independently,
+The README and recipe setup use the published client without a separate checkout.
+To check that printed setup and the optional contributor linking workflow independently,
 set `REDWEB_CLIENT_CHECKOUT` to the absolute path of the matching client checkout
 and run `npm run verify:client:link` from Redweb. It copies the client's build
 inputs, uses an isolated npm global prefix, executes the documented initialization,
@@ -35,7 +38,8 @@ WebSocket and process tests. No client override is installed. Resolution is chec
 from the installed Redweb package, and all four rebuilt client bundles must match
 the checkout's existing build. Developer inputs and the existing link are checked
 afterward. The interactive `npm run dev` is covered by the separate watcher gate,
-not this check. This verifies local development, not a deployable registry pair.
+not this check. The first case verifies default registry setup; the second verifies
+optional local development without changing the developer's existing link.
 
 Verify the resolved entry from Redweb:
 
@@ -91,7 +95,7 @@ For example, from Redweb in PowerShell (use a fresh output directory):
 npm --prefix ../redweb-client run build
 New-Item -ItemType Directory -Path coverage/client-candidate
 npm pack ../redweb-client --pack-destination coverage/client-candidate
-$env:REDWEB_CLIENT_CANDIDATE = (Resolve-Path coverage/client-candidate/redweb-client-0.1.0.tgz).Path
+$env:REDWEB_CLIENT_CANDIDATE = (Resolve-Path coverage/client-candidate/redweb-client-0.2.0.tgz).Path
 npm run verify:live-html:package
 Remove-Item Env:REDWEB_CLIENT_CANDIDATE
 ```
@@ -100,14 +104,14 @@ Use the actual filename printed by `npm pack` if the client version changes.
 The verifier installs both tarballs in a temporary consumer with an explicit local
 override, checks npm integrity and every browser/CommonJS bundle, and resolves
 the client from the installed Redweb package. It compares fingerprints before and
-after testing. The candidate-only browser phase exercises the server-driven
+after testing. The shared browser phase exercises the server-driven
 counter, two-user chat, escaping, draft preservation, reconnect and disconnect
 presence. The broader package gate verifies generated consumers and source-free
 production execution using the isolated runtime dependencies. Certificate checks
 stay enabled; a machine needing its system trust store can use Node's
 `--use-system-ca` option.
 
-The candidate path also copies the unchanged browser acceptance/coverage drivers
+Both registry and candidate paths copy the unchanged browser acceptance/coverage drivers
 and their required fixtures beside the extracted package. It never overwrites
 packed application code. Four individually linked development tools support the
 checks; client, WebSocket, Express and Zod resolution must stay inside the isolated
@@ -121,17 +125,16 @@ installation or full original-client-source coverage. The frozen browser driver
 does not itself prove that every individual shutdown error is propagated.
 
 Without `REDWEB_CLIENT_CANDIDATE`, the command keeps the ordinary registry path;
-it does not use or infer the local npm link. A candidate pass is not a registry
-release pass. `npm run verify:package:tools` includes the fingerprint/containment
+it does not use or infer the local npm link. The installed version, registry URL
+and integrity must match Redweb's lockfile. Both paths compare the installed
+bundles with the source-tested local build and run the same browser checks.
+A candidate pass is not a registry release pass. `npm run verify:package:tools` includes the fingerprint/containment
 unit regressions; its scoped coverage is not coverage of every browser driver.
 
-Published `redweb-client@0.1.0` does **not** export `./live-html`. Its local manifest
-still has that version, so version text alone does not identify this candidate.
-This Redweb development branch therefore requires the link above. It is not ready
-for ordinary registry installation, merging or publication as a compatible pair.
-
-Before release, publish an appropriately versioned client, update Redweb's
-dependency and lockfile, remove the local link with a clean install, and rerun the
-independently installed package and full release gates. A linked working tree is
-not evidence that the published pair works. No publishing or deployment is part
-of this local workflow.
+Published `redweb-client@0.2.0` supplies both required entry points; version 0.1.0
+does not. The 0.2.0 archive's runtime bundles match the previously source-tested
+build, and the clean registry-installed package gate passes without an override.
+The developer link can remain in place because registry checks own independent
+temporary consumers. Latest-head CI, the recovery decision and Redweb's own
+versioned release still remain required; this is not approval to merge or publish.
+No publishing or deployment is part of this local workflow.
