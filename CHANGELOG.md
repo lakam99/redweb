@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Add maintained coverage of unchanged candidate preparation using actual npm/tar/git execution and explicit subprocess-failure units. Reuse one test-only in-memory instrumentation helper for preparation and sealing; frozen source and sealed evaluation records remain unchanged.
+
 - Test zero-budget shutdown explicitly with real page ownership and HTTP requests, alongside the existing positive-budget cancellation case. Assert the nested render-timeout cause so coverage does not rely on competing timers settling in a particular order; runtime behavior and coverage limits are unchanged.
 
 - Copy the shared browser-report helper into the isolated package-verification harness. Add a regression that resolves literal relative harness dependencies from the copied inputs; real packed-consumer verification remains required. This corrects the missing-module CI failure introduced by the browser-coordinator follow-up, without changing runtime code or acceptance limits.

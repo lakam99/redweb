@@ -8,6 +8,38 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Frozen candidate preparation
+
+`verify:evaluation:prepare:coverage` passed five tests in 12.289s on Windows /
+Node 22.21.0. Two native tests use actual npm/tar/git execution: plain and
+in-memory-instrumented CLI runs must produce matching archive, catalogue and
+commit identities; a failed launch from an absent source directory must not
+create a success manifest. Assertions verify emitted/on-disk manifest parity,
+actual byte hashes, host metadata and empty trial directories. Temporary
+artifacts are confined to the test's owned directory and removed afterward.
+Frozen failed-preparation retention is not silently redefined as tool cleanup.
+Three explicit subprocess-result units verify error/stderr/stdout precedence
+and POSIX launch options; they are not native fault simulations.
+
+The unchanged source covers 25 statements / eight branch outcomes / three
+functions / 21 lines at 100%, including all three independently inventoried
+functions. The previous existing-test baseline measured preparation at zero;
+behavior-only success did not establish this scope. Retained map
+`coverage/frozen-prepare-evidence/coverage-final.json` has SHA-256
+`045d8055f326a8c9252426698bf12cbdc194e34856b856532b9d877377f520d1`;
+unchanged LF-normalized source SHA-256
+`9647fad32399076f10e5bafa29d65d9837f7f9066b82b3b989642ceb63d05106`.
+
+The small `FrozenCoverage` test helper extracts the sealing test's existing
+original-filename instrumentation, source-identity checks and exact map-shape
+validation. It is test infrastructure, not silently included in the library
+denominator. The maintained process/sealing regression passed 40 tests with one
+skip in 8.054s; its complete map remains byte-identical, retained as
+`coverage/frozen-prepare-evidence/process-seal-regression.json`, SHA-256
+`cea882c6209d0dc9c03a28140ce81038cfbd613628ec3a04a8900c487d7f8b75`.
+CI bounds and preserves the preparation map separately. No frozen source,
+sealed evaluation, publication, new agent trial or acceptance limit changed.
+
 ### Explicit zero-budget page shutdown
 
 The b2ca53a PR Node 18 [job](https://github.com/lakam99/redweb/actions/runs/33416866879/job/99569507960)
@@ -881,7 +913,6 @@ scripts/verify-live-html-browser.js
 Frozen evaluation tooling also lacks a complete direct map in the reviewed set:
 
 ```text
-scripts/evaluation/prepare.js
 scripts/evaluation/run-trial.js
 scripts/evaluation/validate.js
 scripts/evaluation/verify.js

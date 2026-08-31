@@ -41,6 +41,15 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Candidate-preparation coverage follow-up: five tests pass in 12.289s at all-four
+100% of the unchanged preparation tool (25/8/3/21). Real plain/instrumented CLI
+runs produce identical archive/catalogue/commit identities; a real failed npm
+launch creates no success manifest. Three subprocess-boundary units remain
+explicitly separate from native checks. Shared test-only instrumentation also
+passes the existing 40-test process/sealing regression (one skip, 8.054s) with
+unchanged 100% maps. This is tool coverage, not a new agent trial; remaining
+frozen browser/trial verifiers and release requirements stay open.
+
 Shutdown coverage follow-up: the b2ca53a PR Node 18 job passed 1,770 tests but
 failed the global coverage gate, missing the render-drain timeout path in
 `PageManager`. New zero-budget unit and real-HTTP cases assert that specific
