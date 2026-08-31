@@ -236,6 +236,17 @@ jobs:
           path: coverage/example-dependency-tools/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:package:browser:coverage
+        id: packed-browser-verifier-coverage
+        timeout-minutes: 15
+      - name: Preserve browser page-owner and verifier coverage
+        if: ${{ always() && steps.packed-browser-verifier-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: packed-browser-verifier-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/packed-browser-verifier/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:live-html:package
         id: packed-browser
       - name: Preserve packed browser evidence

@@ -102,8 +102,9 @@ Inventory `coverage/starter-coordinators-full-results.json` SHA-256:
 `a17c022d9c38738bdcbe736496015781abb02a903548e1a52ef27012a1cd7348`.
 
 The critic approved all 13 actual remote changed blobs at `377f029`, including
-the retained full-starter artifacts. Its hosted workflows remain separate and
-in progress; local results do not presume their outcome.
+the retained full-starter artifacts. Both hosted workflows then passed completely:
+PR `33380771673` and push `33380765217`. Later evidence/implementation heads retain
+their own separate hosted outcomes.
 
 No compiler/runtime behavior, coverage thresholds, frozen evaluation files,
 publication, deployment or performance acceptance changed. V8 compiler-generated

@@ -8,7 +8,7 @@ const { createHash } = require('node:crypto');
 const harnessPaths = [
     'scripts/verify-live-html-browser.js', 'scripts/verify-browser-coverage.js', 'scripts/evaluation/process.js',
     ...['verify-action-feedback', 'verify-dashboard-browser', 'verify-starter', 'VerificationWorkspace',
-        'verificationError', 'BrowserCoverage', 'verify-runtime-browser', 'verify-refresh-coverage',
+        'verificationError', 'BrowserCoverage', 'BrowserPages', 'verify-runtime-browser', 'verify-refresh-coverage',
         'verify-refresh-controls', 'verify-live-page-ownership'].map(name => `scripts/lib/${name}.js`),
     'tests/helpers/network.js',
     ...['reactive-pages', 'action-page', 'feedback-page', 'selection-page', 'browser-morph-cases',

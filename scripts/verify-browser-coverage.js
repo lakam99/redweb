@@ -6,6 +6,8 @@ const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const BrowserCoverage = require('./lib/BrowserCoverage');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
+const { verificationError } = require('./lib/verificationError');
+const { BrowserPages } = require('./lib/BrowserPages');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, eventual } = require('./verify-live-html-browser');
 const { withTimeout, waitForListening } = require('../tests/helpers/network');
 
@@ -160,18 +162,15 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     return new VerificationWorkspace().run(async execution => {
         let browser, coveredTab, application, refreshPeer, clientPeer, failure, launchAttempted = false;
-        const tabs = [];
-        const recordFailure = error => { failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
+        const pages = new BrowserPages(execution, openPage, bounded);
+        const recordFailure = value => { const error = verificationError(value); failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
+        const recordCleanup = error => { execution.cleanupFailure = verificationError(error); recordFailure(error); };
         try {
             launchAttempted = true;
             const launched = await launchBrowserWithRetry(executable, execution.directory);
             browser = launched.browser;
             const debugPort = new URL(launched.endpoint).port;
-            const visit = async url => {
-                const tab = await bounded(openPage(debugPort, url), 'browser page');
-                tabs.push(tab);
-                return tab;
-            };
+            const visit = url => pages.open(debugPort, url);
             if (mode === 'refresh') {
                 for (const instrumented of [false, true]) await verifyRefreshCoverage({ coverage, instrumented, visit, debugPort, directory: execution.directory, run, onPeer: peer => { refreshPeer = peer; } });
                 assert.deepEqual(run.instrumentedCases, run.plainCases);
@@ -199,23 +198,29 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
                 try { coverage.collect(await evaluate(coveredTab, mode === 'source' ? 'window.__redwebApplicationCoverage__' : 'window.__redwebBrowserCoverage__')); }
                 catch (error) { recordFailure(error); }
             }
-            for (const tab of tabs) tab.socket.terminate();
+            try { await pages.close(); } catch (error) { recordCleanup(error); }
             try { if (application) await bounded(application.shutdown(), 'live server shutdown'); }
-            catch (error) { execution.cleanupFailure = error; recordFailure(error); }
+            catch (error) { recordCleanup(error); }
             try { if (refreshPeer) await bounded(refreshPeer.pause(), 'revision peer cleanup'); }
-            catch (error) { execution.cleanupFailure = error; refreshPeer.server.unref(); recordFailure(error); }
+            catch (error) {
+                recordCleanup(error);
+                try { refreshPeer.server.unref(); } catch (error) { recordCleanup(error); }
+            }
             try { if (clientPeer) await clientPeer.close(); }
-            catch (error) { execution.cleanupFailure = error; clientPeer.server.unref(); recordFailure(error); }
+            catch (error) {
+                recordCleanup(error);
+                try { clientPeer.server.unref(); } catch (error) { recordCleanup(error); }
+            }
             try {
                 if (browser) {
                     await bounded(stopBrowser(browser.child), 'browser shutdown');
                     assert.ok(browser.child.exitCode !== null || browser.child.signalCode !== null, 'Browser termination remains uncertain');
                 } else if (launchAttempted) throw new Error('Browser launch cleanup could not be independently verified');
             } catch (error) {
-                execution.cleanupFailure = error;
-                browser?.child.stderr?.destroy();
-                browser?.child.unref();
-                recordFailure(error);
+                recordCleanup(error);
+                for (const release of [() => browser?.child?.stderr?.destroy(), () => browser?.child?.unref()]) {
+                    try { release(); } catch (error) { recordCleanup(error); }
+                }
             }
         }
         if (failure) throw failure;

@@ -79,6 +79,19 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Browser-owner follow-up: both browser coordinators share ownership of original
+  page-opening promises and late tabs, retain uncertain cleanup and independently
+  attempt every cleanup/fallback action. Falsy primary failures remain failures.
+  The maintained two-file scope passes 42 tests/four suites at all-four 100%
+  (131 statements, 26 branches, 20 functions, 103 lines), including actual Chromium
+  counter/chat acceptance. Native runtime and refresh coverage gates also pass at
+  unchanged all-four 100%. The critic approved the shared ownership design.
+  The full isolated-package gate also passed with registry client 0.2.0 and matching
+  bundle identities, including all source-free starters and executable docs.
+  Checkout and installed-package evidence remain distinct; full regression is
+  separate. See `BROWSER_OWNER_VERIFICATION.md`. Both preceding `377f029` and
+  `1697f33` hosted workflows passed; no runtime changes or performance waiver occurred.
+
 - Lifecycle-verifier follow-up: a real generated source-free run passed 13 tests
   while c8 produced an empty report. The gate now requires the exact deployed
   helper, nonempty metrics and all-four 100%. It measures emitted JavaScript by

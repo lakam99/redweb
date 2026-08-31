@@ -215,6 +215,8 @@ Run `npm run verify:cli` to test the actual initializer, doctor and incremental-
 
 `npm run verify:starters:lifecycle` requires a nonempty, complete report for the deployed lifecycle helper. Its separate `npm run verify:starters:lifecycle:coverage` command covers the verifier itself. See [lifecycle evidence](docs/STARTER_LIFECYCLE_VERIFICATION.md) for the emitted-JavaScript scope and temporary source-map metadata removal.
 
+`npm run verify:package:browser:coverage` covers the shared browser page owner and packed-browser verifier at all-four 100%, combining explicit failure units with actual Chromium counter/chat integration. Late page openings and cleanup failures retain uncertain workspaces. See [browser ownership evidence](docs/BROWSER_OWNER_VERIFICATION.md) for the checkout/package distinction and exact scope.
+
 `npm run verify:live-html:load` checks 200 expired renders, 110 connected clients, presence/broadcast delivery and heap growth after client closure/session expiry, before server shutdown. Its separate `verify:live-html:load:coverage` command tests the verifier's HTTP/socket ownership, malformed responses, real timeouts and failure handling with unit and native integration tests. It requires all-four 100% coverage of the three verifier modules; instrumented tests do not replace clean memory measurements.
 
 `npm run verify:jsx:performance` renders 10,000 component rows and validates their complete markup outside the timed render. CI supervises the command externally; the five-second performance limit cannot itself interrupt synchronous code. `npm run verify:jsx:coverage` separately checks malformed output, measurement limits and the actual CLI, requiring all-four 100% coverage of this verifier.

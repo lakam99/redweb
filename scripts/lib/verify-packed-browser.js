@@ -6,6 +6,7 @@ const path = require('node:path');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, eventual } = require('../verify-live-html-browser');
 const { withTimeout, waitForListening } = require('../../tests/helpers/network');
 const { verificationError } = require('./verificationError');
+const { BrowserPages } = require('./BrowserPages');
 
 /** Native browser acceptance against modules loaded from the installed tarball. */
 async function verifyPackedBrowser(packageRoot, execution) {
@@ -14,11 +15,13 @@ async function verifyPackedBrowser(packageRoot, execution) {
     const installed = require(packageRoot);
     const { CounterPage } = require(path.join(packageRoot, 'examples/live-html/counter.js'));
     const { createChatroomPage } = require(path.join(packageRoot, 'examples/live-html/chatroom.js'));
-    const servers = [], tabs = [];
-    let browser, failure, closing = false, launchAttempted = false;
+    const servers = [];
+    let browser, failure, launchAttempted = false;
     const record = error => { const next = verificationError(error); failure = failure
         ? new AggregateError([failure, next], failure.message, { cause: failure }) : next; };
     const bounded = (promise, label) => withTimeout(promise, label, 12000);
+    const pages = new BrowserPages(execution, openPage, bounded);
+    const recordCleanup = error => { execution.cleanupFailure = verificationError(error); record(error); };
     const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'packed browser evaluation');
     const wait = (tab, expression, label) => evaluate(tab, eventual(expression, label));
     const report = { counter: false, chat: false, reconnect: false, disconnect: false };
@@ -32,11 +35,7 @@ async function verifyPackedBrowser(packageRoot, execution) {
         const launched = await launchBrowserWithRetry(executable, execution.directory);
         browser = launched.browser;
         const port = new URL(launched.endpoint).port;
-        const visit = server => bounded(openPage(port, `http://127.0.0.1:${server.server.address().port}/`).then(tab => {
-            if (closing) tab.socket.terminate();
-            else tabs.push(tab);
-            return tab;
-        }), 'packed browser page startup');
+        const visit = server => pages.open(port, `http://127.0.0.1:${server.server.address().port}/`);
         const counter = await visit(servers[0]);
         report.browser = await bounded(counter.command('Browser.getVersion'), 'packed browser version');
         await wait(counter, `Number(document.querySelector('[data-rw-state="count"]').textContent) >= 2`, 'packed server-driven counter');
@@ -64,17 +63,21 @@ async function verifyPackedBrowser(packageRoot, execution) {
         report.disconnect = true;
     } catch (error) { record(error); }
     finally {
-        closing = true;
-        for (const tab of tabs) tab.socket.terminate();
+        try { await pages.close(); } catch (error) { recordCleanup(error); }
         try {
             if (browser) {
                 await bounded(stopBrowser(browser.child), 'packed browser shutdown');
                 assert.ok(browser.child.exitCode !== null || browser.child.signalCode !== null, 'Packed browser termination is uncertain');
             } else if (launchAttempted) throw new Error('Packed browser launch cleanup could not be verified');
-        } catch (error) { execution.cleanupFailure = error; browser?.child.stderr?.destroy(); browser?.child.unref(); record(error); }
+        } catch (error) {
+            recordCleanup(error);
+            for (const release of [() => browser?.child?.stderr?.destroy(), () => browser?.child?.unref()]) {
+                try { release(); } catch (error) { recordCleanup(error); }
+            }
+        }
         for (const server of servers) {
             try { await bounded(server.shutdown(), 'packed server shutdown'); }
-            catch (error) { execution.cleanupFailure = error; record(error); }
+            catch (error) { recordCleanup(error); }
         }
     }
     if (failure) throw failure;

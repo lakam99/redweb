@@ -16,7 +16,7 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains
   in `ADMISSION_TIMEOUT_VERIFICATION.md`.
   Exact current full-run evidence is in `STARTER_COORDINATOR_VERIFICATION.md`;
-  that head's hosted checks remain in progress. The preceding isolated package
+  both of that head's hosted checks passed. The preceding isolated package
   evidence is in `ACTION_INPUT_VERIFICATION.md`; its hosted checks and evidence follow-up passed.
   The preceding clean load/memory/recovery/soak/audit checkpoint and passing
   workflows remain in `PACKAGED_EXAMPLE_VERIFICATION.md`.
@@ -459,6 +459,13 @@ source-map comment changes, with original/measured bytes retained. The CLI passe
 four functions. See `STARTER_LIFECYCLE_VERIFICATION.md`; these later tests are not
 part of the preceding 1,388-test full inventory.
 
+The packed-browser verifier and shared `BrowserPages` owner now have a maintained
+exact scope: 42 tests/four suites, 131 statements, 26 branches, 20 functions and
+103 lines, all-four 100%. Targeted browser-coordinator units and complete native
+runtime/refresh gates also pass, but do not close that entire coordinator's direct
+coverage gap. No frozen helper was changed. See `BROWSER_OWNER_VERIFICATION.md`
+for unit/native boundaries, retained identities and isolated-package distinctions.
+
 No direct coverage map was found for these remaining active verification/build files:
 
 ```text
@@ -470,7 +477,6 @@ scripts/verify-live-html-package.js
 scripts/lib/verify-action-feedback.js
 scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-live-page-ownership.js
-scripts/lib/verify-packed-browser.js
 scripts/lib/verify-refresh-controls.js
 scripts/lib/verify-refresh-coverage.js
 scripts/lib/verify-runtime-browser.js
