@@ -8,6 +8,29 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 ## Established scopes
 
+### Refresh history observation follow-up
+
+The refresh verifier now persists the actual `bfcacheRestored` boolean separately
+for plain and instrumented modes. Browser cache admission is not part of required
+case parity: navigation and resumed polling remain mandatory. These observations
+are recorded after successful mode completion, including cleanup and collection;
+a failure earlier in the mode may leave its observation only in the console.
+Two explicit report-boundary units retain asymmetric false/true outcomes and
+reject a failed mode. A no-mock integration runs the canonical HTTP/Chromium
+workload and reads the resulting report from disk.
+
+Local verification: 3 tests / 2 suites passed in 37.541 seconds. Preserved report
+`coverage/refresh-observation-evidence/d1704e74-90a0-48e3-aae6-f4bc73c6948c/report.json`
+has SHA-256 `28a4edc0e32ddb0c10e7b4dc2b78c35a8ec313e0ca8a03ecdffea81c211072ab`.
+Both modes actually observed cache restoration in Chrome 152.0.7977.64 on
+Windows. The unchanged generated refresh source retains 82 statements,
+44 branch outcomes, 12 functions and 71 lines at 100%; source SHA-256
+`d8a14c1b44dab03f1fd6a62ef4b6721bb5e4baa9348b5f2e93a7fa2316bf8cd0`.
+This does not establish complete direct coverage of the two private refresh
+verification helpers, a fresh full regression, or performance acceptance.
+
+### Previously established coverage
+
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
   Latest full local evidence: 1,486 tests/142 suites for the source set in `bf01c2a`,

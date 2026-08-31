@@ -91,7 +91,7 @@ class RevisionPeer {
 
 async function verifyRefreshControls(debugPort, directory, { until, click, closePage, peer = new RevisionPeer(), open = openPage, afterChecks }) {
     const pages = [];
-    let failure;
+    let failure, historyRestoration;
     try {
         await peer.listen();
         const initial = await open(debugPort, 'about:blank');
@@ -134,6 +134,8 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
         await until(() => browser.evaluate(headingReady('Revision fixture')), 'history restoration');
         await until(() => peer.calls > beforeBack, 'polling resumes after history navigation');
         const restored = await browser.evaluate('window.__restores.includes(true)');
+        assert.equal(typeof restored, 'boolean', 'History restoration must be an actual browser observation');
+        historyRestoration = { bfcacheRestored: restored };
         console.log(`Refresh history navigation passed; actual back-forward-cache restoration observed: ${restored}.`);
         await closePage(browser, debugPort);
         pages.pop();
@@ -196,6 +198,7 @@ async function verifyRefreshControls(debugPort, directory, { until, click, close
         catch (error) { failure = combineFailures(failure, error); }
     }
     if (failure) throw failure;
+    return historyRestoration;
 }
 
 module.exports = { verifyRefreshControls, RevisionPeer, headingReady };

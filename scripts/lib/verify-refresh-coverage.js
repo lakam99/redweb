@@ -105,7 +105,7 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
         const point = await tab.evaluate(`(() => { const box = (${expression}).getBoundingClientRect(); return { x: box.x + box.width / 2, y: box.y + box.height / 2 }; })()`);
         for (const type of ['mousePressed', 'mouseReleased']) await tab.command('Input.dispatchMouseEvent', { type, ...point, button: 'left', clickCount: 1 });
     };
-    await verifyRefreshControls(debugPort, directory, { peer, open, until, click, closePage, afterChecks: async () => {
+    const historyRestoration = await verifyRefreshControls(debugPort, directory, { peer, open, until, click, closePage, afterChecks: async () => {
         await usingPage(peer.url + '/heading-readiness', async tab => {
             await until(() => tab.evaluate('Boolean(document.getElementById("heading-readiness"))'), 'heading readiness fixture');
             // Reproduce the concrete missing-heading defect without pretending
@@ -163,6 +163,10 @@ async function verifyRefreshCoverage({ coverage, instrumented, visit, debugPort,
         });
     } });
     if (peer.failures.length) throw new AggregateError(peer.failures, 'Refresh coverage collection failed');
+    // Cache admission is the browser's decision, not a required parity outcome.
+    // Retain each observation separately from the mandatory behavioral cases.
+    run.historyRestoration ??= {};
+    run.historyRestoration[instrumented ? 'instrumented' : 'plain'] = historyRestoration;
     run[instrumented ? 'instrumentedCases' : 'plainCases'] = { controls: true, headingReadiness: true, cleanReload: true, invalidConfiguration: true, explicitDiscard: true, stoppedPollUnitCheck: true };
 }
 

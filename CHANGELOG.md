@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Preserve actual plain/instrumented browser back-forward-cache observations in refresh verification reports, separately from required behavioral parity. Add unit and real-browser report checks; do not equate ordinary history navigation with a cache restoration or change runtime behavior.
+
 - Add maintained authored-source coverage for the unchanged browser runtime-frame and page-ownership verification helpers, including anonymous callbacks. Reuse the canonical real-browser cases and preserve their workload; retain native-converter measurements separately where their function inventory is incomplete.
 
 - Retain original-client coverage worker files outside disposable workspaces before parsing or cleanup. Preserve primary failures and retained-workspace metadata when terminal report writes fail, reusing shared summary handling. Add scoped coordinator coverage and real Vitest failure-path checks without changing runtime behavior or coverage thresholds.
