@@ -43,7 +43,7 @@ async function run(args, cwd, version) {
             `Kept existing: ${result.skipped.join(', ')}`,
             `Planned: ${result.planned.join(', ')}`,
             'Existing files were not validated or changed. Run redweb doctor to check configuration.',
-            options.existing ? 'No application or package files were generated.' : 'Next: npm install && npm run dev',
+            options.existing ? 'No application or package files were generated.' : 'Next (published releases): npm install && npm run dev. Unreleased builds: install the matching Redweb tarball first (see README.md), then npm run dev.',
         ].join('\n');
         return { exitCode: 0, stdout: `${output}\n`, stderr: '' };
     } catch (error) {

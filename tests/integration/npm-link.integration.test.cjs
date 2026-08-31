@@ -33,7 +33,12 @@ async function runPrintedSetup(execution, archive, environment, t, afterInstall)
         const childEnvironment = line === 'npm test'
             ? { ...environment, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --test-reporter=tap` }
             : environment;
+        if (line === 'npm install --save-exact TARBALL') {
+            const readme = fs.readFileSync(path.join(cwd, 'README.md'), 'utf8');
+            assert.ok(readme.includes(line), 'Execute the same unpublished installation command printed in the generated README.');
+        }
         const output = await execution.command([executable, ...args], { cwd, environment: childEnvironment });
+        if (program === 'npx') assert.match(output, /Unreleased builds: install the matching Redweb tarball first \(see README.md\)/);
         if (line === 'npm install --save-exact TARBALL' && afterInstall) await afterInstall(cwd);
         if (line === 'npm test') {
             assert.match(output, /# pass [1-9]/);
@@ -52,6 +57,8 @@ test('printed prerelease setup installs the published client without a checkout 
         const manifest = JSON.parse(fs.readFileSync(path.join(app, 'package.json')));
         assert.equal(manifest.overrides, undefined);
         assert.equal(manifest.dependencies['redweb-client'], undefined);
+        const installedRedweb = JSON.parse(fs.readFileSync(path.join(app, 'node_modules/redweb/package.json')));
+        assert.equal(installedRedweb.version, require('../../package.json').version);
         const installed = verifyInstalledClient(app);
         const locked = require('../../package-lock.json').packages['node_modules/redweb-client'];
         assert.deepEqual([installed.clientVersion, installed.resolved, installed.integrity],

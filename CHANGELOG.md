@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Next package version: `0.13.0` (not yet published).
+
+- Clarify initializer and generated README installation steps for unpublished builds: install the matching tested Redweb tarball before development, without substituting an older registry release. Keep ordinary installation simple for published releases.
+
 - Harden soak verification with exact per-socket reply accounting, unexpected-disconnect failures, immediate socket ownership, guarded traffic/sample timers and independent cleanup. Reject undersampled runs and unsafe timer/counter capacities; preserve original traffic, sampling and acceptance limits. Compare the 99% delivery and 110% heap boundaries with exact integer arithmetic, retain missing replies and raw reported ratios, and add maintained unit/native verification-tool coverage.
 
 - Validate every row and enclosing tag in the JSX performance gate, not just row counts and one escaped label. Preserve the timed workload and memory limits, add external CI supervision, and maintain separate unit/real-CLI coverage of the verifier at all-four 100%.

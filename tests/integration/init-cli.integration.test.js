@@ -61,6 +61,7 @@ describe('redweb init CLI integration', () => {
         const first = run(['init', 'game', '--template', 'site'], workspace);
         expect(first.status).toBe(0);
         expect(first.stdout).toContain('Created: package.json, tsconfig.json, src/app.tsx, src/run-app.ts, src/app.css');
+        expect(first.stdout).toContain('Unreleased builds: install the matching Redweb tarball first (see README.md)');
 
         const target = path.join(workspace, 'game');
         const nodeModules = path.join(target, 'node_modules');

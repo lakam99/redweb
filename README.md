@@ -9,7 +9,7 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Unreleased development documentation. Package metadata is 0.12.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
+> Unreleased development documentation. Package metadata is 0.13.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
 
 Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:
 

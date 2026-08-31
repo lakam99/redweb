@@ -2,6 +2,8 @@
 
 Requirements: Node.js 18 or newer and npm for the realtime, chat, site, socket and http-ws templates; the dashboard template requires Node.js 22.13+ for native SQLite. Use a currently supported Node.js release in production.
 
+For an unreleased checkout or tarball, first run `npm install --save-exact TARBALL`, replacing `TARBALL` with the absolute path to the same tested Redweb tarball used to generate this app (quote paths containing spaces). This installs the matching package and its published client dependency. Do not substitute an older registry release or `latest`. Published Redweb releases can use the installation command below directly.
+
 ```sh
 npm install
 npm test

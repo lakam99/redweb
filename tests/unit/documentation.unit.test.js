@@ -57,6 +57,31 @@ describe('single-source documentation', () => {
         expect(guide).not.toContain('as though the matching client were already published');
     });
 
+    test('every generated README preserves the unpublished tarball prerequisite before installation', () => {
+        for (const template of TEMPLATES) {
+            const files = projectFiles(version, template);
+            const manifest = JSON.parse(files.find(file => file.path === 'package.json').content);
+            const readme = files.find(file => file.path === 'README.md').content.replace(/\r\n/g, '\n');
+            expect(manifest.dependencies.redweb).toBe(`^${version}`);
+            expect(readme).toContain('For an unreleased checkout or tarball');
+            expect(readme).toContain('npm install --save-exact TARBALL');
+            expect(readme.indexOf('npm install --save-exact TARBALL')).toBeLessThan(readme.indexOf('\nnpm install\n'));
+            expect(readme).toContain('absolute path to the same tested Redweb tarball');
+        }
+    });
+
+    test('candidate version agrees across package, lockfile and unreleased release guidance', () => {
+        const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+        const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+        const trust = fs.readFileSync(path.join(root, 'docs/RELEASE_TRUST.md'), 'utf8');
+        expect(lock.version).toBe(version);
+        expect(lock.packages[''].version).toBe(version);
+        expect(changelog).toContain(`Next package version: \`${version}\` (not yet published).`);
+        expect(trust).toContain(`The checkout has package metadata \`${version}\`, reserved for this unreleased candidate`);
+        expect(trust).toContain('npm install --save-exact redweb@0.12.0');
+        expect(new Documentation(root).build().channel).toBe('unreleased');
+    });
+
     test('builds deterministic versioned content and exact initializer files', () => {
         const builder = new Documentation(root);
         const docs = builder.build();
@@ -159,7 +184,9 @@ describe('single-source documentation', () => {
             expect(builder.setup('dashboard')).toContain(`npm install --save-exact redweb@${version}\nnpm run add-user -- alice\nnpm test\nnpm run dev`);
             expect(docs.llms).toContain(`Documentation for Redweb ${version}`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).toContain(`npx --yes redweb@${version} init`);
-            expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).not.toContain('TARBALL');
+            // Published setup is registry-pinned. Its exact generated README
+            // also documents the conditional unpublished-build prerequisite.
+            expect(builder.setup('realtime')).not.toContain('TARBALL');
             const socketManifest = JSON.parse(docs.pages.find(page => page.id === 'recipes/socket').files.find(file => file.path === 'package.json').content);
             expect(socketManifest.devDependencies.typescript).toBe('5.1.0');
             expect(socketManifest.devDependencies.ws).toBe('8.0.0');
