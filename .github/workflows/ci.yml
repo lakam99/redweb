@@ -206,6 +206,17 @@ jobs:
           path: coverage/browser-commands/
           if-no-files-found: error
           retention-days: 30
+      - run: npm run verify:client:coordinator:coverage
+        id: client-source-coordinator
+        timeout-minutes: 5
+      - name: Preserve client source coordinator coverage
+        if: ${{ always() && steps.client-source-coordinator.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: client-source-coordinator-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/client-source-coordinator/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:browser:coverage
         id: browser-coverage
         timeout-minutes: 10

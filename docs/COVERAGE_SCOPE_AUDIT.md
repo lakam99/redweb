@@ -471,6 +471,31 @@ for unit/native boundaries, retained identities and isolated-package distinction
 
 No direct coverage map was found for these remaining active verification/build files:
 
+The client source coordinator is now measured separately by
+`npm run verify:client:coordinator:coverage`: 35 explicit dependency-boundary
+units plus three real preflight subprocess tests, covering 107 statements,
+19 branches, 14 functions and 95 lines at 100%. Its CI job retains that map.
+Two separate native Vitest fixtures reproduce worker-command/invalid-coverage
+failures and verify raw files survive confirmed temporary-workspace cleanup.
+They run in the full linked-client source command, not registry-only CI.
+The recorder/configuration strings still require real execution; this map does
+not claim coverage inside those generated programs or other browser drivers.
+See `CLIENT_DEVELOPMENT.md` for the maintained commands and retention boundary.
+
+Verification on Windows/Node 22.21.0: the 38-test coordinator/preflight command
+passed in 4.006 seconds, map SHA-256
+`ad6e0c653993e37a9ac06c793a3550b5e9ff5b1e93658f88ef896bbc6845c55f`.
+The full source command also passed its 26 collector/preflight/report tests,
+both native failure fixtures (4.487 seconds), and all 77 client tests in each
+plain/instrumented mode plus actual HTTP/WebSocket/browser acceptance.
+Run `cb17c8ec-6c2c-4948-9c32-771571d35a19` retains five raw worker files;
+`coverage/client-source/<run-id>/summary.json` has SHA-256
+`aa3d0b371ec6f6885f8b3fcce87973cb136f007e599aabb944a071d39088fba5`.
+The authored-client scope remains 791 statements/521 branches/125 functions/659
+lines at 100%, with source-built plain bundles matching the published 0.2.0
+runtime identities. These results are not a new library regression/performance
+measurement or publication approval. The original throughput failure remains open.
+
 The development-refresh coordinator has a reviewed launch/cleanup correction and
 15 explicit boundary units, plus the separate actual generated-app browser gate.
 This is not a complete source map and does not remove it from this inventory.
@@ -478,7 +503,6 @@ See `BROWSER_OWNER_VERIFICATION.md` for reproduced failures and exact boundaries
 
 ```text
 scripts/verify-browser-coverage.js
-scripts/verify-client-source-coverage.js
 scripts/verify-development-refresh-browser.js
 scripts/verify-live-html-browser.js
 scripts/verify-live-html-package.js

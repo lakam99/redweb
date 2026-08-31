@@ -62,6 +62,18 @@ The source-coverage command instruments original client modules once and shares
 their maps between Node and Chromium. It checks every test file reported exactly
 once, compares plain/instrumented results, verifies unchanged inputs and saves
 separate contributions. Plain browser candidates must equal the linked build.
+Raw worker files are written directly to `coverage/client-source/<run-id>/workers/`
+before parsing, so command, JSON and collection failures cannot discard them during
+temporary-workspace cleanup. Terminal recording reuses the shared summary helper;
+recording errors remain failures and preserve any retained-workspace location.
+`npm run verify:client:coordinator:coverage` checks the private coordinator with
+explicit boundary units and real preflight subprocesses. The full source command
+also runs real Vitest failure fixtures before the unchanged complete client gate.
+Those fixtures require the linked client's installed development dependencies;
+the registry-only CI coordinator job does not claim to run them or the full client.
+Coverage of generated recorder/configuration strings is not coverage of their
+generated programs; the native fixtures and full gate execute those separately.
+
 The combined gate now passes its unchanged 100% threshold: 791 statements, 521
 branches, 125 functions and 659 lines. The redundant empty-entry queue branch was
 removed because the private queue is dense and its length is checked immediately

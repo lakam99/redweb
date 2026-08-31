@@ -10,10 +10,11 @@ const { ClientSourceCoverage, hash, slash } = require('./lib/ClientSourceCoverag
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
 const { reportCommand } = require('./lib/reportCommand');
+const { finishVerificationSummary } = require('./lib/finishVerificationSummary');
 
-async function main() {
+async function main(args = process.argv.slice(2)) {
     const clientRoot = ClientSourceCoverage.resolveCheckout(require.resolve.paths('redweb-client'));
-    if (ClientSourceCoverage.validateCheckout(clientRoot, process.argv.slice(2))) {
+    if (ClientSourceCoverage.validateCheckout(clientRoot, args)) {
         console.log('Matching linked client checkout verified.');
         return;
     }
@@ -40,7 +41,9 @@ async function main() {
             const compiled = path.join(execution.directory, 'compiled.json');
             fs.writeFileSync(compiled, JSON.stringify(coverage.compiled));
             fs.symlinkSync(path.join(clientRoot, 'node_modules'), path.join(execution.directory, 'node_modules'), 'junction');
-            const reports = path.join(execution.directory, 'workers');
+            // Record raw bytes outside the disposable workspace, even when a
+            // worker fails or its report cannot be parsed or collected.
+            const reports = path.join(output, 'workers');
             fs.mkdirSync(reports);
             const setup = path.join(execution.directory, 'record.mjs');
             fs.writeFileSync(setup, `import { afterAll, expect } from 'vitest';
@@ -122,20 +125,23 @@ setupFiles: [...(base.test.setupFiles || []), ...(instrumented ? [${JSON.stringi
             }
             coverage.assertComplete();
         });
-        run.status = 'passed';
     } catch (error) {
-        failure = verificationError(error); run.status = 'failed'; run.error = failure.message;
+        failure = verificationError(error);
         run.retainedWorkspace = failure.retainedWorkspace;
     }
     run.endedAt = new Date().toISOString();
     try {
-        save('coverage.json', coverage.report());
-        save('summary.json', run);
+        finishVerificationSummary(run, () => {
+            save('coverage.json', coverage.report());
+            save('summary.json', run);
+        }, failure, 'passed');
     } catch (error) {
-        throw failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error;
+        failure = error;
     }
     console.log(JSON.stringify({ ...run, inputs: undefined, tooling: undefined, nodeTests: undefined, coverage: coverage.report().summary }, null, 2));
     if (failure) throw failure;
 }
 
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+
+module.exports = { main };
