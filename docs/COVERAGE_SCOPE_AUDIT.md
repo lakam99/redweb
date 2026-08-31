@@ -6,12 +6,13 @@ instrumentation hash alone does not prove correspondence with current source.
 No aggregate whole-repository 100% claim is made. This does not waive the open
 coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
-Split-runner failure handling follow-up: real IPC regressions and explicit worker
-units now cover synchronous-send listener cleanup, falsy error retention and
-nonempty worker error replies. The final 47-test selection and one fresh normal
-7,400-reply server acceptance pass. The full authored maps for these two files
-remain pending; the existing 100% server-policy scope does not cover them. See
-`SPLIT_RECOVERY_ERROR_HANDLING.md` for baseline failures and measurement limits.
+Split-runner authored coverage is now complete in its maintained scope: 161
+unit/native tests cover the original coordinator/worker plus policy/wrapper at
+all-four 100% (457 statements / 170 branch outcomes / 86 functions / 388 lines).
+Original-source maps are validated; synthetic units are not memory evidence.
+The full Windows `df58f94` suite also passed, but that commit's Node 24 PR job
+failed a soak delivery assertion. See `SPLIT_RECOVERY_COVERAGE.md` and
+`SOAK_ROTATION_OBSERVATION.md`; source coverage does not waive this failure.
 
 ## Established scopes
 
@@ -671,9 +672,10 @@ verification helpers, a fresh full regression, or performance acceptance.
   all-four 100%; not inferred from coverage of strings that generate scripts.
 - Site documentation: seven declared modules at 100% line/branch/function
   coverage, six tests and real HTTP/build checks; not whole-site coverage.
-- Server recovery policy/coordinator/CLI: maintained CI coverage command,
-  76 tests/five suites, 132 statements, 25 branches, 25 functions and 120 lines,
-  all 100%. See `SERVER_RECOVERY_CANDIDATE.md` for exact report identity.
+- Server recovery policy/coordinator/CLI and authored split coordinator/worker:
+  maintained CI coverage command, 161 tests/ten suites, 457 statements,
+  170 branch outcomes, 86 functions and 388 lines, all 100%. See
+  `SPLIT_RECOVERY_COVERAGE.md` for exact report identity and native/unit boundaries.
 - Shipped `recipes/shared/copy-assets.cjs`: `npm run verify:assets:coverage`
   now measures the original source under c8 through actual subprocess/filesystem
   tests and requires all-four 100% in CI. Nested CSS/HTML copying, excluded source
@@ -1053,13 +1055,10 @@ units are separate; the critic approved the correction. See
 `JSX_PERFORMANCE_VERIFICATION.md` for hashes and measurement boundaries. These new
 tests are not retroactively included in the preceding full regression inventory.
 
-Only partial historical maps were found for these files; they changed after some
-reports, so historical percentages do not certify current coverage:
-
-```text
-scripts/diagnostics/recovery-split.cjs
-scripts/diagnostics/recovery-split-worker.cjs
-```
+The two split-runner files previously had only partial historical maps. Their
+current original-source maps are now complete in the maintained server recovery
+coverage gate; see `SPLIT_RECOVERY_COVERAGE.md`. Historical converted maps are
+not used as proof of the current authored function denominator.
 
 The packaged-example probe, its dependency coordinator and guarded action helper
 now have a maintained exact source scope: 40 tests/five suites, 178 statements,

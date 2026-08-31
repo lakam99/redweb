@@ -23,6 +23,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test -- --runInBand --silent
+        id: matrix-tests
+      - name: Preserve matrix soak observations including failures
+        if: ${{ always() && steps.matrix-tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: matrix-soak-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/soak-tools/smoke-reports/
+          if-no-files-found: warn
+          retention-days: 30
       - run: npm run verify:load
       - name: Server recovery acceptance (server-steady-v1)
         run: npm run verify:recovery:server -- "$GITHUB_WORKSPACE/coverage/server-recovery"
@@ -75,7 +84,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify:recovery:coverage
+        id: server-recovery-coverage
         timeout-minutes: 3
+      - name: Preserve server recovery authored coverage
+        if: ${{ always() && steps.server-recovery-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-recovery-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/server-recovery-acceptance/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:recovery:original:coverage
         id: original-recovery-coverage
         timeout-minutes: 5

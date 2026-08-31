@@ -1,14 +1,13 @@
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
 const { WebSocketServer } = require('ws');
 const { SoakClients } = require('../../scripts/lib/SoakClients');
 const { SoakMeasurement } = require('../../scripts/lib/SoakMeasurement');
 const { waitFor } = require('../../scripts/realtime-harness');
 const { waitForCondition, withTimeout } = require('../helpers/network');
 const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
+const { captureSoakCommand } = require('../helpers/SoakCommandEvidence');
 
 async function withPeers(exercise, accept = () => true) {
     let connections = 0, clients;
@@ -59,6 +58,51 @@ test.each(['malformed', 'duplicate', 'unsent', 'server-error', 'disconnect'])
     expect(clients.received).toBeLessThanOrEqual(clients.sent);
 }), 40000);
 
+test.each([false, true])('real pending-reply rotation control: close before reply = %s', closeBeforeReply => withPeers(async (clients, server) => {
+    let releaseReply;
+    const events = [];
+    server.on('connection', peer => {
+        events.push('connected');
+        peer.on('message', raw => {
+            const { slot, tick } = JSON.parse(String(raw));
+            if (slot === 0 && tick === 0) {
+                events.push('reply-held');
+                releaseReply = () => withTimeout(new Promise(resolve => {
+                    events.push('reply-released');
+                    peer.send(JSON.stringify({ tick }), error => resolve(error || null));
+                }), 'controlled peer reply', 5000);
+            } else peer.send(JSON.stringify({ tick }));
+        });
+    });
+    await clients.openInitial();
+    const original = clients.slots[0];
+    original.socket.once('close', () => events.push('original-closed'));
+    clients.sendTick(0);
+    await waitForCondition(() => { clients.check(); return Boolean(releaseReply) && clients.received === 1; }, 'held reply and unaffected peer');
+    expect([...original.pending]).toEqual([0]);
+    expect(clients.sent).toBe(2);
+    if (!closeBeforeReply) {
+        expect(await releaseReply()).toBeNull();
+        await waitForCondition(() => clients.received === 2, 'reply before rotation');
+    }
+    events.push('rotation-started');
+    await clients.rotate(0, () => false);
+    events.push('rotation-completed');
+    if (closeBeforeReply) expect(await releaseReply()).toBeInstanceOf(Error);
+    expect(original.socket.readyState).toBe(original.socket.CLOSED);
+    expect(original.pending.size).toBe(0);
+    expect(clients.slots[0]).not.toBe(original);
+    expect(clients.generations).toEqual([1, 0]);
+    expect(events.indexOf('original-closed')).toBeLessThan(events.lastIndexOf('connected'));
+    expect(events.indexOf('reply-released') < events.indexOf('rotation-started')).toBe(!closeBeforeReply);
+    expect(clients.received).toBe(closeBeforeReply ? 1 : 2);
+    clients.sendTick(1);
+    await waitForCondition(() => { clients.check(); return clients.received === (closeBeforeReply ? 3 : 4); }, 'both replacement-era replies');
+    expect(clients.sent).toBe(4);
+    // Missing replies stay in the delivery denominator, including intentional closes.
+    expect(clients.sent - clients.received).toBe(closeBeforeReply ? 1 : 0);
+}), 70000);
+
 test.each(['partial-acquisition', 'rotation'])('native %s failure retains sockets for complete cleanup', mode => withPeers(async clients => {
     if (mode === 'partial-acquisition') await expect(clients.openInitial()).rejects.toThrow();
     else { await clients.openInitial(); await expect(clients.rotate(0, () => false)).rejects.toThrow(); }
@@ -75,18 +119,13 @@ test('native soak command rejects vacuous sampling and reports actual short-run 
     await expect(owner.command([script], { environment, timeoutMs: 10000 })).rejects.toThrow('--expose-gc');
     await expect(owner.command(['--expose-gc', script], { environment: { ...environment, REDWEB_SOAK_SAMPLE_SECONDS: '20' }, timeoutMs: 10000 })).rejects.toThrow('two active-phase');
     const destination = path.join(owner.directory, 'soak.json');
-    let output, exitCode = 0;
-    try {
-        output = await owner.command(['--expose-gc', script, destination], { environment, timeoutMs: 45000, rejectTruncatedOutput: true });
-    } catch (error) {
-        // This ten-second mechanics fixture can observe a sole-member room
-        // between disconnect and the replacement's next tick. Keep the actual
-        // failed policy outcome; never accept launch/timeout/cleanup failures.
-        const prefix = 'Package verification command failed (1): \n';
-        if (!error.message.startsWith(prefix)) throw error;
-        output = error.message.slice(prefix.length); exitCode = 1;
-    }
-    expect(fs.readFileSync(destination, 'utf8')).toBe(output);
+    const { output, exitCode, rawReport } = await captureSoakCommand(
+        owner,
+        () => owner.command(['--expose-gc', script, destination], { environment, timeoutMs: 45000, rejectTruncatedOutput: true }),
+        destination, path.resolve(__dirname, '../../coverage/soak-tools/smoke-reports'));
+    // The observed exit/report are already retained even if parsing or any
+    // policy assertion below fails. A room-phase failure remains visible.
+    expect(rawReport).toBe(output);
     const result = JSON.parse(output);
     expect(result.samples).toBeGreaterThanOrEqual(4);
     expect(result.messagesSent).toBeGreaterThan(0);
@@ -100,9 +139,4 @@ test('native soak command rejects vacuous sampling and reports actual short-run 
         peak: 2, allowedGrowth: 0, monotonicIncrease: true, passed: false });
     expect(exitCode).toBe(new SoakMeasurement(environment).passed(result) ? 0 : 1);
     expect(result.finalRegistries).toEqual({ clients: 0, rooms: 0, sessions: 0, inFlight: 0 });
-    const reports = path.resolve(__dirname, '../../coverage/soak-tools/smoke-reports');
-    fs.mkdirSync(reports, { recursive: true });
-    fs.writeFileSync(path.join(reports, `${randomUUID()}.json`), JSON.stringify({
-        classification: 'ten-second mechanics only; not soak acceptance', exitCode, measurement: result,
-    }, null, 2), { flag: 'wx' });
 }), 110000);

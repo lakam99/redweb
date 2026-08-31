@@ -21,10 +21,26 @@ test('server acceptance stays blocking, bounded and uses the reviewed command', 
     expect(scripts['verify:recovery:server']).toBe('node scripts/verify-server-recovery.js');
     expect(workflow).toContain('run: npm run verify:recovery:coverage');
     for (const file of ['scripts/lib/ServerRecoveryPolicy.js', 'scripts/lib/ServerRecoveryCandidate.js',
-        'scripts/verify-server-recovery.js']) {
+        'scripts/verify-server-recovery.js', 'scripts/diagnostics/recovery-split.cjs',
+        'scripts/diagnostics/recovery-split-worker.cjs']) {
         expect(scripts['verify:recovery:coverage']).toContain(`--collectCoverageFrom=${file}`);
     }
     expect(scripts['verify:recovery:coverage']).not.toContain('--coverageThreshold');
+});
+
+test('authored recovery coverage includes native and boundary tests and retains failures', () => {
+    const command = scripts['verify:recovery:coverage'];
+    for (const file of ['recovery-split.unit', 'recovery-coordinator-boundaries.unit',
+        'recovery-worker-boundaries.unit', 'recovery-worker-error.unit',
+        'recovery-split.integration', 'recovery-channel.integration']) {
+        expect(command).toContain(`${file}.test.js`);
+    }
+    expect(workflow).toContain('run: npm run verify:recovery:coverage\n        id: server-recovery-coverage\n        timeout-minutes: 3');
+    const artifact = step('Preserve server recovery authored coverage');
+    expect(artifact).toContain("always() && steps.server-recovery-coverage.outcome != 'skipped'");
+    expect(artifact).toContain('path: coverage/server-recovery-acceptance/');
+    expect(artifact).toContain('if-no-files-found: error');
+    expect(artifact).toContain('retention-days: 30');
 });
 
 test('original command is unchanged, visibly non-blocking and never follows uncertain server cleanup', () => {

@@ -41,12 +41,21 @@ This is the full implementation checklist for the requested improvements. Unchec
 
 ## Trust and release verification
 
+Current checkpoint: the original split coordinator/worker coverage maps are
+complete in the maintained 161-test gate, all-four 100%. Full Windows `df58f94`
+regression passed 1,943 tests with five skips, but its Node 24 PR job failed
+the ten-second soak delivery assertion at 98.47715736040608%. The original
+raw measurement was not retained. Failure-time evidence preservation is now
+corrected; real-socket controls establish a possible pending-reply rotation
+loss mechanism, not the historical cause. No acceptance limit changed. See
+`SPLIT_RECOVERY_COVERAGE.md` and `SOAK_ROTATION_OBSERVATION.md`.
+
 Split-runner correctness follow-up: three reproduced failure-channel defects are
 corrected using the shared error normalizer and existing request cleanup. Forty-seven
 unit/native regressions pass; one fresh normal server recovery run reconciles
 all 7,400 replies, peaks at 108.18707393318519% of warm server heap and exits
 normally without forced cleanup. Client growth remains diagnostic. This does not
-close the two runner coverage maps or historical release failures; see
+itself close the two runner coverage maps or historical release failures; see
 `SPLIT_RECOVERY_ERROR_HANDLING.md`.
 
 Original recovery follow-up: the maintained 45-test scope passes with all-four
@@ -57,7 +66,8 @@ boundary and await expiry, including a delayed-observer regression. The earlier
 full Windows run remains failed (two npm certificate-trust timeouts and the
 session assertion); focused passes do not replace full-suite evidence. Both
 hosted runs at the preceding `0e3e257` passed, but predate these changes. See
-`ORIGINAL_RECOVERY_VERIFICATION.md`; split-worker coverage and release remain open.
+`ORIGINAL_RECOVERY_VERIFICATION.md`; the later authored-map closure is above,
+and release remains open.
 
 Frozen Live HTML tool coverage follow-up: 52 tests pass in 27.384s with all-four
 100% of the unchanged authored tool (336 statements / 86 branch outcomes /

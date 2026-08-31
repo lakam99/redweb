@@ -43,8 +43,9 @@ modes, deadlines, forced cleanup and listener reuse.
 The established server policy/coordinator/CLI coverage scope also passed all
 76 tests in 26.638s at all-four 100% before the final missing-stack fallback;
 that fallback is covered by the subsequent 47-test selection. This scope does
-**not** include the full authored coordinator/worker files. Their complete
-source-matched coverage remains open in `COVERAGE_SCOPE_AUDIT.md`.
+**not** include the full authored coordinator/worker files. The subsequent
+161-test maintained gate closes those source-matched maps at all-four 100%;
+see [authored coverage](SPLIT_RECOVERY_COVERAGE.md) for the exact scope and limits.
 
 ## Fresh uninstrumented server acceptance
 

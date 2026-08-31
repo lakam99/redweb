@@ -1,0 +1,89 @@
+# Soak rotation: retained failure and controlled observation
+
+## Actual CI failure, still unresolved
+
+At `df58f94`, PR run 33432429300, Node 24 job 99620736610, failed the native
+ten-second mechanics test's delivery assertion: **98.47715736040608%**, below
+the unchanged 99% limit. The job recorded 1,939 passes, one failure, eight skips,
+175 suites and 1,212.024 seconds, despite all-four 100% library coverage.
+The matching push and later Windows run passed; they do not erase this failure.
+
+The previous test saved its measurement only after all assertions. Its temporary
+workspace was then deleted on failure, so the original raw JSON and exact
+sent/received counts are unavailable. Do not infer those counts from the ratio.
+The complete failed-job log was retained with ANSI removed and LF newlines at
+`coverage/ci-df58f94-node24-99620736610.log`, SHA-256
+`170eec5766098b6d9b27cfbebaf56ace15984d964fe5e2327ddb7b6daea4df8a`.
+
+## Evidence preservation correction
+
+The mechanics fixture now saves raw report text, command output, observed normal
+exit status and available errors before parsing or policy assertions. Invalid
+JSON and a sub-limit outcome remain inspectable. Unknown launch/timeout/cleanup
+failures remain failures, not fabricated exit statuses. If reading or writing
+evidence fails, the original workspace is retained and primary errors survive.
+The critic caught the outer-workspace deletion case; real-filesystem regressions
+now verify the original raw file survives after `VerificationWorkspace.run()`
+rejects. Test cleanup explicitly removes its own retained fixtures afterwards.
+
+The GitHub Node matrix now uploads available `coverage/soak-tools/smoke-reports/`
+artifacts on success or failure, independently of the lifecycle job's coverage
+artifact. Missing evidence warns because a pretest/launch failure can occur
+before the measurement exists; that warning does not turn failed tests green.
+Retention is 30 days. Each observation gets a new exclusive filename.
+
+## Controlled real-socket comparison
+
+Two native WebSocket cases hold one actual reply after the peer receives its
+tick. They use no mocked transport, timers or process APIs:
+
+- Reply before rotation: the original reply arrives, rotation closes the old
+  socket and opens its replacement, and both later replies arrive: **4 sent,
+  4 received**.
+- Rotation before releasing the held reply: the old socket is closed before
+  replacement; releasing that reply fails on the closed peer. Both later
+  replies arrive: **4 sent, 3 received**, with exactly one still missing.
+
+Assertions verify the pending tick before rotation, closed original socket,
+event order, distinct replacement, generation increment and exact counters.
+The targeted comparison passed both cases in 0.582 seconds.
+
+This proves a possible loss mechanism during intentional rotation, **not the
+cause of the historical CI run**. The existing 100 ms send and 1,000 ms rotation
+timers can overlap with pending work. No drain, timing, workload or delivery
+limit has been changed, and missing replies remain in the denominator. The
+next ordinary CI observation must be retained before making a stronger claim.
+A future drain policy would change rotation semantics and needs its own tested,
+explicitly documented methodology; it is not a silent fix for this result.
+
+See [the original soak-verifier correction](SOAK_VERIFICATION.md) for policy
+details and the distinction between short mechanics tests and hour acceptance.
+
+## Final verification of this correction
+
+The maintained `npm run verify:soak:coverage` passed 91 tests across five suites
+in 16.992 seconds after the retention review fix. All 280 statements / 116 branch
+outcomes / 68 functions / 200 lines are covered across the three unchanged
+soak modules and the new test-only retention helper. The latter contributes
+39 statements / 16 branches / three functions / 27 lines; it is not shipped
+runtime coverage. Map: `coverage/soak-tools/coverage-final.json`, SHA-256
+`19d9f505a2d2156e09177a86e5a922fd848b5e1fcdb14c0033f6fab889a98377`.
+
+The reviewed nine-test retention selection also passed independently in 2.266
+seconds with all-four 100% helper coverage. It includes actual child exits and
+filesystem failures, plus explicit application callback faults.
+
+Two ordinary mechanics observations were retained during implementation:
+
+- Before the outer-retention fix: 163 sent / 162 received, 99.38650306748467%,
+  command exit 1 for the known room-phase trend (early 1, late 2), not delivery.
+  Observation `2bed814f-ca66-438e-b3a4-1ab338848976.json`, SHA-256
+  `6b2ff5305c42c103a878a304aaadd353d9225710539674a749d8fa636a4c2af8`.
+- Final wiring verification: 173 sent / 172 received, 99.42196531791907%,
+  command exit 0. Observation `8aacb5b0-9512-48ac-a201-7b64255af574.json`, SHA-256
+  `bee152a47e3047ce9d9bd20570d1b3e253359a315e7cc259847c0acd76421760`.
+
+Both are under `coverage/soak-tools/smoke-reports/`. The prior fixture's explicit
+room-phase allowance is unchanged: a mechanics-test pass can retain command
+exit 1 and is not soak acceptance. Neither observation is lossless, neither
+supersedes the hosted sub-99% failure, and neither is a new hour soak.

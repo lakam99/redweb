@@ -4,6 +4,8 @@
 
 Next package version: `0.13.0` (not yet published).
 
+- Complete original-source recovery coordinator/worker coverage with shared boundary helpers and the existing real-process/socket tests. Preserve CI coverage artifacts. Retain raw short-soak outcomes before assertions and preserve original reports if artifact writing fails; add failure-time matrix artifacts and real pending-reply rotation controls. Keep the observed hosted delivery failure visible, without changing rotation semantics or acceptance thresholds.
+
 - Remove pending IPC listeners/deadlines when native request serialization throws synchronously. Preserve falsy/non-Error recovery failures with the shared normalizer and provide a nonempty worker error fallback, retaining private-snapshot redaction. Include the helper in input fingerprints; add real-process regressions and explicit error units without changing recovery workloads or limits.
 
 - Compare the original recovery diagnostic's 110% boundary using exact integer bytes, fixing false rejection at equality without changing its workload, displayed ratios or any-cycle limit. Add maintained authored coverage units and real CLI/socket/snapshot regression checks. Observe session release in its real lifecycle callback and test delayed observers, avoiding an assertion that incorrectly required a disconnected session to outlive its TTL. Production socket behavior is unchanged.
