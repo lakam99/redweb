@@ -79,6 +79,17 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Action-input verifier follow-up: bounded listening/upgrade, immediate native
+  socket ownership, disabled probe reconnect, preserved client errors and
+  independent confirmed cleanup reuse existing helpers. Uncertain cleanup retains
+  the owned workspace. Both source-free decorator modes and all twelve original
+  action checks remain. Forty-two scoped unit/native tests pass at all-four 100%;
+  the final maintained rerun includes corrected outer Jest budgets and the critic
+  approved the source/tests/CI supervision. The complete isolated package gate
+  passes against published client 0.2.0; full regression remains in progress.
+  Exact scope and failure boundaries are recorded in
+  `ACTION_INPUT_VERIFICATION.md`; no runtime/client API or acceptance limit changed.
+
 - Packaged-example checkpoint (`449a369` / `551a905`): 1,292 tests/126 suites
   passed in 690.807 seconds with two POSIX-only skips and unchanged all-four
   100% across exactly 91 library files. The new 40-test private scope also passes

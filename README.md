@@ -207,6 +207,8 @@ Run `npm run verify:cli` to test the actual initializer, doctor and incremental-
 
 `npm run verify:package:examples:coverage` checks the packed counter without optional development dependencies, chat with explicit Zod, and generated TypeScript additions in a real installed consumer. Unit and real-socket failure tests require all-four 100% coverage of the three verifier modules. See [packaged-example evidence](docs/PACKAGED_EXAMPLE_VERIFICATION.md); this complements the full browser/package gate.
 
+`npm run verify:action:coverage` checks the source-free typed action consumer in both decorator modes, plus real failed upgrades/responses and unit cleanup failures. It requires all-four 100% of the action-input verifier without enlarging the library coverage scope.
+
 `npm run verify:live-html:load` checks 200 expired renders, 110 connected clients, presence/broadcast delivery and heap growth after client closure/session expiry, before server shutdown. Its separate `verify:live-html:load:coverage` command tests the verifier's HTTP/socket ownership, malformed responses, real timeouts and failure handling with unit and native integration tests. It requires all-four 100% coverage of the three verifier modules; instrumented tests do not replace clean memory measurements.
 
 `npm run verify:jsx:performance` renders 10,000 component rows and validates their complete markup outside the timed render. CI supervises the command externally; the five-second performance limit cannot itself interrupt synchronous code. `npm run verify:jsx:coverage` separately checks malformed output, measurement limits and the actual CLI, requiring all-four 100% coverage of this verifier.

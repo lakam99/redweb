@@ -80,6 +80,17 @@ jobs:
         timeout-minutes: 1
       - run: npm run verify:room:coverage
         timeout-minutes: 3
+      - run: npm run verify:action:coverage
+        id: action-verifier-coverage
+        timeout-minutes: 45
+      - name: Preserve action-input verifier coverage evidence
+        if: ${{ always() && steps.action-verifier-coverage.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: action-verifier-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: coverage/action-verifier/
+          if-no-files-found: error
+          retention-days: 30
       - run: npm run verify:build:coverage
         id: build-coverage
         timeout-minutes: 20

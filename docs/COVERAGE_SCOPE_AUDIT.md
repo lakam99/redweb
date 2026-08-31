@@ -425,6 +425,14 @@ actual native peers and a clean packed/installed consumer that compiles and runs
 generated additions. The probe VM map is private outside its explicitly selected
 scope; the library denominator is unchanged. See `PACKAGED_EXAMPLE_VERIFICATION.md`.
 
+The action-input verifier now has its own maintained scope: 42 unit/native tests
+across three suites cover 63 statements, eight branches, nine functions and
+53 lines at all-four 100%. Both source-free decorator compiler modes and the
+original action/context/revocation assertions remain in the native integration
+flow. Outer test budgets and cleanup were corrected without changing the inner
+limits. The final scope and isolated package gates pass; full regression remains
+in progress. See `ACTION_INPUT_VERIFICATION.md`.
+
 No direct coverage map was found for these remaining active verification/build files:
 
 ```text
@@ -437,7 +445,6 @@ scripts/verify-live-html-package.js
 scripts/verify-starter-lifecycle.js
 scripts/verify-starter-source-coverage.js
 scripts/lib/verify-action-feedback.js
-scripts/lib/verify-action-input.js
 scripts/lib/verify-dashboard-browser.js
 scripts/lib/verify-live-page-ownership.js
 scripts/lib/verify-packed-browser.js
