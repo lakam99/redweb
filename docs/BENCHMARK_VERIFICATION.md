@@ -179,6 +179,73 @@ Raw profiles in `coverage/benchmark-cpu-diagnostic/` have SHA-256:
 - `baseline.cpuprofile`: `34880286661985a48ea30e8c58cbfff861041b2b0baaa6243fc8736761d3b498`.
 - `candidate.cpuprofile`: `2ef3e13fc9834ca707071cdf7e531fe1c8c7e586933c75a174d2a65938c90942`.
 
+## Original-phase diagnostic: one fixed ten-worker series
+
+After the `bf01c2a` full regression exited successfully, one predeclared series
+used the original 20,000 measured messages, 2,000 warm-up messages, 128-request
+window and five alternating pairs. All ten workers completed exact delivery and
+normal cleanup. No failed/default acceptance run was repeated or replaced.
+
+The owned diagnostic worker preserves the original CommonJS resolution context.
+Three exact-once insertions prepare the profiler before warm-up, wrap the existing
+measured batch and close the profiler on completion/failure. Original and transformed
+worker bytes are retained. The canonical worker, measurement/accounting helpers,
+runtime entry/manifest/source tree and both resolved WebSocket packages are checked
+before/after; each phase also records the hashes of actually loaded modules. No
+application, socket or timer API is substituted. This is instrumentation, not an
+uninstrumented acceptance measurement.
+
+The implementation follows Node's documented
+[CPU-profiler start/stop workflow](https://nodejs.org/download/release/v22.21.0/docs/api/inspector.html#cpu-profiler).
+The window includes measured-batch construction, response handling, summarization
+and completion microtasks; it excludes startup, warm-up and latency sorting.
+Profiler setup perturbs execution. The requested interval is 1,000 microseconds,
+but each roughly half-second profile contains only 305–316 samples on this Windows
+host. About 18–20 ms is attributed to inspector control, and profile duration is
+longer than the benchmark's own elapsed interval. Independent review verified
+that the first sample is Inspector `post` in every trial and each trial's median
+sampling delta is 1,546–1,549 microseconds. The 18.649–20.953 ms profile/batch
+span difference is a boundary difference, not an estimate of profiling slowdown
+inside the batch. Sampling weights are elapsed
+attribution, not proof of pure CPU or syscall service time.
+
+| Trial | Implementation | Measured ms | Profile ms | Samples | Direct Redweb socket-frame self ms |
+| --- | --- | --- | --- | --- | --- |
+| 1 | baseline | 490.6163 | 509.265 | 316 | 12.372 |
+| 2 | candidate | 486.6625 | 507.615 | 315 | 4.637 |
+| 3 | candidate | 477.3735 | 496.438 | 309 | 12.433 |
+| 4 | baseline | 481.1249 | 500.439 | 309 | 12.485 |
+| 5 | baseline | 479.5333 | 499.140 | 310 | 4.622 |
+| 6 | candidate | 477.3278 | 497.395 | 309 | 13.904 |
+| 7 | candidate | 482.7839 | 501.833 | 313 | 12.445 |
+| 8 | baseline | 483.2845 | 503.428 | 312 | 12.416 |
+| 9 | baseline | 473.8178 | 493.295 | 305 | 10.854 |
+| 10 | candidate | 474.3387 | 494.325 | 307 | 3.098 |
+
+Direct socket-frame attribution sums samples whose actual source URL is under
+Redweb's `src/ws/`; it is not inclusive stack time. Per-trial raw frames and
+weights remain available rather than relying only on pooled totals. `writev`
+accounts for 196.556–246.052 ms and idle for 85.267–124.094 ms across the series;
+both distributions overlap between implementations. These profiles do not
+identify a consistent candidate-specific hotspot, prove why the original median
+failed, justify speculative runtime changes or establish performance acceptance.
+Direct Redweb attribution consists of only two to nine self samples per trial.
+The critic independently verified all ten profile/phase hashes and worker outputs,
+tooling identities and loaded-runtime comparisons, and approved this bounded
+negative attribution result rather than a release-readiness claim.
+The original 4.78495% throughput failure remains unresolved. No further profiling
+series or automatic retry is implied by this result.
+
+Retained directory: `coverage/benchmark-phase-diagnostic/`. Its `report.json`
+SHA-256 is `151cb63390c18daf07ccd84ad4181b6b21e55a1ca245c108ebb770a46dc38ec6`.
+Every profile and phase-record hash is recorded there, along with all ten original
+worker outputs and the fixed order. Diagnostic driver SHA-256:
+`ed135f76b5b7a3bbe43b294a8ea89986fc113756d23a4ce11db2aa796e3b3f8e`;
+phase helper SHA-256:
+`2381d7b28eec21ba6c9b9784426f75e877e7fcfc879058c52ea4282ea46bc851`.
+The scripts are retained under ignored `coverage/`, not shipped or claimed as
+fully covered production tooling. No acceptance threshold or frozen file changed.
+
 ## Verified implementation checkpoint
 
 At `43c6d73`, full pretest/type/regression passed1,098 tests/110 suites in614.552s,

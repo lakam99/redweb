@@ -178,7 +178,14 @@ bounded. Pipe/reference release is not proof of process termination.
 
 Corrected coordinator SHA-256:
 `7309fde16234bcdea8ae3cbe2870d181b1e5ad7a359f5c37dc0818b9c7cf5402`.
-The preceding complete regression at `69dcbf8` passed 1,469 tests/140 suites,
-with two POSIX-only skips and all-four 100% of the 91-file library scope. Its
-two hosted workflows passed completely. New cases are not retroactively added
-to that count; current full-regression and hosted results remain separate.
+The complete regression at `bf01c2a` passed 1,486 tests/142 suites in 773.401
+seconds, with two POSIX-only skips and all-four 100% of the 91-file library scope
+(5,449 statements, 4,046 branches, 978 functions, 4,468 lines). This includes
+the two native feedback-driver cases and all fifteen development-cleanup units.
+Full result `coverage/development-refresh-full-results.json` SHA-256:
+`f0a52e663b7f54d72a06e51890421b85e1fa89f8d5c7e0d587bf2452b3aff8a4`.
+Corresponding `coverage/coverage-final.json` SHA-256:
+`d9669b60e15270da98bce1a04f9e515fbe93fe9cbefa278326ef525af32c403a`.
+Both `69dcbf8` and `9897924` hosted workflows passed completely; latest hosted
+results remain separate. The critic approved all seven actual remote `bf01c2a`
+blobs and their source/documentation identities.

@@ -10,7 +10,7 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 1,469 tests/140 suites for the source set in `69dcbf8`,
+  Latest full local evidence: 1,486 tests/142 suites for the source set in `bf01c2a`,
   with two POSIX-only skips, including the
   benchmark, terminal-interruption, generator, memory, load and navigation corrections. Exact
   scoped/full-run results are below; the preceding runtime/resource/package checkpoint remains

@@ -79,6 +79,14 @@ and generated additions remain actual consumer checks. See
 
 ## Work log
 
+- Original-phase performance diagnostic: after the `bf01c2a` full regression
+  passed 1,486 tests/142 suites with unchanged all-four 100% library coverage,
+  one fixed ten-worker profiling series used the original 20,000-message phase.
+  Every worker delivered all 2,000 warm-up and 20,000 measured replies; inputs
+  stayed unchanged and cleanup passed. Coarse profiles show overlapping timings,
+  not a demonstrated cause or a performance acceptance pass. The original
+  4.78495% throughput failure remains visible. See `BENCHMARK_VERIFICATION.md`.
+
 - Development-refresh ownership follow-up: guarded browser acquisition now retains
   uncertain launch cleanup, bounds shutdown to 15 seconds and independently
   preserves fallback failures. Seven initial explicit boundary units reproduced
