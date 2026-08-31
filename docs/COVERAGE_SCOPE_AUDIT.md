@@ -10,9 +10,10 @@ coverage requirement in `AGENT_READY_ACCEPTANCE.md`.
 
 - Library: all 91 files in the configured root-entrypoint / `src/**/*.js` scope,
   5,449 statements, 4,046 branches, 978 functions and 4,468 lines, all 100%.
-  Latest full local evidence: 940 tests/92 suites at `6018807`, including the
-  terminal-interruption correction. Exact results and report identity are in
-  `ADMISSION_TIMEOUT_VERIFICATION.md`; older checkpoints below remain historical.
+  Latest full local evidence: 951 tests/95 suites at `ba4a0bc`, including the
+  terminal-interruption correction and generator checks. Exact generator/full-run
+  results are below; the preceding runtime/resource/package checkpoint remains
+  in `ADMISSION_TIMEOUT_VERIFICATION.md`.
 - Shipped `bin/redweb.js`: separate real-subprocess CLI gate, all four 100%.
 - Six starter applications and shared `run-app.ts`: original-TypeScript gate,
   104 tests per mode, 600 statements, 299 branches, 160 functions and 472 lines,
@@ -132,6 +133,7 @@ using an old report to certify new edits.
 | `browser-collector` | `lib/BrowserCoverage.js` |
 | `application-collector` | `lib/ApplicationCoverage.js` |
 | `room-verifier` | `lib/verify-room-example.js` |
+| `tool-source/<run>` | `build-live-html-examples.js`, `generate-docs.js`, `generate-protocol-types.js` (separate reports below) |
 | `client-check-preflight` | `lib/ClientSourceCoverage.js`, `lib/reportCommand.js` |
 | `compatibility-capture-runtime` | `diagnostics/ClientHeapCapture.cjs` |
 | `code-attribution-native` | `diagnostics/CodeAttribution.cjs`, `diagnostics/HeapCodeComparison.cjs`, `diagnostics/HeapSnapshotGraph.cjs`, `diagnostics/recovery-heap-graph.cjs`, `diagnostics/recovery-heap-summary.cjs` |
@@ -142,6 +144,58 @@ since reviewed checkpoint `8a15569`, the two deoptimization parsers since
 `8b4694c`, and capture since `daacdac`. Do not substitute the older
 `client-source-collector` report for expanded checkout validation or the older
 `recovery-native-exact` map for the later shared-graph extraction.
+
+## Generator checkpoint: ba4a0bc
+
+The example builder now rejects invalid compiler options and configurations that
+emit no JavaScript. Windows malformed-config paths are normalized before asking
+TypeScript to format diagnostics, avoiding its internal path assertion. Actual
+compiler tests cover `.js`, `.mjs`, `.cjs`, type errors, skipped emission and
+non-emission, import rewriting, missing/stale output and CRLF equivalence.
+The documentation generator's existing release/snapshot/README checks are reused
+with explicit released/unreleased fixtures, not duplicated or dependent on the
+repository remaining unreleased. Protocol output is checked against exact types.
+
+`npm run verify:build:coverage` runs identical real CLI cases against ordinary and
+original-source-instrumented scripts. It reuses `ApplicationCoverage` and the
+managed workspace owner. Fixture files, compiler, original script, test, collector
+and helper inputs are fingerprinted. Each instrumented invocation, including an
+expected command failure, must produce exactly one validated raw coverage map;
+ordinary invocations must produce none. Matched command inventories and source
+correspondence are required before accepting complete coverage. Reports survive
+temporary-workspace cleanup. CI retains them for 30 days on success or failure.
+
+Final focused run: 12 passing tests/four suites in 26.592s, Windows/Node22.21.0,
+TypeScript5.9.3. Three unrelated documentation tests are intentionally filtered by
+this command, not counted as passing. Integration uses actual compiler, files and
+processes, with no API mocks. Five explicitly labelled unit fault cases inject
+falsy thrown values; real-process negative controls remove/duplicate/add owned
+report files to prove invalid evidence is rejected. The critic approved the
+implementation, cleanup budgets and actual PR head.
+
+| Original script | Statements | Branches | Functions | Lines | Child reports |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `build-live-html-examples.js` | 35 | 18 | 8 | 28 | 16 |
+| `generate-docs.js` | 50 | 37 | 7 | 42 | 41 |
+| `generate-protocol-types.js` | 13 | 6 | 1 | 12 | 7 |
+
+Every listed metric is 100%. Reports under `coverage/tool-source/<run>/report.json`:
+
+| Script | Run | SHA-256 |
+| --- | --- | --- |
+| Example builder | `6d6d82f8-db83-456a-b429-58d8613a6f00` | `c48f5076a0e325e2cd93ea2b015c327e0e319fa0317cfec1eb4903563789dec1` |
+| Documentation | `6df5c048-eab7-4462-8108-008dd0f32658` | `d8f8a7a69848000006f34ae4b2276183948313fe71fccefe260772ddcbb8c2ab` |
+| Protocol types | `74c46f2f-ea89-4814-849c-01d70d13b86f` | `6f35424ef444a384a04f287b88249c63481d00381d7552689313c4bfde3d4fd0` |
+
+All current tooling hashes, paired inventories and 64 raw-report hashes were
+rechecked after this run. Full local regression at the same code checkpoint
+passed all 951 tests/95 suites in 517.317s, including normal pretest/generated/type
+checks. Library counts remain those listed above, all-four 100%.
+`coverage/coverage-final.json` SHA-256:
+`24b22792ad69ee6460f2282814046ccb6c53796be25008bb11b0c9389d62e456`.
+Hosted PR33358575524 and push33358573729 were still running when this evidence
+was recorded. No new runtime/resource/long-soak result, npm publication, deployment
+or merge is claimed by this build-tool increment.
 
 ## Remaining private-tool measurement gaps
 
@@ -158,9 +212,6 @@ No direct coverage map was found for these active verification/build files:
 
 ```text
 scripts/benchmark-worker.js
-scripts/build-live-html-examples.js
-scripts/generate-docs.js
-scripts/generate-protocol-types.js
 scripts/measure-starter-coverage.js
 scripts/memory-worker.js
 scripts/realtime-harness.js
@@ -207,3 +258,11 @@ infrastructure, not silently part of the library denominator. The client’s
 standalone Node-only V8 diagnostic remains a separate known failure; original
 authored-source and browser coverage do not relabel it passing. Coverage work
 does not require restarting the deferred scientific runtime investigation.
+
+Next concrete correction: an actual `REDWEB_MEMORY_CLIENTS=0` run of
+`verify-memory-overhead.js` exited zero with zero connections, null per-connection
+values and zero computed metadata cost. This invalid-input false pass does not
+describe the earlier recorded 500-client measurements. The worker/coordinator
+need validated counts/results and bounded, failure-preserving ownership before
+their tool coverage gap can be closed. Defaults, sampling and thresholds must
+remain unchanged; legitimate negative GC deltas must not be clamped.
