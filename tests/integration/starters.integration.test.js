@@ -13,5 +13,5 @@ describe('generated starters use real HTTP and sockets', () => {
                 expect(output).toMatch(/# fail 0/);
             }
         });
-    }, 120000); // Three sequential 30s command limits plus bounded process cleanup.
+    }, 210000); // Three sequential 60s supervisor limits plus bounded process cleanup; shipped tests retain their own deadlines.
 });

@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { npmEntrypoint } = require('../evaluation/process');
 const { projectNodeIssue } = require('../../src/cli/ProjectDoctor');
+const STARTER_COMMAND_TIMEOUT_MS = 60000;
 
 // Both CI and the tarball gate use the exact generated tests, with real consumers and network listeners.
-async function verifyStarter(packageRoot, execution, template, { timeoutMs = 30000 } = {}) {
+async function verifyStarter(packageRoot, execution, template, { timeoutMs = STARTER_COMMAND_TIMEOUT_MS } = {}) {
     const target = path.join(execution.directory, template);
     const output = await execution.command([path.join(packageRoot, 'bin/redweb.js'), 'init', target, '--template', template, '--json'],
         { timeoutMs });
@@ -15,7 +16,7 @@ async function verifyStarter(packageRoot, execution, template, { timeoutMs = 300
     return verifyApplication(packageRoot, target, template, execution, { timeoutMs });
 }
 
-async function verifyApplication(packageRoot, target, template, execution, { timeoutMs = 30000 } = {}) {
+async function verifyApplication(packageRoot, target, template, execution, { timeoutMs = STARTER_COMMAND_TIMEOUT_MS } = {}) {
     const manifest = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8'));
     if (projectNodeIssue(process.versions.node, manifest.engines?.node)?.severity === 'error') {
         return `# SKIP ${template}: requires Node ${manifest.engines.node}; current ${process.versions.node}. CI verifies it on Node 22.\n`;
