@@ -15,7 +15,7 @@ const { projectFiles } = require('../../src/cli/templates');
 const manifest = JSON.parse(projectFiles(require('../../package.json').version, 'dashboard').find(file => file.path === 'package.json').content);
 const dashboardTest = projectNodeIssue(process.versions.node, manifest.engines.node)?.severity === 'error' ? test.skip : test;
 
-dashboardTest('dashboard verification uses actual Chromium, authentication, SQLite and private live updates', async () => {
+dashboardTest('dashboard verification uses headed Chromium, authentication, SQLite and private live updates', async () => {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     expect(executable).toBeTruthy();
     const execution = new VerificationWorkspace();
@@ -28,7 +28,7 @@ dashboardTest('dashboard verification uses actual Chromium, authentication, SQLi
             failure = combineFailures(failure, error);
         };
         try {
-            const launched = await launchBrowserWithRetry(executable, owner.directory);
+            const launched = await launchBrowserWithRetry(executable, owner.directory, { headless: false });
             browser = launched.browser;
             await verifyDashboard(owner, { debugPort: new URL(launched.endpoint).port,
                 openPage: (port, url) => pages.open(port, url) });

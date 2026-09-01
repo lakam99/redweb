@@ -57,12 +57,18 @@ async function verifyDashboard(execution, { openPage, debugPort }) {
         finally { store.close(); }
         app = createApp({ port: 0, database });
         await waitForListening(app.server);
-        const origin = `http://127.0.0.1:${app.server.address().port}`;
+        // Use the browser-equivalent loopback name that the server does not print.
+        // This caught a real form/socket rejection hidden by synthetic Origin headers.
+        const origin = `http://localhost:${app.server.address().port}`;
         const first = await open(`${origin}/login`);
         const signIn = async page => {
             await evaluate(page, `document.querySelector('#account').value = 'alice'; document.querySelector('#password').value = 'browser-test-only-password'; document.querySelector('form').requestSubmit();`);
             await waitForPage(page, `Boolean(document.querySelector('#card-title')) && document.documentElement.getAttribute('data-rw-connection') === 'open'`);
         };
+        await evaluate(first, `document.querySelector('#account').value = 'alice'; document.querySelector('#password').value = 'incorrect-browser-password'; document.querySelector('form').requestSubmit();`);
+        await waitForPage(first, `document.body.textContent.includes('Check your credentials')`);
+        await first.command('Page.navigate', { url: `${origin}/login` });
+        await waitForPage(first, `Boolean(document.querySelector('#account'))`);
         await signIn(first);
         const second = await open(origin);
         await evaluate(second, `window.savedInput = document.querySelector('#card-title'); savedInput.value = 'Unsent draft'; savedInput.focus(); savedInput.setSelectionRange(2, 5);`);
@@ -78,7 +84,7 @@ async function verifyDashboard(execution, { openPage, debugPort }) {
         assert.equal(await evaluate(first, `document.querySelector('.card-grid h2').textContent`), 'Browser saved card');
         await evaluate(first, `document.querySelector('[rw-submit="remove"]').requestSubmit();`);
         await waitForPage(first, `document.querySelectorAll('.card-grid li').length === 0`);
-        console.log('Dashboard browser passed: real sign-in/forms, private live cards, draft preservation, HttpOnly cookies, sign-out/re-login and deletion.');
+        console.log('Dashboard browser passed: real rejected/accepted browser sign-in forms across localhost, private live cards, draft preservation, HttpOnly cookies, sign-out/re-login and deletion.');
     } catch (error) { failure = verificationError(error); }
     closing = true;
     await Promise.allSettled(openings.map(opening => withTimeout(opening.promise, 'dashboard pending page open', 10000)));

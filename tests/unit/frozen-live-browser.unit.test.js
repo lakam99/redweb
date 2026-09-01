@@ -8,6 +8,7 @@ const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspa
 const { FrozenBrowserBoundary } = require('../helpers/FrozenBrowserBoundary');
 const { withTimeout } = require('../helpers/network');
 const flush = () => new Promise(setImmediate);
+const browserSource = fs.readFileSync(path.resolve(__dirname, '../../scripts/verify-live-html-browser.js'), 'utf8');
 
 async function boundary(options, assertion) {
     await new VerificationWorkspace().run(async owner => {
@@ -38,6 +39,11 @@ const observations = [
     ['documentation composition', e => e.includes("document.querySelectorAll('article').length"), 'Documentation composition helpers produced incorrect browser DOM.'],
     ['JSX safety', e => e.includes('window.__redwebJsxInjected !== true'), 'Escaped JSX content executed or composed incorrectly in the browser.'],
 ];
+
+test('the native JSX action oracle follows the wrapper-free counter markup safely', () => {
+    expect(browserSource).toContain(`document.querySelector('[rw-click="increment"]')?.textContent.trim() === 'Count 1'`);
+    expect(browserSource).not.toContain(`document.querySelector('output').textContent === '1'`);
+});
 
 test.each(observations)('frozen main rejects a failed %s observation and performs its normal cleanup', async (_label, select, message) => {
     let selected = 0;
@@ -218,6 +224,16 @@ test('browser startup deadline includes collected stderr', async () => {
         await flush(); probe.tick(); await rejected;
         await probe.api.stopBrowser(browser.child);
         expect(probe.timers.size).toBe(0);
+    });
+});
+
+test('headed browser launch omits headless mode and allows its window to be shown', async () => {
+    await boundary({}, async probe => {
+        const browser = probe.context.launchBrowser('unit-browser', probe.directory, { headless: false });
+        await expect(browser.endpoint).resolves.toBe('ws://127.0.0.1:9222/unit');
+        expect(probe.children[0].args).not.toContain('--headless=new');
+        expect(probe.children[0].settings.windowsHide).toBe(false);
+        await probe.api.stopBrowser(browser.child);
     });
 });
 

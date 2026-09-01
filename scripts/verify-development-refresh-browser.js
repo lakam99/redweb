@@ -131,7 +131,7 @@ async function verifyTemplate(execution, debugPort, template, open) {
             await browser.command('Input.insertText', { text: 'Keep my unsent draft' });
             await browser.evaluate('window.__documentMarker = "edited"; window.__developmentHost = document.getElementById("__redweb_dev"); true');
             await click(peer, 'document.querySelector("button[rw-click]")');
-            await until(() => browser.evaluate('document.querySelector("output").textContent === "1"'), 'peer-triggered root patch');
+            await until(() => browser.evaluate('document.querySelector("button[rw-click]")?.textContent.trim() === "Count 1"'), 'peer-triggered root patch');
             assert.equal(await browser.evaluate('document.activeElement.id === "draft" && document.getElementById("draft").value === "Keep my unsent draft" && window.__developmentHost === document.getElementById("__redweb_dev") && Boolean(window.__developmentHost.shadowRoot)'), true);
             fs.writeFileSync(sourceFile, `${source}\nconst invalid: number = 'broken build';\n`);
             await until(() => output.includes('TS2322') && output.includes('app crashed'), 'failed build remains stopped');
@@ -140,7 +140,7 @@ async function verifyTemplate(execution, debugPort, template, open) {
             fs.writeFileSync(sourceFile, source);
             await until(() => browser.evaluate('Boolean(document.getElementById("__redweb_dev").shadowRoot.querySelector("button"))'), 'edited document confirmation');
             assert.equal(await browser.evaluate('document.querySelector("h1").textContent === "Generation two" && document.activeElement.id === "draft" && document.getElementById("draft").value === "Keep my unsent draft"'), true);
-            await until(() => peer.evaluate('document.querySelector("h1").textContent === "Generation three" && document.querySelector("output").textContent === "0"'), 'clean peer reload and server-state reset');
+            await until(() => peer.evaluate('document.querySelector("h1")?.textContent === "Generation three" && document.querySelector("button[rw-click]")?.textContent.trim() === "Count 0"'), 'clean peer reload and server-state reset');
             await until(() => browser.evaluate('getComputedStyle(document.getElementById("__redweb_dev")).position === "fixed"'), 'external notice stylesheet');
             await click(browser, 'document.getElementById("reset")');
             assert.equal(await browser.evaluate('window.__documentMarker === "edited" && Boolean(document.getElementById("__redweb_dev").shadowRoot.querySelector("button"))'), true);

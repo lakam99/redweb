@@ -18,18 +18,18 @@ Use the [official Node release schedule](https://nodejs.org/en/about/previous-re
 
 ## Pin the package and the documentation together
 
-For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This guide is versioned for 0.13.3. Before registry publication, verify the packed candidate; after publication, repeat these registry checks from a clean application:
+For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This guide is versioned for 0.13.4. Before registry publication, verify the packed candidate; after publication, repeat these registry checks from a clean application:
 
 ```sh
-npm view redweb@0.13.3 version engines dist.integrity dist.signatures dist.attestations gitHead --json
-npm install --save-exact redweb@0.13.3
+npm view redweb@0.13.4 version engines dist.integrity dist.signatures dist.attestations gitHead --json
+npm install --save-exact redweb@0.13.4
 npm audit signatures
 npm audit --omit=dev
 ```
 
 The signature command must run in the installed application directory. Keep TLS verification enabled and use a current npm CLI; a certificate/trust-store failure is not a reason to disable verification. A lockfile's integrity value detects changed package bytes; registry signatures authenticate registry metadata; provenance, when present and verified, links an artifact to a build/source identity. Vulnerability audit is a separate check against known advisories, not an application penetration test.
 
-Redweb 0.13.3 contains the server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics, lifecycle work, and bounded heartbeat grace described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.13.3 and assume newer APIs exist.
+Redweb 0.13.4 contains the server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics, lifecycle work, and bounded heartbeat grace described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.13.4 and assume newer APIs exist.
 
 Redweb is pre-1.0. Consult the changelog and versioned guide before upgrading, run your own real HTTP/WebSocket/browser tests, and keep a rollback artifact. Patch/minor numbers and a compatible TypeScript build alone do not prove wire compatibility, preserved sessions, database compatibility or application authorization. HTTP-created live-page sessions are process-owned; a restart or rolling replacement does not migrate them automatically. Raw socket protocol versions are negotiated only when the route opts in, and application payload compatibility remains your contract.
 
