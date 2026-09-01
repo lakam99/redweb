@@ -1,6 +1,6 @@
 {
   "name": "redweb",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "A small Node.js foundation for HTTP, WebSockets, multiplayer services, and server-rendered HTML",
   "main": "index.js",
   "types": "index.d.ts",

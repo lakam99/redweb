@@ -1,6 +1,6 @@
 # Development refresh and inspection
 
-This API is available in `redweb@0.13.3`. Use documentation matching the installed package before enabling it.
+This API is available in `redweb@0.13.4`. Use documentation matching the installed package before enabling it.
 
 ## Browser refresh
 

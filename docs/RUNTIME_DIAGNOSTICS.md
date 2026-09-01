@@ -1,6 +1,6 @@
 # Understand failures before retrying
 
-Status: included in `redweb@0.13.3`.
+Status: included in `redweb@0.13.4`.
 
 Authentication identifies a visitor. Authorization decides what that visitor may do. Validation checks an input's shape. An application failure means server code or a dependency failed; it is not evidence that the visitor supplied bad credentials.
 

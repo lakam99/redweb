@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.13.4
+
+Released 2026-09-01 (America/Toronto).
+
+- Accept the equivalent `localhost`, `127.0.0.1`, and IPv6 loopback origins for the loopback-only development dashboard, while retaining exact configured-origin enforcement in production. Apply the same policy to form submissions and realtime socket upgrades.
+- Exercise rejected and accepted dashboard login forms, authentication, private realtime updates, persistence, logout, and reconnect through headed Chromium. CI supplies a virtual display instead of substituting synthetic request headers or headless-only coverage.
+
 ## 0.13.3
 
 Released 2026-09-01 (America/Toronto).
