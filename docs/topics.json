@@ -16,6 +16,6 @@
   { "id": "operations", "title": "Deploy and operate socket services", "summary": "Readiness, shutdown, capacity, reconnection, and distributed boundaries.", "source": "docs/MULTIPLAYER_OPERATIONS.md" },
   { "id": "production-contract", "title": "Production guarantees and limits", "summary": "Resource ownership, delivery semantics, compatibility, and release gates.", "source": "docs/PRODUCTION_READINESS.md" },
   { "id": "verification", "title": "Recorded verification evidence", "summary": "Historical measurements and their exact scope; not proof of a newer release.", "source": "docs/VERIFICATION_EVIDENCE.md" },
-  { "id": "release-status", "title": "Development release status", "summary": "Acceptance checklist, completed increments, and unfinished release gates.", "source": "docs/AGENT_READY_ACCEPTANCE.md" },
+  { "id": "release-status", "title": "Release status", "summary": "Acceptance checklist, completed increments, and remaining publication or deployment boundaries.", "source": "docs/AGENT_READY_ACCEPTANCE.md" },
   { "id": "release-trust", "title": "Choose and verify a release", "summary": "Maintained runtimes, compiler/browser verification boundaries, pinned packages, registry signatures, provenance and support limits.", "source": "docs/RELEASE_TRUST.md" }
 ]

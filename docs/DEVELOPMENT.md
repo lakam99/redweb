@@ -1,6 +1,6 @@
 # Development refresh and inspection
 
-This API is **unreleased**. Use the matching packed candidate rather than assuming it exists in the published package.
+This API is available in `redweb@0.13.0`. Use documentation matching the installed package before enabling it.
 
 ## Browser refresh
 

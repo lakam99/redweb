@@ -69,10 +69,10 @@ describe('single-source documentation', () => {
         }
     });
 
-    test('deployment guidance distinguishes the published client from unreleased Redweb', () => {
+    test('deployment guidance identifies the published release pair and future checkout boundary', () => {
         const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
-        expect(guide).toContain('`redweb-client@0.2.0` is published');
-        expect(guide).toContain('Unreleased Redweb changes still require the matching tested tarball');
+        expect(guide).toContain('`redweb@0.13.0` installs published `redweb-client@0.2.0`');
+        expect(guide).toContain('Future unreleased Redweb changes require their matching tested tarball');
         expect(guide).toContain('a clean production install does not preserve that link');
         expect(guide).not.toContain('as though the matching client were already published');
     });
@@ -90,15 +90,15 @@ describe('single-source documentation', () => {
         }
     });
 
-    test('candidate version agrees across package, lockfile and unreleased release guidance', () => {
+    test('published version agrees across package, lockfile, changelog and release guidance', () => {
         const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
         const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
         const trust = fs.readFileSync(path.join(root, 'docs/RELEASE_TRUST.md'), 'utf8');
         expect(lock.version).toBe(version);
         expect(lock.packages[''].version).toBe(version);
-        expect(changelog).toContain(`Next package version: \`${version}\` (not yet published).`);
-        expect(trust).toContain(`The checkout has package metadata \`${version}\`, reserved for this unreleased candidate`);
-        expect(trust).toContain('npm install --save-exact redweb@0.12.0');
+        expect(changelog).toContain(`## ${version}`);
+        expect(trust).toContain(`npm install --save-exact redweb@${version}`);
+        expect(trust).toContain('gitHead');
         expect(new Documentation(root).build().channel).toBe('unreleased');
     });
 
@@ -157,6 +157,21 @@ describe('single-source documentation', () => {
         expect(builder.setup('dashboard')).toContain('npm install --save-exact TARBALL\nnpm run add-user -- alice\nnpm test\nnpm run dev');
     });
 
+    test('released documentation does not describe its shipped capabilities as unpublished', () => {
+        const docs = new Documentation(root, version).build();
+        const text = [fs.readFileSync(path.join(root, 'README.md'), 'utf8'), docs.llms, ...docs.pages.map(page => page.markdown)].join('\n');
+        for (const stale of [
+            'Redweb itself remains unreleased',
+            'This command is currently **unreleased**',
+            'This API is **unreleased**',
+            'On this unreleased branch',
+            'This checkout contains unreleased work even while its package metadata still matches an older npm version',
+            'the current development candidate',
+        ]) expect(text).not.toContain(stale);
+        expect(text).toContain(`These commands are available in \`redweb@${version}\``);
+        expect(text).toContain(`This API is available in \`redweb@${version}\``);
+    });
+
     test('resolves source-relative links without rewriting code examples', () => {
         const builder = new Documentation(root);
         expect(builder.links('[state](LIVE_HTML.md#automatic-reactive-tsx)', 'docs/CLI.md'))
@@ -167,7 +182,7 @@ describe('single-source documentation', () => {
         expect(builder.links(code, 'docs/CLI.md')).toBe(code);
         expect(() => builder.links('[unknown](missing.md)', 'docs/CLI.md')).toThrow('Undocumented link target');
         expect(() => new Documentation(root, '../release')).toThrow('exact package version');
-        expect(() => new Documentation(root, version)).toThrow('Move unreleased changes');
+        expect(new Documentation(root, version).build().channel).toBe(version);
         expect(() => builder.setup('../unknown')).toThrow('Unknown starter template');
     });
 

@@ -47,7 +47,7 @@ per expired connection; bound connections and queues independently.
 
 The independent senior-review gate rejects releases that weaken any invariant, hide ambiguous delivery semantics, add mandatory brokers or identity libraries, or substitute coverage percentages for race, load, soak, and failure evidence.
 
-See [operations verification](MULTIPLAYER_OPERATIONS.md#verification) for the current commands and the distinction between server acceptance and the original diagnostic. These are required gates, not a statement that the current development candidate has passed them; consult the [release checklist](AGENT_READY_ACCEPTANCE.md) for outstanding failures.
+See [operations verification](MULTIPLAYER_OPERATIONS.md#verification) for the current commands and the distinction between server acceptance and the original diagnostic. These are required gates, not a statement that every release has passed them; consult the version's [release checklist](AGENT_READY_ACCEPTANCE.md) for recorded results and remaining limitations.
 
 ## Horizontal composition contract
 

@@ -46,6 +46,7 @@ describe('documented applications without mocks', () => {
         await verifyScript({ script: 'scripts/generate-docs.js', testFile: __filename,
           prepare(workspace) {
             copyDocumentationSource(root, workspace);
+            fs.rmSync(path.join(workspace, `docs/releases/${require('../../package.json').version}.json`));
             fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n- Pending.\n');
           },
           async exercise(workspace, run) {
