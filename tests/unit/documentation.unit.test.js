@@ -166,6 +166,7 @@ describe('single-source documentation', () => {
             'This API is **unreleased**',
             'On this unreleased branch',
             'This checkout contains unreleased work even while its package metadata still matches an older npm version',
+            'the current development candidate',
         ]) expect(text).not.toContain(stale);
         expect(text).toContain(`These commands are available in \`redweb@${version}\``);
         expect(text).toContain(`This API is available in \`redweb@${version}\``);
