@@ -329,7 +329,7 @@ jobs:
           path: coverage/development-coordinator/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:dashboard:coverage
+      - run: xvfb-run -a npm run verify:dashboard:coverage
         id: dashboard-verifier
         timeout-minutes: 12
       - name: Preserve dashboard verifier coverage

@@ -81,9 +81,9 @@ function jsonRequest(url, method = 'GET') {
     });
 }
 
-function launchBrowser(executable, profile) {
+function launchBrowser(executable, profile, { headless = true } = {}) {
     const child = spawn(executable, [
-        '--headless=new',
+        ...(headless ? ['--headless=new'] : []),
         '--disable-gpu',
         '--disable-dev-shm-usage',
         '--no-first-run',
@@ -91,7 +91,7 @@ function launchBrowser(executable, profile) {
         '--remote-debugging-port=0',
         `--user-data-dir=${profile}`,
         'about:blank',
-    ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: headless });
     const endpoint = new Promise((resolve, reject) => {
         let stderr = '';
         const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 20_000);
@@ -125,12 +125,12 @@ async function stopBrowser(child) {
     }
 }
 
-async function launchBrowserWithRetry(executable, profileRoot) {
+async function launchBrowserWithRetry(executable, profileRoot, options) {
     const errors = [];
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         const profile = path.join(profileRoot, `attempt-${attempt}`);
         fs.mkdirSync(profile);
-        const browser = launchBrowser(executable, profile);
+        const browser = launchBrowser(executable, profile, options);
         try {
             return { browser, endpoint: await browser.endpoint };
         } catch (error) {

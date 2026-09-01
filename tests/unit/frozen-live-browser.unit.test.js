@@ -221,6 +221,16 @@ test('browser startup deadline includes collected stderr', async () => {
     });
 });
 
+test('headed browser launch omits headless mode and allows its window to be shown', async () => {
+    await boundary({}, async probe => {
+        const browser = probe.context.launchBrowser('unit-browser', probe.directory, { headless: false });
+        await expect(browser.endpoint).resolves.toBe('ws://127.0.0.1:9222/unit');
+        expect(probe.children[0].args).not.toContain('--headless=new');
+        expect(probe.children[0].settings.windowsHide).toBe(false);
+        await probe.api.stopBrowser(browser.child);
+    });
+});
+
 test('browser shutdown handles no child, completed child, and asynchronous exit', async () => {
     await boundary({ asyncExit: true }, async probe => {
         await probe.api.stopBrowser();

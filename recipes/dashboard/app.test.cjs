@@ -8,7 +8,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { spawn, spawnSync } = require('node:child_process');
 const net = require('node:net');
 const { WebSocketServer, WebSocket } = require('ws');
-const { createApp, databasePath } = require('../dist/app');
+const { allowsDashboardOrigin, createApp, databasePath } = require('../dist/app');
 const { DashboardStore } = require('../dist/store');
 const { DashboardAuth, credentials, sessionToken } = require('../dist/auth');
 const { PrivateCards } = require('../dist/cards');
@@ -122,6 +122,20 @@ test('private live cards: real HTTP, sockets, isolation, reconnect, sign-out and
     const client = await cardClient(t, origin, renewed);
     client.remove(items[0].id);
     await client.items(value => value.length === 1);
+});
+
+test('unit: development accepts only equivalent loopback browser origins on the listening port', () => {
+    const expected = 'http://127.0.0.1:8181';
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false), true);
+    assert.equal(allowsDashboardOrigin('http://127.0.0.1:8181', expected, false), true);
+    assert.equal(allowsDashboardOrigin('http://[::1]:8181', expected, false), true);
+    assert.equal(allowsDashboardOrigin('https://localhost:8181', expected, false), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8182', expected, false), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181/path', expected, false), false);
+    assert.equal(allowsDashboardOrigin('not an origin', expected, false), false);
+    assert.equal(allowsDashboardOrigin(undefined, expected, false), false);
+    assert.equal(allowsDashboardOrigin('https://dashboard.example', 'https://dashboard.example', true), true);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', 'https://dashboard.example', true), false);
 });
 
 test('session expiry closes idle sockets and rejects later HTTP access', async t => {

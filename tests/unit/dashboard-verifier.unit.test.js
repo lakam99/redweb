@@ -25,6 +25,7 @@ test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', '
         if (['shutdown', 'combined', 'unref'].includes(mode)) throw cleanup;
     } };
     const page = { command: async method => {
+        if (method === 'Page.navigate') { events.push('navigate'); return; }
         expect(method).toBe('Page.close'); events.push('close');
         if (['close', 'late-close'].includes(mode)) throw cleanup;
     }, socket: { terminate() {
@@ -95,6 +96,7 @@ test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', '
     else if (mode === 'timeout') expect(result.message).toMatch(/Dashboard browser condition failed/);
     else expect(result).toBe(primary);
     if (events.includes('created')) expect(events).toContain('shutdown');
+    if (mode === 'pass') expect(events).toContain('navigate');
     if (['credentials', 'provision'].includes(mode)) expect(events).toContain('store-close');
     if (events.includes('close')) expect(events).toContain('terminate');
     if (['close', 'terminate', 'shutdown', 'combined', 'unref', 'late-close', 'unsettled'].includes(mode)) {
