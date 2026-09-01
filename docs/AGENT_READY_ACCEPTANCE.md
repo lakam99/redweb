@@ -228,7 +228,7 @@ and generated additions remain actual consumer checks. See
   records `gitHead` `7196d504ee65dfaf5ac869ea4bda66d7cf86d015`, the
   verified merge commit on `main`. All 215 registry files match that commit's
   content: two byte-for-byte and 213 after Windows CRLF normalization. The
-  per-file hashes are retained in `docs/releases/0.13.0-audit.json`.
+  per-file hashes are retained in `docs/releases/audit-0.13.0.json`.
   A clean exact installation with lifecycle scripts disabled
   passed `npm audit signatures` with no invalid or missing signatures and
   `npm audit --omit=dev` with zero vulnerabilities; registry metadata contains
