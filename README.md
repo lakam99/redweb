@@ -9,15 +9,19 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.13.4. Install that exact version when following these examples.
+> Unreleased development documentation. Package metadata is 0.13.5, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
+
+Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:
 
 ```sh
-npx --yes redweb@0.13.4 init my-realtime --template realtime
+npx --yes --package TARBALL redweb init my-realtime --template realtime
 cd my-realtime
-npm install --save-exact redweb@0.13.4
+npm install --save-exact TARBALL
 npm test
 npm run dev
 ```
+
+This prerelease Redweb artifact is development-only until its release checks finish. For released applications, use an available versioned release guide.
 <!-- redweb:setup:end -->
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.

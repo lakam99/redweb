@@ -135,6 +135,7 @@ async function exercise(mode) {
             reports.push(JSON.parse(JSON.stringify(report))); return failure;
         } },
         './lib/verify-starter': { verifyStarter: async () => {} },
+        './lib/verify-starter-browser': { verifyStarterBrowser: async () => ({ realtime: true, chat: true, site: true, headed: true }) },
         './lib/verify-documentation': { verifyDocumentation: async () => {} },
         './lib/verify-action-input': { verifyActionInput: async () => {} },
         './lib/verify-room-example': { verifyRoomExample: async () => {} },

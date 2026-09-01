@@ -64,6 +64,8 @@ test('frozen main completes the synthetic orchestration with delayed listeners a
         await probe.context.main();
         expect(probe.logs).toHaveLength(1);
         expect(probe.logs[0]).toContain('Live HTML browser gate passed:');
+        expect(probe.children[0].args).not.toContain('--headless=new');
+        expect(probe.children[0].settings.windowsHide).toBe(false);
         expect(probe.sockets).toHaveLength(13);
         expect(probe.sockets.every(socket => socket.closed === 1)).toBe(true);
         expect(probe.apps.map(app => app.stops)).toEqual(Array(8).fill(1));

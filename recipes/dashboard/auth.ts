@@ -26,8 +26,10 @@ export class DashboardAuth {
     private closed = false;
     private readonly attempts = new Map<string, { count: number; expires: number }>();
 
-    constructor(private readonly store: DashboardStore, private readonly ttlMs = 3600000) {
+    constructor(private readonly store: DashboardStore, private readonly ttlMs = 3600000,
+        private readonly attemptWindowMs = 60000) {
         if (!Number.isInteger(ttlMs) || ttlMs < 100 || ttlMs > 86400000) throw new RangeError('Invalid session lifetime.');
+        if (!Number.isInteger(attemptWindowMs) || attemptWindowMs < 20 || attemptWindowMs > 60000) throw new RangeError('Invalid login attempt window.');
     }
 
     async login(ip: string, account: unknown, password: unknown): Promise<string | undefined> {
@@ -37,7 +39,7 @@ export class DashboardAuth {
         let attempt = this.attempts.get(ip);
         if (!attempt) {
             if (this.attempts.size >= 1024) return undefined;
-            attempt = { count: 0, expires: now + 60000 };
+            attempt = { count: 0, expires: now + this.attemptWindowMs };
             this.attempts.set(ip, attempt);
         }
         if (++attempt.count > 10 || this.active >= 4) return undefined;

@@ -228,6 +228,8 @@ test('logout fences password checks in flight; close and admission bounds stop n
     assert.equal(await closing, undefined);
     assert.equal(await auth.login('peer', 'alice', password), undefined);
     assert.throws(() => new DashboardAuth(store, 0));
+    assert.throws(() => new DashboardAuth(store, 3600000, 19));
+    assert.throws(() => new DashboardAuth(store, 3600000, 60001));
     const limited = new DashboardAuth(store);
     const concurrent = Array.from({ length: 5 }, (_, index) => limited.login(`peer-${index}`, 'alice', password));
     assert.equal(await concurrent[4], undefined);

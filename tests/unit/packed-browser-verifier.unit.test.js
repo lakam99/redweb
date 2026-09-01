@@ -9,6 +9,11 @@ const { createCoverageMap } = require('istanbul-lib-coverage');
 const filename = path.resolve(__dirname, '../../scripts/lib/verify-packed-browser.js');
 const packageRoot = path.resolve('unit-installed-redweb');
 
+test('packed browser selection rejects unknown scenarios before acquiring resources', async () => {
+    const { verifyPackedBrowser } = require('../../scripts/lib/verify-packed-browser');
+    await expect(verifyPackedBrowser(packageRoot, { directory: 'unused' }, 'unknown')).rejects.toThrow('Unknown browser example');
+});
+
 // Explicit browser/process boundary faults, not browser integration substitutes.
 test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'launch', 'page',
     'evaluate', 'draft', 'escaping', 'command', 'tab-close', 'stop', 'uncertain', 'signal',
@@ -41,6 +46,10 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
             if (['evaluate', 'combined'].includes(mode)) throw primary;
             if (expression === 'document.querySelector("#chat-message").value') return mode === 'draft' ? 'wrong draft' : 'Unsent draft';
             if (expression === 'document.querySelector(".message-list b") === null') return mode !== 'escaping';
+            if (expression.includes('output[data-rw-component=') && expression.includes('.textContent')) return '0';
+            if (expression.includes('getComputedStyle') && expression.includes('"output"')) return 'rgb(103, 232, 249)';
+            if (expression.includes('getComputedStyle') && expression.includes('".card"')) return 'rgb(31, 41, 55)';
+            if (expression.includes('getComputedStyle') && expression.includes('".counter-card"')) return 'rgb(17, 24, 39)';
             return true;
         }, command: async () => { if (mode === 'command') throw primary; return { product: 'unit-browser' }; } };
         tabs.push(value); return value;
@@ -51,9 +60,12 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
         if (name === packageRoot) { if (mode === 'import') throw primary; return { start }; }
         if (name === path.join(packageRoot, 'examples/live-html/counter.js')) return { CounterPage: class {} };
         if (name === path.join(packageRoot, 'examples/live-html/chatroom.js')) return { createChatroomPage: () => class {} };
+        if (name === path.join(packageRoot, 'examples/live-html/cards.js')) return { CardsPage: class {} };
+        if (name === path.join(packageRoot, 'examples/live-html/components.js')) return { ComponentsPage: class {} };
+        if (name === path.join(packageRoot, 'examples/live-html/jsx-page.js')) return { JsxPage: class {} };
         if (name === '../verify-live-html-browser') return {
             browserCandidates: ['unit-chromium'], eventual: expression => expression,
-            launchBrowserWithRetry: async () => { events.push('launch'); if (mode === 'launch') throw primary; return { browser, endpoint: 'ws://127.0.0.1:9222/devtools/browser/unit' }; },
+            launchBrowserWithRetry: async (_executable, _profile, options) => { expect(options).toEqual({ headless: false }); events.push('launch'); if (mode === 'launch') throw primary; return { browser, endpoint: 'ws://127.0.0.1:9222/devtools/browser/unit' }; },
             openPage: async () => {
                 events.push('open');
                 if (mode === 'page') throw primary;
@@ -91,7 +103,8 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
     const result = await context.module.exports.verifyPackedBrowser(packageRoot, execution).catch(error => error);
     await new Promise(resolve => setImmediate(resolve));
     if (['pass', 'environment', 'signal'].includes(mode)) {
-        expect(result).toEqual({ counter: true, chat: true, reconnect: true, disconnect: true, browser: { product: 'unit-browser' } });
+        expect(result).toEqual({ counter: true, chat: true, reconnect: true, disconnect: true,
+            cards: true, components: true, jsx: true, headed: true, browser: { product: 'unit-browser' } });
         expect(execution.cleanupFailure).toBeUndefined();
     } else expect(require('node:util').types.isNativeError(result)).toBe(true);
     for (let index = 0; index < servers.length; index++) expect(events).toContain(`shutdown-${index}`);

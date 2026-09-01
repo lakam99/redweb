@@ -29,6 +29,8 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
 test('the default and hosted gates exclude soak and long fixed-window benchmark tests', () => {
     const matrix = workflow.slice(workflow.indexOf('  test:'), workflow.indexOf('  lifecycle-smoke:'));
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
+    expect(workflow).toContain('run: xvfb-run -a npm run verify:starter:browser:coverage');
+    expect(workflow).toContain('run: xvfb-run -a npm run verify:package:browser:coverage');
     expect(workflow).not.toMatch(/run: npm run verify:(?:soak|soak:coverage|overhead:coverage)/);
     const command = require('../../package.json').scripts.test;
     const patterns = [...command.matchAll(/--testPathIgnorePatterns=([^ ]+)/g)].map(match => new RegExp(match[1]));
@@ -43,9 +45,9 @@ test('the default and hosted gates exclude soak and long fixed-window benchmark 
 
 test('package CI runs the authored coverage gate once and retains both evidence scopes', () => {
     const scripts = require('../../package.json').scripts;
-    expect(workflow.match(/run: npm run verify:package:coordinator:coverage/g)).toHaveLength(1);
+    expect(workflow.match(/run: xvfb-run -a npm run verify:package:coordinator:coverage/g)).toHaveLength(1);
     expect(workflow).not.toMatch(/run: npm run verify:live-html:package\s/);
-    expect(workflow).toMatch(/run: npm run verify:package:coordinator:coverage\s+id: packed-browser\s+timeout-minutes: 20/);
+    expect(workflow).toMatch(/run: xvfb-run -a npm run verify:package:coordinator:coverage\s+id: packed-browser\s+timeout-minutes: 20/);
     expect(workflow).toMatch(/path: \|\s+coverage\/packed-browser\/\s+coverage\/package-coordinator\//);
     for (const file of ['tests/unit/package-coordinator.unit.test.js',
         'tests/unit/packed-browser-report.unit.test.js',
@@ -103,9 +105,9 @@ test('frozen-tool coverage remains separate from behavioral evaluation controls'
 
 test('Live HTML CI measures the existing native workload once alongside explicit boundary units', () => {
     const scripts = require('../../package.json').scripts;
-    expect(workflow.match(/run: npm run verify:live-html:browser:coverage/g)).toHaveLength(1);
+    expect(workflow.match(/run: xvfb-run -a npm run verify:live-html:browser:coverage/g)).toHaveLength(1);
     expect(workflow).not.toMatch(/run: npm run verify:live-html:browser\s/);
-    expect(workflow).toMatch(/run: npm run verify:live-html:browser:coverage\s+id: frozen-live-browser\s+timeout-minutes: 5/);
+    expect(workflow).toMatch(/run: xvfb-run -a npm run verify:live-html:browser:coverage\s+id: frozen-live-browser\s+timeout-minutes: 5/);
     expect(workflow).toContain('coverage/frozen-live-browser/');
     expect(scripts['verify:live-html:browser:coverage']).toContain('--collectCoverageFrom=scripts/verify-live-html-browser.js');
     for (const file of ['tests/integration/frozen-live-browser.integration.test.js', 'tests/unit/frozen-live-browser.unit.test.js']) {

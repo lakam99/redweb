@@ -244,7 +244,7 @@ async function main() {
             waitForListening(componentBoundaries.server),
             waitForListening(validatedActions.server),
         ]);
-        const launched = await launchBrowserWithRetry(executable, profile);
+        const launched = await launchBrowserWithRetry(executable, profile, { headless: false });
         browser = launched.browser;
         const endpoint = new URL(launched.endpoint);
         const debugPort = Number(endpoint.port);

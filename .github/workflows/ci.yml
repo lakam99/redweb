@@ -250,7 +250,7 @@ jobs:
         timeout-minutes: 5
       - run: npm run verify:recovery:diagnostics
         timeout-minutes: 2
-      - run: npm run verify:live-html:browser:coverage
+      - run: xvfb-run -a npm run verify:live-html:browser:coverage
         id: frozen-live-browser
         timeout-minutes: 5
       - name: Preserve frozen Live HTML browser coverage
@@ -313,6 +313,8 @@ jobs:
       - run: xvfb-run -a npm run verify:dashboard:coverage
         id: dashboard-verifier
         timeout-minutes: 12
+      - run: xvfb-run -a npm run verify:starter:browser:coverage
+        timeout-minutes: 5
       - name: Preserve dashboard verifier coverage
         if: ${{ always() && steps.dashboard-verifier.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -358,7 +360,7 @@ jobs:
           path: coverage/example-dependency-tools/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:package:browser:coverage
+      - run: xvfb-run -a npm run verify:package:browser:coverage
         id: packed-browser-verifier-coverage
         timeout-minutes: 15
       - name: Preserve browser page-owner and verifier coverage
@@ -369,7 +371,7 @@ jobs:
           path: coverage/packed-browser-verifier/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:package:coordinator:coverage
+      - run: xvfb-run -a npm run verify:package:coordinator:coverage
         id: packed-browser
         timeout-minutes: 20
       - name: Preserve packed browser evidence
