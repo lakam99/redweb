@@ -28,7 +28,7 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
 
 test('matrix failures retain any available raw soak observations', () => {
     const matrix = workflow.slice(workflow.indexOf('  test:'), workflow.indexOf('  lifecycle-smoke:'));
-    expect(matrix).toMatch(/run: npm test -- --runInBand --silent\s+id: matrix-tests/);
+    expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
     expect(matrix).toContain("always() && steps.matrix-tests.outcome != 'skipped'");
     expect(matrix).toContain('name: matrix-soak-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}');
     expect(matrix).toContain('path: coverage/soak-tools/smoke-reports/');
