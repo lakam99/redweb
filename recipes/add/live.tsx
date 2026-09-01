@@ -11,7 +11,7 @@ export class __CLASS__ {
         return (
             <section>
                 <h1>__TITLE__</h1>
-                <button rw-click="increment">Count <output>{this.count}</output></button>
+                <button rw-click="increment">Count {this.count}</button>
             </section>
         );
     }

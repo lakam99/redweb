@@ -4,7 +4,7 @@ Use the version installed in your project (`npx --no-install redweb`) when troub
 
 ## Add pages, components, and socket routes
 
-These commands are available in `redweb@0.13.2`.
+These commands are available in `redweb@0.13.3`.
 
 ```sh
 npx --no-install redweb add page dashboard

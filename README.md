@@ -9,12 +9,12 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.13.2. Install that exact version when following these examples.
+> Documentation for Redweb 0.13.3. Install that exact version when following these examples.
 
 ```sh
-npx --yes redweb@0.13.2 init my-realtime --template realtime
+npx --yes redweb@0.13.3 init my-realtime --template realtime
 cd my-realtime
-npm install --save-exact redweb@0.13.2
+npm install --save-exact redweb@0.13.3
 npm test
 npm run dev
 ```
@@ -42,7 +42,7 @@ export class CounterPage {
                 <h1>A counter owned by the server</h1>
                 <p>Open this page in two tabs. Either button updates both.</p>
                 <button rw-click="increment">
-                    Count <output>{this.count}</output>
+                    Count {this.count}
                 </button>
             </main>
         );
@@ -265,7 +265,7 @@ The isolated browser harness copies its verification helpers explicitly and chec
 
 `npm run verify:live-html:browser:coverage` combines the existing full browser workload (counter, chat, CSS, JSX, components, forms and dashboard) with explicit failure-path unit tests. Its 100% authored-tool coverage is separate from frontend coverage and release acceptance. The native workload requires the dashboard's supported Node version. Known limitations of the unchanged legacy browser tool— including uncertain descendant cleanup—are characterized, not silently fixed or counted as verified cleanup; see the [coverage audit](docs/COVERAGE_SCOPE_AUDIT.md).
 
-The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. Redweb 0.13.2 depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md).
+The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. Redweb 0.13.3 depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md).
 
 `npm run measure:browser:client` separately serves the exact installed socket-only module with and without instrumentation through the same real HTTP/WebSocket/browser cases and retains its source hash and counters. It exits unsuccessfully until all four coverage metrics reach 100%; incomplete results are not a passing dependency-coverage claim. Reports are local under `coverage/browser-client` and do not alter the installed dependency or published package.
 
