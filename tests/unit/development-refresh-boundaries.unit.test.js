@@ -9,7 +9,14 @@ const { isNativeError } = require('node:util/types');
 const { createInstrumenter } = require('istanbul-lib-instrument');
 const { createCoverageMap } = require('istanbul-lib-coverage');
 const filename = path.resolve(__dirname, '../../scripts/verify-development-refresh-browser.js');
+const source = fs.readFileSync(filename, 'utf8');
 const leaves = error => Array.isArray(error?.errors) ? error.errors.flatMap(leaves) : [error];
+
+test('refresh assertions follow wrapper-free counter markup with null-safe lookups', () => {
+    expect(source).toContain(`document.querySelector("button[rw-click]")?.textContent.trim() === "Count 1"`);
+    expect(source).toContain(`document.querySelector("button[rw-click]")?.textContent.trim() === "Count 0"`);
+    expect(source).not.toContain(`document.querySelector("output").textContent`);
+});
 
 // Explicit dependency-boundary units. The native integration runs the unchanged
 // generated watcher/browser workflow without these doubles.
