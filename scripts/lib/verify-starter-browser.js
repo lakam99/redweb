@@ -8,6 +8,7 @@ const { waitForListening, withTimeout } = require('../../tests/helpers/network')
 const { BrowserPages } = require('./BrowserPages');
 const { BrowserAcceptance } = require('./BrowserAcceptance');
 const { verificationError } = require('./verificationError');
+const { releaseBrowserHandles } = require('./releaseBrowserHandles');
 
 /** Headed acceptance for compiled browser-facing starters whose source was removed. */
 async function verifyStarterBrowser(execution, template) {
@@ -88,7 +89,10 @@ async function verifyStarterBrowser(execution, template) {
                 await bounded(stopBrowser(browser.child), 'starter browser shutdown');
                 assert.ok(browser.child.exitCode !== null || browser.child.signalCode !== null, 'Starter browser termination is uncertain');
             } else if (launchAttempted) throw new Error('Starter browser launch cleanup could not be verified');
-        } catch (error) { recordCleanup(error); }
+        } catch (error) {
+            recordCleanup(error);
+            releaseBrowserHandles(browser, recordCleanup);
+        }
         for (const app of apps) {
             try { await bounded(app.shutdown(), 'starter application shutdown'); }
             catch (error) { recordCleanup(error); }

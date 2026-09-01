@@ -8,20 +8,23 @@ const { withTimeout, waitForListening } = require('../../tests/helpers/network')
 const { verificationError } = require('./verificationError');
 const { BrowserPages } = require('./BrowserPages');
 const { BrowserAcceptance } = require('./BrowserAcceptance');
+const { releaseBrowserHandles } = require('./releaseBrowserHandles');
 
 /** Native browser acceptance against modules loaded from the installed tarball. */
 async function verifyPackedBrowser(packageRoot, execution, example) {
-    const selected = example === undefined ? ['counter', 'chat', 'cards', 'components', 'jsx'] : [example];
-    assert.ok(selected.every(name => ['counter', 'chat', 'cards', 'components', 'jsx'].includes(name)), 'Unknown browser example');
+    const examples = {
+        counter: () => require(path.join(packageRoot, 'examples/live-html/counter.js')).CounterPage,
+        chat: () => require(path.join(packageRoot, 'examples/live-html/chatroom.js')).createChatroomPage(),
+        cards: () => require(path.join(packageRoot, 'examples/live-html/cards.js')).CardsPage,
+        components: () => require(path.join(packageRoot, 'examples/live-html/components.js')).ComponentsPage,
+        jsx: () => require(path.join(packageRoot, 'examples/live-html/jsx-page.js')).JsxPage,
+    };
+    const selected = example === undefined ? Object.keys(examples) : [example];
+    assert.ok(selected.every(name => Object.keys(examples).includes(name)), 'Unknown browser example');
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for packed client/server browser verification.');
     const installed = require(packageRoot);
-    const { CounterPage } = require(path.join(packageRoot, 'examples/live-html/counter.js'));
-    const { createChatroomPage } = require(path.join(packageRoot, 'examples/live-html/chatroom.js'));
-    const { CardsPage } = require(path.join(packageRoot, 'examples/live-html/cards.js'));
-    const { ComponentsPage } = require(path.join(packageRoot, 'examples/live-html/components.js'));
-    const { JsxPage } = require(path.join(packageRoot, 'examples/live-html/jsx-page.js'));
-    const servers = [];
+    const servers = {};
     let browser, failure, launchAttempted = false;
     const record = error => {
         const next = verificationError(error); failure = failure
@@ -37,9 +40,9 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
         cards: false, components: false, jsx: false, headed: false
     };
     try {
-        for (const Page of [CounterPage, createChatroomPage(), CardsPage, ComponentsPage, JsxPage]) {
-            const server = installed.start(Page, { port: 0, bind: '127.0.0.1', logger: null });
-            servers.push(server);
+        for (const name of selected) {
+            const server = installed.start(examples[name](), { port: 0, bind: '127.0.0.1', logger: null });
+            servers[name] = server;
             await bounded(waitForListening(server.server), 'packed server startup');
         }
         launchAttempted = true;
@@ -52,13 +55,13 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
         const metadata = await pages.open(port, 'about:blank');
         report.browser = await bounded(metadata.command('Browser.getVersion'), 'packed browser version');
         if (selected.includes('counter')) {
-            const counter = await acceptance.open(origin(servers[0]));
+            const counter = await acceptance.open(origin(servers.counter));
             await acceptance.wait(counter, `Number(document.querySelector('[data-rw-state="count"]').textContent) >= 2`, 'packed server-driven counter');
             await acceptance.style(counter, 'output', 'color', 'rgb(103, 232, 249)');
             report.counter = true;
         }
         if (selected.includes('chat')) {
-            const alice = await acceptance.open(origin(servers[1])), bob = await acceptance.open(origin(servers[1]));
+            const alice = await acceptance.open(origin(servers.chat)), bob = await acceptance.open(origin(servers.chat));
             for (const [tab, name] of [[alice, 'Alice'], [bob, 'Bob']]) {
                 await evaluate(tab, `document.querySelector('#display-name').value = ${JSON.stringify(name)}; document.querySelector('form[rw-submit="join"]').requestSubmit();`);
                 await wait(tab, 'Boolean(document.querySelector("#chat-message"))', 'packed chat joined');
@@ -81,7 +84,7 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
             report.disconnect = true;
         }
         if (selected.includes('cards')) {
-            const cards = await acceptance.open(origin(servers[2]));
+            const cards = await acceptance.open(origin(servers.cards));
             await acceptance.wait(cards, `document.querySelectorAll('.card').length === 2`, 'packed cards readiness');
             await acceptance.evaluate(cards, `document.querySelector('[rw-click="add"]').click()`);
             await acceptance.wait(cards, `document.querySelectorAll('.card').length === 3`, 'packed card action');
@@ -89,7 +92,7 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
             report.cards = true;
         }
         if (selected.includes('components')) {
-            const components = await acceptance.open(origin(servers[3]));
+            const components = await acceptance.open(origin(servers.components));
             await acceptance.wait(components, `document.querySelectorAll('button[data-rw-component]').length === 2`, 'packed component readiness');
             await acceptance.evaluate(components, `document.querySelector('button[data-rw-component="primary"]').click()`);
             await acceptance.wait(components, `document.querySelector('output[data-rw-component="primary"]').textContent === '1'`, 'packed component action');
@@ -99,7 +102,7 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
             report.components = true;
         }
         if (selected.includes('jsx')) {
-            const jsxPage = await acceptance.open(origin(servers[4]), '/jsx');
+            const jsxPage = await acceptance.open(origin(servers.jsx), '/jsx');
             await acceptance.evaluate(jsxPage, `document.querySelector('[rw-click="increment"]').click()`);
             await acceptance.wait(jsxPage, `document.querySelector('[rw-click="increment"]')?.textContent.trim() === 'Count 1'`, 'packed JSX action');
             await acceptance.style(jsxPage, '.counter-card', 'backgroundColor', 'rgb(17, 24, 39)');
@@ -115,11 +118,9 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
             } else if (launchAttempted) throw new Error('Packed browser launch cleanup could not be verified');
         } catch (error) {
             recordCleanup(error);
-            for (const release of [() => browser?.child?.stderr?.destroy(), () => browser?.child?.unref()]) {
-                try { release(); } catch (error) { recordCleanup(error); }
-            }
+            releaseBrowserHandles(browser, recordCleanup);
         }
-        for (const server of servers) {
+        for (const server of Object.values(servers)) {
             try { await bounded(server.shutdown(), 'packed server shutdown'); }
             catch (error) { recordCleanup(error); }
         }

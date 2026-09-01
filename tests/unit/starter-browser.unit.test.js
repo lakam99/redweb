@@ -10,12 +10,14 @@ const filename = path.resolve(__dirname, '../../scripts/lib/verify-starter-brows
 
 // Explicit process/browser boundary units; the separate integration uses native Chromium.
 test.each(['pass', 'configured', 'invalid', 'no-browser', 'source', 'source-present', 'start', 'listen', 'launch', 'evaluate',
-    'tab-close', 'stop', 'uncertain', 'signal', 'shutdown', 'combined'])('starter browser ownership handles %s', async mode => {
+    'tab-close', 'stop', 'uncertain', 'signal', 'shutdown', 'combined', 'stderr', 'unref'])('starter browser ownership handles %s', async mode => {
     const events = [], apps = [], tabs = [];
     const execution = { directory: path.resolve('unit-starter-browser') };
     const primary = new Error('unit workload failed');
     const cleanup = new Error('unit cleanup failed');
-    const child = { exitCode: null, signalCode: null };
+    const child = { exitCode: null, signalCode: null,
+        stderr: { destroy() { events.push('stderr'); if (mode === 'stderr') throw cleanup; } },
+        unref() { events.push('unref'); if (mode === 'unref') throw cleanup; } };
     const nativeRequire = createRequire(filename);
     const requireBoundary = name => {
         if (name === 'node:fs') return {
@@ -52,7 +54,7 @@ test.each(['pass', 'configured', 'invalid', 'no-browser', 'source', 'source-pres
                     } };
                 tabs.push(page); return page;
             },
-            async stopBrowser() { events.push('stop'); if (mode === 'stop') throw cleanup;
+            async stopBrowser() { events.push('stop'); if (['stop', 'stderr', 'unref'].includes(mode)) throw cleanup;
                 if (mode === 'signal') child.signalCode = 'SIGTERM'; else if (mode !== 'uncertain') child.exitCode = 0; },
         };
         if (name === '../../tests/helpers/network') return {
@@ -72,8 +74,11 @@ test.each(['pass', 'configured', 'invalid', 'no-browser', 'source', 'source-pres
     } else expect(require('node:util').types.isNativeError(result)).toBe(true);
     for (let index = 0; index < apps.length; index++) expect(events).toContain(`shutdown-${index}`);
     if (tabs.length) expect(events).toContain('stop');
-    if (['launch', 'tab-close', 'stop', 'uncertain', 'shutdown', 'combined'].includes(mode)) {
+    if (['launch', 'tab-close', 'stop', 'uncertain', 'shutdown', 'combined', 'stderr', 'unref'].includes(mode)) {
         expect(require('node:util').types.isNativeError(execution.cleanupFailure)).toBe(true);
+    }
+    if (['stop', 'uncertain', 'stderr', 'unref'].includes(mode)) {
+        expect(events).toEqual(expect.arrayContaining(['stderr', 'unref']));
     }
     if (process.argv.includes('--collectCoverageFrom=scripts/lib/verify-starter-browser.js')) {
         const combined = createCoverageMap(globalThis.__coverage__ || {});
