@@ -13,6 +13,7 @@ const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { ClientCandidate } = require('./lib/ClientCandidate');
 const { createHash, randomUUID } = require('node:crypto');
 const { verifyPackedBrowser } = require('./lib/verify-packed-browser');
+const { verifyStarterBrowser } = require('./lib/verify-starter-browser');
 const { PackedBrowserHarness } = require('./lib/PackedBrowserHarness');
 const { preservePackedBrowserReport } = require('./lib/preservePackedBrowserReport');
 const { verificationError } = require('./lib/verificationError');
@@ -120,6 +121,7 @@ async function main() {
         for (const template of require('../src/cli/templates').TEMPLATES) {
             await verifyStarter(packageRoot, execution, template);
         }
+        await verifyStarterBrowser(execution);
         await verifyDocumentation(packageRoot, execution);
         await verifyActionInput(packageRoot, execution);
         await verifyRoomExample(packageRoot, execution);

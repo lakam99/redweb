@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.13.5
+
+Released 2026-09-01 (America/Toronto).
+
+- Run every browser-facing canonical example and generated starter through headed Chromium, including packed/source-removed output; retain real-network tests for socket-only starters.
+- Replace the dashboard's one-minute test wait with the same real admission limiter configured to a short test window.
+
 ## 0.13.4
 
 Released 2026-09-01 (America/Toronto).
