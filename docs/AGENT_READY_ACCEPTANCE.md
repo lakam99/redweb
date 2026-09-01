@@ -226,14 +226,17 @@ and generated additions remain actual consumer checks. See
 
 - Published-release audit (`redweb@0.13.0`, published 2026-09-01 UTC): npm
   records `gitHead` `7196d504ee65dfaf5ac869ea4bda66d7cf86d015`, the
-  verified merge commit on `main`. All 215 registry files hash-identically to
-  that checkout. A clean exact installation with lifecycle scripts disabled
+  verified merge commit on `main`. All 215 registry files match that commit's
+  content: two byte-for-byte and 213 after Windows CRLF normalization. The
+  per-file hashes are retained in `docs/releases/0.13.0-audit.json`.
+  A clean exact installation with lifecycle scripts disabled
   passed `npm audit signatures` with no invalid or missing signatures and
   `npm audit --omit=dev` with zero vulnerabilities; registry metadata contains
   no provenance attestation. The immutable tarball retains a documentation-only
-  publication defect: its generated catalogue says `unreleased` and its
-  changelog says 0.13.0 is not published. Repository/site sources correct that
-  label, but a future patch release is required to correct bundled package
+  publication defect: its generated catalogue and changelog retain prerelease
+  labels, while its setup guidance and README also describe the release as a
+  development tarball/unreleased. Repository/site sources correct those labels,
+  but a future patch release is required to correct bundled package
   documentation. Runtime code and public declarations are unaffected.
 
 - `18b1dfd` regression/performance checkpoint (Windows, Node22.21.0,

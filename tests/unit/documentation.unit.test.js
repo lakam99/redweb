@@ -69,10 +69,10 @@ describe('single-source documentation', () => {
         }
     });
 
-    test('deployment guidance distinguishes the published client from unreleased Redweb', () => {
+    test('deployment guidance identifies the published release pair and future checkout boundary', () => {
         const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
-        expect(guide).toContain('`redweb-client@0.2.0` is published');
-        expect(guide).toContain('Unreleased Redweb changes still require the matching tested tarball');
+        expect(guide).toContain('`redweb@0.13.0` installs published `redweb-client@0.2.0`');
+        expect(guide).toContain('Future unreleased Redweb changes require their matching tested tarball');
         expect(guide).toContain('a clean production install does not preserve that link');
         expect(guide).not.toContain('as though the matching client were already published');
     });
@@ -155,6 +155,20 @@ describe('single-source documentation', () => {
             expect(guide.markdown).toContain('## Check that it works');
         }
         expect(builder.setup('dashboard')).toContain('npm install --save-exact TARBALL\nnpm run add-user -- alice\nnpm test\nnpm run dev');
+    });
+
+    test('released documentation does not describe its shipped capabilities as unpublished', () => {
+        const docs = new Documentation(root, version).build();
+        const text = [fs.readFileSync(path.join(root, 'README.md'), 'utf8'), docs.llms, ...docs.pages.map(page => page.markdown)].join('\n');
+        for (const stale of [
+            'Redweb itself remains unreleased',
+            'This command is currently **unreleased**',
+            'This API is **unreleased**',
+            'On this unreleased branch',
+            'This checkout contains unreleased work even while its package metadata still matches an older npm version',
+        ]) expect(text).not.toContain(stale);
+        expect(text).toContain(`These commands are available in \`redweb@${version}\``);
+        expect(text).toContain(`This API is available in \`redweb@${version}\``);
     });
 
     test('resolves source-relative links without rewriting code examples', () => {
