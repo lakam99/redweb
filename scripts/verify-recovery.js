@@ -1,10 +1,58 @@
 const redweb = require('..');
 const { silentLogger, waitFor, openClient, closeClient } = require('./realtime-harness');
 
-const warmConnections = Number(process.env.REDWEB_RECOVERY_WARM_CONNECTIONS || 200);
-const stormConnections = Number(process.env.REDWEB_RECOVERY_STORM_CONNECTIONS || 1200);
-const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE || 50);
+const warmConnections = Number(process.env.REDWEB_RECOVERY_WARM_CONNECTIONS ?? 200);
+const stormConnections = Number(process.env.REDWEB_RECOVERY_STORM_CONNECTIONS ?? 1200);
+const batchSize = Number(process.env.REDWEB_RECOVERY_BATCH_SIZE ?? 50);
+// Fixed preconditioning distinguishes runtime warm-up from retained application
+// growth. Keep the original cold protocol selectable for historical comparisons.
+const protocol = process.env.REDWEB_RECOVERY_PROTOCOL ?? 'steady-v2';
+if (!['cold-v1', 'steady-v2'].includes(protocol)) throw new TypeError('REDWEB_RECOVERY_PROTOCOL must be cold-v1 or steady-v2.');
+const minimumRounds = protocol === 'steady-v2' ? 5 : 1;
+const stormRounds = Number(process.env.REDWEB_RECOVERY_STORM_ROUNDS ?? minimumRounds);
+if (!Number.isSafeInteger(stormRounds) || stormRounds < minimumRounds) {
+    throw new TypeError(`REDWEB_RECOVERY_STORM_ROUNDS must be a safe integer of at least ${minimumRounds}.`);
+}
+const preconditioningConnections = protocol === 'steady-v2' ? stormConnections : 0;
+for (const [name, value] of Object.entries({
+    REDWEB_RECOVERY_WARM_CONNECTIONS: warmConnections,
+    REDWEB_RECOVERY_STORM_CONNECTIONS: stormConnections,
+    REDWEB_RECOVERY_BATCH_SIZE: batchSize,
+})) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${name} must be a positive safe integer.`);
+}
+if (!Number.isSafeInteger(preconditioningConnections + warmConnections + stormConnections * stormRounds)) throw new RangeError('Combined recovery connection count must be a safe integer.');
+if (!Number.isSafeInteger(batchSize * 2)) throw new RangeError('Recovery connection capacity must be a safe integer.');
+const diagnostics = process.env.REDWEB_RECOVERY_DIAGNOSTICS === '1';
+const v8 = diagnostics ? require('node:v8') : undefined;
+// Materialize a flat string so native snapshots retain the marker value rather
+// than a concatenation node whose contents would require arbitrary string walks.
+const diagnosticRun = diagnostics ? Buffer.from(`${process.pid}:${require('node:crypto').randomUUID()}`).toString('utf8') : undefined;
+function diagnosticRecord(value) {
+    if (diagnostics) Object.defineProperty(value, '__redwebRecoveryDiagnostic', { value: diagnosticRun });
+    return value;
+}
+const snapshotDirectory = process.env.REDWEB_RECOVERY_HEAP_DIRECTORY;
+if (snapshotDirectory !== undefined && (!diagnostics || !require('node:path').isAbsolute(snapshotDirectory))) {
+    throw new TypeError('Heap snapshots require diagnostics and an absolute REDWEB_RECOVERY_HEAP_DIRECTORY.');
+}
 if (typeof global.gc !== 'function') throw new Error('Run with node --expose-gc scripts/verify-recovery.js.');
+
+// Opt-in observation only: these allocations can perturb the diagnostic run.
+// Never subtract code bytes from the acceptance measurement or budget.
+function diagnosticSnapshot(stage, capture = true) {
+    const sample = diagnosticRecord({ spaces: v8.getHeapSpaceStatistics(), code: v8.getHeapCodeStatistics(), memory: process.memoryUsage() });
+    // Raw snapshots may contain secrets. Use only in an isolated diagnostic process;
+    // never publish the files. Capturing one adds GC/work, so this is not acceptance.
+    if (snapshotDirectory !== undefined && capture) {
+        Object.defineProperty(sample, '__redwebRecoveryCapture', { value: stage });
+        const filename = require('node:path').join(snapshotDirectory, `${stage}.heapsnapshot`);
+        const descriptor = require('node:fs').openSync(filename, 'wx', 0o600);
+        require('node:fs').closeSync(descriptor);
+        v8.writeHeapSnapshot(filename);
+    }
+    return sample;
+}
 
 class ReconnectHandler extends redweb.BaseHandler {
     constructor() { super('connect'); }
@@ -66,22 +114,57 @@ async function main() {
         if (!server.server.listening) await waitFor(server.server, 'listening');
         const route = server.routes[0];
         const url = `ws://127.0.0.1:${server.server.address().port}/reconnect`;
-        await runConnections(route, url, 0, warmConnections);
-        await new Promise(resolve => setTimeout(resolve, 400));
-        const warmedHeap = await collectHeap();
-        await runConnections(route, url, warmConnections, stormConnections);
-        await new Promise(resolve => setTimeout(resolve, 400));
-        const recoveredHeap = await collectHeap();
+        const settle = async phase => {
+            await new Promise(resolve => setTimeout(resolve, 400));
+            const heap = await collectHeap();
+            const registries = diagnosticRecord({ clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size });
+            if (Object.values(registries).some(value => value !== 0)) {
+                throw new Error(`Recovery registries did not empty after ${phase}: ${JSON.stringify(registries)}`);
+            }
+            return diagnosticRecord({ phase, heap, registries });
+        };
+        let preconditioning;
+        if (preconditioningConnections) {
+            await runConnections(route, url, 0, preconditioningConnections);
+            preconditioning = await settle('preconditioning');
+        }
+        await runConnections(route, url, preconditioningConnections, warmConnections);
+        const warm = await settle('warm');
+        const warmedHeap = warm.heap;
+        const warmDiagnostics = diagnostics ? diagnosticSnapshot('warm') : undefined;
+        const cycleDiagnostics = diagnosticRecord({});
+        const cycles = diagnosticRecord([]);
+        for (let round = 0; round < stormRounds; round++) {
+            await runConnections(route, url, preconditioningConnections + warmConnections + round * stormConnections, stormConnections);
+            const cycle = await settle(`storm-${round + 1}`);
+            cycles.push(diagnosticRecord({ ...cycle, recoveredHeapPercentOfWarm: cycle.heap / warmedHeap * 100 }));
+            // Observe the known third-storm peak without adding snapshot GC to
+            // storms 1/2/4 or duplicating the final snapshot. Never acceptance.
+            if (diagnostics) cycleDiagnostics[cycle.phase] = diagnosticSnapshot(cycle.phase, round === 2 && round < stormRounds - 1);
+        }
+        const finalCycle = cycles[cycles.length - 1];
+        const recoveredHeap = finalCycle.heap;
+        const recoveredDiagnostics = diagnostics ? diagnosticSnapshot('recovered') : undefined;
         const result = {
+            protocol,
+            diagnosticOnly: diagnostics,
+            preconditioningConnections,
+            stormRounds,
             warmConnections,
             stormConnections,
+            ...(preconditioning ? { preconditioning } : {}),
+            warm,
+            cycles,
             warmedHeap,
             recoveredHeap,
             recoveredHeapPercentOfWarm: recoveredHeap / warmedHeap * 100,
             registries: { clients: route.clients.size, rooms: route.rooms.size, sessions: route.sessions.size },
+            ...(diagnostics ? { diagnostics: { warm: warmDiagnostics, ...cycleDiagnostics, recovered: recoveredDiagnostics } } : {}),
         };
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-        if (Object.values(result.registries).some(value => value !== 0) || result.recoveredHeapPercentOfWarm > 110) {
+        // Decide from integer bytes: the displayed percentage can round above
+        // 110 at exact equality. The strict limit and any-cycle rule are unchanged.
+        if (cycles.some(cycle => BigInt(cycle.heap) * 100n > BigInt(warmedHeap) * 110n)) {
             throw new Error('Reconnect recovery exceeded its cleanup or retained-heap budget.');
         }
     } finally {

@@ -2,8 +2,10 @@
 
 const { isHtml, renderAttributeValue, renderValue, trustedHtml } = require('./Html');
 const synchronous = require('./synchronous');
+const ReactiveRenderer = require('./ReactiveRenderer');
 
 const Fragment = Symbol('redweb.Fragment');
+const KEYS = new WeakMap();
 const NAME = /^[A-Za-z][A-Za-z0-9:._-]*$/;
 const VOID_ELEMENTS = new Set([
     'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link',
@@ -14,10 +16,17 @@ const TERMINAL_ELEMENTS = new Set(['plaintext']);
 const BOOLEAN_VALUE_ATTRIBUTES = new Set(['contenteditable', 'draggable', 'spellcheck', 'writingsuggestions']);
 const ATTRIBUTE_ALIASES = Object.freeze({ className: 'class', htmlFor: 'for' });
 
-function renderChild(value) {
+function renderChild(value, keys = new Set()) {
     if (value === null || value === undefined || typeof value === 'boolean') return '';
-    if (Array.isArray(value)) return value.map(renderChild).join('');
-    if (isHtml(value)) return renderValue(value);
+    if (Array.isArray(value)) return value.map(child => renderChild(child, keys)).join('');
+    if (isHtml(value)) {
+        const key = KEYS.get(value);
+        if (key !== undefined) {
+            if (keys.has(key)) throw new Error('Duplicate JSX sibling key.');
+            keys.add(key);
+        }
+        return renderValue(value);
+    }
     if (['string', 'number', 'bigint'].includes(typeof value)) return renderValue(value);
     throw new TypeError('JSX children must be text, numbers, HtmlFragment values, or arrays of those values.');
 }
@@ -72,15 +81,22 @@ function renderComponent(Component, properties) {
     return Array.isArray(result) ? trustedHtml(renderValue(result)) : result;
 }
 
-function createElement(type, properties) {
+function createElement(type, properties, key) {
+    const reactive = ReactiveRenderer.jsx();
     const props = properties == null ? {} : properties;
     if (!props || typeof props !== 'object' || Array.isArray(props)) {
         throw new TypeError('JSX properties must be an object.');
     }
-    if (type === Fragment) return trustedHtml(renderChild(props.children));
-    if (typeof type === 'string') return renderIntrinsic(type, props);
-    if (typeof type === 'function') return renderComponent(type, props);
-    throw new TypeError('JSX element types must be intrinsic names or function components.');
+    let result;
+    if (type === Fragment) result = trustedHtml(renderChild(props.children));
+    else if (typeof type === 'string') result = renderIntrinsic(type, props);
+    else if (typeof type === 'function') result = renderComponent(type, props);
+    else throw new TypeError('JSX element types must be intrinsic names or function components.');
+    const elementKey = key ?? props.key;
+    if (!reactive || elementKey === undefined) return result;
+    const keyed = trustedHtml(ReactiveRenderer.key(renderValue(result), elementKey));
+    if (elementKey !== null) KEYS.set(keyed, String(elementKey));
+    return keyed;
 }
 
 module.exports = { Fragment, createElement, renderChild };

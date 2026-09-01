@@ -1,28 +1,15 @@
 'use strict';
 
-const http = require('http');
-const WebSocket = require('ws');
-const { RedwebClient } = require('redweb-client');
 const { start } = require('..');
 const { createChatroomPage } = require('../examples/live-html/chatroom');
+const { silentLogger: logger, waitFor: waitForEvent } = require('./realtime-harness');
+const { readLiveHtmlPage: getPage } = require('./lib/readLiveHtmlPage');
+const { LiveHtmlLoadClient } = require('./lib/LiveHtmlLoadClient');
+const { settleTasks } = require('../src/serverLifecycle');
+const { verificationError } = require('./lib/verificationError');
+const { withTimeout } = require('../tests/helpers/network');
 
-const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-
-function getPage(port) {
-    return new Promise((resolve, reject) => {
-        http.get({ host: '127.0.0.1', port, path: '/' }, response => {
-            const chunks = [];
-            response.on('data', chunk => chunks.push(chunk));
-            response.on('end', () => {
-                const body = Buffer.concat(chunks).toString('utf8');
-                const match = body.match(/<script type="application\/json" id="__redweb_page">([^<]+)<\/script>/);
-                if (response.statusCode !== 200 || !match) return reject(new Error('Live HTML page render failed.'));
-                resolve(JSON.parse(match[1]));
-            });
-        }).once('error', reject);
-    });
-}
 
 async function waitFor(predicate, label, timeoutMs = 10_000) {
     const deadline = Date.now() + timeoutMs;
@@ -32,27 +19,13 @@ async function waitFor(predicate, label, timeoutMs = 10_000) {
     }
 }
 
-function createClient(port, config, updates) {
-    const client = new RedwebClient(`ws://127.0.0.1:${port}${config.socketPath}?pageId=${config.pageId}`, {
-        version: config.version,
-        webSocketFactory: url => new WebSocket(url, { headers: { Origin: `http://127.0.0.1:${port}` } }),
-    });
-    client.on('redweb:state', message => updates.push(message.payload));
-    return client;
-}
-
-function closeClient(client) {
-    if (client.state === 'closed' || client.state === 'idle') {
-        client.close();
-        return Promise.resolve();
-    }
-    return new Promise(resolve => {
-        const unsubscribe = client.onClose(() => { unsubscribe(); resolve(); });
-        client.close();
-    });
+async function complete(tasks) {
+    const failures = (await settleTasks(tasks)).map(verificationError);
+    if (failures.length) throw new AggregateError(failures, failures[0].message, { cause: failures[0] });
 }
 
 async function main() {
+    if (typeof global.gc !== 'function') throw new Error('Run the Live HTML load gate with --expose-gc.');
     const server = start(createChatroomPage(), {
         port: 0,
         bind: '127.0.0.1',
@@ -61,60 +34,72 @@ async function main() {
         sessionTtlMs: 1000,
     });
     const clients = [];
+    const failures = [];
+    let result;
+    const checkClients = () => clients.forEach(client => client.check());
+    const until = (predicate, label) => waitFor(() => { checkClients(); return predicate(); }, label);
     try {
-        if (!server.server.listening) await new Promise(resolve => server.server.once('listening', resolve));
+        if (!server.server.listening) await waitForEvent(server.server, 'listening');
         const port = server.server.address().port;
-        global.gc?.();
+        global.gc();
         const baseline = process.memoryUsage().heapUsed;
 
-        await Promise.all(Array.from({ length: 200 }, () => getPage(port)));
+        await complete(Array.from({ length: 200 }, () => () => getPage(port)));
         if (server.manager.pending.size !== 200) throw new Error('Pending-session concurrency accounting failed.');
         await waitFor(() => server.manager.pending.size === 0, 'pending-session expiry');
 
         const liveClients = 110;
-        const configs = await Promise.all(Array.from({ length: liveClients }, () => getPage(port)));
+        const configs = [];
+        await complete(Array.from({ length: liveClients }, (_, index) => async () => { configs[index] = await getPage(port); }));
         const updates = configs.map(() => []);
-        configs.forEach((config, index) => clients.push(createClient(port, config, updates[index])));
-        await Promise.all(clients.map(client => client.connect()));
-        await waitFor(() => updates.every(messages => messages.length >= 1), 'initial state fan-out');
-        await Promise.all(clients.map((client, index) => client.request('redweb:html', {
+        configs.forEach((config, index) => clients.push(new LiveHtmlLoadClient(port, config, updates[index])));
+        await complete(clients.map(client => () => client.connect()));
+        await until(() => updates.every(messages => messages.length >= 1), 'initial state fan-out');
+        await complete(clients.map((client, index) => () => client.client.request('redweb:html', {
             kind: 'action',
             component: 'chat',
             name: 'join',
             args: [{ name: `load-${index}` }],
         })));
-        await waitFor(
-            () => updates.every(messages => messages.at(-1)?.value.includes(`Online · ${liveClients}`)),
+        await until(
+            () => updates.every(messages => messages.at(-1)?.html.includes(`Online · ${liveClients}`)),
             `${liveClients}-client room presence`
         );
-        if (!updates[0].at(-1)?.value.includes('+10 more')) throw new Error('Visible presence list was not capped.');
-        clients[0].send('redweb:html', {
+        if (!updates[0].at(-1)?.html.includes('+10 more')) throw new Error('Visible presence list was not capped.');
+        clients[0].client.send('redweb:html', {
             kind: 'action',
             component: 'chat',
             name: 'send',
             args: [{ message: 'ordered-broadcast' }],
         });
-        await waitFor(
-            () => updates.every(messages => messages.at(-1)?.value.includes('ordered-broadcast')),
-            `${liveClients}-client ordered broadcast`
+        await until(
+            () => updates.every(messages => messages.at(-1)?.html.includes('ordered-broadcast')),
+            `${liveClients}-client broadcast delivery`
         );
 
-        await Promise.all(clients.splice(0).map(closeClient));
+        await complete(clients.map(client => () => client.close()));
+        checkClients();
+        clients.length = 0;
         await waitFor(() => server.manager.active.size === 0, 'disconnected-session expiry');
-        global.gc?.();
+        global.gc();
         await pause(50);
-        global.gc?.();
+        global.gc();
         const growth = process.memoryUsage().heapUsed - baseline;
         const limit = 24 * 1024 * 1024;
         if (growth > limit) throw new Error(`Live HTML heap grew by ${growth} bytes; limit is ${limit}.`);
-        console.log(`Live HTML load gate passed: 200 expired renders, ${liveClients} live clients, heap delta ${growth} bytes.`);
-    } finally {
-        await Promise.allSettled(clients.map(closeClient));
-        await server.shutdown();
+        result = `Live HTML load gate passed: 200 expired renders, ${liveClients} live clients, heap delta ${growth} bytes.`;
+    } catch (error) { failures.push(verificationError(error)); }
+    failures.push(...(await settleTasks(clients.map(client => () => client.close()))).map(verificationError));
+    for (const client of clients) {
+        if (client.failure && !failures.includes(client.failure)) failures.push(client.failure);
     }
+    try { await withTimeout(server.shutdown(), 'Live HTML load server shutdown', 10000); }
+    catch (error) { failures.push(verificationError(error)); }
+    if (failures.length) throw new AggregateError(failures, failures[0].message, { cause: failures[0] });
+    console.log(result);
 }
 
 main().catch(error => {
-    console.error(error);
+    console.error(require('./diagnostics/recovery-split.cjs').describeFailure(error));
     process.exitCode = 1;
 });

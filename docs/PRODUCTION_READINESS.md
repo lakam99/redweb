@@ -20,6 +20,13 @@ WebSocket provides an ordered byte stream while a connection remains healthy. Re
 ## Roadmap gates
 
 1. **Bounded transport:** pre-upgrade admission, origin policy, rate limits, slow-consumer enforcement, bounded ordered processing, payload limits, and route-level heartbeat.
+
+Heartbeat expiry is deferred to the event-loop check phase before terminating a
+peer, allowing already-dispatched pong handling to win after a server stall; an
+actually silent peer is terminated by the deferred check.
+`timeoutMs` is therefore a liveness threshold subject to event-loop scheduling,
+not a hard wall-clock resource limit. The deferral owns at most one pending check
+per expired connection; bound connections and queues independently.
 2. **Multiplayer grouping:** route-scoped rooms, atomic membership cleanup, bounded session resumption, fixed-step services, and vendor-neutral metrics.
 3. **Horizontal composition:** draining/readiness, adapter lifecycle, loop prevention, bounded validation, placement hooks, and documented partition behavior.
 4. **Protocol and clients:** version negotiation, stable envelopes and error codes, generated client-facing types, binary replication hooks, and operational examples.
@@ -35,10 +42,12 @@ WebSocket provides an ordered byte stream while a connection remains healthy. Re
 - Broadcast serializes once and remains O(n) in selected recipients.
 - Slow clients cannot grow framework-owned memory without bound.
 - A 60-minute soak shows no monotonic growth in timers, listeners, rooms, sessions, or queues.
-- Reconnect storms return retained heap to within 10% of the warmed baseline after expiry and forced collection.
+- The blocking `server-steady-v1` reconnect gate requires every storm to retain at most 110% of the same warmed **server** heap after expiry and forced collection. Exact delivery, empty measured registries, unchanged inputs, complete logs and normal worker cleanup are mandatory. Client heap is reported separately; the original shared-process diagnostic remains visible and non-blocking, without relabelling its failures.
 - Readiness becomes false before draining and shutdown completes within its documented bound.
 
 The independent senior-review gate rejects releases that weaken any invariant, hide ambiguous delivery semantics, add mandatory brokers or identity libraries, or substitute coverage percentages for race, load, soak, and failure evidence.
+
+See [operations verification](MULTIPLAYER_OPERATIONS.md#verification) for the current commands and the distinction between server acceptance and the original diagnostic. These are required gates, not a statement that the current development candidate has passed them; consult the [release checklist](AGENT_READY_ACCEPTANCE.md) for outstanding failures.
 
 ## Horizontal composition contract
 
@@ -65,4 +74,4 @@ The independent senior-review gate rejects releases that weaken any invariant, h
 - Timed-out admission hooks that ignore cancellation retain their reservation until they actually settle, preventing repeated timeout waves from accumulating unbounded application work.
 - Fixed-step services clamp retained lag with `maxRetainedLagMs`; dropped time is observable rather than replayed forever.
 - Session count, ID length, and lifetime are bounded by Redweb. Session `data` is application-owned, so applications must validate and cap its shape and byte size before storing it.
-- Fully enabled idle routes have a 2 KiB framework-metadata budget per connection. Disabled features retain the legacy path and are compared against 0.8 by the performance gate.
+- Fully enabled idle routes have a 2 KiB framework-metadata budget per connection. Disabled features retain the legacy path; the performance gate compares against an explicitly prepared, identified release baseline. Historical 0.8 evidence does not establish performance against a newer baseline.

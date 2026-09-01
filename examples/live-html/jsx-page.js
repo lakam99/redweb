@@ -67,7 +67,7 @@ let JsxPage = (() => {
             this.count += 1;
         }
         render() {
-            return ((0, jsx_runtime_1.jsxs)("main", { class: "page-shell", children: [(0, jsx_runtime_1.jsx)("h1", { children: "Redweb JSX" }), (0, jsx_runtime_1.jsxs)(Card, { title: "Server rendered", children: [(0, jsx_runtime_1.jsx)("p", { children: "Plain TSX, escaped by default, with no browser framework." }), (0, jsx_runtime_1.jsxs)("button", { type: "button", "rw-click": "increment", children: ["Count ", (0, jsx_runtime_1.jsx)("output", { "data-rw-state": "count", children: this.count })] })] })] }));
+            return ((0, jsx_runtime_1.jsxs)("main", { class: "page-shell", children: [(0, jsx_runtime_1.jsx)("h1", { children: "Redweb JSX" }), (0, jsx_runtime_1.jsxs)(Card, { title: "Server rendered", children: [(0, jsx_runtime_1.jsx)("p", { children: "Plain TSX, escaped by default, with no browser framework." }), (0, jsx_runtime_1.jsxs)("button", { type: "button", "rw-click": "increment", children: ["Count ", (0, jsx_runtime_1.jsx)("output", { children: this.count })] })] })] }));
         }
         constructor() {
             super(...arguments);

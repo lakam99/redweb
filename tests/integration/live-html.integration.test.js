@@ -138,18 +138,20 @@ describe('Live HTML integration without mocks', () => {
         expect(response.status).toBe(200);
         expect(response.body).toContain('<h1>Redweb JSX</h1>');
         expect(response.body).toContain('<article class="counter-card">');
-        expect(response.body).toContain('data-rw-state="count">0</output>');
+        expect(response.body).toContain('<output>0</output>');
         const config = pageConfig(response.body);
         const updates = [];
         const client = liveClient(port, config);
-        client.on('redweb:state', message => updates.push(message.payload));
+        client.on('redweb:patch', message => updates.push(message.payload));
         clients.add(client);
         await client.connect();
         await waitForCondition(() => updates.length === 1, 'JSX state snapshot');
-        expect(updates[0]).toEqual({ name: 'count', value: '0', html: false });
+        expect(updates[0].patches[0].html).toContain('<output>0</output>');
+        expect(updates[0].states).toEqual([]);
         await client.request('redweb:html', { kind: 'action', name: 'increment', args: [] });
         await waitForCondition(() => updates.length === 2, 'JSX action state update');
-        expect(updates[1]).toEqual({ name: 'count', value: '1', html: false });
+        expect(updates[1].patches[0].html).toContain('<output>1</output>');
+        expect(updates[1].states).toEqual([]);
     });
 
     async function connectClient(port, config) {
@@ -186,9 +188,10 @@ describe('Live HTML integration without mocks', () => {
         const runtime = await request({ port: firstPage.port, path: firstPage.config.runtimePath });
         const browserClient = await request({ port: firstPage.port, path: '/__redweb/client.js' });
         expect(runtime.status).toBe(200);
-        expect(runtime.body).toContain("new RedwebClient");
+        expect(runtime.body).toBe('import { mountLivePage } from "/__redweb/client.js";\nmountLivePage();\n');
         expect(browserClient.status).toBe(200);
         expect(browserClient.body).toContain('RedwebClient = class');
+        expect(browserClient.body).toContain('mountLivePage');
 
         const firstUpdates = [];
         const first = liveClient(firstPage.port, firstPage.config);
@@ -229,41 +232,41 @@ describe('Live HTML integration without mocks', () => {
 
         const firstUpdates = [];
         const secondUpdates = [];
-        const latest = (updates, name) => [...updates].reverse().find(update => update.name === name);
+        const latest = updates => updates.at(-1);
+        const feedback = (updates, text) => waitForCondition(() => latest(updates)?.html.includes(text), text);
         const first = liveClient(firstPage.port, firstPage.config);
         const second = liveClient(secondPage.port, secondPage.config);
-        first.on('redweb:state', message => firstUpdates.push(message.payload));
-        second.on('redweb:state', message => secondUpdates.push(message.payload));
+        first.on('redweb:patch', message => firstUpdates.push(...message.payload.patches));
+        second.on('redweb:patch', message => secondUpdates.push(...message.payload.patches));
         clients.add(first);
         clients.add(second);
         await Promise.all([first.connect(), second.connect()]);
-        await waitForCondition(() => firstUpdates.length === 3 && secondUpdates.length === 3, 'initial chat snapshots');
-        expect(latest(firstUpdates, 'screen')).toMatchObject({ component: 'chat', name: 'screen', html: true });
-        expect(latest(firstUpdates, 'screen').value).toMatch(/<form[^>]*rw-submit="join"[^>]*data-rw-component="chat"/);
+        await waitForCondition(() => firstUpdates.length === 1 && secondUpdates.length === 1, 'initial chat snapshots');
+        expect(latest(firstUpdates)).toMatchObject({ id: 'root' });
+        expect(latest(firstUpdates).html).toMatch(/<form[^>]*rw-submit="join"[^>]*data-rw-component="chat"/);
         firstUpdates.length = 0;
         secondUpdates.length = 0;
 
         expect(await first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: 'too early' }],
         })).toMatchObject({ payload: false });
-        expect(await first.request('redweb:html', {
+        await expect(first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: '   ' }],
-        })).toMatchObject({ payload: false });
-        expect(firstUpdates.at(-1).value).toContain('Choose a visible display name');
+        })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
         await first.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: '<Admin>' }],
+            kind: 'action', component: 'chat', name: 'join', args: [{ name: ' ＜Admin＞ ' }],
         });
         await second.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Ada' }],
         });
         await waitForCondition(
-            () => latest(firstUpdates, 'presence')?.value.includes('Online · 2') &&
-                latest(secondUpdates, 'presence')?.value.includes('Online · 2'),
+            () => latest(firstUpdates)?.html.includes('Online · 2') &&
+                latest(secondUpdates)?.html.includes('Online · 2'),
             'two joined chat participants'
         );
-        expect(latest(firstUpdates, 'presence').value).toContain('&lt;Admin&gt;');
-        expect(latest(firstUpdates, 'presence').value).toContain('Ada');
-        expect(latest(firstUpdates, 'screen').value).toMatch(/<form[^>]*rw-submit="send"[^>]*data-rw-component="chat"/);
+        expect(latest(firstUpdates).html).toContain('&lt;Admin&gt;');
+        expect(latest(firstUpdates).html).toContain('Ada');
+        expect(latest(firstUpdates).html).toMatch(/<form[^>]*rw-submit="send"[^>]*data-rw-component="chat"/);
         firstUpdates.length = 0;
         secondUpdates.length = 0;
 
@@ -273,15 +276,15 @@ describe('Live HTML integration without mocks', () => {
         });
         await waitForCondition(() => firstUpdates.length === 1 && secondUpdates.length === 1, 'chat broadcast');
         for (const update of [firstUpdates[0], secondUpdates[0]]) {
-            expect(update).toMatchObject({ component: 'chat', name: 'messages', html: true });
-            expect(update.value).toContain('&lt;Admin&gt;');
-            expect(update.value).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-            expect(update.value).not.toContain('<script>');
+            expect(update).toMatchObject({ id: 'c63686174' });
+            expect(update.html).toContain('&lt;Admin&gt;');
+            expect(update.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+            expect(update.html).not.toContain('<script>');
         }
         const updateCount = firstUpdates.length;
-        await first.request('redweb:html', {
+        await expect(first.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: '   ' }],
-        });
+        })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
         expect(firstUpdates).toHaveLength(updateCount);
 
         await closeLiveClient(second);
@@ -290,25 +293,25 @@ describe('Live HTML integration without mocks', () => {
             () => server.manager.active.get(secondPage.config.pageId)?.socket === null,
             'chat disconnect before reconnect'
         );
-        await waitForCondition(() => latest(firstUpdates, 'presence')?.value.includes('Online · 1'), 'presence after disconnect');
+        await waitForCondition(() => latest(firstUpdates)?.html.includes('Online · 1'), 'presence after disconnect');
         first.send('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: 'Missed' }],
         });
-        await waitForCondition(() => latest(firstUpdates, 'messages')?.value.includes('Missed'), 'message while peer disconnected');
+        await waitForCondition(() => latest(firstUpdates)?.html.includes('Missed'), 'message while peer disconnected');
         const reconnected = liveClient(secondPage.port, secondPage.config);
         const reconnectUpdates = [];
-        reconnected.on('redweb:state', message => reconnectUpdates.push(message.payload));
+        reconnected.on('redweb:patch', message => reconnectUpdates.push(...message.payload.patches));
         clients.add(reconnected);
         await reconnected.connect();
-        await waitForCondition(() => latest(reconnectUpdates, 'messages')?.value.includes('Missed'), 'authoritative reconnect snapshot');
-        const reconnectedMessages = latest(reconnectUpdates, 'messages').value;
+        await waitForCondition(() => latest(reconnectUpdates)?.html.includes('Missed'), 'authoritative reconnect snapshot');
+        const reconnectedMessages = latest(reconnectUpdates).html;
         expect(reconnectedMessages.indexOf('alert(1)')).toBeLessThan(reconnectedMessages.indexOf('Missed'));
-        await waitForCondition(() => latest(reconnectUpdates, 'presence')?.value.includes('Online · 2'), 'reconnected presence');
+        await waitForCondition(() => latest(reconnectUpdates)?.html.includes('Online · 2'), 'reconnected presence');
 
         await reconnected.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'leave', args: [],
         });
-        await waitForCondition(() => reconnectUpdates.at(-1)?.value.includes('Join the chatroom'), 'leave screen');
+        await waitForCondition(() => reconnectUpdates.at(-1)?.html.includes('Join the chatroom'), 'leave screen');
         expect(await reconnected.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'send', args: [{ message: 'after leave' }],
         })).toMatchObject({ payload: false });
@@ -320,41 +323,40 @@ describe('Live HTML integration without mocks', () => {
         const invalidPage = await getPage(server);
         const invalid = liveClient(invalidPage.port, invalidPage.config);
         const invalidUpdates = [];
-        invalid.on('redweb:state', message => invalidUpdates.push(message.payload));
+        invalid.on('redweb:patch', message => invalidUpdates.push(...message.payload.patches));
         clients.add(invalid);
         await invalid.connect();
-        expect(await invalid.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: ['array'] }],
-        })).toMatchObject({ payload: false });
-        expect(latest(invalidUpdates, 'screen')?.value).toContain('Display name must be text.');
-        expect(await invalid.request('redweb:html', {
-            kind: 'action', component: 'chat', name: 'join', args: [{ name: 'hidden\u200bname' }],
-        })).toMatchObject({ payload: false });
-        expect(latest(invalidUpdates, 'screen')?.value).toContain('Choose a visible display name');
+        for (const input of [null, {}, { name: ['array'] }, { name: 'hidden\u200bname' }, { name: 'Alice', extra: true }]) {
+            await expect(invalid.request('redweb:html', {
+                kind: 'action', component: 'chat', name: 'join', args: [input],
+            })).rejects.toMatchObject({ code: 'ACTION_INVALID_INPUT' });
+        }
+        expect(invalid.state).toBe('open');
 
         const duplicatePage = await getPage(server);
         const duplicate = liveClient(duplicatePage.port, duplicatePage.config);
         const duplicateUpdates = [];
-        duplicate.on('redweb:state', message => duplicateUpdates.push(message.payload));
+        duplicate.on('redweb:patch', message => duplicateUpdates.push(...message.payload.patches));
         clients.add(duplicate);
         await duplicate.connect();
         expect(await duplicate.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: '<ADMIN>' }],
         })).toMatchObject({ payload: false });
-        expect(duplicateUpdates.at(-1)?.value).toContain('That display name is already in use.');
+        await feedback(duplicateUpdates, 'That display name is already in use.');
+        expect(duplicateUpdates.at(-1)?.html).toContain('That display name is already in use.');
 
         const isolatedServer = await start(createChatroomServer);
         const isolatedPage = await getPage(isolatedServer);
         const isolatedUpdates = [];
         const isolated = liveClient(isolatedPage.port, isolatedPage.config);
-        isolated.on('redweb:state', message => isolatedUpdates.push(message.payload));
+        isolated.on('redweb:patch', message => isolatedUpdates.push(...message.payload.patches));
         clients.add(isolated);
         await isolated.connect();
         expect(await isolated.request('redweb:html', {
             kind: 'action', component: 'chat', name: 'join', args: [{ name: '<ADMIN>' }],
         })).toMatchObject({ payload: true });
-        await waitForCondition(() => latest(isolatedUpdates, 'presence')?.value.includes('Online · 1'), 'isolated room join');
-        expect(latest(isolatedUpdates, 'messages').value).not.toContain('alert(1)');
+        await waitForCondition(() => latest(isolatedUpdates)?.html.includes('Online · 1'), 'isolated room join');
+        expect(latest(isolatedUpdates).html).not.toContain('alert(1)');
     });
 
     test('the Live HTML heartbeat removes a half-open browser from component presence', async () => {
@@ -363,7 +365,7 @@ describe('Live HTML integration without mocks', () => {
         const secondPage = await getPage(server);
         const updates = [];
         const first = liveClient(firstPage.port, firstPage.config);
-        first.on('redweb:state', message => updates.push(message.payload));
+        first.on('redweb:patch', message => updates.push(...message.payload.patches));
         clients.add(first);
         await first.connect();
         await first.request('redweb:html', {
@@ -382,13 +384,13 @@ describe('Live HTML integration without mocks', () => {
             payload: { kind: 'action', component: 'chat', name: 'join', args: [{ name: 'Sleeper' }] },
         }));
         await waitForCondition(
-            () => updates.some(update => update.name === 'presence' && update.value.includes('Online · 2')),
+            () => updates.some(update => update.html.includes('Online · 2')),
             'half-open participant join'
         );
 
         halfOpen._socket.pause();
         await waitForCondition(
-            () => updates.at(-1)?.name === 'presence' && updates.at(-1).value.includes('Online · 1'),
+            () => updates.at(-1)?.html.includes('Online · 1'),
             'heartbeat-driven presence removal',
             1000
         );
@@ -631,7 +633,7 @@ describe('Live HTML integration without mocks', () => {
         const status = await websocketUpgradeStatus(url, {
             headers: { Origin: 'https://foreign.example' },
         });
-        expect(status).toBe(401);
+        expect(status).toBe(403);
 
         const socket = new WebSocket(url, { headers: { Origin: `http://127.0.0.1:${port}` } });
         rawSockets.add(socket);
@@ -649,7 +651,7 @@ describe('Live HTML integration without mocks', () => {
             if (message.type === 'error') rejected = message;
             else snapshots.push(message);
         }
-        expect(snapshots.every(message => message.type === 'redweb:state' && message.payload.component === 'chat')).toBe(true);
+        expect(snapshots.every(message => message.type === 'redweb:patch' && message.payload.patches.every(patch => patch.id === 'root'))).toBe(true);
         expect(rejected.type).toBe('error');
         expect(rejected.error.code).toBe('HANDLER_FAILED');
         expect(rejected.requestId).toBe('forbidden-action');
@@ -689,7 +691,7 @@ describe('Live HTML integration without mocks', () => {
                 headers: { Origin: `http://127.0.0.1:${port}` },
             }
         );
-        expect(rejectedStatus).toBe(401);
+        expect(rejectedStatus).toBe(403);
     });
 
     test('binds a page token to the same authenticated HTTP and WebSocket principal', async () => {
@@ -795,10 +797,10 @@ describe('Live HTML integration without mocks', () => {
         await started;
         servers.delete(server);
         const began = Date.now();
-        await expect(server.shutdown()).rejects.toThrow('Live HTML shutdown failed');
+        await expect(server.shutdown()).resolves.toBeUndefined();
         expect(Date.now() - began).toBeLessThan(1000);
         expect(renderSignal.aborted).toBe(true);
         expect(server.server.listening).toBe(false);
-        expect(await hangingRequest).toHaveProperty('message');
+        expect((await hangingRequest).status).toBe(500);
     });
 });

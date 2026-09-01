@@ -1,19 +1,14 @@
 {
+  "extends": "../../config/tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "jsx": "react-jsx",
-    "jsxImportSource": "redweb",
-    "strict": true,
-    "experimentalDecorators": false,
-    "useDefineForClassFields": true,
-    "skipLibCheck": false,
+    "esModuleInterop": true,
     "baseUrl": "../..",
     "paths": {
       "redweb": ["."],
       "redweb/*": ["*"]
     }
   },
-  "files": ["counter.ts", "chatroom.ts", "cards.ts", "components.ts", "jsx-page.tsx"]
+  "files": ["counter.ts", "chatroom.tsx", "cards.ts", "components.ts", "jsx-page.tsx"]
 }

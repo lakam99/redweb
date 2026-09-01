@@ -11,6 +11,13 @@ const Row = properties => jsxs('li', {
     children: [jsx('strong', { children: properties.label }), ': ', properties.index],
 });
 
+// Validate outside the timed render and release the oracle before heap sampling.
+function verifyMarkup(output) {
+    const expected = '<ul>' + Array.from({ length: count }, (_, index) =>
+        `<li class="row" data-index="${index}"><strong>&lt;safe&gt;</strong>: ${index}</li>`).join('') + '</ul>';
+    if (output !== expected) throw new Error('The JSX performance render produced incorrect markup.');
+}
+
 global.gc();
 const baseline = process.memoryUsage().heapUsed;
 const started = process.hrtime.bigint();
@@ -20,9 +27,7 @@ let page = jsx('ul', {
 let output = page.toString();
 const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
 
-if ((output.match(/<li /g) || []).length !== count || output.includes('<safe>') || !output.includes('&lt;safe&gt;')) {
-    throw new Error('The JSX performance render produced incorrect markup.');
-}
+verifyMarkup(output);
 if (elapsedMs > 5_000) throw new Error(`Rendering ${count} JSX rows took ${elapsedMs.toFixed(1)}ms.`);
 
 page = null;

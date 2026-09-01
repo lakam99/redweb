@@ -1,8 +1,11 @@
 const { AsyncLocalStorage } = require('async_hooks');
 const HtmlRenderer = require('./HtmlRenderer');
 const TemplateRenderer = require('./TemplateRenderer');
+const ReactiveRenderer = require('./ReactiveRenderer');
+const dataProperty = require('../dataProperty');
+const { ActionInputError } = require('./ActionDefinition');
 const { isHtml, markHtml, renderValue } = require('./Html');
-const { forEachState, getActionImplementation, getStateConfig, isComponentClass } = require('./metadata');
+const { forEachState, getActionImplementation, getActionDefinition, getStateConfig, isComponentClass } = require('./metadata');
 
 const RUNTIME = new WeakMap();
 const COMPONENT_RENDER_CONTEXT = new AsyncLocalStorage();
@@ -67,17 +70,41 @@ class LivePage {
     static attach(page, socket, context) { return LivePage.prototype._attach.call(page, socket, context); }
     static detach(page, socket, context) { return LivePage.prototype._detach.call(page, socket, context); }
     static dispose(page) { return LivePage.prototype.dispose.call(page); }
-    static invoke(page, name, args, context) { return LivePage.prototype._invoke.call(page, name, args, context); }
+    static invoke(page, name, args, context, beforeInvoke) { return LivePage.prototype._invoke.call(page, name, args, context, beforeInvoke); }
     static loadComponents(page, context) { return LivePage.prototype._loadComponents.call(page, context); }
     static setFromClient(page, name, value) { return LivePage.prototype._setFromClient.call(page, name, value); }
 
-    static statePayload(page, name, value) {
+    // Read owned runtime structure only: no application fields or state values.
+    static describe(page, describeList) {
+        const { list, members } = require('../development/description');
+        const limited = describeList || list;
         const internal = runtime(page);
+        return { disposed: internal.disposed, components: limited(internal.components, ([id, component]) => ({ id, ...members(dataProperty(component, 'constructor'), limited) })) };
+    }
+
+    static statePayload(page, name, value, lazy = false) {
+        const internal = runtime(page);
+        if (lazy) {
+            let payload;
+            const materialize = () => payload ||= LivePage.statePayload(page, name, value);
+            return {
+                name, component: internal.componentId || undefined,
+                get value() { return materialize().value; },
+                get html() { return materialize().html; },
+            };
+        }
         const payload = HtmlRenderer.statePayload(name, value, page);
         if (!internal.componentId) return payload;
         payload.component = internal.componentId;
         if (payload.html) payload.value = TemplateRenderer.component(payload.value, internal.componentId);
         return payload;
+    }
+
+    static snapshots(page, lazy = false) {
+        const values = [];
+        forEachState(page.constructor, (_options, name) => values.push(LivePage.statePayload(page, name, page[name], lazy)));
+        for (const child of runtime(page).children.values()) values.push(...LivePage.snapshots(child, lazy));
+        return values;
     }
 
     static withRenderContext(context, render) {
@@ -119,8 +146,12 @@ class LivePage {
             Object.defineProperty(this, name, {
                 configurable: true,
                 enumerable: true,
-                get: () => internal.stateValues.get(name),
+                get: () => {
+                    ReactiveRenderer.read(this, name);
+                    return internal.stateValues.get(name);
+                },
                 set: value => {
+                    ReactiveRenderer.assertWritable();
                     const previous = internal.stateValues.get(name);
                     internal.stateValues.set(name, value);
                     if (previous !== value) LivePage.prototype._stateChanged.call(this, name, value);
@@ -141,11 +172,13 @@ class LivePage {
     _renderComponent() {
         const internal = runtime(this);
         if (!internal.componentId) throw new Error('Components must be owned by a page field before rendering.');
-        const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
-        if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
-        if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
-        const markup = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), this);
-        return TemplateRenderer.component(markup, internal.componentId);
+        return ReactiveRenderer.component(this, internal.componentId, () => {
+            const source = this.render?.(COMPONENT_RENDER_CONTEXT.getStore());
+            if (source && typeof source.then === 'function') throw new TypeError('Component render() must be synchronous.');
+            if (source === undefined) throw new Error(`${this.constructor.name || 'Component'} must provide render().`);
+            const markup = isHtml(source) ? renderValue(source) : HtmlRenderer.render(source.toString(), this);
+            return TemplateRenderer.component(markup, internal.componentId);
+        });
     }
 
     _component(id) {
@@ -154,6 +187,7 @@ class LivePage {
 
     async _loadComponents(context) {
         for (const component of runtime(this).children.values()) {
+            if (runtime(this).disposed || context?.signal?.aborted) return;
             await component.loading?.(context);
             await LivePage.loadComponents(component, context);
         }
@@ -162,14 +196,17 @@ class LivePage {
     _attach(socket, context) {
         const internal = runtime(this);
         if (internal.disposed) throw new Error('Cannot connect a disposed page.');
+        if (context?.signal?.aborted) throw new ActionInputError('ACTION_CANCELLED');
         internal.connections.add(socket);
         forEachState(this.constructor, (_options, name) => {
+            if (socket.__redwebPageSession?.renderer) return;
             const payload = LivePage.statePayload(this, name, this[name]);
             socket.sendEvent?.('redweb:state', payload);
         });
         const connected = this.connected?.(context);
         return Promise.resolve(connected).then(async result => {
             for (const component of internal.children.values()) {
+                if (internal.disposed || context?.signal?.aborted || !internal.connections.has(socket)) return false;
                 await LivePage.attach(component, socket, context);
             }
             return result;
@@ -189,8 +226,14 @@ class LivePage {
 
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
-        const payload = LivePage.statePayload(this, name, value);
-        runtime(this).connections.forEach(socket => socket.sendEvent?.('redweb:state', payload));
+        const payload = LivePage.statePayload(this, name, value, true);
+        runtime(this).connections.forEach(socket => {
+            const session = socket.__redwebPageSession;
+            if (session?.lifetime?.revoked) return;
+            const renderer = session?.renderer;
+            if (renderer) renderer.invalidate(this, name, payload);
+            else socket.sendEvent?.('redweb:state', payload);
+        });
         return true;
     }
 
@@ -200,11 +243,18 @@ class LivePage {
         this[name] = value;
     }
 
-    async _invoke(name, args, context) {
+    async _invoke(name, args, context, beforeInvoke) {
         const implementation = getActionImplementation(this.constructor, name);
         if (!implementation || this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
         if (!Array.isArray(args)) throw new TypeError('Action arguments must be an array.');
-        return implementation.call(this, ...args, context);
+        const definition = getActionDefinition(this.constructor, name);
+        const validated = await definition.arguments(args, context);
+        if (beforeInvoke) await beforeInvoke();
+        if (runtime(this).disposed || context?.signal?.aborted || (context?.socket?.readyState !== undefined && context.socket.readyState !== 1)) {
+            throw new ActionInputError('ACTION_CANCELLED');
+        }
+        if (this[name] !== implementation) throw new Error(`Unknown page action "${name}".`);
+        return implementation.call(this, ...validated, context);
     }
 
     async dispose() {

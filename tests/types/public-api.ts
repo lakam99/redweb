@@ -7,6 +7,7 @@ import {
     RoomRegistry,
     SessionRegistry,
     SocketRoute,
+    SocketServer,
     SocketService,
     ERROR_CODES,
     LiveHtmlServer,
@@ -25,6 +26,22 @@ import {
     url,
     view,
 } from 'redweb';
+
+new HttpServer({
+    listen: false,
+    services: [{
+        serviceName: '/health', method: 'get',
+        function: (request, response, next) => {
+            const path: string = request.path;
+            response.status(200).json({ path });
+            next();
+            // @ts-expect-error Express response status requires a number, not an untyped callback argument.
+            response.status('ok');
+            // @ts-expect-error Incoming requests are not Express responses.
+            request.status(200);
+        },
+    }],
+});
 
 @component()
 class TypedComponent {
@@ -207,12 +224,54 @@ route.clients.forEach(socket => {
     void socket.sendBinaryEvent?.({ ready: true });
 });
 const standaloneRooms = new RoomRegistry({ maxRooms: 2 });
+const protectedRooms = new RoomRegistry({
+    authorize: async (context, roomId) => {
+        void context.request.get('cookie');
+        void context.signal.aborted;
+        return context.principal === 'alice' && roomId === 'private';
+    },
+    authorizationTimeoutMs: 500,
+    maxPendingAuthorizations: 16,
+    maxPendingPerConnection: 2,
+});
+route.clients.forEach(async socket => {
+    const joined: boolean = await socket.enterRoom!('private');
+    const entered: boolean = await protectedRooms.enter('private', socket);
+    protectedRooms.broadcastFrom(socket, 'private', { update: true });
+    if (socket.context) {
+        // @ts-expect-error Authenticated context identity is read-only.
+        socket.context.principal = 'forged';
+        // @ts-expect-error Captured request data is read-only.
+        socket.context.request.headers.authorization = 'forged';
+    }
+    void joined; void entered;
+});
+// @ts-expect-error Authorization deadline requires a policy.
+new RoomRegistry({ authorizationTimeoutMs: 100 });
+// @ts-expect-error A policy must return a boolean, not a truthy credential.
+new RoomRegistry({ authorize: () => 'allowed' });
 const standaloneSessions = new SessionRegistry<{ score: number }>({ maxSessions: 2 });
 void standaloneRooms;
 void standaloneSessions;
 void Simulation;
 void CallbackRoute;
 new HttpServer({ listen: false, corsOptions: false });
+
+const inspectedServer = new SocketServer({ listen: false, development: { inspect: true } });
+const inspection = inspectedServer.inspect();
+if (inspection?.sockets.available) {
+    const registered: number = inspection.sockets.routes.items[0].registeredConnections;
+    void registered;
+    // @ts-expect-error Inspection snapshots are deeply read-only.
+    inspection.sockets.routes.items.push({ path: '/fake' });
+}
+// @ts-expect-error Inspection is explicitly boolean, not a callback or endpoint.
+new SocketServer({ development: { inspect: () => true } });
+// @ts-expect-error Inspection belongs to servers, not individual routes.
+route.inspect();
+// @ts-expect-error Raw socket services have no HTML browser refresh.
+new SocketServer({ development: { refresh: true } });
+new LiveHtmlServer({ pages: [CounterPage], listen: false, development: { refresh: true, inspect: true } });
 
 new SocketRoute({
     path: '/invalid',

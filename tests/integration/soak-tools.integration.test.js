@@ -1,0 +1,143 @@
+'use strict';
+
+const path = require('node:path');
+const { WebSocketServer } = require('ws');
+const { SoakClients } = require('../../scripts/lib/SoakClients');
+const { SoakMeasurement } = require('../../scripts/lib/SoakMeasurement');
+const { waitFor } = require('../../scripts/realtime-harness');
+const { waitForCondition, withTimeout } = require('../helpers/network');
+const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspace');
+const { captureSoakCommand } = require('../helpers/SoakCommandEvidence');
+
+async function withPeers(exercise, accept = () => true) {
+    let connections = 0, clients;
+    const failures = [];
+    const server = new WebSocketServer({ port: 0, host: '127.0.0.1', verifyClient: (_info, done) => done(accept(++connections), 503) });
+    try {
+        await waitFor(server, 'listening');
+        clients = new SoakClients(`ws://127.0.0.1:${server.address().port}`, 2, () => {});
+        await exercise(clients, server);
+    } catch (error) { failures.push(error); }
+    try { await clients?.closeAll(); } catch (error) { failures.push(error); }
+    for (const peer of server.clients) peer.terminate();
+    try { await withTimeout(new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())), 'soak peer shutdown', 5000); }
+    catch (error) { failures.push(error); }
+    if (failures.length) throw new AggregateError(failures, 'Native soak fixture failed', { cause: failures[0] });
+}
+
+test('native soak clients match ticks, rotate and close every owned socket', () => withPeers(async (clients, server) => {
+    server.on('connection', peer => peer.on('message', raw => peer.send(JSON.stringify({ tick: JSON.parse(String(raw)).tick }))));
+    await clients.openInitial();
+    clients.sendTick(0);
+    await waitForCondition(() => clients.received === 2, 'initial exact soak replies');
+    await clients.rotate(0, () => false);
+    clients.sendTick(1);
+    await waitForCondition(() => clients.received === 4, 'rotated exact soak replies');
+    expect(clients.sent).toBe(4); expect(clients.generations).toEqual([1, 0]); clients.check();
+    const sockets = [...clients.records].map(record => record.socket);
+    await clients.closeAll(); await clients.closeAll();
+    expect(sockets.every(socket => socket.readyState === socket.CLOSED)).toBe(true);
+    expect(clients.records.size).toBe(0);
+}), 80000);
+
+test.each(['malformed', 'duplicate', 'unsent', 'server-error', 'disconnect'])
+('native soak rejects %s instead of counting arbitrary frames or fewer clients', mode => withPeers(async (clients, server) => {
+    server.on('connection', peer => peer.on('message', raw => {
+        const { tick } = JSON.parse(String(raw));
+        if (mode === 'disconnect') peer.close();
+        else if (mode === 'malformed') peer.send('{');
+        else if (mode === 'server-error') peer.send(JSON.stringify({ type: 'error' }));
+        else {
+            peer.send(JSON.stringify({ tick: mode === 'unsent' ? tick + 1 : tick }));
+            if (mode === 'duplicate') peer.send(JSON.stringify({ tick }));
+        }
+    }));
+    await clients.openInitial(); clients.sendTick(0);
+    await waitForCondition(() => clients.failure !== null, 'latched native soak failure');
+    expect(() => clients.check()).toThrow(clients.failure);
+    if (mode === 'disconnect') expect(clients.failure.message).toContain('code 1005');
+    expect(clients.received).toBeLessThanOrEqual(clients.sent);
+}), 40000);
+
+test.each([false, true])('real pending-reply rotation control: close before reply = %s', closeBeforeReply => withPeers(async (clients, server) => {
+    let releaseReply;
+    const events = [];
+    server.on('connection', peer => {
+        events.push('connected');
+        peer.on('message', raw => {
+            const { slot, tick } = JSON.parse(String(raw));
+            if (slot === 0 && tick === 0) {
+                events.push('reply-held');
+                releaseReply = () => withTimeout(new Promise(resolve => {
+                    events.push('reply-released');
+                    peer.send(JSON.stringify({ tick }), error => resolve(error || null));
+                }), 'controlled peer reply', 5000);
+            } else peer.send(JSON.stringify({ tick }));
+        });
+    });
+    await clients.openInitial();
+    const original = clients.slots[0];
+    original.socket.once('close', () => events.push('original-closed'));
+    clients.sendTick(0);
+    await waitForCondition(() => { clients.check(); return Boolean(releaseReply) && clients.received === 1; }, 'held reply and unaffected peer');
+    expect([...original.pending]).toEqual([0]);
+    expect(clients.sent).toBe(2);
+    if (!closeBeforeReply) {
+        expect(await releaseReply()).toBeNull();
+        await waitForCondition(() => clients.received === 2, 'reply before rotation');
+    }
+    events.push('rotation-started');
+    await clients.rotate(0, () => false);
+    events.push('rotation-completed');
+    if (closeBeforeReply) expect(await releaseReply()).toBeInstanceOf(Error);
+    expect(original.socket.readyState).toBe(original.socket.CLOSED);
+    expect(original.pending.size).toBe(0);
+    expect(clients.slots[0]).not.toBe(original);
+    expect(clients.generations).toEqual([1, 0]);
+    expect(events.indexOf('original-closed')).toBeLessThan(events.lastIndexOf('connected'));
+    expect(events.indexOf('reply-released') < events.indexOf('rotation-started')).toBe(!closeBeforeReply);
+    expect(clients.received).toBe(closeBeforeReply ? 1 : 2);
+    clients.sendTick(1);
+    await waitForCondition(() => { clients.check(); return clients.received === (closeBeforeReply ? 3 : 4); }, 'both replacement-era replies');
+    expect(clients.sent).toBe(4);
+    // Missing replies stay in the delivery denominator, including intentional closes.
+    expect(clients.sent - clients.received).toBe(closeBeforeReply ? 1 : 0);
+}), 70000);
+
+test.each(['partial-acquisition', 'rotation'])('native %s failure retains sockets for complete cleanup', mode => withPeers(async clients => {
+    if (mode === 'partial-acquisition') await expect(clients.openInitial()).rejects.toThrow();
+    else { await clients.openInitial(); await expect(clients.rotate(0, () => false)).rejects.toThrow(); }
+    const sockets = [...clients.records].map(record => record.socket);
+    expect(sockets.length).toBeGreaterThan(0);
+    await clients.closeAll();
+    expect(sockets.every(socket => socket.readyState === socket.CLOSED)).toBe(true);
+    expect(clients.records.size).toBe(0);
+}, attempt => mode === 'partial-acquisition' ? attempt !== 2 : attempt <= 2), 55000);
+
+test('native soak command rejects vacuous sampling and reports actual short-run evidence', () => new VerificationWorkspace().run(async owner => {
+    const script = path.resolve(__dirname, '../../scripts/verify-soak.js');
+    const environment = { REDWEB_SOAK_SECONDS: '10', REDWEB_SOAK_CLIENTS: '2', REDWEB_SOAK_SAMPLE_SECONDS: '1' };
+    await expect(owner.command([script], { environment, timeoutMs: 10000 })).rejects.toThrow('--expose-gc');
+    await expect(owner.command(['--expose-gc', script], { environment: { ...environment, REDWEB_SOAK_SAMPLE_SECONDS: '20' }, timeoutMs: 10000 })).rejects.toThrow('two active-phase');
+    const destination = path.join(owner.directory, 'soak.json');
+    const { output, exitCode, rawReport } = await captureSoakCommand(
+        owner,
+        () => owner.command(['--expose-gc', script, destination], { environment, timeoutMs: 45000, rejectTruncatedOutput: true }),
+        destination, path.resolve(__dirname, '../../coverage/soak-tools/smoke-reports'));
+    // The observed exit/report are already retained even if parsing or any
+    // policy assertion below fails. A room-phase failure remains visible.
+    expect(rawReport).toBe(output);
+    const result = JSON.parse(output);
+    expect(result.samples).toBeGreaterThanOrEqual(4);
+    expect(result.messagesSent).toBeGreaterThan(0);
+    expect(result.messagesMissing).toBe(result.messagesSent - result.messagesReceived);
+    expect(result.deliveryPercent).toBeGreaterThanOrEqual(99);
+    expect(result.deliveryPercent).toBeLessThanOrEqual(100);
+    expect(Object.entries(result.trends).filter(([key]) => key !== 'rooms').every(([, trend]) => trend.passed)).toBe(true);
+    expect(BigInt(result.finalHeap) * 10n <= BigInt(result.warmHeap) * 11n).toBe(true);
+    expect(result.handlesAfter).toBeLessThanOrEqual(result.handlesBefore + 1);
+    if (!result.trends.rooms.passed) expect(result.trends.rooms).toEqual({ early: 1, late: 2, delta: 1,
+        peak: 2, allowedGrowth: 0, monotonicIncrease: true, passed: false });
+    expect(exitCode).toBe(new SoakMeasurement(environment).passed(result) ? 0 : 1);
+    expect(result.finalRegistries).toEqual({ clients: 0, rooms: 0, sessions: 0, inFlight: 0 });
+}), 110000);

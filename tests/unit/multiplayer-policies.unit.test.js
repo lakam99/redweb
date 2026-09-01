@@ -1,5 +1,7 @@
 const { EventEmitter } = require('events');
 const { AdmissionPolicy, ADMISSION_CONTEXT, PLACEMENT_REDIRECT } = require('../../src/ws/AdmissionPolicy');
+const { UPGRADE_REJECTION } = require('../../src/access/RequestFailure');
+const { withTimeout } = require('../helpers/network');
 const HeartbeatMonitor = require('../../src/ws/HeartbeatMonitor');
 const TaskQueue = require('../../src/ws/TaskQueue');
 const TokenBucket = require('../../src/ws/TokenBucket');
@@ -62,7 +64,7 @@ describe('production multiplayer policies', () => {
         expect(contexts[0].signal).toBeInstanceOf(AbortSignal);
     });
 
-    test('rejects disallowed, missing, false, throwing, closed, and timed-out admission', async () => {
+    test('rejects disallowed, missing, false, throwing, and closed admission', async () => {
         const exact = new AdmissionPolicy({ origins: ['https://game.example'] });
         expect(await exact.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
         expect(await exact.authorize({ headers: { origin: 'https://evil.example' } }, rawSocket(), route())).toBe(false);
@@ -86,17 +88,6 @@ describe('production multiplayer policies', () => {
         closing.emit('close');
         expect(await closeResult).toBe(false);
 
-        let timeoutSignal;
-        const timeoutPolicy = new AdmissionPolicy({
-            timeoutMs: 1,
-            authenticate(_request, context) {
-                timeoutSignal = context.signal;
-                return new Promise(() => {});
-            },
-        });
-        expect(await timeoutPolicy.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
-        expect(timeoutSignal.aborted).toBe(true);
-
         const external = new AbortController();
         let externalSignal;
         const externallyCancelled = new AdmissionPolicy({
@@ -108,7 +99,7 @@ describe('production multiplayer policies', () => {
         const externalResult = externallyCancelled.authorize({ headers: {} }, rawSocket(), route(), external.signal);
         external.abort();
         expect(await externalResult).toBe(false);
-        expect(externalSignal.aborted).toBe(true);
+        expect(externalSignal).toBeUndefined(); // Already cancelled work must not invoke application code.
 
         const alreadyAborted = new AbortController();
         alreadyAborted.abort();
@@ -165,17 +156,42 @@ describe('production multiplayer policies', () => {
         const accepted = { headers: {} };
         expect(await new AdmissionPolicy({ place: () => true }).authorize(accepted, rawSocket(), route())).toBe(true);
         expect(accepted[ADMISSION_CONTEXT]).toEqual({ principal: undefined });
+    });
 
-        let placementAborted = false;
-        const timedPlacement = new AdmissionPolicy({
-            timeoutMs: 1,
-            place(_principal, _request, { signal }) {
-                signal.addEventListener('abort', () => { placementAborted = true; }, { once: true });
-                return new Promise(() => {});
-            },
-        });
-        expect(await timedPlacement.authorize({ headers: {} }, rawSocket(), route())).toBe(false);
-        expect(placementAborted).toBe(true);
+    test.each(['authenticate', 'place'])('real deadline rejects pending %s without requiring application entry', async stage => {
+        const observedSignals = [];
+        const policy = new AdmissionPolicy({ timeoutMs: 1, [stage](...args) {
+            observedSignals.push(args.at(-1).signal);
+            return new Promise(() => {});
+        } });
+        const request = { headers: {} };
+        expect(await policy.authorize(request, rawSocket(), route())).toBe(false);
+        expect(request[UPGRADE_REJECTION].headers['Redweb-Error']).toBe('ADMISSION_TIMEOUT');
+        // A real deadline may expire at a checkpoint before the callback starts.
+        // Any callback that did start must receive cancellation; entry and abort
+        // delivery are independently required by the synchronized test below.
+        for (const signal of observedSignals) expect(signal.aborted).toBe(true);
+    });
+
+    test.each(['authenticate', 'place'])('cancellation reaches %s after application entry', async stage => {
+        const external = new AbortController();
+        let enter, aborted = false;
+        const entered = new Promise(resolve => { enter = resolve; });
+        const policy = new AdmissionPolicy({ [stage](...args) {
+            const { signal } = args.at(-1);
+            signal.addEventListener('abort', () => { aborted = true; }, { once: true });
+            enter(signal);
+            return new Promise(() => {});
+        } });
+        const request = { headers: {} };
+        const result = policy.authorize(request, rawSocket(), route(), external.signal);
+        let signal, accepted;
+        try { signal = await withTimeout(entered, `${stage} application entry`, 1000); }
+        finally { external.abort(); accepted = await result; }
+        expect(accepted).toBe(false);
+        expect(signal.aborted).toBe(true);
+        expect(aborted).toBe(true);
+        expect(request[UPGRADE_REJECTION].headers['Redweb-Error']).toBe('ADMISSION_CANCELLED');
     });
 
     test('token buckets refill monotonically and validate costs and options', () => {
@@ -237,7 +253,8 @@ describe('production multiplayer policies', () => {
         await defaultReporter.whenIdle();
     });
 
-    test('one heartbeat monitor manages pong, timeout, errors, detach, and idempotent stop', () => {
+    test('one heartbeat monitor manages pong, timeout, errors, detach, and idempotent stop', async () => {
+        const deferred = () => new Promise(resolve => setImmediate(resolve));
         expect(() => new HeartbeatMonitor({ intervalMs: 0, timeoutMs: 1 })).toThrow('intervalMs');
         expect(() => new HeartbeatMonitor({ intervalMs: 1.5, timeoutMs: 1 })).toThrow('intervalMs');
         expect(() => new HeartbeatMonitor({ intervalMs: 1, timeoutMs: 0 })).toThrow('timeoutMs');
@@ -265,6 +282,7 @@ describe('production multiplayer policies', () => {
         healthy.emit('pong');
         now = 5;
         monitor.tick();
+        await deferred();
         expect(unresponsive.terminated).toBe(1);
         now = 10;
         monitor.tick();
@@ -286,6 +304,7 @@ describe('production multiplayer policies', () => {
         monitor.tick();
         now = 25;
         monitor.tick();
+        await deferred();
         expect(errors).toEqual(expect.arrayContaining(['ping failed', 'terminate failed']));
         monitor.attach(new EventEmitter());
         monitor.stop();
@@ -307,8 +326,43 @@ describe('production multiplayer policies', () => {
         expect(silent.terminate).not.toHaveBeenCalled();
         longNow = 30;
         longerTimeout.tick();
+        await deferred();
         expect(silent.terminate).toHaveBeenCalledTimes(1);
         longerTimeout.stop();
+
+        let stalledNow = 0;
+        const stalledMonitor = new HeartbeatMonitor({ intervalMs: 10, timeoutMs: 5 }, null, () => stalledNow);
+        const responsive = new EventEmitter();
+        responsive.ping = jest.fn(); responsive.terminate = jest.fn();
+        stalledMonitor.attach(responsive); stalledMonitor.tick();
+        stalledNow = 5; stalledMonitor.tick(); stalledMonitor.tick();
+        responsive.emit('pong'); await deferred();
+        expect(responsive.terminate).not.toHaveBeenCalled();
+        stalledNow = 10; stalledMonitor.tick();
+        expect(responsive.ping).toHaveBeenCalledTimes(2);
+        const silentAfterDelay = new EventEmitter();
+        silentAfterDelay.ping = jest.fn(); silentAfterDelay.terminate = jest.fn();
+        stalledMonitor.attach(silentAfterDelay); stalledMonitor.tick();
+        stalledNow = 15; stalledMonitor.tick(); await deferred();
+        expect(silentAfterDelay.terminate).toHaveBeenCalledTimes(1);
+
+        const reattached = new EventEmitter();
+        reattached.ping = jest.fn(); reattached.terminate = jest.fn();
+        stalledMonitor.attach(reattached); stalledMonitor.tick();
+        stalledNow = 20; stalledMonitor.tick();
+        expect(stalledMonitor.detach(reattached)).toBe(true);
+        stalledMonitor.attach(reattached);
+        await deferred();
+        expect(reattached.terminate).not.toHaveBeenCalled();
+
+        const pendingAtStop = new EventEmitter();
+        pendingAtStop.ping = jest.fn(); pendingAtStop.terminate = jest.fn();
+        stalledMonitor.attach(pendingAtStop); stalledMonitor.tick();
+        stalledNow = 25; stalledMonitor.tick();
+        stalledMonitor.stop();
+        await deferred();
+        expect(reattached.terminate).not.toHaveBeenCalled();
+        expect(pendingAtStop.terminate).not.toHaveBeenCalled();
     });
 
     test.each([

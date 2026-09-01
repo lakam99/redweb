@@ -5,10 +5,12 @@ const HeartbeatMonitor = require('./HeartbeatMonitor');
 const RoomRegistry = require('./RoomRegistry');
 const SessionRegistry = require('./SessionRegistry');
 const DistributionBridge = require('./DistributionBridge');
+const requestSnapshot = require('../context/RequestSnapshot');
 
 function joinRoom(roomId) { return this.__redwebRuntimeOwner.rooms.join(roomId, this); }
+function enterRoom(roomId) { return this.__redwebRuntimeOwner.rooms.enter(roomId, this); }
 function leaveRoom(roomId) { return this.__redwebRuntimeOwner.rooms.leave(roomId, this); }
-function roomBroadcast(roomId, data, options) { return this.__redwebRuntimeOwner.rooms.broadcast(roomId, data, options); }
+function roomBroadcast(roomId, data, options) { return this.__redwebRuntimeOwner.rooms.broadcastFrom(this, roomId, data, options); }
 function createSession(sessionId, data) {
     this.__redwebRuntimeOwner.ensureContext(this);
     return this.__redwebRuntimeOwner.sessions.create(sessionId, data, this);
@@ -18,6 +20,7 @@ function resumeSession(sessionId) {
     return this.__redwebRuntimeOwner.sessions.resume(sessionId, this);
 }
 function publishEvent(type, payload) { return this.__redwebRuntimeOwner.route.publish(type, payload); }
+function connectionContext() { return this.__redwebRuntimeOwner.ensureContext(this); }
 
 class RouteRuntime {
     constructor(route, { heartbeat, rooms, sessions, distribution, drainHandlers }) {
@@ -25,12 +28,17 @@ class RouteRuntime {
         this.inFlight = drainHandlers ? new Set() : null;
         this.abortController = drainHandlers ? new AbortController() : null;
         this.acceptingWork = true;
+        this.contexts = new WeakMap();
+        this.requests = new WeakMap();
+        this.needsContext = Boolean(route.admissionPolicy || route.protocolPolicy || rooms || sessions || drainHandlers);
         try {
             this.heartbeat = heartbeat === undefined ? null : new HeartbeatMonitor(heartbeat, route.logger);
             this.rooms = rooms === undefined || rooms === false
                 ? null
                 : new RoomRegistry(rooms === true ? {} : rooms, {
-                    hasConnection: socket => route.clients.get(socket.clientKey) === socket,
+                    hasConnection: socket => !route.draining && route.clients.get(socket.clientKey) === socket &&
+                        socket.readyState === 1 && this.contexts.get(socket)?.active !== false,
+                    contextFor: socket => this.ensureContext(socket),
                     policy: route.transportPolicy,
                     onChange: action => {
                         route.metrics?.increment(`redweb.room.${action}`);
@@ -65,10 +73,11 @@ class RouteRuntime {
     }
 
     decorate(socket, request) {
-        if (request?.[ADMISSION_CONTEXT] || request?.[PROTOCOL_CONTEXT] || this.abortController) this.ensureContext(socket, request);
+        if (this.needsContext) this.prepareContext(socket, request);
         if (this.rooms || this.sessions || this.distribution) socket.__redwebRuntimeOwner = this;
         if (this.rooms) {
             socket.joinRoom = joinRoom;
+            socket.enterRoom = enterRoom;
             socket.leaveRoom = leaveRoom;
             socket.roomBroadcast = roomBroadcast;
         }
@@ -79,17 +88,46 @@ class RouteRuntime {
         if (this.distribution) socket.publishEvent = publishEvent;
     }
 
-    ensureContext(socket, request) {
-        if (socket.context) return socket.context;
-        socket.context = {
-            connectionId: randomUUID(),
+    prepareContext(socket, request) {
+        const existing = this.contexts.get(socket);
+        if (existing) return existing;
+        const record = {
+            snapshot: this.requests.get(request) || requestSnapshot(request || {}),
             principal: request?.[ADMISSION_CONTEXT]?.principal,
+            protocol: request?.[PROTOCOL_CONTEXT],
+            active: !this.route.draining, context: null, controller: null,
+        };
+        this.contexts.set(socket, record);
+        socket.__redwebRuntimeOwner = this;
+        Object.defineProperty(socket, 'context', { get: connectionContext, enumerable: true });
+        return record;
+    }
+
+    ensureContext(socket, request) {
+        const record = this.prepareContext(socket, request);
+        if (record.context) return record.context;
+        const controller = new AbortController();
+        const snapshot = record.snapshot;
+        const context = {
             session: null,
             metadata: Object.create(null),
-            signal: this.abortController?.signal,
-            protocol: request?.[PROTOCOL_CONTEXT],
         };
-        return socket.context;
+        const stable = {
+            connectionId: randomUUID(),
+            principal: record.principal,
+            request: snapshot, params: snapshot.params, query: snapshot.query, body: snapshot.body,
+            signal: controller.signal,
+            protocol: record.protocol,
+        };
+        for (const [name, value] of Object.entries(stable)) Object.defineProperty(context, name, { value, enumerable: true });
+        record.context = context;
+        record.controller = controller;
+        if (!record.active) controller.abort();
+        return context;
+    }
+
+    prepareRequest(request) {
+        if (this.needsContext) this.requests.set(request, requestSnapshot(request));
     }
 
     attach(socket) {
@@ -97,7 +135,10 @@ class RouteRuntime {
     }
 
     detach(socket) {
+        const record = this.contexts.get(socket);
+        if (record) record.active = false;
         this.rooms?.leaveAll(socket);
+        record?.controller?.abort();
         this.sessions?.release(socket);
         this.heartbeat?.detach(socket);
     }
@@ -113,6 +154,11 @@ class RouteRuntime {
     }
 
     beginDrain() {
+        this.rooms?.close();
+        this.route.clients.forEach(socket => {
+            const record = this.contexts.get(socket);
+            if (record) { record.active = false; record.controller?.abort(); }
+        });
         this.abortController?.abort();
         this.route.clients.forEach(socket => socket.__redwebRuntime?.queue?.close());
     }

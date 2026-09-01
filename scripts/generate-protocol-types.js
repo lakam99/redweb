@@ -38,7 +38,7 @@ export class ProtocolClient {
     parse<T = unknown>(input: string | Uint8Array | ArrayBuffer | { data: string | Uint8Array | ArrayBuffer }): ProtocolEnvelope<T> | ProtocolErrorEnvelope;
 }
 
-export const ERROR_CODES: Readonly<Record<RedWebProtocolErrorCode, RedWebProtocolErrorCode>>;
+export const ERROR_CODES: { readonly [Code in RedWebProtocolErrorCode]: Code };
 `;
 const target = path.join(root, 'client.d.ts');
 

@@ -1,10 +1,10 @@
 const redweb = require('..');
-const { silentLogger, waitFor, openClient, closeClient } = require('./realtime-harness');
+const { WebSocket, silentLogger, waitFor, closeClient } = require('./realtime-harness');
+const { MemoryMeasurement } = require('./lib/MemoryMeasurement');
+const { verificationError } = require('./lib/verificationError');
 
-const mode = process.argv[2];
-const count = Number(process.argv[3] || 500);
-const modes = new Set(['legacy', 'context', 'transport', 'heartbeat', 'rooms', 'sessions', 'drain', 'protocol', 'enabled']);
-if (!modes.has(mode)) throw new Error('unsupported memory measurement mode');
+const mode = MemoryMeasurement.mode(process.argv[2]);
+const count = MemoryMeasurement.count(process.argv[3] ?? 500);
 if (typeof global.gc !== 'function') throw new Error('Run with --expose-gc.');
 
 class IdleHandler extends redweb.BaseHandler {
@@ -46,23 +46,41 @@ async function collect() {
 
 async function main() {
     const server = new redweb.SocketServer({ port: 0, bind: '127.0.0.1', routes: [IdleRoute], logger: silentLogger });
-    if (!server.server.listening) await waitFor(server.server, 'listening');
-    const before = await collect();
-    const suffix = mode === 'enabled' || mode === 'protocol' ? '?redwebVersion=1' : '';
-    const url = `ws://127.0.0.1:${server.server.address().port}/idle${suffix}`;
-    const clients = [];
-    for (let offset = 0; offset < count; offset += 50) {
-        const batch = await Promise.all(Array.from({ length: Math.min(50, count - offset) }, () => openClient(url)));
-        clients.push(...batch);
+    let clients, result, failure;
+    try {
+        if (!server.server.listening) await waitFor(server.server, 'listening');
+        const before = await collect();
+        const suffix = mode === 'enabled' || mode === 'protocol' ? '?redwebVersion=1' : '';
+        const url = `ws://127.0.0.1:${server.server.address().port}/idle${suffix}`;
+        clients = [];
+        for (let offset = 0; offset < count; offset += 50) {
+            await Promise.all(Array.from({ length: Math.min(50, count - offset) }, async () => {
+                const client = new WebSocket(url);
+                clients.push(client); // Own connecting peers even if another member of this batch fails.
+                await waitFor(client, 'open');
+            }));
+        }
+        await new Promise(resolve => setImmediate(resolve));
+        const after = await collect();
+        result = { mode, count, heapDelta: after - before, bytesPerConnection: (after - before) / count };
+    } catch (error) { failure = verificationError(error); }
+    const closed = await Promise.allSettled((clients || []).map(async client => {
+        await closeClient(client);
+        if (client.readyState !== WebSocket.CLOSED) await waitFor(client, 'close');
+    }));
+    try { await server.shutdown(); }
+    catch (error) { closed.push({ status: 'rejected', reason: error }); }
+    for (const outcome of closed) {
+        if (outcome.status === 'rejected') {
+            const error = verificationError(outcome.reason);
+            failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error;
+        }
     }
-    await new Promise(resolve => setImmediate(resolve));
-    const after = await collect();
-    process.stdout.write(`${JSON.stringify({ mode, count, heapDelta: after - before, bytesPerConnection: (after - before) / count })}\n`);
-    await Promise.all(clients.map(closeClient));
-    await server.shutdown();
+    if (failure) throw failure;
+    process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 main().catch(error => {
-    process.stderr.write(`${error.stack || error}\n`);
+    process.stderr.write(`${require('./diagnostics/recovery-split.cjs').describeFailure(error)}\n`);
     process.exitCode = 1;
 });

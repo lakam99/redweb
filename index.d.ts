@@ -1,5 +1,7 @@
 declare module 'redweb' {
-    import { Application } from 'express';
+    export { defineSocketContract } from 'redweb/contract';
+    export type { SocketContract, ContractClient, SocketSchema, ContractInput, ContractOutput, ContractMessage } from 'redweb/contract';
+    import { Application, RequestHandler } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
     import { Server as NodeHttpsServer } from 'https';
@@ -15,7 +17,7 @@ declare module 'redweb' {
         port?: number;
         bind?: string;
         publicPaths?: string[];
-        services?: Array<{ serviceName: string; method: string; function: Function }>;
+        services?: Array<{ serviceName: string; method: string; function: RequestHandler }>;
         listen?: boolean;
         listenCallback?: () => void;
         encoding?: RedWebEncoding;
@@ -35,6 +37,8 @@ declare module 'redweb' {
         broadcast(data: unknown): number;
         context?: RedWebConnectionContext;
         joinRoom?(roomId: string): boolean;
+        /** Bounded permission check followed by atomic membership insertion. */
+        enterRoom?(roomId: string): Promise<boolean>;
         leaveRoom?(roomId: string): boolean;
         roomBroadcast?(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         createSession?(sessionId: string, data: unknown): boolean;
@@ -45,13 +49,12 @@ declare module 'redweb' {
         sendBinaryEvent?(value: unknown): Promise<boolean>;
     };
 
-    export interface RedWebConnectionContext {
-        connectionId: string;
-        principal: unknown;
+    export interface RedWebConnectionContext extends RequestContext {
+        readonly connectionId: string;
+        readonly principal: unknown;
         session: unknown | null;
         metadata: Record<string, unknown>;
-        signal?: AbortSignal;
-        protocol?: Readonly<{ version: string }>;
+        readonly protocol?: Readonly<{ version: string }>;
     }
 
     export interface AdmissionContext {
@@ -98,12 +101,18 @@ declare module 'redweb' {
         timeoutMs: number;
     }
 
-    export interface RoomOptions {
+    export type RoomOptions = {
         maxRooms?: number;
         maxMembersPerRoom?: number;
         maxRoomsPerConnection?: number;
         maxRoomIdLength?: number;
-    }
+    } & ({ authorize?: undefined; authorizationTimeoutMs?: never; maxPendingAuthorizations?: never; maxPendingPerConnection?: never } | {
+        /** Grants subscription until explicit leave/disconnect; not per-message receive authorization. */
+        authorize: (context: Readonly<RedWebConnectionContext>, roomId: string) => boolean | Promise<boolean>;
+        authorizationTimeoutMs?: number;
+        maxPendingAuthorizations?: number;
+        maxPendingPerConnection?: number;
+    });
 
     export interface SessionOptions {
         ttlMs?: number;
@@ -164,7 +173,7 @@ declare module 'redweb' {
     }
 
     export interface ProtocolOptions {
-        versions: string[];
+        versions: readonly string[];
         required?: boolean;
         queryParameter?: string;
         header?: string;
@@ -173,7 +182,86 @@ declare module 'redweb' {
 
     /** ─────────────────── SOCKET SERVER ─────────────────── */
 
+    export interface DevelopmentOptions {
+        /** Explicit local-only inspection; rejected when NODE_ENV is production. */
+        inspect?: boolean;
+    }
+
+    export interface LiveDevelopmentOptions extends DevelopmentOptions {
+        /** Loopback-only browser refresh. False overrides REDWEB_DEV_REFRESH=1. */
+        refresh?: boolean;
+    }
+
+    export interface InspectionList<T> {
+        readonly items: readonly T[];
+        readonly total: number;
+        readonly truncated: boolean;
+    }
+    export type InspectionSection<T> = { readonly available: false } | ({ readonly available: true } & T);
+    export interface InspectionMembers {
+        readonly className: string;
+        readonly actions: InspectionList<string>;
+        readonly states: InspectionList<string>;
+    }
+    export interface InspectionPage extends InspectionMembers {
+        readonly path: string;
+        readonly live: boolean;
+        readonly shared: boolean;
+        readonly instanceMetadata: 'observed' | 'unobserved';
+        readonly instances: InspectionList<{
+            readonly id: number;
+            readonly disposed: boolean;
+            readonly components: InspectionList<InspectionMembers & { readonly id: string }>;
+        }>;
+    }
+    export interface InspectionSession {
+        /** Inspector-local IDs; never page tokens, credentials or socket IDs. */
+        readonly render: number;
+        readonly instance: number;
+        readonly route: string;
+        readonly status: 'connected' | 'detaching' | 'pending' | 'retained';
+        readonly reactive: boolean;
+    }
+    export interface InspectionEvent {
+        readonly sequence: number;
+        readonly render: number;
+        readonly route: string;
+        readonly kind: 'state-invalidated' | 'flush-started' | 'flush-completed' | 'flush-superseded' | 'flush-failed';
+        readonly state?: string;
+        readonly component?: string;
+        readonly affectedOwners?: InspectionList<string>;
+        readonly snapshot?: boolean;
+        readonly dirtyOwners?: InspectionList<string>;
+        readonly durationMs?: number;
+    }
+    export interface DevelopmentSnapshot {
+        readonly schemaVersion: 1;
+        readonly mode: 'development';
+        readonly pages: InspectionSection<{
+            readonly registrations: InspectionList<InspectionPage>;
+            readonly sessions: InspectionList<InspectionSession>;
+            readonly closing?: boolean;
+            readonly rendering?: number;
+            readonly connections?: Readonly<Record<InspectionSession['status'], number>>;
+        }>;
+        readonly sockets: InspectionSection<{
+            readonly routes: InspectionList<{
+                readonly path: string;
+                readonly handlers: InspectionList<string>;
+                readonly registeredConnections: number;
+                readonly draining: boolean;
+                readonly rooms: number;
+                readonly sessions: number;
+            }>;
+            readonly pendingUpgrades: number;
+            readonly draining: boolean;
+        }>;
+        /** Flush completion is not a network delivery guarantee. */
+        readonly history: InspectionList<InspectionEvent> & { readonly limit: number };
+    }
+
     export interface SocketServerOptions {
+        development?: DevelopmentOptions;
         server?: NodeHttpServer;
         port?: number;
         bind?: string;
@@ -306,6 +394,7 @@ declare module 'redweb' {
 
         addRoute(route: new () => SocketRoute): SocketRoute;
         isReady(): boolean;
+        inspect(): DevelopmentSnapshot | null;
         beginDrain(): boolean;
         shutdown(): Promise<void>;
     }
@@ -317,11 +406,13 @@ declare module 'redweb' {
     export class RoomRegistry {
         constructor(options?: RoomOptions);
         join(roomId: string, socket: RedWebSocket): boolean;
+        enter(roomId: string, socket: RedWebSocket): Promise<boolean>;
         leave(roomId: string, socket: RedWebSocket): boolean;
         leaveAll(socket: RedWebSocket): number;
         members(roomId: string): RedWebSocket[];
         has(roomId: string, socket: RedWebSocket): boolean;
         broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
+        broadcastFrom(socket: RedWebSocket, roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         clear(): void;
         close(): boolean;
         readonly size: number;
@@ -421,30 +512,33 @@ declare module 'redweb' {
         readonly [htmlUrlBrand]: true;
     }
 
-    export interface LivePageRequest {
+    export interface RedWebRequest {
         readonly path: string;
         readonly url: string;
         readonly method: string;
-        readonly headers: import('http').IncomingHttpHeaders;
+        readonly headers: Readonly<Record<string, string | readonly string[] | undefined>>;
         readonly params: Readonly<Record<string, string>>;
         readonly query: Readonly<Record<string, unknown>>;
         readonly body: unknown;
         get(name: string): string | undefined;
     }
 
-    export interface LivePageRequestContext {
-        request: LivePageRequest;
-        params: Readonly<Record<string, string>>;
-        query: Readonly<Record<string, unknown>>;
-        body: unknown;
-        principal?: string | number | bigint | boolean;
-        signal: AbortSignal;
+    export interface LivePageRequest extends RedWebRequest {}
+
+    export interface RequestContext<Principal = unknown> {
+        readonly request: RedWebRequest;
+        readonly params: Readonly<Record<string, string>>;
+        readonly query: Readonly<Record<string, unknown>>;
+        readonly body: unknown;
+        readonly principal?: Principal;
+        readonly signal: AbortSignal;
     }
 
-    export interface LivePageConnectionContext {
+    export interface LivePageRequestContext extends RequestContext<string | number | bigint | boolean> {}
+
+    /** The original page request/identity is retained across normal reconnects. */
+    export interface LivePageConnectionContext extends LivePageRequestContext {
         socket: RedWebSocket;
-        signal?: AbortSignal;
-        principal?: string | number | bigint | boolean;
     }
 
     export abstract class LivePage {
@@ -452,21 +546,27 @@ declare module 'redweb' {
         loading?(context: LivePageRequestContext): void | Promise<void>;
         render?(context: LivePageRequestContext): string | HtmlFragment | Promise<string | HtmlFragment>;
         connected?(context: LivePageConnectionContext): void | Promise<void>;
-        disconnected?(context: { socket: RedWebSocket }): void | Promise<void>;
+        disconnected?(context: LivePageConnectionContext): void | Promise<void>;
         disposed?(): void | Promise<void>;
         dispose(): Promise<boolean>;
     }
 
-    export interface PageOptions {
+    export type PageOptions = {
         template?: string;
         css?: string | readonly string[];
-        scope?: 'connection' | 'shared';
-        shared?: boolean;
         live?: boolean;
         head?: PageHead;
         cache?: PageCache;
         layout?: PageLayout;
-    }
+    } & ({
+        scope?: 'connection' | 'shared'; shared?: boolean;
+        authorize?: undefined; authorizationTimeoutMs?: never;
+    } | {
+        scope?: 'connection'; shared?: false;
+        /** Checked before construction/loading, on connection, and before actions/state writes. */
+        authorize: (context: LivePageRequestContext) => boolean | Promise<boolean>;
+        authorizationTimeoutMs?: number;
+    });
 
     export type PageLayout = (content: HtmlFragment, context: LivePageRequestContext) => HtmlFragment;
 
@@ -502,6 +602,17 @@ declare module 'redweb' {
         ): Value;
     }
 
+    /** The validated (possibly transformed) value passed as an action's first argument. */
+    export type ActionInput<Schema extends import('redweb/contract').SocketSchema> = import('redweb/contract').ContractOutput<Schema>;
+
+    export interface ValidatedActionDecorator<Input> {
+        <Value extends (input: Input, context: LivePageConnectionContext) => any>(target: object, propertyKey: string,
+            descriptor: TypedPropertyDescriptor<Value>): void;
+        <This, Value extends (this: This, input: Input, context: LivePageConnectionContext) => any>(
+            value: Value, context: ClassMethodDecoratorContext<This, Value>
+        ): Value;
+    }
+
     export interface LiveViewDecorator {
         (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
         <This, Value extends (this: This, item: any, index: number) => HtmlFragment>(
@@ -516,6 +627,18 @@ declare module 'redweb' {
         (properties: Props) => HtmlFragment;
     export function state(options?: StateOptions): LiveStateDecorator;
     export function action(): LiveActionDecorator;
+    export interface ActionAuthorization<Input> {
+        authorize: (context: LivePageConnectionContext, input: Input) => boolean | Promise<boolean>;
+        /** Bounds permission checks, not application execution; defaults to 5000ms. */
+        authorizationTimeoutMs?: number;
+    }
+    export function action<Schema extends import('redweb/contract').SocketSchema>(options: {
+        input: Schema;
+        /** Bounds input validation, not application execution; defaults to 5000ms. */
+        validationTimeoutMs?: number;
+    } & (ActionAuthorization<ActionInput<Schema>> | { authorize?: undefined; authorizationTimeoutMs?: never })): ValidatedActionDecorator<ActionInput<Schema>>;
+    /** Authorized actions use a fixed (input, context) shape, including buttons without a payload. */
+    export function action(options: ActionAuthorization<unknown>): ValidatedActionDecorator<unknown>;
     export function view(stateName: string): LiveViewDecorator;
     export function html(strings: TemplateStringsArray, ...values: unknown[]): HtmlFragment;
     export function attribute(value: string | number | bigint | boolean): HtmlAttribute;
@@ -529,7 +652,8 @@ declare module 'redweb' {
 
     export type LivePageClass = new () => object;
 
-    export interface LiveHtmlServerOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+    export interface LiveHtmlServerBaseOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+        development?: LiveDevelopmentOptions;
         pages: readonly LivePageClass[];
         templateRoot?: string;
         livePaths?: {
@@ -541,13 +665,21 @@ declare module 'redweb' {
         sessionTtlMs?: number;
         maxSessions?: number;
         maxConcurrentRenders?: number;
+        /** Phase-local render/route and final owned-HTTP cleanup bound; defaults to 1000ms, not a total application deadline. */
         shutdownTimeoutMs?: number;
         heartbeat?: HeartbeatOptions;
-        authenticate?(request: import('http').IncomingMessage | import('express').Request):
-            string | number | bigint | boolean | false | null | undefined |
-            Promise<string | number | bigint | boolean | false | null | undefined>;
         origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
     }
+
+    export type LiveHtmlAuthentication = {
+        authenticate(request: import('http').IncomingMessage | import('express').Request):
+            string | number | bigint | boolean | null | undefined |
+            Promise<string | number | bigint | boolean | null | undefined>;
+        /** Bounds identity lookup, not external application work; defaults to 5000ms. */
+        authenticationTimeoutMs?: number;
+    } | { authenticate?: undefined; authenticationTimeoutMs?: never };
+    export type LiveHtmlServerOptions = LiveHtmlServerBaseOptions & LiveHtmlAuthentication;
+    export type LiveHtmlStartOptions = Omit<LiveHtmlServerBaseOptions, 'pages'> & LiveHtmlAuthentication;
 
     export class LiveHtmlServer {
         app: Application;
@@ -555,12 +687,16 @@ declare module 'redweb' {
         http: HttpServer | HttpsServer;
         sockets: SocketServer | null;
         constructor(options: LiveHtmlServerOptions);
+        /** Revoke matching in-process sessions/renders; credential invalidation remains application-owned. */
+        revoke(principal: string | number | bigint | true): Promise<number>;
+        /** Local metadata only; null unless development inspection was explicitly enabled. */
+        inspect(): DevelopmentSnapshot | null;
         shutdown(): Promise<void>;
     }
 
     export function start(
         pageOrPages: LivePageClass | readonly LivePageClass[],
-        options?: Omit<LiveHtmlServerOptions, 'pages'>
+        options?: LiveHtmlStartOptions
     ): LiveHtmlServer;
 
     export interface StaticExportOptions {
@@ -587,9 +723,7 @@ declare module 'redweb' {
         layout?: PageLayout;
     }
 
-    export interface SitePageOptions extends Omit<PageOptions, 'live'> {
-        live?: false;
-    }
+    export type SitePageOptions = PageOptions & { live?: false };
 
     export interface SiteExportOptions extends StaticExportOptions {
         publicDir?: string;
@@ -641,14 +775,5 @@ declare module 'redweb' {
     export const HTTP_OPTIONS: RedWebOptions;
     export const SOCKET_OPTIONS: SocketServerOptions;
 
-    export const ERROR_CODES: Readonly<{
-        INVALID_MESSAGE: 'INVALID_MESSAGE';
-        UNKNOWN_HANDLER: 'UNKNOWN_HANDLER';
-        HANDLER_FAILED: 'HANDLER_FAILED';
-        BINARY_UNSUPPORTED: 'BINARY_UNSUPPORTED';
-        RATE_LIMITED: 'RATE_LIMITED';
-        QUEUE_FULL: 'QUEUE_FULL';
-        CAPACITY_REACHED: 'CAPACITY_REACHED';
-        INITIALIZATION_FAILED: 'INITIALIZATION_FAILED';
-    }>;
+    export const ERROR_CODES: typeof import('redweb/client').ERROR_CODES;
 }

@@ -3,6 +3,10 @@ const HttpServer = require('../http/HttpServer');
 const HttpsServer = require('../http/HttpsServer');
 const SocketServer = require('../ws/SocketServer');
 const { PageManager } = require('./PageManager');
+const { createInspection } = require('../development/Inspection');
+const developmentSettings = require('../development/settings');
+const OwnedServerLifecycle = require('../OwnedServerLifecycle');
+const { listenServer, validateListenerOptions } = require('../serverLifecycle');
 
 class LiveHtmlServer {
     constructor(options = {}) {
@@ -19,15 +23,20 @@ class LiveHtmlServer {
             shutdownTimeoutMs = 1000,
             heartbeat,
             authenticate,
+            authenticationTimeoutMs,
             origins,
+            development,
             server: suppliedApp,
             ...httpOptions
         } = options;
+        const settings = developmentSettings(development, ['inspect', 'refresh'], { refresh: process.env.REDWEB_DEV_REFRESH === '1' });
+        this._inspection = createInspection({ inspect: settings.inspect });
         const app = suppliedApp === undefined ? express() : suppliedApp;
         if (!app || typeof app.get !== 'function' || typeof app.use !== 'function') {
             throw new TypeError('`server` must be an Express-compatible application.');
         }
-        this.manager = new PageManager({
+        const Manager = settings.refresh ? require('../development/DevelopmentPageManager') : PageManager;
+        this.manager = new Manager({
             pages,
             templateRoot,
             paths: livePaths,
@@ -37,32 +46,46 @@ class LiveHtmlServer {
             shutdownTimeoutMs,
             heartbeat,
             authenticate,
+            authenticationTimeoutMs,
             origins,
             logger: httpOptions.logger,
         });
+        if (this._inspection) this.manager.Renderer = this._inspection.Renderer;
         this.manager.mount(app);
         const listen = httpOptions.listen ?? true;
         const ServerClass = httpOptions.ssl ? HttpsServer : HttpServer;
-        this.http = new ServerClass({ ...httpOptions, server: app, listen: this.manager.hasLivePages ? false : listen });
-        if (this.manager.hasLivePages) {
-            const Route = this.manager.route();
-            this.sockets = new SocketServer({
-                server: this.http.server,
-                routes: [Route],
-                listen,
-                port: this.http.port,
-                bind: this.http.bind,
-                listenCallback: this.http.listenCallback,
-                logger: this.http.logger,
-                closeServerOnShutdown: false,
-            });
-        } else {
-            this.sockets = null;
-        }
+        this.http = new ServerClass({ ...httpOptions, server: app, listen: false });
+        validateListenerOptions({ ...this.http, listen });
+        this._ownedServer = new OwnedServerLifecycle(this.http.server);
+        try {
+            if (this.manager.hasLivePages) {
+                const Route = this.manager.route();
+                this.sockets = new SocketServer({
+                    server: this.http.server,
+                    routes: [Route],
+                    listen,
+                    port: this.http.port,
+                    bind: this.http.bind,
+                    listenCallback: this.http.listenCallback,
+                    logger: this.http.logger,
+                    closeServerOnShutdown: false,
+                });
+            } else {
+                this.sockets = null;
+                if (listen) listenServer(this.http.server, {
+                    port: this.http.port, bind: this.http.bind, callback: this.http.listenCallback,
+                    logger: this.http.logger, name: httpOptions.ssl ? 'HttpsServer' : 'HttpServer',
+                });
+            }
+        } catch (error) { this._ownedServer.dispose(); throw error; }
         this.app = this.http.app;
         this.server = this.http.server;
         this._shutdownPromise = null;
     }
+
+    revoke(principal) { return this.manager.revoke(principal); }
+
+    inspect() { return this._inspection ? this._inspection.snapshot(this) : null; }
 
     shutdown() {
         if (!this._shutdownPromise) {
@@ -80,9 +103,8 @@ class LiveHtmlServer {
         try { await this.manager.shutdown(); }
         catch (error) {
             errors.push(error);
-            if (error?.code === 'LIVE_HTML_SHUTDOWN_TIMEOUT') this.server.closeAllConnections?.();
         }
-        try { await this.http.shutdown(); }
+        try { await this._ownedServer.close(this.manager.shutdownTimeoutMs, () => this.http.shutdown()); }
         catch (error) { errors.push(error); }
         if (errors.length) throw new AggregateError(errors, 'Live HTML shutdown failed.');
     }

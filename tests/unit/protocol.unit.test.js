@@ -53,7 +53,7 @@ describe('ProtocolPolicy', () => {
         expect(missing[PROTOCOL_REJECTION]).toEqual({
             statusCode: 426,
             statusText: 'Upgrade Required',
-            headers: { 'Redweb-Versions': '2, 1' },
+            headers: { 'Redweb-Versions': '2, 1', 'Redweb-Error': 'PROTOCOL_UNSUPPORTED', 'Cache-Control': 'no-store' },
             message: 'A supported protocol version is required.',
         });
         const unsupported = { url: '/?v=3', headers: {} };

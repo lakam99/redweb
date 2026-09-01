@@ -25,7 +25,7 @@ class HeartbeatMonitor {
 
     attach(socket) {
         this.detach(socket);
-        const state = { awaitingPong: false, lastPing: null };
+        const state = { awaitingPong: false, lastPing: null, terminationPending: false };
         socket.__redwebHeartbeatState = state;
         this.sockets.set(socket, state);
         socket.on('pong', acknowledgePong);
@@ -44,12 +44,7 @@ class HeartbeatMonitor {
         const now = this.clock();
         this.sockets.forEach((state, socket) => {
             if (state.awaitingPong && now - state.lastPing >= this.timeoutMs) {
-                this.detach(socket);
-                try {
-                    socket.terminate?.();
-                } catch (error) {
-                    this.logger?.error?.('Error terminating unresponsive socket:', error);
-                }
+                this.scheduleTermination(socket, state);
                 return;
             }
             if (!state.awaitingPong && (state.lastPing === null || now - state.lastPing >= this.intervalMs)) {
@@ -62,6 +57,23 @@ class HeartbeatMonitor {
                 }
             }
         });
+    }
+
+    scheduleTermination(socket, state) {
+        if (state.terminationPending) return;
+        state.terminationPending = true;
+        // Defer to the check phase so already-dispatched pong handling can win.
+        const check = setImmediate(() => {
+            state.terminationPending = false;
+            if (this.sockets.get(socket) !== state || !state.awaitingPong) return;
+            this.detach(socket);
+            try {
+                socket.terminate?.();
+            } catch (error) {
+                this.logger?.error?.('Error terminating unresponsive socket:', error);
+            }
+        });
+        check.unref();
     }
 
     stop() {

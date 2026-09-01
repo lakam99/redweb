@@ -1,13 +1,18 @@
 // Generated from src/ws/protocol-schema.json by scripts/generate-protocol-types.js.
 export type RedWebProtocolErrorCode =
     | 'INVALID_MESSAGE'
+    | 'INVALID_PAYLOAD'
     | 'UNKNOWN_HANDLER'
     | 'HANDLER_FAILED'
     | 'BINARY_UNSUPPORTED'
     | 'RATE_LIMITED'
     | 'QUEUE_FULL'
     | 'CAPACITY_REACHED'
-    | 'INITIALIZATION_FAILED';
+    | 'INITIALIZATION_FAILED'
+    | 'ACCESS_DENIED'
+    | 'ACCESS_TIMEOUT'
+    | 'ACCESS_CANCELLED'
+    | 'ACCESS_CAPACITY';
 
 export interface ProtocolMetadata {
     requestId?: string;
@@ -39,4 +44,4 @@ export class ProtocolClient {
     parse<T = unknown>(input: string | Uint8Array | ArrayBuffer | { data: string | Uint8Array | ArrayBuffer }): ProtocolEnvelope<T> | ProtocolErrorEnvelope;
 }
 
-export const ERROR_CODES: Readonly<Record<RedWebProtocolErrorCode, RedWebProtocolErrorCode>>;
+export const ERROR_CODES: { readonly [Code in RedWebProtocolErrorCode]: Code };

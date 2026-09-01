@@ -1,0 +1,113 @@
+{
+  "startedAt": "2026-08-30T07:03:03.611Z",
+  "root": "C:\\Users\\arkam\\AppData\\Local\\Temp\\evaluation-run-KaRGXp",
+  "checks": [
+    {
+      "name": "loopback-binding",
+      "passed": true,
+      "durationMs": 825
+    },
+    {
+      "name": "http-and-two-tabs",
+      "passed": true,
+      "durationMs": 841
+    },
+    {
+      "name": "shared-server-counter",
+      "passed": true,
+      "durationMs": 134
+    },
+    {
+      "name": "named-presence",
+      "passed": true,
+      "durationMs": 42
+    },
+    {
+      "name": "message-delivery",
+      "passed": true,
+      "durationMs": 33
+    },
+    {
+      "name": "draft-preservation",
+      "passed": true,
+      "durationMs": 35
+    },
+    {
+      "name": "literal-message-safety",
+      "passed": true,
+      "durationMs": 36
+    },
+    {
+      "name": "disconnect-presence",
+      "passed": true,
+      "durationMs": 34
+    },
+    {
+      "name": "fresh-page-snapshot",
+      "passed": true,
+      "durationMs": 397
+    },
+    {
+      "name": "actual-websocket-traffic",
+      "passed": true,
+      "durationMs": 0
+    }
+  ],
+  "passed": true,
+  "build": {
+    "startedAt": "2026-08-30T07:03:03.611Z",
+    "stdout": "\n> redweb-team-room-trial@1.0.0 build\n> tsc\n\n",
+    "stderr": "",
+    "exitCode": 0,
+    "endedAt": "2026-08-30T07:03:04.325Z"
+  },
+  "origin": "http://127.0.0.1:63186",
+  "listenerAddresses": [
+    "127.0.0.1"
+  ],
+  "browser": {
+    "browserVersions": [
+      {
+        "protocolVersion": "1.3",
+        "product": "Chrome/152.0.7977.64",
+        "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+        "jsVersion": "15.2.124.18"
+      },
+      {
+        "protocolVersion": "1.3",
+        "product": "Chrome/152.0.7977.64",
+        "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+        "jsVersion": "15.2.124.18"
+      },
+      {
+        "protocolVersion": "1.3",
+        "product": "Chrome/152.0.7977.64",
+        "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+        "jsVersion": "15.2.124.18"
+      }
+    ],
+    "networkEventCounts": {
+      "Network.webSocketCreated": 3,
+      "Network.webSocketWillSendHandshakeRequest": 3,
+      "Network.webSocketHandshakeResponseReceived": 3,
+      "Network.webSocketFrameReceived": 25,
+      "Network.webSocketFrameSent": 7
+    }
+  },
+  "application": {
+    "output": "{\"url\":\"http://127.0.0.1:63186\"}\n",
+    "errors": ""
+  },
+  "endedAt": "2026-08-30T07:03:07.277Z",
+  "durationMs": 3666,
+  "notRun": [],
+  "inputs": {
+    "sealSha256": "477ce351d67e128d8505c6623d088d2f1e410a614a9c1277f98cdd87e4824a16",
+    "candidateSha256": "c753ae17463f7d8e17eade6d631534180cc1f632b34e44af04fed562abe9f914",
+    "verifiedInstalledFiles": 154
+  },
+  "compiledAppSha256": "4355279f90787a4a683d754a2a5108e7076e4d392c7617e73bd1da7912be3d13"
+}

@@ -1,7 +1,22 @@
 const net = require('net');
 const WebSocket = require('ws');
 const { BaseHandler, SocketRoute, SocketServer } = require('../..');
-const { closeWebSocket, nextMessage, silentLogger, waitForListening, waitForOpen, withTimeout } = require('../helpers/network');
+const { silentLogger, waitForListening, waitForOpen, withTimeout } = require('../helpers/network');
+
+async function exchange(socket, payload, label, expectClose = false) {
+    let message, closed, error;
+    try {
+        return await withTimeout(new Promise((resolve, reject) => {
+            message = data => { if (!expectClose) resolve(data); };
+            closed = () => expectClose ? resolve() : reject(new Error(`${label}: connection closed before reply`));
+            error = reject;
+            socket.on('message', message); socket.once('close', closed); socket.once('error', error);
+            socket.send(payload);
+        }), label, 2000);
+    } finally {
+        socket.off('message', message); socket.off('close', closed); socket.off('error', error);
+    }
+}
 
 function seededBytes(seed, length) {
     let state = seed >>> 0;
@@ -53,9 +68,18 @@ describe('WebSocket hostile input integration without mocks', () => {
     });
 
     afterEach(async () => {
-        await Promise.all([...clients].map(closeWebSocket));
+        // Hostile-frame failures must not prevent listener cleanup or wait for a
+        // graceful handshake with the very peer being tested.
+        const outcomes = await Promise.allSettled([...clients].map(async socket => {
+            if (socket.readyState === WebSocket.CLOSED) return;
+            const closed = new Promise(resolve => socket.once('close', resolve));
+            socket.terminate();
+            await withTimeout(closed, 'owned fuzz client termination', 1500);
+        }));
         clients.clear();
-        await server.shutdown();
+        outcomes.push(...await Promise.allSettled([withTimeout(server.shutdown(), 'fuzz server shutdown', 1500)]));
+        const failures = outcomes.filter(result => result.status === 'rejected').map(result => result.reason);
+        if (failures.length) throw new AggregateError(failures, 'Fuzz fixture cleanup failed');
     });
 
     async function connect() {
@@ -77,9 +101,8 @@ describe('WebSocket hostile input integration without mocks', () => {
         for (const request of cases) await rawUpgrade(port, request);
 
         const socket = await connect();
-        const response = nextMessage(socket);
-        socket.send(JSON.stringify({ type: 'echo', value: 'healthy' }));
-        expect(JSON.parse((await response).data.toString())).toEqual({ value: 'healthy' });
+        const response = await exchange(socket, JSON.stringify({ type: 'echo', value: 'healthy' }), 'post-upgrade-fuzz echo');
+        expect(JSON.parse(response.toString())).toEqual({ value: 'healthy' });
     });
 
     test('contains deterministic malformed text and binary frames across reconnects', async () => {
@@ -88,26 +111,22 @@ describe('WebSocket hostile input integration without mocks', () => {
             '{"type":null}', '{"type":""}', '{"type":"missing"}',
             ...Array.from({ length: 25 }, (_, index) => seededBytes(index + 1, 1 + index * 7).toString('base64')),
         ];
-        for (const payload of malformed) {
+        for (const [index, payload] of malformed.entries()) {
             const socket = await connect();
-            socket.send(payload);
-            await withTimeout(new Promise(resolve => socket.once('close', resolve)), 'fuzz client close');
+            await exchange(socket, payload, `malformed frame ${index} close`, true);
             clients.delete(socket);
         }
 
         const binarySocket = await connect();
         for (let seed = 1; seed <= 50; seed += 1) {
-            const rejected = nextMessage(binarySocket);
-            binarySocket.send(seededBytes(seed, seed * 3));
-            expect(JSON.parse((await rejected).data.toString())).toEqual({ error: 'Binary messages are not supported by this handler' });
+            const rejected = await exchange(binarySocket, seededBytes(seed, seed * 3), `binary frame ${seed} rejection`);
+            expect(JSON.parse(rejected.toString())).toEqual({ error: 'Binary messages are not supported by this handler' });
         }
-        const response = nextMessage(binarySocket);
-        binarySocket.send(JSON.stringify({ type: 'echo', value: 'still healthy' }));
-        expect(JSON.parse((await response).data.toString())).toEqual({ value: 'still healthy' });
+        const response = await exchange(binarySocket, JSON.stringify({ type: 'echo', value: 'still healthy' }), 'post-fuzz echo');
+        expect(JSON.parse(response.toString())).toEqual({ value: 'still healthy' });
 
         const finalSocket = await connect();
-        const finalResponse = nextMessage(finalSocket);
-        finalSocket.send(JSON.stringify({ type: 'echo', value: 42 }));
-        expect(JSON.parse((await finalResponse).data.toString())).toEqual({ value: 42 });
-    });
+        const finalResponse = await exchange(finalSocket, JSON.stringify({ type: 'echo', value: 42 }), 'new-client echo');
+        expect(JSON.parse(finalResponse.toString())).toEqual({ value: 42 });
+    }, 30000); // Many sequential network exchanges; each still has its own short deadline.
 });

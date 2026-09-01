@@ -14,6 +14,7 @@ const {
     ERROR_CODES,
 } = require('./src/ws');
 const { BaseHandler } = require('./src/ws/BaseHandler');
+const { defineSocketContract } = require('./contract');
 const HttpServer = require('./src/http/HttpServer');
 const HttpsServer = require('./src/http/HttpsServer');
 const { action, attribute, codeBlock, component, defineSite, each, exportStatic, html, HtmlRenderer, LiveHtmlServer, LivePage, page, start, state, url, view } = require('./src/htmx');
@@ -24,6 +25,7 @@ module.exports = {
     SocketServer,
     SecureSocketServer,
     BaseHandler,
+    defineSocketContract,
     SocketRoute,
     SocketService,
     FixedStepService,

@@ -1,622 +1,290 @@
-# RedWeb
+# Redweb
 
-RedWeb is a small Node.js transport foundation that wires together Express HTTP/HTTPS servers and `ws` WebSocket servers with simple defaults. Use it for ordinary web apps or opt into bounded multiplayer controls without adopting a broker, identity system, or game-state framework.
+Build a TypeScript website and its realtime backend together. Decorated classes own state and actions; server-rendered JSX updates the browser through WebSockets. No React, frontend bundler, or separate socket glue is required.
 
-Version 0.9 adds production-minded multiplayer building blocks while preserving the 0.8 API and wire behavior when they are disabled. Redweb owns transport boundaries and lifecycle; your game remains responsible for authoritative state, rules, matchmaking, persistence, and identity.
+Use the same package for a live site, static HTML, Express HTTP endpoints, or routed WebSocket services.
 
 ## Install
 
-```bash
-npm install redweb
+Start with a complete, tested counter application:
+
+<!-- redweb:setup:start -->
+> Unreleased development documentation. Package metadata is 0.13.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
+
+Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:
+
+```sh
+npx --yes --package TARBALL redweb init my-realtime --template realtime
+cd my-realtime
+npm install --save-exact TARBALL
+npm test
+npm run dev
 ```
 
-## Exports
+This prerelease Redweb artifact is development-only until its release checks finish. For released applications, use an available versioned release guide.
+<!-- redweb:setup:end -->
 
-```js
-const {
-  HttpServer,          // HTTP over Express
-  HttpsServer,         // HTTP with TLS (key/cert required)
-  SocketServer,        // WebSocket over HTTP
-  SecureSocketServer,  // WebSocket over HTTPS
-  SocketRoute,         // Per-path WebSocket routing
-  SocketService,       // Route-scoped background/tick logic
-  FixedStepService,    // Drift-aware, non-overlapping simulation ticks
-  SocketRegistry,      // Evented in-memory store
-  RoomRegistry,        // Bounded route-local connection groups
-  SessionRegistry,     // Bounded, expiring application-issued sessions
-  BaseHttpServer,      // Express app builder for advanced composition
-  BaseHandler,         // WebSocket message handler base
-  sendJson,            // Utility to stringify+send
-  HTTP_OPTIONS,        // Defaults for HTTP servers
-  ENCODINGS,           // json/urlencoded encoding names
-  SOCKET_OPTIONS,      // Defaults for socket servers
-  METHODS,             // Express method helpers
-  LiveHtmlServer,      // SSR plus lifecycle-safe realtime HTML
-  HtmlRenderer,        // Safe HTML templates, collections, and state payloads
-  LivePage,            // Optional base for advanced page internals
-  page, state, action, view, // Live HTML decorators
-  html, start          // Safe HTML plus one-call page startup
-} = require('redweb');
+Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
+
+This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, shutdown helper, and real-network tests; the file is not a standalone copy-and-run program.
+
+<!-- redweb:realtime:start -->
+```tsx
+import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
+import { runApp } from './run-app';
+
+@page('/', { css: 'app.css', shared: true })
+export class CounterPage {
+    @state() count = 0;
+
+    @action()
+    increment() { this.count += 1; }
+
+    render() {
+        return (
+            <main class="home">
+                <h1>A counter owned by the server</h1>
+                <p>Open this page in two tabs. Either button updates both.</p>
+                <button rw-click="increment">
+                    Count <output>{this.count}</output>
+                </button>
+            </main>
+        );
+    }
+}
+
+export function createApp(options: LiveHtmlStartOptions = {}) {
+    return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
+}
+
+if (require.main === module) runApp(createApp);
 ```
+<!-- redweb:realtime:end -->
+
+## Choose what to build
+
+The links below describe each starter and its boundaries. Reuse the version-correct setup above, changing both the directory name and `--template realtime` to your chosen template. Every initialized project includes all application files and real tests; complete generated recipe pages and file contents are also available in the [documentation catalogue](docs/generated.json).
+
+| Build | Starter | Recipe notes |
+| --- | --- | --- |
+| Live site with server-owned state | `realtime` | [Counter](recipes/realtime/README.md) |
+| Chatroom with reusable components and presence | `chat` | [Chat](recipes/chat/README.md) |
+| Non-live pages with shared layout and CSS | `site` | [Site](recipes/site/README.md) |
+| Typed `/match` route with join/move/resume handlers | `socket` | [Socket service](recipes/socket/README.md) |
+| Account-private cards with persistent SQLite data | `dashboard` | [Dashboard](recipes/dashboard/README.md), Node 22.13+ |
+| HTTP and raw WebSockets on one port | `http-ws` | [Shared listener](recipes/http-ws/README.md) |
+
+Choose the recipe's `--template` option when initializing. Shared memory survives visitors, not server restarts. The dashboard demonstrates application-owned persistence and identity; it is single-process, not a managed database or authentication service.
 
 ## Live HTML
 
-`start(PageClass)` combines server-rendered TSX or `.html` templates and Redweb WebSockets on one listener. Decorated plain classes hold the behavior. Redweb injects a small browser runtime backed by [`redweb-client`](https://www.npmjs.com/package/redweb-client), binds the HTTP render to an expiring page token, and disposes connection-owned state after disconnect.
+- A page is a decorated class whose `render()` returns server-side TSX.
+- Ordinary expressions over `@state()` update after assignment. Replace arrays/objects rather than mutating them in place.
+- `@action()` explicitly exposes a method to the browser. Validate inputs and authorize the operation on the server.
+- Function components reuse presentation; decorated class components reuse state, actions, and lifecycle.
+- Stable JSX keys preserve DOM identity for lists. CSS lives in ordinary external files.
+- Pages are connection-scoped by default. `shared: true` deliberately shares one instance: do not put private visitor data there.
 
-TSX is the concise default for new pages. It renders straight to Redweb's existing `HtmlFragment`; there is no React dependency, virtual DOM, hydration pass, or client component runtime:
+TSX and `html` templates escape text and attribute values and restrict URL protocols. Use external assets instead of inline executable markup. Ordinary `.html` templates remain available; the old executable `.htmx` sandbox does not.
 
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "redweb"
-  }
-}
-```
-
-```tsx
-import { LivePage, action, component, page, start, state } from 'redweb';
-import type { Child } from 'redweb/jsx-runtime';
-
-const Card = component((props: { title: string; children?: Child }) => (
-  <article class="card">
-    <h2>{props.title}</h2>
-    {props.children}
-  </article>
-));
-
-@page('/', { css: 'counter.css' })
-class CounterPage extends LivePage {
-  @state() count = 0;
-
-  @action()
-  increment() { this.count += 1; }
-
-  render() {
-    return (
-      <main>
-        <Card title="Server counter">
-          <button rw-click="increment">
-            Count <output data-rw-state="count">{this.count}</output>
-          </button>
-        </Card>
-      </main>
-    );
-  }
-}
-
-start(CounterPage, { port: 8181 });
-```
-
-Text and attribute values are escaped automatically. URL attributes use Redweb's existing safe-protocol policy. `on*`, inline `style`, `srcdoc`, `srcset`, and executable `<script>` or `<style>` children are rejected; use `rw-*` server directives and external CSS or JavaScript assets. Existing `html` fragments can be nested in TSX, and TSX fragments can be nested in `html`, so migration can be incremental.
-
-Ordinary declarative `.html` templates remain available when separating markup into a standalone file is preferable:
-
-```ts
-import { page, start, state } from 'redweb';
-
-@page('/', { template: 'counter.html', css: 'counter.css' })
-class CounterPage {
-  @state()
-  count = 0;
-
-  private ticker?: NodeJS.Timeout;
-
-  connected() {
-    this.ticker = setInterval(() => this.count++, 1000);
-  }
-
-  disconnected() {
-    clearInterval(this.ticker);
-  }
-}
-
-start(CounterPage, { port: 8080 });
-```
-
-`counter.html` contains no executable server code:
-
-```html
-<h1>Server-side counter</h1>
-<output aria-live="polite" data-rw-state="count"></output>
-```
-
-Changing a `@state()` property sends only that binding's new value. State updates are shallow and assignment-driven; Redweb does not install deep proxies or rerender the document for scalar changes.
-
-CSS is colocated with the page and needs no static-server setup. Pass one file with `css: 'counter.css'` or compose several with `css: ['base.css', 'counter.css']`. Redweb resolves the files beside the decorated class, injects `<link>` elements during SSR, and serves content-addressed stylesheets with immutable browser caching.
-
-Browser events can call only explicitly exposed actions:
-
-```ts
-@component()
-class Chatroom {
-  @state()
-  screen = html`<form rw-submit="join"><input name="name"><button>Join</button></form>`;
-
-  @action()
-  join({ name }: { name: string }) {
-    this.screen = html`<p>Connected as ${name}</p><form rw-submit="send"><input name="message"><button>Send</button></form>`;
-  }
-}
-```
-
-```ts
-@page('/chat', { css: 'chatroom.css' })
-class ChatroomPage {
-  chat = new Chatroom();
-  render() { return html`<main>${this.chat}</main>`; }
-}
-```
-
-Interpolations created with `html` are escaped by default and are restricted to element text—not attributes, URLs, scripts, or styles. Only `HtmlFragment` values may produce HTML patches; ordinary state uses `textContent`. Use `@state({ writable: true })` to opt a property into `rw-bind="property"` browser updates. A page is connection-scoped by default; `shared: true` deliberately shares one instance across its connected visitors. The older `scope: 'shared'` spelling remains supported.
-
-Collections use the same model without manual concatenation. Keep the array in `@state()`, render one item with `@view('cards')`, and place it with `<section rw-each="cards"></section>`. Item views must return `html` fragments, so values remain escaped. The current protocol replaces the collection contents atomically; keyed incremental patches can be added later without changing the page API.
-
-Documentation and content-heavy pages can compose nested fragments without a client framework:
-
-```ts
-import { attribute, codeBlock, each, html, url } from 'redweb';
-
-const sections = each(apiSections, section => html`
-  <article id="${attribute(section.id)}">
-    <h2>${section.name}</h2>
-    <a href="${url(`#${section.id}`)}">Permalink</a>
-    ${each(section.methods, method => html`<section><h3>${method.name}</h3></section>`)}
-    ${codeBlock(section.usage, { language: 'ts', label: 'TypeScript' })}
-  </article>
-`);
-```
-
-Primitive values may be interpolated directly into quoted attributes and safe URL attributes. Redweb escapes attributes and rejects unsafe or protocol-relative URL schemes; `attribute()` and `url()` remain available when explicit intent helps readability. Event handlers, inline styles, `srcdoc`, and `srcset` remain prohibited. `codeBlock()` escapes ordinary code and can call a server-side `highlight` function that returns an `HtmlFragment`.
-
-For React-free documentation or marketing pages, set `live: false`. Redweb omits page tokens, browser JavaScript, and WebSockets; adds document metadata; and serves the result with an ETag:
-
-```ts
-@page('/docs', {
-  template: 'docs.html',
-  css: 'docs.css',
-  live: false,
-  head: {
-    title: 'Redweb API',
-    description: 'Complete Redweb API reference.',
-    canonical: 'https://example.com/docs',
-    image: 'https://example.com/og.png',
-  },
-  cache: { maxAge: 300, staleWhileRevalidate: 3600 },
-})
-class DocsPage {}
-```
-
-Export the same decorated page to CDN-ready files with `await exportStatic(DocsPage, { outDir: 'dist' })`. Route paths become `index.html` files, colocated stylesheets are emitted under their content-addressed URLs, and no Live HTML runtime is included. Static export requires `live: false`.
-
-For a multi-page site, `defineSite()` removes repeated static-page configuration. It shares CSS, metadata, caching, and a safe layout; generates canonical URLs; and can copy a public asset directory during export:
-
-```ts
-const docs = defineSite({
-  origin: 'https://redweb.example',
-  css: 'site.css',
-  head: { description: 'Redweb documentation' },
-  layout: content => html`<body><nav>Redweb</nav><main>${content}</main></body>`,
-});
-
-@docs.page('/docs', { head: { title: 'Documentation' } })
-class DocsPage {
-  render() { return html`<h1>Documentation</h1>`; }
-}
-
-await docs.export(DocsPage, { outDir: 'dist', publicDir: 'public' });
-```
-
-An `html` fragment returned by `render()` is final safe markup, so documentation examples containing literal `{{ bindings }}` are never parsed a second time. Return a string or use a template file when Redweb should resolve template bindings and directives.
-
-The same API serves HTTPS/WSS when `ssl` is provided. For private pages, an optional `authenticate(request)` callback binds the page token to the same stable user identity across the HTTP render and WebSocket upgrade. Initial connections and reconnects always receive a complete authoritative state snapshot.
-
-See the [Live HTML guide](docs/LIVE_HTML.md), runnable [TSX page](examples/live-html/jsx-page.tsx), TypeScript [server counter](examples/live-html/counter.ts), component-based [chatroom](examples/live-html/chatroom.ts), and [persistent card collection](examples/live-html/cards.ts). The chatroom separates joining from its stable message composer, tracks online members, preserves bounded history, restores identity and missed messages after reconnect, and creates an isolated room for every server. The cards page uses `shared: true`, so additions survive reloads, reconnects, and new visitors while its server is running. Run the examples with `npm run example:jsx`, `npm run example:counter`, `npm run example:chatroom`, and `npm run example:cards`. The decorated sources are compiled and exercised unchanged by mock-free HTTP/WebSocket integration tests and a real-Chromium DOM gate.
-
-Reusable snippets can own server behavior without page-level forwarding methods. Decorate a class with `@component()`, put instances in page fields, and interpolate them directly: `` html`<main>${this.primary}${this.secondary}</main>` ``. Each instance gets isolated `@state()`, scoped `@action()` methods, nested-component support, and page-owned lifecycle cleanup. See the runnable [component counters](examples/live-html/components.ts) or run `npm run example:components`.
-
-## Multiplayer in 0.9
-
-Redweb keeps each production feature independent and opt-in:
-
-| Need | Redweb primitive |
-| --- | --- |
-| Authenticate and place players before upgrade | Bounded `admission` hooks with origin and redirect policy |
-| Contain abusive or slow peers | Connection, rate, queue, payload, and outbound-buffer limits |
-| Detect dead connections cheaply | One heartbeat scheduler per route |
-| Group players and resume ownership | Bounded rooms and expiring application-issued sessions |
-| Run simulation work predictably | Drift-aware, non-overlapping `FixedStepService` ticks |
-| Scale across nodes | Optional broker adapter with bounded fan-out and explicit best-effort semantics |
-| Roll deployments safely | Readiness, draining, cooperative cancellation, and bounded shutdown |
-| Evolve clients | Opt-in version negotiation, stable envelopes/error codes, generated types, and codec hooks |
-
-The framework does not claim exactly-once delivery or durable state. See the [production-readiness contract](docs/PRODUCTION_READINESS.md), [multiplayer operations guide](docs/MULTIPLAYER_OPERATIONS.md), and [release evidence](docs/VERIFICATION_EVIDENCE.md) before running authoritative sessions.
+See [pages, components, forms, CSS and rendering](docs/LIVE_HTML.md), [private rooms and request identity](docs/ROOM_AUTHORIZATION.md), and [runtime failures and retry limits](docs/RUNTIME_DIAGNOSTICS.md).
 
 ## HTTP servers (Express)
 
-`new HttpServer(options)` creates a Node HTTP server and starts listening immediately by default (default port `80`). `new HttpsServer({ ssl: { key, cert }, ... })` does the same over TLS.
-
-Options:
-
-- `port` (number): defaults to `80`.
-- `bind` (string): defaults to `0.0.0.0`.
-- `publicPaths` (string[]): folders served as static assets.
-- `services` (array): `{ serviceName, method, function }` for REST endpoints.
-- `listen` (boolean): defaults to `true`; set `false` to build `.app` and `.server` without binding a port.
-- `listenCallback` (function): invoked after `.listen`.
-- `encoding` (`'json' | 'urlencoded'`): body parser selection.
-- `corsOptions`: passed to `cors`.
-- `corsOptions: false`: disables the CORS middleware entirely.
-- `exposeErrors` (boolean): include WebSocket handler details in responses; defaults to `false`.
-- `logger`: an object with optional `log`, `warn`, and `error` methods. Pass `null` to disable library logging.
-
-Example:
-
-```js
-const { HttpServer, METHODS } = require('redweb');
-
-new HttpServer({
-  port: 3000,
-  publicPaths: ['./public'],
-  services: [
-    {
-      serviceName: '/api/hello',
-      method: METHODS.GET,
-      function: (req, res) => res.json({ hello: 'world' })
-    }
-  ]
-});
-```
-
-CORS remains permissive by default for backward compatibility. CORS is not authorization; configure `corsOptions`, add authentication middleware to `server.app`, or disable the middleware as appropriate.
+Use `HttpServer` for Express services and `HttpsServer` when Node terminates TLS. HTTP and WebSockets can run independently; the example below combines them on one listener.
 
 ## WebSocket servers
 
-`SocketServer` uses `ws` and routes connections to `SocketRoute` instances. Clients must send JSON containing a `type` that matches a handler name.
+The `http-ws` starter answers `GET /health` and accepts `{"type":"hello"}` at `ws://127.0.0.1:8181/chat`, using the same port. A URL selects a route; a message's `type` selects its handler. No secondary `message.action` dispatcher is needed.
 
-Handler:
+<!-- redweb:http-ws:start -->
+```tsx
+import { BaseHandler, HttpServer, METHODS, SocketRoute, SocketServer, type RedWebSocket, type SocketServerOptions } from 'redweb';
+import { runApp } from './run-app';
 
-```js
-const { BaseHandler } = require('redweb');
+export class Hello extends BaseHandler {
+    constructor() { super('hello'); }
 
-class ChatHandler extends BaseHandler {
-  constructor() { super('chat'); }
-
-  onMessage(socket, message) {
-    socket.broadcast({ type: 'chat', text: message.text });
-  }
-}
-```
-
-Route:
-
-```js
-const { SocketRoute } = require('redweb');
-
-class ChatRoute extends SocketRoute {
-  constructor() {
-    super({
-      path: '/chat',
-      handlers: [ChatHandler],
-      allowDuplicateConnections: true // otherwise one connection per IP
-    });
-  }
-}
-```
-
-Server:
-
-```js
-const { SocketServer } = require('redweb');
-
-new SocketServer({
-  port: 3000,          // default
-  routes: [ChatRoute], // defaults to a route at "/" with DefaultHandler if omitted
-});
-```
-
-Each connected socket gets:
-
-- `socket.sendJson(data)` to send JSON.
-- `socket.broadcast(data)` to send JSON to all other clients on the same route.
-
-Invalid JSON triggers an error response and closes the socket.
-
-### Binary WebSocket messages
-
-Text frames are still parsed as JSON and routed by `message.type`. Binary frames are dispatched separately, so handlers can receive raw `Buffer` payloads without triggering JSON parse errors.
-
-```js
-const { BaseHandler, SocketRoute } = require('redweb');
-
-class UploadHandler extends BaseHandler {
-  constructor() { super('upload'); }
-
-  onMessage(socket, message) {
-    socket.sendJson({ type: 'upload:control', action: message.action });
-  }
-
-  onBinaryMessage(socket, buffer) {
-    socket.sendJson({ type: 'upload:chunk', bytes: buffer.length });
-  }
-}
-
-class UploadRoute extends SocketRoute {
-  constructor() {
-    super({
-      path: '/upload',
-      handlers: [UploadHandler],
-      allowDuplicateConnections: true,
-      websocketOptions: {
-        maxPayload: 2 * 1024 * 1024
-      }
-    });
-  }
-}
-```
-
-`BaseHandler` provides `handleBinaryMessage(socket, buffer)` and `onBinaryMessage(socket, buffer)`. Override `onBinaryMessage` for normal use. If a handler does not override it, RedWeb sends:
-
-```json
-{ "error": "Binary messages are not supported by this handler" }
-```
-
-Routes may also select a binary-capable handler with `acceptsBinary(socket, buffer)`:
-
-```js
-class ImageHandler extends BaseHandler {
-  constructor() { super('image'); }
-
-  acceptsBinary(socket, buffer) {
-    return buffer.length > 0;
-  }
-
-  onMessage(socket, message) {}
-  onBinaryMessage(socket, buffer) {}
-}
-```
-
-### WebSocket route options
-
-`SocketRoute` accepts `websocketOptions`, which are passed to `new WebSocketServer(...)`. Use this for `ws` server settings such as `maxPayload` or `perMessageDeflate`.
-Redweb controls `noServer`, `path`, `server`, and `port`; do not include them in `websocketOptions`. Route selection is performed once by Redweb so strict matching and optional root fallback behave consistently. Handshake authentication can use the `ws` `verifyClient` option, although authenticating in the surrounding HTTP upgrade flow is preferable for complex applications.
-
-```js
-class ClipboardRoute extends SocketRoute {
-  constructor() {
-    super({
-      path: '/clipboard',
-      handlers: [ClipboardHandler],
-      websocketOptions: {
-        maxPayload: 1024 * 1024,
-        perMessageDeflate: false
-      }
-    });
-  }
-}
-```
-
-Other route options:
-
-- `trustProxy`: use the first `X-Forwarded-For` value as the connection identity. Enable this only behind a trusted proxy.
-- `getClientKey(req)`: provide application-specific connection identity logic instead of IP-based identity.
-- `exposeErrors`: return handler exception messages to clients; defaults to `false`.
-- `logger`: route logger with optional `log`, `warn`, and `error` methods; pass `null` to disable it.
-- `shutdownTimeoutMs`: grace period before non-cooperating peers are terminated during shutdown; defaults to `1000`.
-- `admission`: optional pre-upgrade authentication/origin/placement policy. It may be a function or `{ authenticate, origins, place, allowedPlacementOrigins, allowInsecurePlacement, timeoutMs }`. Secure `wss` placement is the default; returned destinations can be origin-allowlisted.
-- `maxPendingUpgrades`: maximum concurrent pre-upgrade authorization/negotiation operations; defaults to `64`.
-- `limits`: opt-in connection, message-rate, pending-message, and outbound-buffer limits.
-- `orderedMessages`: process each connection's messages serially through a bounded queue; defaults to `false` for compatibility.
-- `heartbeat`: optional `{ intervalMs, timeoutMs }` half-open detection using one scheduler per route.
-- `rooms` and `sessions`: optional bounded route-local grouping and resumable session registries. Session payload shape and byte size remain the application's responsibility.
-- `distribution`: optional bounded fan-out adapter. Mark it `required` to fail readiness and reject new upgrades after startup or publish failure; adapter operations receive cancellation signals.
-- `drainHandlers`: expose a route shutdown signal to handlers and track their work within `shutdownTimeoutMs`.
-- `protocol`: optional version negotiation, stable envelopes, and binary codec hooks.
-
-Production protections are deliberately opt-in, so existing applications retain their behavior and disabled features add no timers or per-connection queues. A protected route can stay compact:
-
-```js
-class GameRoute extends SocketRoute {
-  constructor() {
-    super({
-      path: '/game',
-      handlers: [InputHandler],
-      admission: {
-        origins: ['https://game.example'],
-        timeoutMs: 3000,
-        authenticate: (request, { signal }) => verifySession(request, signal)
-      },
-      limits: {
-        maxConnections: 5000,
-        maxBufferedBytes: 1024 * 1024,
-        maxPendingMessages: 64,
-        messageRate: { capacity: 60, refillPerSecond: 30 }
-      },
-      orderedMessages: true,
-      heartbeat: { intervalMs: 30000, timeoutMs: 10000 },
-      websocketOptions: { maxPayload: 64 * 1024 }
-    });
-  }
-}
-```
-
-Admission completes before the WebSocket upgrade and before any handler hook runs. Its return value becomes `socket.context.principal`; the random `connectionId`, authenticated principal, future resumable session, and legacy IP-based `clientKey` remain separate concepts. Authentication errors are never returned to clients.
-
-Rate and backpressure actions are `"drop"` or `"disconnect"`. Slow-consumer checks apply equally to `sendJson` and `broadcast`, and broadcasts still serialize a message once. Ordered processing never keeps more than `maxPendingMessages` waiting behind the active task.
-
-### Rooms, resumable sessions, and metrics
-
-Set `rooms: true` to add bounded route-local rooms, or pass limits such as `{ maxRooms, maxMembersPerRoom, maxRoomsPerConnection, maxRoomIdLength }`. Connected sockets receive `joinRoom`, `leaveRoom`, and `roomBroadcast`. Joins and leaves are idempotent, disconnect removes every membership, and empty rooms are reclaimed.
-
-Set `sessions: true` or provide `{ ttlMs, maxSessions, maxSessionIdLength, sweepIntervalMs }`. Applications supply opaque session IDs; Redweb does not create credentials. Sockets receive `createSession` and `resumeSession`. A successful takeover closes the former owner, and a stale close cannot release the replacement. Disconnected sessions expire through one route scheduler.
-
-The optional `metrics` sink is vendor-neutral and supports `increment`, `gauge`, and `observe`. Framework attributes contain only the static route path—never player IDs, room IDs, tokens, payloads, or exception text.
-
-```js
-class MatchRoute extends SocketRoute {
-  constructor() {
-    super({
-      path: '/match',
-      handlers: [MatchHandler],
-      rooms: { maxRooms: 1000, maxMembersPerRoom: 32 },
-      sessions: { ttlMs: 30000, maxSessions: 10000 },
-      metrics: myMetricsSink
-    });
-  }
-}
-```
-
-### Horizontal composition and draining
-
-Distribution is an opt-in adapter seam, not a bundled broker. Provide `distribution: { adapter, channel, nodeId, onEvent }`; the adapter only needs `publish(channel, serializedEvent)` and `subscribe(channel, listener)`. Optional `start`, `unsubscribe`, and `close` hooks have bounded lifecycles. Redweb validates event size, ignores events published by the same node, and retains a bounded, expiring deduplication window. Delivery remains at-most-effort: partitions can lose events and reconnects can duplicate them, so authoritative games should include their own tick or sequence in payloads.
-
-Sockets on distributed routes receive `publishEvent(type, payload)`. The application decides how a received event affects rooms or state:
-
-```js
-super({
-  path: '/match',
-  handlers: [MatchHandler],
-  rooms: true,
-  distribution: {
-    adapter: brokerAdapter,
-    channel: 'matches',
-    nodeId: process.env.INSTANCE_ID,
-    onEvent(event, route) {
-      route.rooms.broadcast('match-42', event.payload)
+    onMessage(socket: RedWebSocket) {
+        socket.sendJson({ type: 'hello', message: 'Hello from the server!' });
     }
-  }
-})
-```
+}
 
-`server.beginDrain()` flips readiness before rejecting new upgrades with `503`; `server.isReady()` exposes the state. Set `drainHandlers: true` to give connection contexts an `AbortSignal` and make shutdown wait for active handlers. Handlers must cooperate with that signal—JavaScript cannot forcibly cancel arbitrary application promises. This option is off by default, adding no per-message tracking to existing routes.
-
-### Versioned game protocol
-
-Set `protocol: { versions: ['1'] }` to require version negotiation before upgrade. Browser clients use `?redwebVersion=1`; non-browser clients may send `x-redweb-version: 1`. Missing or unsupported versions receive `426 Upgrade Required` with a `Redweb-Versions` response header. The selected value is available as `socket.context.protocol.version`.
-
-Protocol messages use `{ v, type, payload, requestId?, sequence? }`. Protocol routes add `socket.sendEvent(...)` and `socket.sendProtocolError(...)`; framework failures use stable codes exported as `ERROR_CODES`. This affects only opted-in routes. Existing routes retain their existing message and error shapes.
-
-```js
-super({
-  path: '/match',
-  handlers: [MoveHandler],
-  protocol: {
-    versions: ['2', '1'],
-    binary: {
-      maxBytes: 64 * 1024,
-      encode: state => myCodec.encode(state),
-      decode: bytes => myCodec.decode(bytes)
+export class ChatRoute extends SocketRoute {
+    constructor() {
+        super({ path: '/chat', handlers: [Hello], allowDuplicateConnections: true });
     }
-  }
-})
-```
-
-The optional binary hooks add no codec dependency. Decoded values pass through the same version/envelope validation and handler dispatch as JSON; `socket.sendBinaryEvent(value)` applies the same slow-consumer policy as other outbound traffic. Without binary hooks, binary frames on a protocol route receive `BINARY_UNSUPPORTED`.
-
-For clients, `require('redweb/client')` exports the dependency-free `ProtocolClient` and the same error codes. Its TypeScript declarations are generated from Redweb's checked-in protocol schema and checked for drift before every test run.
-
-`BaseHandler.validateMessage(message, socket)` may return `false` or a promise resolving to `false` to reject a message. Text and binary handlers may be asynchronous; rejected promises are caught and converted to safe error responses.
-
-### Sharing an HTTP/HTTPS server
-
-Use `listen: false` on `HttpServer` to build the Express app and Node server without binding a port. Then pass `httpServer.server` to `SocketServer`. When `SocketServer` receives a prebuilt `server`, it attaches upgrade handling but does not call `.listen()` unless you explicitly set `listen: true`.
-
-```js
-const { HttpServer, METHODS, SocketServer } = require('redweb');
-
-const httpServer = new HttpServer({
-  port: 3030,
-  listen: false,
-  publicPaths: ['./public'],
-  services: [
-    { serviceName: '/health', method: METHODS.GET, function: (req, res) => res.json({ ok: true }) },
-    { serviceName: '/session', method: METHODS.POST, function: createSession }
-  ]
-});
-
-new SocketServer({
-  server: httpServer.server,
-  routes: [ClipboardRoute]
-});
-
-httpServer.server.listen(3030, () => console.log('HTTP and WebSocket server listening on 3030'));
-```
-
-### Socket services
-
-Route-scoped background logic:
-
-```js
-const { SocketService } = require('redweb');
-
-class ClockService extends SocketService {
-  constructor() { super('clock', 1000); } // tick every 1s
-  onTick() {
-    this.route.clients.forEach((socket) => socket.sendJson({ type: 'time', now: Date.now() }));
-  }
 }
-```
 
-Add with `services: [ClockService]` when constructing a `SocketRoute`.
+export function createApp(options: Pick<SocketServerOptions, 'port' | 'bind' | 'logger'> = {}) {
+    const http = new HttpServer({
+        listen: false,
+        publicPaths: [],
+        services: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
+    });
 
-For authoritative simulation timing, extend `FixedStepService`. It compensates for timer drift, caps catch-up work, contains tick failures, and never overlaps an asynchronous tick with itself:
-
-```js
-class Simulation extends FixedStepService {
-  constructor() { super('simulation', 50, 3); }
-  async onTick(stepMs, tick) {
-    await game.update(stepMs, tick);
-  }
+    return new SocketServer({
+        port: options.port ?? Number(process.env.PORT ?? 8181),
+        bind: options.bind ?? '127.0.0.1',
+        logger: options.logger,
+        server: http.server,
+        routes: [ChatRoute],
+        listen: true,
+        closeServerOnShutdown: true, // One owner closes routes and the shared HTTP listener.
+    });
 }
+
+if (require.main === module) runApp(createApp);
+```
+<!-- redweb:http-ws:end -->
+
+Follow the [shared-listener notes](recipes/http-ws/README.md) and initialize with `--template http-ws` using the matching artifact above. The socket service explicitly owns cleanup of the supplied HTTP listener. `/health` reports liveness, not readiness. This demonstrates raw JSON messages, not a chatroom UI.
+
+For validated, inferred client/server payloads, use [shared socket contracts](docs/SOCKET_CONTRACTS.md). The client wraps your transport; it does not create or reconnect one for you.
+
+## One development loop
+
+After installing the matching package:
+
+```sh
+npm test
+npm run dev
 ```
 
-### Socket registries
+Tests compile the application and use real HTTP/WebSocket listeners. Development watches source, CSS, HTML, and root TypeScript configuration, then rebuilds/restarts. Local HTML pages refresh; detected edits require confirmation before reload. This is not autosave or state-preserving hot-module replacement. See [development refresh and inspection](docs/DEVELOPMENT.md).
 
-`SocketRegistry` is a small evented list for socket-bound objects.
+Build with `npm run build`, then run compiled output with `npm start`. Production ships `dist/`, the manifest, and lockfile, with runtime dependencies installed through `npm ci --omit=dev`; it does not need `src/` or TypeScript.
 
-```js
-const { SocketRegistry } = require('redweb');
+## Add to an existing project
 
-class PlayerRegistry extends SocketRegistry {
-  addPlayer(player) {
-    this.add(player);
-    this.emit('playerJoined', player);
-  }
-}
+Use the installed CLI so the tool and application agree:
+
+```sh
+npx --no-install redweb init --existing --dry-run --json
+npx --no-install redweb doctor --json
+npx --no-install redweb add page dashboard --dry-run --json
 ```
 
-Helpers: `add`, `remove(itemOrId, byKey = 'id')`, `all()`, `count()`.
+Remove `--dry-run` to create missing files. Existing configuration/source is never overwritten. Incremental generation reports imports, registration steps and isolated tests; it does not rewrite startup or silently repair your project. See [CLI prerequisites, commands and limitations](docs/CLI.md).
+
+## Fit and production boundaries
+
+Good fit: Node-hosted live dashboards, chat, collaboration, server-rendered sites and multiplayer socket endpoints. Static HTML export is a separate deployment mode.
+
+Choose something else when you need React compatibility, browser-side components, an edge-only runtime without Node listeners, or managed authentication/database/matchmaking infrastructure.
+
+Before public deployment, configure HTTPS/WSS, trusted origins, identity, authorization, resource limits and application persistence. Reconnect is not exactly-once delivery; multiple processes do not automatically share state. See [operations](docs/MULTIPLAYER_OPERATIONS.md), [guarantees and limits](docs/PRODUCTION_READINESS.md), and [runtime compatibility and release verification](docs/RELEASE_TRUST.md).
+
+## Exports
+
+See the [public TypeScript API](index.d.ts), [complete documentation catalogue](docs/generated.json), and [getting-started guide](docs/GETTING_STARTED.md). The catalogue includes version-labelled Markdown and executable recipes. An [optional read-only MCP adapter](docs/AGENT_ACCESS.md) serves the same source without adding SDK dependencies to your application; it is currently private/unpublished.
 
 ## Defaults and lifecycle
 
-- HTTP defaults: port `80`, bind `0.0.0.0`, `listen: true`.
-- WebSocket defaults: port `3000`, single connection per IP unless `allowDuplicateConnections` is set.
-- `SocketServer` owns and listens on its own server by default; if you pass `server`, you own calling `.listen()` unless you also pass `listen: true`.
-- Upgrade paths are matched strictly by default. Set `fallbackToRoot: true` for legacy behavior that sends unmatched paths to `/`.
-- If you do not supply `routes`, `SocketServer` registers a default route at `/` with `DefaultHandler` (it expects messages with `type: 'DefaultHandler'`).
-- `shutdown()` closes routes and services. It closes an owned listener, but leaves a supplied listener running unless `closeServerOnShutdown: true` is set.
-- Shutdown is best-effort: all hooks, clients, routes, and owned listeners are processed before collected cleanup errors are reported.
-- `HttpServer` and `HttpsServer` expose an idempotent async `shutdown()` helper.
+HTTP defaults to port 80; sockets default to 3000. Generated applications explicitly select 8181. Supplied socket listeners are neither started nor closed unless the corresponding options explicitly transfer that responsibility. Await `shutdown()`; forced transport closure does not guarantee completed application work.
+
+See [production ownership and lifecycle](docs/PRODUCTION_READINESS.md).
 
 ## 0.8 migration notes
 
-- Unmatched WebSocket paths are rejected unless `fallbackToRoot: true` is configured.
-- Handler exception details are hidden unless `exposeErrors: true` is configured.
-- Shutting down a WebSocket server no longer closes a caller-supplied HTTP/HTTPS server by default.
-- `bind` is now honored by HTTP, HTTPS, WebSocket, and secure WebSocket listeners.
-- `shutdown()` is asynchronous; await it when deterministic cleanup matters.
+See [strict paths, sanitized errors and borrowed-listener ownership](docs/MIGRATION.md#08-migration-notes).
 
 ## 0.9 migration notes
 
-- No migration is required when the new multiplayer options are disabled.
-- Production controls are route-local and opt-in; enable and size them from measured capacity rather than copying example limits.
-- `ProtocolClient` is available from `redweb/client` for negotiated protocol routes without adding runtime dependencies.
-- The minimum supported Node.js version is 18.
+See [opt-in multiplayer controls and protocol clients](docs/MIGRATION.md#09-migration-notes).
 
 ## Live HTML migration
 
-The earlier executable `.htmx` sandbox and `enableHtmxRendering` option have been replaced. Templates are now ordinary `.html` files registered through decorated plain classes. Move template calculations and imports into the page class, mark reactive fields with `@state()`, expose browser-callable methods with `@action()`, and launch the page with `start(PageClass)`.
+See [replacing the executable HTMX sandbox and configuring TSX](docs/MIGRATION.md#live-html-migration).
 
 ## Developing
 
-- Run tests with `npm test` (Jest). The suite includes mock-free HTTP, HTTPS, WebSocket, and secure WebSocket integration tests plus unit tests, with 100% coverage enforced for statements, branches, functions, and lines.
+Run `npm test` for unit tests, actual HTTP/HTTPS/WS/WSS integration tests, type checks and enforced 100% instrumented-library statement/branch/function/line coverage. Browser, package, performance and tool verification have separate gates; this is not a claim of exhaustive repository or application coverage.
+
+`npm run verify:load` checks the default 32-client/3,200-message workload, p99 latency, throughput and slow-client containment. Its separate `npm run verify:load:coverage` gate combines unit failure tests with real malformed-message, disconnect and timeout integration tests and enforces all-four 100% coverage of the load policy, coordinator, traffic driver and shared socket helper. Coverage runs do not replace clean performance measurements. See the [scope audit](docs/COVERAGE_SCOPE_AUDIT.md) for exact evidence and remaining gaps.
+
+Run `npm run verify:cli` to test the actual initializer, doctor and incremental-add commands and enforce 100% coverage of the shipped CLI entrypoint across subprocesses. This complements, rather than replaces, the library's CLI implementation coverage.
+
+`npm run verify:package:examples:coverage` checks the packed counter without optional development dependencies, chat with explicit Zod, and generated TypeScript additions in a real installed consumer. Unit and real-socket failure tests require all-four 100% coverage of the three verifier modules. See [packaged-example evidence](docs/PACKAGED_EXAMPLE_VERIFICATION.md); this complements the full browser/package gate.
+
+`npm run verify:action:coverage` checks the source-free typed action consumer in both decorator modes, plus real failed upgrades/responses and unit cleanup failures. It requires all-four 100% of the action-input verifier without enlarging the library coverage scope.
+
+`npm run verify:reports:coverage` checks that failed starter commands retain available raw reports without overwriting or merging prior evidence. It combines unit faults with real child processes/filesystem checks and requires all-four 100% of the shared retention helper.
+
+`npm run verify:starter-coordinators:coverage` checks both starter coverage runners and their shared final-report handling at all-four 100%. Real compiler/test runs prove changed inputs are rejected; filesystem failures cannot turn a failed command into success. See [starter verification](docs/STARTER_COORDINATOR_VERIFICATION.md) for the exact scope and unit/integration boundaries.
+
+`npm run verify:starters:lifecycle` requires a nonempty, complete report for the deployed lifecycle helper. Its separate `npm run verify:starters:lifecycle:coverage` command covers the verifier itself. See [lifecycle evidence](docs/STARTER_LIFECYCLE_VERIFICATION.md) for the emitted-JavaScript scope and temporary source-map metadata removal.
+
+`npm run verify:package:browser:coverage` covers the shared browser page owner and packed-browser verifier at all-four 100%, combining explicit failure units with actual Chromium counter/chat integration. Late page openings and cleanup failures retain uncertain workspaces. See [browser ownership evidence](docs/BROWSER_OWNER_VERIFICATION.md) for the checkout/package distinction and exact scope.
+
+Browser and authored-source coverage share strict source-map and execution-counter validation. Malformed reports are rejected before merging; see [coverage validation evidence](docs/COVERAGE_COUNTER_VALIDATION.md) for the unit and real-browser checks.
+
+Feedback and development-refresh verification share bounded browser commands so a disconnected debugging socket reaches cleanup. [Native failure evidence](docs/FEEDBACK_COMMAND_VERIFICATION.md) records the fixes, exact coverage scopes using actual Chromium/server cases, and the remaining acquisition boundary.
+
+Development-refresh checks retain uncertain browser-launch cleanup and preserve shutdown failures. [Verification boundaries](docs/BROWSER_OWNER_VERIFICATION.md#development-refresh-launch-cleanup-follow-up) distinguish these fault tests from real generated-app/browser acceptance.
+
+`npm run verify:live-html:load` checks 200 expired renders, 110 connected clients, presence/broadcast delivery and heap growth after client closure/session expiry, before server shutdown. Its separate `verify:live-html:load:coverage` command tests the verifier's HTTP/socket ownership, malformed responses, real timeouts and failure handling with unit and native integration tests. It requires all-four 100% coverage of the three verifier modules; instrumented tests do not replace clean memory measurements.
+
+`npm run verify:jsx:performance` renders 10,000 component rows and validates their complete markup outside the timed render. CI supervises the command externally; the five-second performance limit cannot itself interrupt synchronous code. `npm run verify:jsx:coverage` separately checks malformed output, measurement limits and the actual CLI, requiring all-four 100% coverage of this verifier.
+
+`npm run verify:soak` checks exact per-connection replies, rotation, disconnects and resource trends. It rejects undersampled runs and reports missing replies explicitly; the existing 99% delivery allowance is not a lossless guarantee. Final heap is sampled after client closure/expiry, before server shutdown. `npm run verify:soak:coverage` separately requires all-four 100% coverage of the verifier, policy and socket owner using unit and real-network/process tests. A short test run does not certify the default one-hour workload.
+
+`npm run verify:overhead -- <baseline-directory>` compares disabled-feature socket throughput and p99 latency against a separately prepared baseline. Both sides must complete every warm-up and measured exchange with valid, unique reply IDs; malformed output, timeouts and cleanup failures fail the check. The limits remain 3% throughput regression and 5% p99 regression. `npm run verify:overhead:coverage` separately enforces all-four 100% coverage of the six benchmark modules through unit and real-socket/process tests. See [benchmark evidence and limitations](docs/BENCHMARK_VERIFICATION.md); a coverage pass is not a performance pass.
+
+Run `npm run verify:recovery:server` from this source checkout for the blocking CI recovery contract: 7,400 exact exchanges with a separately measured server, empty registries, normal worker exits and every storm within 110% of warmed server heap. The original `npm run verify:recovery` remains a visible non-blocking CI diagnostic; its historical failures are not resolved by this measurement change. CI preserves both results and logs. See the [reviewed recovery contract and evidence](docs/SERVER_RECOVERY_CANDIDATE.md).
+
+`npm run verify:recovery:coverage` separately enforces all-four 100% coverage of that gate's policy, CLI, and full authored coordinator/worker source. It combines unit boundary tests with actual worker/socket integration without repeating the native workload. The instrumented behavioral run is not used as a clean heap measurement; the normal server recovery command remains separate. See [authored recovery coverage](docs/SPLIT_RECOVERY_COVERAGE.md).
+
+`npm run verify:recovery:original:coverage` separately tests the original shared-process verifier with authored-source coverage units and its existing real CLI/socket/snapshot checks. Its 110% limit now compares integer bytes exactly: equality passes, a one-byte excess fails, and any over-budget storm still fails even if the final heap recovers. Displayed ratios and workloads are unchanged. Synthetic unit heap values are not memory evidence, and this rounding correction does not explain larger historical failures. See the [coverage and regression evidence](docs/ORIGINAL_RECOVERY_VERIFICATION.md).
+
+Recovery workers also retain non-Error failures and clean up rejected IPC requests immediately; empty error replies cannot masquerade as success. [Real-process regressions and server recovery evidence](docs/SPLIT_RECOVERY_ERROR_HANDLING.md) distinguish correctness fixes from coverage. Short soak checks retain raw results before assertions and preserve original reports if artifact writing fails. A [hosted delivery failure and real rotation controls](docs/SOAK_ROTATION_OBSERVATION.md) remain visible; no delivery threshold was relaxed.
+
+Run `npm run verify:recovery:diagnostics` for native-source 100% coverage of the two private heap-analysis tools, including their real command-line entrypoints. It reuses the graph unit cases under Node's test runner to avoid merging Jest-transformed and original source ranges. Parser fixtures and real file/subprocess checks cover graph bounds, shared references, redaction, and malformed input; the separate recovery integration suite also checks actual V8 snapshots and a real server-held object. This gate does not cover the recovery workload verifier itself or waive its failed memory budget.
+
+Run `npm run verify:package:tools` for a separate 100% coverage gate over the managed subprocess owner, failure normalizer, and starter/Markdown application verifiers. Tests use actual npm/native commands, descendants, files and generated applications. Use Node 22.13+ to exercise all six recipes, including the SQLite dashboard. Package packing/extraction and consumer checks use the same bounded owner; uncertain cleanup fails verification and retains its workspace. This is a scoped tool gate, verified on Windows, not coverage of every verification script or proof of cross-platform execution; Windows file-lock cases are skipped elsewhere.
+
+Every generated starter also has `npm run test:coverage`: real application tests with coverage mapped to its TypeScript, separate from library coverage. In this repository, `npm run measure:starters:coverage` runs all six starter commands and records source/report hashes and run-specific results. It checks that every application module is measured, but does not present incomplete coverage as a passing 100% gate; compiler-generated decorator accessors appear in function counts. The chat and socket recipes include domain and real-network tests for reconnecting, identity conflicts, bounded history and session capacity.
+
+`npm run verify:starters:source-coverage` separately instruments original TypeScript before compilation, so compiler-created decorator helpers do not inflate authored function counts. It runs the same application tests plain and instrumented, checks unchanged inputs, retains V8 reports, and enforces 100% of Istanbul's tracked statements/branches/functions/lines. All six starters pass with 104 tests per mode and all 600 statements, 299 branches, 160 functions and 472 lines covered. Integration tests use real networking and persistence; explicitly labelled unit cases exercise defensive failure paths. Istanbul does not independently count optional-chaining short circuits, so this is not an exhaustive semantic-branch claim or a replacement for V8 evidence. Reports identify received process reports, not every spawned child: hard termination can prevent an exit report, while every source module still starts in the denominator at zero. Node 22.13+ is required for all six recipes. Instrumentation and reports are test-only and are not shipped.
+
+Run `npm run verify:browser:coverage` for native Chromium tests of the complete emitted Live HTML runtime and development-refresh script. The gate enforces 100% statement/branch/function/line coverage and runs the same cases without instrumentation. Actual HTTP/WebSocket checks cover actions, forms, state updates, reconnection and selection preservation. Refresh checks cover real reloads, draft guards, failed HTTP peers, history restoration and explicit discard under a self-only script policy; instrumentation requires no dynamic code evaluation.
+
+The refresh report (`coverage/browser-refresh/report.json`) also retains `historyRestoration.plain.bfcacheRestored` and `historyRestoration.instrumented.bfcacheRestored` for each successfully completed mode. These are actual browser observations, not requirements: history navigation and resumed polling must pass, but the browser may choose to reload instead of restoring from its back/forward cache. A mode that fails before completion may only log its observation.
+
+`npm run verify:refresh:coverage` separately requires 100% authored coverage of both refresh verification helpers. It combines explicit failure-boundary units with actual Chromium, HTTP uploads and socket cleanup, and is included in the browser coverage gate. Collection, page-close and socket-release failures remain visible together; a rejected non-Error value cannot become a passing result. The host-side helper map does not measure execution inside browser-expression strings; the separate generated-refresh map and native checks remain required.
+
+`npm run verify:development:coverage` additionally covers the generated-app refresh verifier: real TypeScript/CSS rebuilds, browser draft preservation, adverse HTTP peers and process cleanup, plus explicit startup/cleanup failure units. Page openings remain owned if they time out or settle late; uncertain cleanup retains the workspace. CI runs this gate instead of repeating the standalone development browser command. Its 100% scope is the authored coordinator, not embedded browser programs or every possible platform failure.
+
+`npm run verify:package:coordinator:coverage` runs the complete isolated-package check alongside explicit failure-boundary units and real listener-cleanup tests. It requires 100% authored coverage of the package coordinator and report helper. Every acquired example server gets its own cleanup attempt; a missing error value cannot become success, and success is printed only after workspace cleanup. CI uses this instead of repeating the standalone package command. The full consumer check requires the dashboard starter's Node version (22.13 or newer); older supported library versions run the native cleanup checks but skip that consumer case.
+
+The isolated browser harness copies its verification helpers explicitly and checks their literal relative imports against that copied set. This catches missing test dependencies without falling back to checkout runtime code; the real packed-consumer gate still verifies installation and execution.
+
+`npm run verify:evaluation:process:coverage` measures the unchanged evaluation process and evidence-sealing tools at 100% authored coverage. It combines explicit OS-boundary units with actual subprocess, archive, file-lock, CLI and listener checks. A test-only preload instruments selected code in memory; frozen source and sealed evaluation records are not rewritten. Native interface inspection is Windows-only; unsupported platforms are tested for explicit rejection. This coverage gate does not rerun an agent trial or resolve historical cleanup failures.
+
+`npm run verify:evaluation:prepare:coverage` separately checks candidate preparation against actual npm archives, catalogue bytes and Git identity, comparing plain and instrumented CLI execution. Real launch-failure checks supplement explicit subprocess-boundary units. It uses owned temporary directories and does not publish packages or rerun sealed agent trials.
+
+`npm run verify:evaluation:trial:coverage` checks the unchanged trial runner's input hashes, build outcomes and evidence retention. It combines real archive/CLI checks, explicit failure units and the evaluator's actual HTTP/WebSocket browser control on Windows. Synthetic checker fixtures are not new agent trials or substitutes for packed Redweb acceptance. Uncertain cleanup preserves the outer test workspace and its report, including leftover browser profiles even when no report was saved.
+
+`npm run verify:evaluation:controls:coverage` measures the unchanged control validator and browser evaluator together: four working protocol controls and seven deliberately broken variants run in actual Chromium on Windows. Real CLI tests also cover failed builds, early exits, invalid startup URLs and HTTP rejection. Elsewhere, interface inspection must explicitly refuse support, not imply browser success. Separate browser/process/result boundary units cover reporting and cleanup faults; unexpected native outcomes retain their original errors and workspace. These evaluator controls are not new Redweb agent submissions or release acceptance.
+
+`npm run verify:live-html:browser:coverage` combines the existing full browser workload (counter, chat, CSS, JSX, components, forms and dashboard) with explicit failure-path unit tests. Its 100% authored-tool coverage is separate from frontend coverage and release acceptance. The native workload requires the dashboard's supported Node version. Known limitations of the unchanged legacy browser tool— including uncertain descendant cleanup—are characterized, not silently fixed or counted as verified cleanup; see the [coverage audit](docs/COVERAGE_SCOPE_AUDIT.md).
+
+The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. This branch depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md). Redweb itself remains unreleased until its remaining release checks finish.
+
+`npm run measure:browser:client` separately serves the exact installed socket-only module with and without instrumentation through the same real HTTP/WebSocket/browser cases and retains its source hash and counters. It exits unsuccessfully until all four coverage metrics reach 100%; incomplete results are not a passing dependency-coverage claim. Reports are local under `coverage/browser-client` and do not alter the installed dependency or published package.
+
+`npm run verify:browser:coordinator:coverage` checks the browser coordinator and four runtime/refresh verification helpers together at 100% authored coverage. The umbrella browser gate uses this combined run to avoid repeating the native workloads. Failure units supplement actual Chromium/HTTP/WebSocket checks; the installed-client diagnostic must still report incomplete coverage as failure, not a release pass. CI retains the combined map and separate runtime/refresh/client reports. An additional source-build integration requires `REDWEB_VERIFY_CLIENT_SOURCE=1` and the linked client checkout with its development dependencies; ordinary registry-only CI skips that case. The standalone `verify:client:source-coverage` remains the original-source acceptance gate.
+
+Ownership and stopped-poll edge cases also use native-browser unit-style tests; browser and transport APIs are not replaced. Runtime coverage now covers all Live HTML modules inside the linked client bundle, excluding its transport prefix; the development-refresh script is measured separately. Whole-application/tool coverage and cross-browser certification remain separate gates.
+
+`npm run verify:client:source-coverage` measures the linked client's original TypeScript/JavaScript using one instrumentation map across its Node tests and the native browser tests. Every executable source module starts at zero; erased declarations and static export linkage are separately audited. Both test passes use identical source/test inputs, every Vitest test realm must report, and plain browser bundles must match the linked build byte-for-byte. Reports retain separate Node/browser contributions under `coverage/client-source/<run-id>`. The gate passes all 791 statements, 521 branches, 125 functions and 659 lines, with 77 Node tests per mode plus native-browser acceptance. The client's default `npm test` uses this same complete gate after linkage, build and type checks. Its original Node-only V8 diagnostic remains separately available as `npm run test:v8`, with unchanged thresholds and known missing-browser coverage. Original-source instrumentation does not count every optional-chain short circuit, replace V8 evidence, or mean all tests are mock-free: isolated unit transports remain, while integration/browser tests use actual networking.
+
+Client verification also retains raw worker files before parsing or cleanup, including failed runs. Its private coordinator has a separate 100% coverage gate; real Vitest failure fixtures exercise retention without replacing filesystem, compiler or process APIs. See [client development](docs/CLIENT_DEVELOPMENT.md) for commands and scope.
+
+`npm run verify:browser:supplements` combines focused units with the existing real-browser runtime cases to require 100% authored-source coverage of the page-ownership and runtime-frame verification helpers, including anonymous callbacks. It is included in the browser coverage gate; see the [coverage scope audit](docs/COVERAGE_SCOPE_AUDIT.md) for exact boundaries and remaining gaps.
+
+`npm run verify:dashboard:coverage` measures the dashboard browser verifier separately: failure-boundary units plus actual Chromium, SQLite, sign-in, private card updates, draft preservation and logout checks. Native dashboard tests require the starter's supported Node version; file-lock retention is Windows-specific. The scope is the authored verifier, not internal coverage of its browser-expression strings.
+
+An unresolved Linux CI process-cleanup assertion and the diagnostics added to investigate it are tracked in [process cleanup observations](docs/PROCESS_CLEANUP_OBSERVATION.md). Passing runs do not establish its cause or waive the original failure.
+
+Edit canonical recipes/guides, then run `npm run generate:docs`; do not maintain independent copies of the examples. See [documentation maintenance](docs/DOCUMENTATION.md) and the [full acceptance checklist](docs/AGENT_READY_ACCEPTANCE.md) for verification evidence and remaining release work.

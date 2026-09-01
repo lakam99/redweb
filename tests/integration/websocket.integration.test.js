@@ -276,7 +276,7 @@ describe('WebSocket integration without mocks', () => {
         const server = await start({ routes: [ProtectedRoute] });
         expect(await expectConnectionFailure(address(server, '/protected'), {
             headers: { origin: 'https://evil.example', authorization: 'Bearer valid' },
-        })).toBe(401);
+        })).toBe(403);
         expect(await expectConnectionFailure(address(server, '/protected'), {
             headers: { origin: 'https://game.example', authorization: 'Bearer invalid' },
         })).toBe(401);
@@ -316,7 +316,7 @@ describe('WebSocket integration without mocks', () => {
             }
         }
         const server = await start({ routes: [TimedAdmissionRoute] });
-        expect(await expectConnectionFailure(address(server, '/timed-admission'))).toBe(401);
+        expect(await expectConnectionFailure(address(server, '/timed-admission'))).toBe(503);
         expect(aborted).toBe(true);
         expect(initialContacts).toBe(0);
         expect(server.routes[0].clients.size).toBe(0);
@@ -380,7 +380,7 @@ describe('WebSocket integration without mocks', () => {
             }
         }
         const server = await start({ routes: [NonCooperatingRoute] });
-        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(401);
+        expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(503);
         expect(server.routes[0].pendingUpgrades).toBe(1);
         expect(await expectConnectionFailure(address(server, '/non-cooperating-admission'))).toBe(503);
         finishAuthentication(false);
@@ -497,8 +497,35 @@ describe('WebSocket integration without mocks', () => {
         expect(server.routes[0].clients.size).toBe(0);
     });
 
-    test('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks', async () => {
+    test('does not blame a responsive peer for a delayed server heartbeat tick', async () => {
+        class NoopHandler extends BaseHandler {
+            constructor() { super('noop'); }
+            onMessage() {}
+        }
+        class HeartbeatRoute extends SocketRoute {
+            constructor() {
+                super({ path: '/heartbeat-delay', handlers: [NoopHandler],
+                    heartbeat: { intervalMs: 50, timeoutMs: 50 }, logger: silentLogger });
+            }
+        }
+        const server = await start({ routes: [HeartbeatRoute] });
+        const client = await trackedConnect(address(server, '/heartbeat-delay'));
+        const peer = [...server.routes[0].clients.values()][0];
+        const ping = peer.ping.bind(peer);
+        let delayed = false, pings = 0;
+        peer.ping = (...args) => {
+            pings++;
+            ping(...args);
+            if (!delayed) { delayed = true; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120); }
+        };
+        await waitForCondition(() => pings >= 2, 'responsive peer pong recovery', 1000);
+        expect(delayed).toBe(true);
+        expect(client.readyState).toBe(WebSocket.OPEN);
+    });
+
+    test.each([0, 50])('manages real room membership, atomic session takeover, expiry, metrics, and fixed ticks (observer delay=%sms)', async observerDelayMs => {
         const metricEvents = [];
+        const closeSnapshots = [];
         let ticks = 0;
         class GameLoop extends FixedStepService {
             constructor() { super('game-loop', 5, 2); }
@@ -541,6 +568,12 @@ describe('WebSocket integration without mocks', () => {
                     logger: silentLogger,
                 });
             }
+            connectionCloseCallback() {
+                // Observe release in its lifecycle callback, before a later
+                // timer turn can legitimately expire the disconnected session.
+                closeSnapshots.push({ clients: this.clients.size, rooms: this.rooms.size,
+                    sessions: this.sessions.size, data: this.sessions.get('opaque-1') });
+            }
         }
         const server = await start({ routes: [MultiplayerRoute] });
         const route = server.routes[0];
@@ -582,9 +615,14 @@ describe('WebSocket integration without mocks', () => {
 
         await closeWebSocket(second);
         clients.delete(second);
+        if (observerDelayMs) await new Promise(resolve => setTimeout(resolve, observerDelayMs));
         await waitForCondition(() => route.rooms.size === 0, 'room cleanup');
-        expect(route.sessions.size).toBe(1);
-        await new Promise(resolve => setTimeout(resolve, 35));
+        await waitForCondition(() => closeSnapshots.length === 2, 'session release callbacks');
+        expect(closeSnapshots).toEqual([
+            { clients: 1, rooms: 1, sessions: 1, data: { score: 9 } },
+            { clients: 0, rooms: 0, sessions: 1, data: { score: 9 } },
+        ]);
+        await waitForCondition(() => route.sessions.size === 0, 'session expiry');
         expect(route.sessions.size).toBe(0);
         expect(route.rooms.size).toBe(0);
         expect(ticks).toBeGreaterThan(0);

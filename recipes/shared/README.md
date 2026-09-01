@@ -1,0 +1,40 @@
+# Your Redweb application
+
+Requirements: Node.js 18 or newer and npm for the realtime, chat, site, socket and http-ws templates; the dashboard template requires Node.js 22.13+ for native SQLite. Use a currently supported Node.js release in production.
+
+For an unreleased checkout or tarball, first run `npm install --save-exact TARBALL`, replacing `TARBALL` with the absolute path to the same tested Redweb tarball used to generate this app (quote paths containing spaces). This installs the matching package and its published client dependency. Do not substitute an older registry release or `latest`. Published Redweb releases can use the installation command below directly.
+
+```sh
+npm install
+npm test
+npm run dev
+```
+
+HTTP starters open at http://localhost:8181; the authenticated dashboard uses http://127.0.0.1:8181/login and requires account provisioning described below. Set the `PORT` environment variable to change the listener.
+`npm test` builds and runs real HTTP/WebSocket integration tests on an ephemeral loopback port. No mocks or external service are needed.
+`npm run test:coverage` runs the same tests with application coverage mapped back to TypeScript. Reports are written to the ignored `coverage/` directory; this is separate from Redweb library coverage. TypeScript-generated decorator accessors can appear in function counts even when the framework does not call them. The report exposes remaining gaps; it does not certify complete application coverage. Source maps are generated during the build for diagnostics and coverage, but no coverage collector is loaded by `npm start`.
+
+## Development and production
+
+Edit `src/app.tsx`. `npm run dev` watches TypeScript, TSX, CSS, HTML, and the root TypeScript configuration,
+then rebuilds and restarts the server. A type error stops startup until you fix it. On direct localhost access,
+HTML pages refresh automatically when a new server revision is ready. If edits were detected, a keyboard-accessible
+notice keeps the old document until you choose **Reload and discard drafts**. This is a conservative edit guard,
+not autosave or browser hot-module replacement: restarts reset in-memory state and old socket sessions.
+The generated development command sets `REDWEB_DEV_REFRESH=1`; `development: { refresh: false }` overrides it.
+The refresh feature is refused under `NODE_ENV=production`, applies only to served HTML (not raw sockets or static exports),
+and creates no local/session-storage copy of form contents. Use direct `localhost`, `127.x.x.x`, or `[::1]` access;
+custom hostnames, tunnels and proxy-forwarded origins are not supported by this development helper.
+`npm run build` checks types and copies CSS/HTML beside the compiled classes in `dist/`.
+Run `npm start` to serve the compiled app. For deployment, build first, ship `dist/`, `package.json`, and the lockfile,
+then install runtime dependencies with `npm ci --omit=dev`. The application does not require TypeScript or `src/` at runtime.
+
+The standalone entrypoint calls the shared `runApp(createApp)` helper. Importing either module starts no listener and installs no process handlers. On SIGINT/SIGTERM, a listener error, or native listener closure, the helper calls application shutdown once. Repeated signals do not bypass cleanup. The five-second outer deadline covers the whole application, including database/worker cleanup after HTTP closes; customize it with the helper's second argument if necessary. Cleanup must resolve only after resources are released. A failed cleanup sets a failure exit status and retains a deadline for any surviving handles; the helper never resets an existing failure status. If cleanup does not finish in time, the entrypoint terminates the process with a failure status. This cannot preempt synchronous code blocking Node's event loop and does not make in-memory state durable. Factory functions remain responsible for releasing partially constructed resources before throwing.
+
+The shipped lifecycle tests exercise actual processes, HTTP/TCP/WebSocket peers and timers. Linux uses actual OS signals; Windows tests explicitly emit signal events inside the process because killing a Windows child does not exercise graceful POSIX signal delivery. This is not a claim that Windows console/service managers forward the same signals. Deploy with a supervisor that forwards the supported termination signal and allows longer than the configured cleanup deadline.
+
+For public deployment, configure HTTPS/WSS at your Node server or reverse proxy, authentication, trusted origins,
+and application-specific rate limits. These starters are demonstrations, not a hosted identity or database service.
+Never commit secrets; `.env` is ignored but is not loaded automatically.
+
+`npx --no-install redweb doctor --json` reports configuration problems without changing your files.

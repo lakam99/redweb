@@ -34,67 +34,55 @@ var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, 
     done = true;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChatroomComponent = void 0;
+exports.ChatroomComponent = exports.chatInputs = void 0;
 exports.createChatroomPage = createChatroomPage;
+const jsx_runtime_1 = require('../../jsx-runtime');
 const redweb_1 = require('../..');
+const zod_1 = require("zod");
 const MAX_VISIBLE_MEMBERS = 100;
-const UNSAFE_TEXT = /[\p{Cc}\p{Cf}]/u;
-function messageView(messages) {
-    return messages.length
-        ? (0, redweb_1.each)([...messages], entry => (0, redweb_1.html) `<li><strong>${entry.sender}</strong><p>${entry.text}</p></li>`)
-        : (0, redweb_1.html) `<li class="empty-message">No messages yet. Say hello.</li>`;
-}
-function presenceView(members) {
-    const visible = members.slice(0, MAX_VISIBLE_MEMBERS);
-    const remaining = members.length - visible.length;
-    return (0, redweb_1.html) `
-        <p class="eyebrow">Online · ${members.length}</p>
-        <ul>
-            ${(0, redweb_1.each)([...visible], member => (0, redweb_1.html) `<li>${member}</li>`)}
-            ${remaining ? (0, redweb_1.html) `<li class="more-members">+${remaining} more</li>` : (0, redweb_1.html) ``}
-        </ul>
-    `;
-}
+const visibleText = (maximum) => zod_1.z.string()
+    .transform(value => value.normalize('NFKC').trim())
+    .pipe(zod_1.z.string().min(1).max(maximum).regex(/^[^\p{Cc}\p{Cf}]+$/u));
+exports.chatInputs = {
+    join: zod_1.z.object({ name: visibleText(40) }).strict(),
+    send: zod_1.z.object({ message: visibleText(500) }).strict(),
+};
 class ChatRoom {
     history = [];
+    nextMessageId = 0;
     participants = new Set();
     online = new Set();
     join(participant) {
         const name = participant.displayName.toLocaleLowerCase();
-        if ([...this.participants].some(member => member !== participant && member.displayName.toLocaleLowerCase() === name)) {
+        if ([...this.participants].some(member => member !== participant && member.displayName.toLocaleLowerCase() === name))
             return false;
-        }
         this.participants.add(participant);
         this.online.add(participant);
-        participant.updateMessages(messageView(this.history));
+        participant.updateMessages(this.history);
         this.publishPresence();
         return true;
     }
     disconnect(participant) {
-        if (!this.online.delete(participant))
-            return;
-        this.publishPresence();
+        if (this.online.delete(participant))
+            this.publishPresence();
     }
     leave(participant) {
         this.online.delete(participant);
-        if (!this.participants.delete(participant))
-            return;
-        this.publishPresence();
+        if (this.participants.delete(participant))
+            this.publishPresence();
     }
     send(participant, text) {
         if (!this.online.has(participant))
             return false;
-        this.history = [...this.history, { sender: participant.displayName, text }].slice(-100);
-        const messages = messageView(this.history);
+        this.history = [...this.history, { id: ++this.nextMessageId, sender: participant.displayName, text }].slice(-100);
         for (const member of this.participants)
-            member.updateMessages(messages);
+            member.updateMessages(this.history);
         return true;
     }
     publishPresence() {
         const members = [...this.online].map(participant => participant.displayName);
-        const presence = presenceView(members);
         for (const participant of this.participants)
-            participant.updatePresence(presence);
+            participant.updatePresence(members);
     }
 }
 let ChatroomComponent = (() => {
@@ -103,15 +91,18 @@ let ChatroomComponent = (() => {
     let _classExtraInitializers = [];
     let _classThis;
     let _instanceExtraInitializers = [];
-    let _screen_decorators;
-    let _screen_initializers = [];
-    let _screen_extraInitializers = [];
+    let _displayName_decorators;
+    let _displayName_initializers = [];
+    let _displayName_extraInitializers = [];
+    let _feedback_decorators;
+    let _feedback_initializers = [];
+    let _feedback_extraInitializers = [];
     let _messages_decorators;
     let _messages_initializers = [];
     let _messages_extraInitializers = [];
-    let _presence_decorators;
-    let _presence_initializers = [];
-    let _presence_extraInitializers = [];
+    let _members_decorators;
+    let _members_initializers = [];
+    let _members_extraInitializers = [];
     let _join_decorators;
     let _send_decorators;
     let _leave_decorators;
@@ -119,121 +110,71 @@ let ChatroomComponent = (() => {
         static { _classThis = this; }
         static {
             const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
-            _screen_decorators = [(0, redweb_1.state)()];
+            _displayName_decorators = [(0, redweb_1.state)()];
+            _feedback_decorators = [(0, redweb_1.state)()];
             _messages_decorators = [(0, redweb_1.state)()];
-            _presence_decorators = [(0, redweb_1.state)()];
-            _join_decorators = [(0, redweb_1.action)()];
-            _send_decorators = [(0, redweb_1.action)()];
+            _members_decorators = [(0, redweb_1.state)()];
+            _join_decorators = [(0, redweb_1.action)({ input: exports.chatInputs.join })];
+            _send_decorators = [(0, redweb_1.action)({ input: exports.chatInputs.send })];
             _leave_decorators = [(0, redweb_1.action)()];
             __esDecorate(this, null, _join_decorators, { kind: "method", name: "join", static: false, private: false, access: { has: obj => "join" in obj, get: obj => obj.join }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _send_decorators, { kind: "method", name: "send", static: false, private: false, access: { has: obj => "send" in obj, get: obj => obj.send }, metadata: _metadata }, null, _instanceExtraInitializers);
             __esDecorate(this, null, _leave_decorators, { kind: "method", name: "leave", static: false, private: false, access: { has: obj => "leave" in obj, get: obj => obj.leave }, metadata: _metadata }, null, _instanceExtraInitializers);
-            __esDecorate(null, null, _screen_decorators, { kind: "field", name: "screen", static: false, private: false, access: { has: obj => "screen" in obj, get: obj => obj.screen, set: (obj, value) => { obj.screen = value; } }, metadata: _metadata }, _screen_initializers, _screen_extraInitializers);
+            __esDecorate(null, null, _displayName_decorators, { kind: "field", name: "displayName", static: false, private: false, access: { has: obj => "displayName" in obj, get: obj => obj.displayName, set: (obj, value) => { obj.displayName = value; } }, metadata: _metadata }, _displayName_initializers, _displayName_extraInitializers);
+            __esDecorate(null, null, _feedback_decorators, { kind: "field", name: "feedback", static: false, private: false, access: { has: obj => "feedback" in obj, get: obj => obj.feedback, set: (obj, value) => { obj.feedback = value; } }, metadata: _metadata }, _feedback_initializers, _feedback_extraInitializers);
             __esDecorate(null, null, _messages_decorators, { kind: "field", name: "messages", static: false, private: false, access: { has: obj => "messages" in obj, get: obj => obj.messages, set: (obj, value) => { obj.messages = value; } }, metadata: _metadata }, _messages_initializers, _messages_extraInitializers);
-            __esDecorate(null, null, _presence_decorators, { kind: "field", name: "presence", static: false, private: false, access: { has: obj => "presence" in obj, get: obj => obj.presence, set: (obj, value) => { obj.presence = value; } }, metadata: _metadata }, _presence_initializers, _presence_extraInitializers);
+            __esDecorate(null, null, _members_decorators, { kind: "field", name: "members", static: false, private: false, access: { has: obj => "members" in obj, get: obj => obj.members, set: (obj, value) => { obj.members = value; } }, metadata: _metadata }, _members_initializers, _members_extraInitializers);
             __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
             ChatroomComponent = _classThis = _classDescriptor.value;
             if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
             __runInitializers(_classThis, _classExtraInitializers);
         }
         room = __runInitializers(this, _instanceExtraInitializers);
-        displayName = '';
-        screen = __runInitializers(this, _screen_initializers, this.joinScreen());
-        messages = (__runInitializers(this, _screen_extraInitializers), __runInitializers(this, _messages_initializers, messageView([])));
-        presence = (__runInitializers(this, _messages_extraInitializers), __runInitializers(this, _presence_initializers, presenceView([])));
+        displayName = __runInitializers(this, _displayName_initializers, '');
+        feedback = (__runInitializers(this, _displayName_extraInitializers), __runInitializers(this, _feedback_initializers, ''));
+        messages = (__runInitializers(this, _feedback_extraInitializers), __runInitializers(this, _messages_initializers, []));
+        members = (__runInitializers(this, _messages_extraInitializers), __runInitializers(this, _members_initializers, []));
         constructor(room) {
-            __runInitializers(this, _presence_extraInitializers);
+            __runInitializers(this, _members_extraInitializers);
             this.room = room;
         }
-        connected() {
-            if (this.displayName)
-                this.room.join(this);
-        }
-        disconnected() {
-            this.room.disconnect(this);
-        }
-        disposed() {
-            this.room.leave(this);
-        }
+        connected() { if (this.displayName)
+            this.room.join(this); }
+        disconnected() { this.room.disconnect(this); }
+        disposed() { this.room.leave(this); }
         join({ name }) {
             if (this.displayName)
                 return false;
-            if (typeof name !== 'string') {
-                this.screen = this.joinScreen('Display name must be text.');
+            this.displayName = name;
+            if (!this.room.join(this)) {
+                this.displayName = '';
+                this.feedback = 'That display name is already in use.';
                 return false;
             }
-            const displayName = name.normalize('NFKC').trim();
-            if (!displayName || displayName.length > 40 || UNSAFE_TEXT.test(displayName)) {
-                this.screen = this.joinScreen('Choose a visible display name of at most 40 characters.');
-                return false;
-            }
-            this.displayName = displayName;
-            if (this.room.join(this)) {
-                this.screen = this.roomScreen();
-                return true;
-            }
-            this.displayName = '';
-            this.screen = this.joinScreen('That display name is already in use.');
-            return false;
+            this.feedback = '';
+            return true;
         }
         send({ message }) {
-            if (typeof message !== 'string')
-                return false;
-            const text = message.normalize('NFKC').trim();
-            if (!text || text.length > 500 || UNSAFE_TEXT.test(text))
-                return false;
-            return this.room.send(this, text);
+            return this.room.send(this, message);
         }
         leave() {
             this.room.leave(this);
             this.displayName = '';
-            this.screen = this.joinScreen();
+            this.feedback = '';
+            this.messages = [];
+            this.members = [];
         }
-        updateMessages(messages) {
-            this.messages = messages;
-        }
-        updatePresence(presence) {
-            this.presence = presence;
-        }
+        updateMessages(messages) { this.messages = messages; }
+        updatePresence(members) { this.members = members; }
         render() {
-            return (0, redweb_1.html) `<section class="chatroom" data-rw-state="screen">${this.screen}</section>`;
+            return (0, jsx_runtime_1.jsx)("section", { class: "chatroom", children: this.displayName ? this.roomScreen() : this.joinScreen() });
         }
-        joinScreen(error = '') {
-            const feedback = error ? (0, redweb_1.html) `<p class="form-error" role="alert">${error}</p>` : (0, redweb_1.html) ``;
-            return (0, redweb_1.html) `
-            <section class="join-panel">
-                <p class="eyebrow">Live room</p>
-                <h1>Join the chatroom</h1>
-                <p>Choose a name once, then chat in realtime with everyone currently in the room.</p>
-                ${feedback}
-                <form rw-submit="join" class="join-form">
-                    <label for="display-name">Display name</label>
-                    <div class="input-row">
-                        <input id="display-name" name="name" maxlength="40" autocomplete="nickname" required autofocus>
-                        <button type="submit">Join room</button>
-                    </div>
-                </form>
-            </section>
-        `;
+        joinScreen() {
+            return ((0, jsx_runtime_1.jsxs)("section", { class: "join-panel", children: [(0, jsx_runtime_1.jsx)("p", { class: "eyebrow", children: "Live room" }), (0, jsx_runtime_1.jsx)("h1", { children: "Join the chatroom" }), (0, jsx_runtime_1.jsx)("p", { children: "Choose a name once, then chat in realtime with everyone currently in the room." }), this.feedback && (0, jsx_runtime_1.jsx)("p", { class: "form-error", role: "alert", children: this.feedback }), (0, jsx_runtime_1.jsxs)("form", { "rw-submit": "join", class: "join-form", children: [(0, jsx_runtime_1.jsx)("label", { for: "display-name", children: "Display name" }), (0, jsx_runtime_1.jsxs)("div", { class: "input-row", children: [(0, jsx_runtime_1.jsx)("input", { id: "display-name", name: "name", maxlength: "40", autocomplete: "nickname", required: true, autofocus: true }), (0, jsx_runtime_1.jsx)("button", { type: "submit", children: "Join room" })] })] })] }));
         }
         roomScreen() {
-            return (0, redweb_1.html) `
-            <div class="room-layout">
-                <section class="conversation">
-                    <header class="room-header">
-                        <div><p class="eyebrow">Connected as</p><h1>${this.displayName}</h1></div>
-                        <button type="button" class="quiet-button" rw-click="leave">Leave</button>
-                    </header>
-                    <ol class="message-list" aria-live="polite" data-rw-state="messages">${this.messages}</ol>
-                    <form rw-submit="send" class="composer">
-                        <label class="sr-only" for="chat-message">Message</label>
-                        <input id="chat-message" name="message" maxlength="500" autocomplete="off" placeholder="Message the room…" required autofocus>
-                        <button type="submit">Send</button>
-                    </form>
-                </section>
-                <aside class="presence" aria-label="People in the room" data-rw-state="presence">${this.presence}</aside>
-            </div>
-        `;
+            const remaining = this.members.length - MAX_VISIBLE_MEMBERS;
+            return ((0, jsx_runtime_1.jsxs)("div", { class: "room-layout", children: [(0, jsx_runtime_1.jsxs)("section", { class: "conversation", children: [(0, jsx_runtime_1.jsxs)("header", { class: "room-header", children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("p", { class: "eyebrow", children: "Connected as" }), (0, jsx_runtime_1.jsx)("h1", { children: this.displayName })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", class: "quiet-button", "rw-click": "leave", children: "Leave" })] }), (0, jsx_runtime_1.jsx)("ol", { class: "message-list", "aria-live": "polite", children: this.messages.length ? this.messages.map(entry => ((0, jsx_runtime_1.jsxs)("li", { children: [(0, jsx_runtime_1.jsx)("strong", { children: entry.sender }), (0, jsx_runtime_1.jsx)("p", { children: entry.text })] }, entry.id))) : (0, jsx_runtime_1.jsx)("li", { class: "empty-message", children: "No messages yet. Say hello." }) }), (0, jsx_runtime_1.jsxs)("form", { "rw-submit": "send", class: "composer", children: [(0, jsx_runtime_1.jsx)("label", { class: "sr-only", for: "chat-message", children: "Message" }), (0, jsx_runtime_1.jsx)("input", { id: "chat-message", name: "message", maxlength: "500", autocomplete: "off", placeholder: "Message the room\u2026", required: true, autofocus: true }), (0, jsx_runtime_1.jsx)("button", { type: "submit", children: "Send" })] })] }), (0, jsx_runtime_1.jsxs)("aside", { class: "presence", "aria-label": "People in the room", children: [(0, jsx_runtime_1.jsxs)("p", { class: "eyebrow", children: ["Online \u00B7 ", this.members.length] }), (0, jsx_runtime_1.jsxs)("ul", { children: [this.members.slice(0, MAX_VISIBLE_MEMBERS).map(member => (0, jsx_runtime_1.jsx)("li", { children: member }, member)), remaining > 0 && (0, jsx_runtime_1.jsxs)("li", { class: "more-members", children: ["+", remaining, " more"] })] })] })] }));
         }
     };
     return ChatroomComponent = _classThis;
@@ -256,9 +197,7 @@ function createChatroomPage() {
                 __runInitializers(_classThis, _classExtraInitializers);
             }
             chat = new ChatroomComponent(room);
-            render() {
-                return (0, redweb_1.html) `<main>${this.chat}</main>`;
-            }
+            render() { return (0, jsx_runtime_1.jsx)("main", { children: this.chat }); }
         };
         return ChatroomPage = _classThis;
     })();

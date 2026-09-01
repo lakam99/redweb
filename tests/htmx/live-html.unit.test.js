@@ -40,6 +40,31 @@ function decorateView(PageClass, stateName, name) {
 }
 
 describe('decorator-first Live HTML units', () => {
+    test('lazy reactive payloads materialize once and keep legacy bindings compatible', () => {
+        let conversions = 0;
+        class Owner extends LivePage {}
+        const owner = new Owner();
+        const value = { toString() { conversions++; return '<plain>'; } };
+        const deferred = LivePage.statePayload(owner, 'value', value, true);
+        expect(deferred.name).toBe('value');
+        expect(deferred.component).toBeUndefined();
+        expect(conversions).toBe(0);
+        expect(deferred.value).toBe('<plain>');
+        expect(deferred.html).toBe(false);
+        expect(deferred.value).toBe('<plain>');
+        expect(conversions).toBe(1);
+        expect(LivePage.statePayload(owner, 'value', value).value).toBe('<plain>');
+        expect(conversions).toBe(2);
+        class Child { content = html`<button rw-click="save">Save</button>`; }
+        component()(Child);
+        state()(Child.prototype, 'content');
+        owner.child = new Child();
+        LivePage.activate(owner);
+        expect(LivePage.snapshots(owner)).toEqual([{
+            name: 'content', component: 'child', html: true,
+            value: '<button rw-click="save" data-rw-component="child">Save</button>',
+        }]);
+    });
     test('browser cleanup recognizes a real child terminated by signal', async () => {
         const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
         await new Promise((resolve, reject) => {
@@ -840,10 +865,7 @@ describe('decorator-first Live HTML units', () => {
     test('generates a small delegated browser runtime around redweb-client', () => {
         const source = browserRuntime('/internal/client.js');
         expect(source).toContain("from \"/internal/client.js\"");
-        expect(source).toContain("client.send('redweb:html'");
-        expect(source).toContain("document.addEventListener('click'");
-        expect(source).toContain("document.addEventListener('submit'");
-        expect(source).toContain("document.addEventListener('input'");
+        expect(source).toBe('import { mountLivePage } from "/internal/client.js";\nmountLivePage();\n');
     });
 
     test('exports non-live decorated pages and content-addressed CSS as static files', async () => {

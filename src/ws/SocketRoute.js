@@ -8,6 +8,8 @@ const TransportPolicy = require('./TransportPolicy');
 const Metrics = require('./Metrics');
 const RouteRuntime = require('./RouteRuntime');
 const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
+const { InboundContractValidationError } = require('./ContractValidationError');
+const { RequestFailure } = require('../access/RequestFailure');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -272,6 +274,7 @@ class SocketRoute {
         if (!this.allowDuplicateConnections) {
             const existing = this.clients.get(clientKey);
             if (existing) {
+                this.runtime.detach(existing);
                 this.logger.warn?.(`Client ${ip} already connected, disconnecting existing connection.`);
                 if (existing.sendEvent) {
                     existing.sendEvent('system.disconnect', { reason: 'replaced' });
@@ -342,6 +345,14 @@ class SocketRoute {
             socket,
             this.protocolPolicy.error(socket.context.protocol.version, code, message, metadata)
         );
+    }
+
+    sendAccessFailure(socket, error, metadata) {
+        const failure = RequestFailure.from(error);
+        if (!failure.code.startsWith('ACCESS_')) return false;
+        if (this.protocolPolicy && socket.context?.protocol) this.sendFailure(socket, failure.code, failure.message, metadata);
+        else this.send(socket, { code: failure.code, error: failure.message });
+        return true;
     }
 
     async sendBinary(socket, value) {
@@ -440,6 +451,12 @@ class SocketRoute {
                 await handler.handleMessage(sock, data);
                 return true;
             } catch (error) {
+                if (this.sendAccessFailure(sock, error, { requestId: data.requestId })) return false;
+                if (error instanceof InboundContractValidationError) {
+                    this.sendFailure(sock, error.code, error.message, { requestId: data.requestId });
+                    sock.close?.(1008, 'Invalid contract payload');
+                    return false;
+                }
                 this.logger.error?.(`Error handling message in handler ${handler.name}:`, error);
                 this.metrics?.increment('redweb.handlers.failed');
                 this.sendFailure(sock, ERROR_CODES.HANDLER_FAILED, this.exposeErrors ? errorMessage(error) : 'Handler failed', { requestId: data.requestId });
@@ -476,6 +493,7 @@ class SocketRoute {
             await handler.handleBinaryMessage(socket, buffer);
             return true;
         } catch (error) {
+            if (this.sendAccessFailure(socket, error)) return false;
             this.logger.error?.('Error handling binary message:', error);
             this.metrics?.increment('redweb.handlers.failed');
             this.sendFailure(socket, ERROR_CODES.HANDLER_FAILED, this.exposeErrors ? errorMessage(error) : 'Binary handler failed');

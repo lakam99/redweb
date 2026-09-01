@@ -1,6 +1,8 @@
 const ADMISSION_CONTEXT = Symbol('redweb.admissionContext');
 const PLACEMENT_REDIRECT = Symbol('redweb.placementRedirect');
 const ADMISSION_SETTLEMENT = Symbol('redweb.admissionSettlement');
+const { BoundedOperation, OperationInterrupted } = require('../async/BoundedOperation');
+const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
 
 class AdmissionPolicy {
     constructor(options) {
@@ -48,41 +50,37 @@ class AdmissionPolicy {
         this.origins = origins;
         this.place = place;
         this.timeoutMs = timeoutMs;
+        this.boundary = new BoundedOperation(timeoutMs);
         this.allowInsecurePlacement = allowInsecurePlacement;
     }
 
     async authorize(request, rawSocket, route, externalSignal) {
         const controller = new AbortController();
         const onClose = () => controller.abort();
-        const onExternalAbort = () => controller.abort();
         rawSocket.once('close', onClose);
-        if (externalSignal?.aborted) controller.abort();
-        else externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
-        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-        timer.unref();
+        if (rawSocket.destroyed || externalSignal?.aborted) controller.abort();
+        else externalSignal?.addEventListener('abort', onClose, { once: true });
         try {
-            const evaluation = Promise.resolve().then(() => this.evaluate(request, route, controller.signal));
-            request[ADMISSION_SETTLEMENT] = evaluation.then(() => undefined, () => undefined);
-            const cancelled = new Promise((_, reject) => {
-                controller.signal.addEventListener('abort', () => reject(new Error('Admission cancelled.')), { once: true });
-            });
-            const result = await Promise.race([
-                evaluation,
-                cancelled,
-            ]);
-            if (result === false || rawSocket.destroyed || controller.signal.aborted) return false;
+            const result = await this.boundary.run((signal, checkpoint) => {
+                const evaluation = this.evaluate(request, route, signal, checkpoint);
+                request[ADMISSION_SETTLEMENT] = evaluation.then(() => undefined, () => undefined);
+                return evaluation;
+            }, controller.signal);
+            if (rawSocket.destroyed || controller.signal.aborted) throw new RequestFailure('ADMISSION_CANCELLED');
             if (result.redirect) {
                 request[PLACEMENT_REDIRECT] = result.redirect;
                 return false;
             }
             request[ADMISSION_CONTEXT] = { principal: result.principal };
             return true;
-        } catch {
+        } catch (error) {
+            request[UPGRADE_REJECTION] = (error instanceof OperationInterrupted
+                ? new RequestFailure(error.reason === 'timeout' ? 'ADMISSION_TIMEOUT' : 'ADMISSION_CANCELLED')
+                : RequestFailure.from(error)).rejection;
             return false;
         } finally {
-            clearTimeout(timer);
             rawSocket.off?.('close', onClose);
-            externalSignal?.removeEventListener?.('abort', onExternalAbort);
+            externalSignal?.removeEventListener?.('abort', onClose);
         }
     }
 
@@ -114,20 +112,23 @@ class AdmissionPolicy {
         }
     }
 
-    async evaluate(request, route, signal) {
-        if (!await this.acceptsOrigin(request)) return false;
+    async evaluate(request, route, signal, checkpoint) {
+        if (!await this.acceptsOrigin(request)) throw new RequestFailure('ORIGIN_DENIED');
+        checkpoint();
         const context = {
             signal,
             networkIdentity: route.resolveRemoteAddress(request),
             route,
         };
         const principal = this.authenticate ? await this.authenticate(request, context) : undefined;
-        if (principal === false) return false;
+        if (principal === false) throw new RequestFailure('AUTHENTICATION_REQUIRED');
+        checkpoint();
         if (!this.place) return { principal };
         const placement = await this.place(principal, request, context);
-        if (placement === false) return false;
+        if (placement === false) throw new RequestFailure('PLACEMENT_DENIED');
         if (typeof placement === 'string') {
-            return this.isSafeRedirect(placement) ? { redirect: placement } : false;
+            if (!this.isSafeRedirect(placement)) throw new RequestFailure('PLACEMENT_INVALID');
+            return { redirect: placement };
         }
         return { principal };
     }
