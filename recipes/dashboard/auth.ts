@@ -55,12 +55,12 @@ export class DashboardAuth {
 
     close() { this.closed = true; this.attempts.clear(); }
 
-    mount(app: Application, origin: () => string, allowsOrigin: (candidate: string | undefined) => boolean, revoke: (account: string) => Promise<unknown>) {
+    mount(app: Application, origin: () => string, allowsOrigin: (candidate: string | undefined, request: Request) => boolean, revoke: (account: string) => Promise<unknown>) {
         const cookie = (token: string) => `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${token ? Math.ceil(this.ttlMs / 1000) : 0}${origin().startsWith('https:') ? '; Secure' : ''}`;
         const post = (route: string, handler: (request: Request, response: Response) => Promise<void>) => {
             app.post(route, (request, response) => {
                 response.set('Cache-Control', 'private, no-store');
-                if (!allowsOrigin(request.get('origin'))) { response.status(403).send('This form must be submitted from this site.'); return; }
+                if (!allowsOrigin(request.get('origin'), request)) { response.status(403).send('This form must be submitted from this site.'); return; }
                 void handler(request, response).catch(() => response.status(503).send('Unable to complete the request. Try again later.'));
             });
         };

@@ -70,9 +70,12 @@ async function cardClient(t, origin, cookie) {
 test('private live cards: real HTTP, sockets, isolation, reconnect, sign-out and durable restart', async t => {
     const fixtureApp = await fixture(t);
     let { origin } = fixtureApp;
+    const localhost = origin.replace('127.0.0.1', 'localhost');
     assert.equal((await fetch(`${origin}/login`)).status, 200);
     assert.equal((await fetch(origin)).status, 401);
     assert.equal((await post(origin, '/login', { account: 'alice', password }, '', 'https://foreign.example')).status, 403);
+    assert.equal((await post(origin, '/login', { account: 'alice', password }, '', localhost)).status, 403);
+    assert.equal((await post(localhost, '/login', { account: 'alice', password: 'wrong-password-at-least-16' })).status, 401);
     assert.equal((await post(origin, '/login', { account: 'alice', password: 'wrong-password-at-least-16' })).status, 401);
     const alice = await login(origin);
     const alice2 = await login(origin);
@@ -80,6 +83,14 @@ test('private live cards: real HTTP, sockets, isolation, reconnect, sign-out and
     const page = await fetch(origin, { headers: { Cookie: alice } });
     assert.match(page.headers.get('cache-control'), /private.*no-store/);
     assert.equal(page.headers.get('etag'), null);
+    const document = await page.text();
+    const pageConfig = JSON.parse(document.match(/id="__redweb_page">([^<]+)/)[1]);
+    const hostile = new WebSocket(`${origin.replace('http:', 'ws:')}${pageConfig.socketPath}?pageId=${pageConfig.pageId}&redwebVersion=${encodeURIComponent(pageConfig.version)}`,
+        { headers: { Cookie: alice, Origin: localhost } });
+    hostile.on('error', () => {});
+    const [, rejection] = await once(hostile, 'unexpected-response');
+    assert.equal(rejection.statusCode, 403);
+    rejection.resume();
     const first = await cardClient(t, origin, alice);
     const second = await cardClient(t, origin, alice2);
     const other = await cardClient(t, origin, bob);
@@ -126,14 +137,17 @@ test('private live cards: real HTTP, sockets, isolation, reconnect, sign-out and
 
 test('unit: development accepts only equivalent loopback browser origins on the listening port', () => {
     const expected = 'http://127.0.0.1:8181';
-    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false), true);
-    assert.equal(allowsDashboardOrigin('http://127.0.0.1:8181', expected, false), true);
-    assert.equal(allowsDashboardOrigin('http://[::1]:8181', expected, false), true);
-    assert.equal(allowsDashboardOrigin('https://localhost:8181', expected, false), false);
-    assert.equal(allowsDashboardOrigin('http://localhost:8182', expected, false), false);
-    assert.equal(allowsDashboardOrigin('http://localhost:8181/path', expected, false), false);
-    assert.equal(allowsDashboardOrigin('not an origin', expected, false), false);
-    assert.equal(allowsDashboardOrigin(undefined, expected, false), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false, 'localhost:8181'), true);
+    assert.equal(allowsDashboardOrigin('http://127.0.0.1:8181', expected, false, '127.0.0.1:8181'), true);
+    assert.equal(allowsDashboardOrigin('http://[::1]:8181', expected, false, '[::1]:8181'), true);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false, '127.0.0.1:8181'), false);
+    assert.equal(allowsDashboardOrigin('https://localhost:8181', expected, false, 'localhost:8181'), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8182', expected, false, 'localhost:8182'), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181/path', expected, false, 'localhost:8181'), false);
+    assert.equal(allowsDashboardOrigin('not an origin', expected, false, 'localhost:8181'), false);
+    assert.equal(allowsDashboardOrigin(undefined, expected, false, 'localhost:8181'), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false), false);
+    assert.equal(allowsDashboardOrigin('http://localhost:8181', expected, false, 'localhost:8181/path'), false);
     assert.equal(allowsDashboardOrigin('https://dashboard.example', 'https://dashboard.example', true), true);
     assert.equal(allowsDashboardOrigin('http://localhost:8181', 'https://dashboard.example', true), false);
 });

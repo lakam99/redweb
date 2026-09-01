@@ -84,7 +84,7 @@ async function verifyDashboard(execution, { openPage, debugPort }) {
         assert.equal(await evaluate(first, `document.querySelector('.card-grid h2').textContent`), 'Browser saved card');
         await evaluate(first, `document.querySelector('[rw-submit="remove"]').requestSubmit();`);
         await waitForPage(first, `document.querySelectorAll('.card-grid li').length === 0`);
-        console.log('Dashboard browser passed: headed Chromium, real rejected/accepted sign-in forms across localhost, private live cards, draft preservation, HttpOnly cookies, sign-out/re-login and deletion.');
+        console.log('Dashboard browser passed: real rejected/accepted browser sign-in forms across localhost, private live cards, draft preservation, HttpOnly cookies, sign-out/re-login and deletion.');
     } catch (error) { failure = verificationError(error); }
     closing = true;
     await Promise.allSettled(openings.map(opening => withTimeout(opening.promise, 'dashboard pending page open', 10000)));

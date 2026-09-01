@@ -369,7 +369,7 @@ async function main() {
         pages.push(jsxPage);
         await jsxPage.evaluate(`document.querySelector('[rw-click="increment"]').click()`);
         await jsxPage.evaluate(eventual(
-            `document.querySelector('output').textContent === '1'`,
+            `document.querySelector('[rw-click="increment"]')?.textContent.trim() === 'Count 1'`,
             'the TSX server action DOM update'
         ));
         const jsxCardColor = await jsxPage.evaluate("getComputedStyle(document.querySelector('.counter-card')).backgroundColor");

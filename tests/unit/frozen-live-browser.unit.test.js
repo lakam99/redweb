@@ -8,6 +8,7 @@ const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspa
 const { FrozenBrowserBoundary } = require('../helpers/FrozenBrowserBoundary');
 const { withTimeout } = require('../helpers/network');
 const flush = () => new Promise(setImmediate);
+const browserSource = fs.readFileSync(path.resolve(__dirname, '../../scripts/verify-live-html-browser.js'), 'utf8');
 
 async function boundary(options, assertion) {
     await new VerificationWorkspace().run(async owner => {
@@ -38,6 +39,11 @@ const observations = [
     ['documentation composition', e => e.includes("document.querySelectorAll('article').length"), 'Documentation composition helpers produced incorrect browser DOM.'],
     ['JSX safety', e => e.includes('window.__redwebJsxInjected !== true'), 'Escaped JSX content executed or composed incorrectly in the browser.'],
 ];
+
+test('the native JSX action oracle follows the wrapper-free counter markup safely', () => {
+    expect(browserSource).toContain(`document.querySelector('[rw-click="increment"]')?.textContent.trim() === 'Count 1'`);
+    expect(browserSource).not.toContain(`document.querySelector('output').textContent === '1'`);
+});
 
 test.each(observations)('frozen main rejects a failed %s observation and performs its normal cleanup', async (_label, select, message) => {
     let selected = 0;

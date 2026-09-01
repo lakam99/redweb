@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { mkdirSync } from 'node:fs';
+import type { IncomingMessage } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { page, start, type LivePageRequestContext } from 'redweb';
 import { DashboardAuth, sessionToken } from './auth';
@@ -14,14 +15,17 @@ export function databasePath() { return resolve(process.env.DASHBOARD_DATABASE ?
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 /** Development is loopback-only, so its equivalent browser hostnames share one trust boundary. */
-export function allowsDashboardOrigin(candidate: string | undefined, expected: string, configured: boolean) {
+export function allowsDashboardOrigin(candidate: string | undefined, expected: string, configured: boolean, host?: string) {
     if (!candidate) return false;
     if (configured) return candidate === expected;
+    if (!host || /[\/@?#\\]/.test(host)) return false;
     try {
         const actual = new URL(candidate);
         const local = new URL(expected);
+        const target = new URL(`http://${host}`);
         return actual.origin === candidate && actual.protocol === 'http:'
-            && actual.port === local.port && LOOPBACK_HOSTS.has(actual.hostname);
+            && actual.origin === target.origin && actual.port === local.port
+            && LOOPBACK_HOSTS.has(actual.hostname);
     } catch { return false; }
 }
 
@@ -46,7 +50,8 @@ export function createApp(options: DashboardOptions = {}) {
     };
     app.use(invalidBody);
     const origin = () => configuredOrigin ?? `http://127.0.0.1:${(server.server.address() as { port: number }).port}`;
-    const allowsOrigin = (candidate: string | undefined) => allowsDashboardOrigin(candidate, origin(), Boolean(configuredOrigin));
+    const allowsOrigin = (candidate: string | undefined, request: IncomingMessage) =>
+        allowsDashboardOrigin(candidate, origin(), Boolean(configuredOrigin), request.headers.host);
 
     @page('/login', { live: false, css: 'app.css', head: { title: 'Sign in · Your cards' } })
     class Login {
