@@ -340,7 +340,7 @@ The same bounded validation implementation is shared with socket contracts. Thei
 
 ## Action authorization
 
-Identity and permission are separate: the server's existing `authenticate(request)` hook establishes `context.principal`; an action policy decides whether that identity may perform this operation. In Redweb 0.13.2, add `authorize` to the action decorator instead of repeating permission checks inside each method:
+Identity and permission are separate: the server's existing `authenticate(request)` hook establishes `context.principal`; an action policy decides whether that identity may perform this operation. In Redweb 0.13.3, add `authorize` to the action decorator instead of repeating permission checks inside each method:
 
 ```tsx
 // Inside a page/component; `input` is the amount schema from the example above.
@@ -365,7 +365,7 @@ Denial returns recoverable `ACCESS_DENIED`; timeout returns `ACCESS_TIMEOUT`; co
 
 ## Protected pages and shared request identity
 
-In Redweb 0.13.2, a page can declare `authorize(context)` alongside its route. This is an API pattern for an application that already supplies the server's `authenticate(request)` hook, not a standalone login system:
+In Redweb 0.13.3, a page can declare `authorize(context)` alongside its route. This is an API pattern for an application that already supplies the server's `authenticate(request)` hook, not a standalone login system:
 
 ```tsx
 @page('/account/:id', {
