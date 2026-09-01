@@ -31,8 +31,14 @@ test('the default and hosted gates exclude soak and long fixed-window benchmark 
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
     expect(workflow).not.toMatch(/run: npm run verify:(?:soak|soak:coverage|overhead:coverage)/);
     const command = require('../../package.json').scripts.test;
-    expect(command).toContain('--testPathIgnorePatterns=soak-.*\\.test\\.js$');
-    expect(command).toContain('--testPathIgnorePatterns=benchmark-measurement\\.integration\\.test\\.js$');
+    const patterns = [...command.matchAll(/--testPathIgnorePatterns=([^ ]+)/g)].map(match => new RegExp(match[1]));
+    expect(patterns).toHaveLength(2);
+    for (const separator of ['/', '\\']) {
+        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-command.test.js`))).toBe(true);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurement.integration.test.js`))).toBe(true);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-commandXtestYjs`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurementXintegrationYtestZjs`))).toBe(false);
+    }
 });
 
 test('package CI runs the authored coverage gate once and retains both evidence scopes', () => {
