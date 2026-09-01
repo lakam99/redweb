@@ -119,10 +119,10 @@ disconnect: a responsive same-process client automatically pongs, while one
 server-side ping callback stalls the event loop beyond the heartbeat deadline.
 Previously the next timer terminated that healthy client before its already
 dispatched pong handling could win. Heartbeat expiry now owns one deduplicated,
-unreferenced `Immediate` per expired socket. The deferred check terminates a peer
-that is still silent; pong handling, detach/reattach, or monitor shutdown makes
-the stale check harmless. No deferred-check allocation occurs on healthy ticks and no timeout is
-reset. Connection/queue limits remain the resource bounds.
+unreferenced grace timer per expired socket. The timer waits one additional
+`timeoutMs` before terminating a peer that is still silent; pong handling,
+detach/reattach, or monitor shutdown cancels it. No grace-timer allocation occurs
+on healthy ticks. Connection/queue limits remain the resource bounds.
 
 The focused heartbeat scope passes71 unit and real-socket tests at100% statements,
 branches, functions and lines. The senior critic required and approved silent-peer,

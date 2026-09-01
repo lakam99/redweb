@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Give an expired WebSocket heartbeat one additional `timeoutMs` grace window before termination. A pong, detach, reattach, or shutdown cancels the owned timer, preventing a delayed Node event loop from disconnecting a responsive peer while keeping silent-peer cleanup bounded.
+
 ## 0.13.0
 
 Published 2026-08-31 (America/Toronto; 2026-09-01 UTC).

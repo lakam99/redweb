@@ -2,7 +2,12 @@ const { performance } = require('perf_hooks');
 
 function acknowledgePong() {
     const state = this.__redwebHeartbeatState;
-    if (state) state.awaitingPong = false;
+    if (!state) return;
+    state.awaitingPong = false;
+    if (state.terminationTimer) {
+        clearTimeout(state.terminationTimer);
+        state.terminationTimer = null;
+    }
 }
 
 class HeartbeatMonitor {
@@ -25,7 +30,7 @@ class HeartbeatMonitor {
 
     attach(socket) {
         this.detach(socket);
-        const state = { awaitingPong: false, lastPing: null, terminationPending: false };
+        const state = { awaitingPong: false, lastPing: null, terminationTimer: null };
         socket.__redwebHeartbeatState = state;
         this.sockets.set(socket, state);
         socket.on('pong', acknowledgePong);
@@ -34,6 +39,8 @@ class HeartbeatMonitor {
     detach(socket) {
         const state = this.sockets.get(socket);
         if (!state) return false;
+        if (state.terminationTimer) clearTimeout(state.terminationTimer);
+        state.terminationTimer = null;
         socket.off?.('pong', acknowledgePong);
         delete socket.__redwebHeartbeatState;
         this.sockets.delete(socket);
@@ -60,20 +67,19 @@ class HeartbeatMonitor {
     }
 
     scheduleTermination(socket, state) {
-        if (state.terminationPending) return;
-        state.terminationPending = true;
-        // Defer to the check phase so already-dispatched pong handling can win.
-        const check = setImmediate(() => {
-            state.terminationPending = false;
-            if (this.sockets.get(socket) !== state || !state.awaitingPong) return;
+        if (state.terminationTimer) return;
+        // Give an already-sent pong one full timeout window to reach JavaScript.
+        // This prevents a delayed server event loop from blaming a responsive peer.
+        state.terminationTimer = setTimeout(() => {
+            state.terminationTimer = null;
             this.detach(socket);
             try {
                 socket.terminate?.();
             } catch (error) {
                 this.logger?.error?.('Error terminating unresponsive socket:', error);
             }
-        });
-        check.unref();
+        }, this.timeoutMs);
+        state.terminationTimer.unref();
     }
 
     stop() {
