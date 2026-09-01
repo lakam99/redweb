@@ -1,10 +1,10 @@
 # Shared socket contracts
 
-Status: unreleased on `codex/agent-ready`; not part of npm 0.12.0.
+Status: published in `redweb@0.13.0`.
 
 A contract declares message payloads once. The same schema supplies runtime validation and inferred TypeScript types for senders and handlers. The URL still selects the route (`/match`), and the envelope's `type` selects an individual handler (`join`, `move`, `resume`). No socket decorators or second action dispatcher are required.
 
-Start with `npx redweb init my-match --template socket` after installing a release containing this feature. During development, use the checked-out CLI or packed artifact instead of the published 0.12.0 command. The complete maintained example lives in [the socket recipe](../recipes/socket/README.md): [contract](../recipes/socket/contract.ts), [handlers](../recipes/socket/handlers.ts), [server](../recipes/socket/app.tsx), and [real-network tests](../recipes/socket/app.test.cjs).
+Start with `npx --yes redweb@0.13.0 init my-match --template socket`. The complete maintained example lives in [the socket recipe](../recipes/socket/README.md): [contract](../recipes/socket/contract.ts), [handlers](../recipes/socket/handlers.ts), [server](../recipes/socket/app.tsx), and [real-network tests](../recipes/socket/app.test.cjs).
 
 Session ownership is separate from room fan-out. For authenticated group delivery,
 see [room authorization](ROOM_AUTHORIZATION.md) and the complete

@@ -90,15 +90,15 @@ describe('single-source documentation', () => {
         }
     });
 
-    test('candidate version agrees across package, lockfile and unreleased release guidance', () => {
+    test('published version agrees across package, lockfile, changelog and release guidance', () => {
         const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
         const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
         const trust = fs.readFileSync(path.join(root, 'docs/RELEASE_TRUST.md'), 'utf8');
         expect(lock.version).toBe(version);
         expect(lock.packages[''].version).toBe(version);
-        expect(changelog).toContain(`Next package version: \`${version}\` (not yet published).`);
-        expect(trust).toContain(`The checkout has package metadata \`${version}\`, reserved for this unreleased candidate`);
-        expect(trust).toContain('npm install --save-exact redweb@0.12.0');
+        expect(changelog).toContain(`## ${version}`);
+        expect(trust).toContain(`npm install --save-exact redweb@${version}`);
+        expect(trust).toContain('gitHead');
         expect(new Documentation(root).build().channel).toBe('unreleased');
     });
 
@@ -167,7 +167,7 @@ describe('single-source documentation', () => {
         expect(builder.links(code, 'docs/CLI.md')).toBe(code);
         expect(() => builder.links('[unknown](missing.md)', 'docs/CLI.md')).toThrow('Undocumented link target');
         expect(() => new Documentation(root, '../release')).toThrow('exact package version');
-        expect(() => new Documentation(root, version)).toThrow('Move unreleased changes');
+        expect(new Documentation(root, version).build().channel).toBe(version);
         expect(() => builder.setup('../unknown')).toThrow('Unknown starter template');
     });
 

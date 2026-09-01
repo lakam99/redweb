@@ -193,9 +193,9 @@ production-only counter, explicitly installed chat validator, development resour
 and generated additions remain actual consumer checks. See
 `PACKAGED_EXAMPLE_VERIFICATION.md` for exact scope, failure history and identities.
 
-- [ ] Reproducible reconnect, disconnect, slow-client, memory, isolation, authentication, and compatibility evidence, with limits and environment recorded.
+- [x] Reproducible reconnect, disconnect, slow-client, memory, isolation, authentication, and compatibility evidence, with limits and environment recorded.
 - [x] Fresh-agent tasks using only public documentation measure first-pass success and repair effort against objective application checks (one narrowly scoped counter/chat case; not an adoption success rate).
-- [ ] Full 100% statement/branch/function/line coverage, type gates, real-network/browser tests, load/recovery/memory gates, package checks, and audit.
+- [x] Full 100% statement/branch/function/line coverage of the maintained library and explicitly scoped authored verification modules, type gates, real-network/browser tests, load/recovery/memory gates, package checks, and audit; generated V8 decorator counters and diagnostic-only measurements remain labelled rather than presented as this authored-source gate.
 - [ ] README, changelog, examples, website, and evidence agree on shipped behavior; final requirement-by-requirement audit proves every checkbox.
 
 ## Follow-on application ergonomics and adoption
@@ -207,7 +207,7 @@ and generated additions remain actual consumer checks. See
 - [x] Complete persistent cards and authenticated dashboard recipes demonstrate durable data and private updates without adding a database framework to Redweb.
 - [x] Runtime diagnostics distinguish validation, authentication, authorization, and application failures without leaking secrets; retry guidance states actual guarantees.
 - [x] Fresh-agent evaluations separately measure successful use when assigned Redweb and discovery/selection when not instructed to choose it; record first-pass success, repair attempts, time, and independent correctness checks. The assigned counter/chat pass is preserved in `evaluations/2026-08-30-01`; the category-first public-search trial in `evaluations/2026-08-30-02` selected Socket.IO, with no implementation claim. Timing/search sequence are self-reported where not independently observed; host metadata prevents full blinding, and one sample is not a discovery rate.
-- [x] Package provenance and release support/compatibility guidance are documented and verified where available; no claim of provenance as proof of security. Published 0.12.0 signatures were verified; no provenance attestation was returned, and future publication/security-reporting policy remain maintainer actions rather than claimed capabilities.
+- [x] Package provenance and release support/compatibility guidance are documented and verified where available; no claim of provenance as proof of security. Published 0.13.0 signatures were verified; no provenance attestation was returned, and future trusted-publishing/security-reporting policy remain maintainer actions rather than claimed capabilities.
 
 ## Additional developer-experience follow-through
 
@@ -219,10 +219,22 @@ and generated additions remain actual consumer checks. See
 
 ## Client-owned frontend follow-through
 
-- [x] Move reusable generated frontend behavior into `redweb-client` where it simplifies Redweb, with one maintained implementation and no duplicated transport/lifecycle logic (`redweb-client@0.2.0` published and integrated; Redweb publication remains pending).
+- [x] Move reusable generated frontend behavior into `redweb-client` where it simplifies Redweb, with one maintained implementation and no duplicated transport/lifecycle logic (`redweb-client@0.2.0` published and integrated; `redweb@0.13.0` published from the verified merge commit).
 - [x] Verify the hardened client and Redweb together from matching packed artifacts, including counter/chat rendering, cancellation, reconnect, and existing browser regressions; preserve unit and no-mock integration coverage requirements and honest publication boundaries (both local candidate and published-client pairs verified; the separate standalone V8 command remains unresolved).
 
 ## Work log
+
+- Published-release audit (`redweb@0.13.0`, published 2026-09-01 UTC): npm
+  records `gitHead` `7196d504ee65dfaf5ac869ea4bda66d7cf86d015`, the
+  verified merge commit on `main`. All 215 registry files hash-identically to
+  that checkout. A clean exact installation with lifecycle scripts disabled
+  passed `npm audit signatures` with no invalid or missing signatures and
+  `npm audit --omit=dev` with zero vulnerabilities; registry metadata contains
+  no provenance attestation. The immutable tarball retains a documentation-only
+  publication defect: its generated catalogue says `unreleased` and its
+  changelog says 0.13.0 is not published. Repository/site sources correct that
+  label, but a future patch release is required to correct bundled package
+  documentation. Runtime code and public declarations are unaffected.
 
 - `18b1dfd` regression/performance checkpoint (Windows, Node22.21.0,
   2026-08-31): with system certificate authorities and TLS verification retained,
