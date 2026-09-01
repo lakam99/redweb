@@ -41,7 +41,7 @@ class CounterPage extends LivePage {
     return (
       <Panel title="Server counter">
         <button rw-click="increment">
-          Count <output>{this.count}</output>
+          Count {this.count}
         </button>
       </Panel>
     );

@@ -32,7 +32,7 @@ test('__NAME__ generated __KIND__ works over the network', { timeout: 10000 }, a
         const response = await fetch(`${origin}${'__KIND__' === 'page' ? '/__NAME__' : '/'}`);
         assert.equal(response.status, 200);
         const document = await response.text();
-        assert.match(document, /<output>0<\/output>/);
+        assert.match(document, /Count 0/);
         config = JSON.parse(document.match(/id="__redweb_page">([^<]+)</)[1]);
     }
     const endpoint = config
@@ -49,7 +49,7 @@ test('__NAME__ generated __KIND__ works over the network', { timeout: 10000 }, a
         } }));
     } else await artifact.contract.client(socket).send('ping', { text: 'Hello' }, { requestId: 'probe' });
     const success = message => config
-        ? message.type === 'redweb:patch' && message.payload.patches.some(patch => patch.html?.includes('<output>1</output>'))
+        ? message.type === 'redweb:patch' && message.payload.patches.some(patch => patch.html?.includes('Count 1'))
         : message.type === 'pong' && message.payload.text === 'Hello' && message.requestId === 'probe';
     const deadline = Date.now() + 3000;
     while (!received.some(success) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));

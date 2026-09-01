@@ -9,12 +9,12 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.13.2. Install that exact version when following these examples.
+> Documentation for Redweb 0.13.3. Install that exact version when following these examples.
 
 ```sh
-npx --yes redweb@0.13.2 init my-realtime --template realtime
+npx --yes redweb@0.13.3 init my-realtime --template realtime
 cd my-realtime
-npm install --save-exact redweb@0.13.2
+npm install --save-exact redweb@0.13.3
 npm test
 npm run dev
 ```
@@ -42,7 +42,7 @@ export class CounterPage {
                 <h1>A counter owned by the server</h1>
                 <p>Open this page in two tabs. Either button updates both.</p>
                 <button rw-click="increment">
-                    Count <output>{this.count}</output>
+                    Count {this.count}
                 </button>
             </main>
         );

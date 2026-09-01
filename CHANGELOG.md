@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.13.3
+
+Released 2026-09-01 (America/Toronto).
+
+- Simplify the canonical TSX counter to render decorated state directly as `Count {this.count}`. The standard `<output>` element remains available when its semantics are useful, but is not required for Redweb reactivity.
+
 ## 0.13.2
 
 Released 2026-09-01 (America/Toronto).

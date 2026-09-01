@@ -30,7 +30,7 @@ export class JsxPage extends LivePage {
                 <Card title="Server rendered">
                     <p>Plain TSX, escaped by default, with no browser framework.</p>
                     <button type="button" rw-click="increment">
-                        Count <output>{this.count}</output>
+                        Count {this.count}
                     </button>
                 </Card>
             </main>

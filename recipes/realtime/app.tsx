@@ -14,7 +14,7 @@ export class CounterPage {
                 <h1>A counter owned by the server</h1>
                 <p>Open this page in two tabs. Either button updates both.</p>
                 <button rw-click="increment">
-                    Count <output>{this.count}</output>
+                    Count {this.count}
                 </button>
             </main>
         );
