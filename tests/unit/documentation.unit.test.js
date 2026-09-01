@@ -71,7 +71,7 @@ describe('single-source documentation', () => {
 
     test('deployment guidance identifies the published release pair and future checkout boundary', () => {
         const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
-        expect(guide).toContain('`redweb@0.13.0` installs published `redweb-client@0.2.0`');
+        expect(guide).toContain(`\`redweb@${version}\` installs published \`redweb-client@0.2.0\``);
         expect(guide).toContain('Future unreleased Redweb changes require their matching tested tarball');
         expect(guide).toContain('a clean production install does not preserve that link');
         expect(guide).not.toContain('as though the matching client were already published');
