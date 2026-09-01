@@ -2,7 +2,19 @@
 
 ## Unreleased
 
+## 0.13.2
+
+Released 2026-09-01 (America/Toronto).
+
+- Ship package-versioned README setup, generated documentation, and the immutable 0.13.2 catalogue snapshot together.
+- Refuse publication when the package version, generated catalogue, README recipe, or release snapshot is unreleased, stale, missing, or inconsistent.
+
+## 0.13.1
+
+Released 2026-09-01 (America/Toronto).
+
 - Give an expired WebSocket heartbeat one additional `timeoutMs` grace window before termination. A pong, detach, reattach, or shutdown cancels the owned timer, preventing a delayed Node event loop from disconnecting a responsive peer while keeping silent-peer cleanup bounded.
+- Publication note: the runtime fix shipped, but the archive retained unreleased documentation, omitted a 0.13.1 catalogue snapshot, and recorded a `gitHead` whose committed package version was still 0.13.0. Version 0.13.2 supersedes that release-process defect.
 
 ## 0.13.0
 

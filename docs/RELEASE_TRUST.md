@@ -18,22 +18,22 @@ Use the [official Node release schedule](https://nodejs.org/en/about/previous-re
 
 ## Pin the package and the documentation together
 
-For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This example deliberately pins the current documented release:
+For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This guide is versioned for 0.13.2. Before registry publication, verify the packed candidate; after publication, repeat these registry checks from a clean application:
 
 ```sh
-npm view redweb@0.13.0 version engines dist.integrity dist.signatures dist.attestations gitHead --json
-npm install --save-exact redweb@0.13.0
+npm view redweb@0.13.2 version engines dist.integrity dist.signatures dist.attestations gitHead --json
+npm install --save-exact redweb@0.13.2
 npm audit signatures
 npm audit --omit=dev
 ```
 
 The signature command must run in the installed application directory. Keep TLS verification enabled and use a current npm CLI; a certificate/trust-store failure is not a reason to disable verification. A lockfile's integrity value detects changed package bytes; registry signatures authenticate registry metadata; provenance, when present and verified, links an artifact to a build/source identity. Vulnerability audit is a separate check against known advisories, not an application penetration test.
 
-Redweb 0.13.0 contains the server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics and lifecycle work described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.13.0 and assume newer APIs exist.
+Redweb 0.13.2 contains the server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics, lifecycle work, and bounded heartbeat grace described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.13.2 and assume newer APIs exist.
 
 Redweb is pre-1.0. Consult the changelog and versioned guide before upgrading, run your own real HTTP/WebSocket/browser tests, and keep a rollback artifact. Patch/minor numbers and a compatible TypeScript build alone do not prove wire compatibility, preserved sessions, database compatibility or application authorization. HTTP-created live-page sessions are process-owned; a restart or rolling replacement does not migrate them automatically. Raw socket protocol versions are negotiated only when the route opts in, and application payload compatibility remains your contract.
 
-## What was verified for the published package
+## Historical registry verification
 
 Read-only registry inspection after publication on **2026-09-01 UTC** reported `latest: 0.13.0`, with:
 
@@ -46,11 +46,15 @@ An independently created temporary application installed that exact package with
 
 The immutable 0.13.0 tarball has a known documentation-only release-process defect. Its bundled `docs/generated.json` says `channel: "unreleased"`; its changelog says 0.13.0 was not yet published; and its README uses development-tarball setup, calls that setup prerelease/development-only, and later says Redweb remains unreleased. Runtime files and public declarations match the verified merge commit. The repository and website sources correct those labels. The repository's `docs/releases/0.13.0.json` is therefore a corrected **post-publication** documentation snapshot for 0.13.0, not the catalogue that shipped inside the immutable 0.13.0 tarball. A future patch release is required to deliver the corrected bundled documentation to npm consumers.
 
+Registry inspection after the later 0.13.1 publication reported `gitHead` `db64d5b655d5668a75b587122c9e1e9ef4c9bca1`, SHA-512 integrity `sha512-DCLcmiDj89kXf3+80H5/1W+nQEXIhF8RfiBlU6b/LA7418/ChkzhZ8oV4JmVLDL/nt7zFNcytyjavzrDT/XfoA==`, SHA-1 checksum `c05f3e0dc560d4bb379b8fbd6747c3470fcc31f0`, a registry signature, and no provenance attestation. Its runtime contains the heartbeat correction, but its 217-file immutable archive again labels `docs/generated.json` and the README as unreleased and contains no `docs/releases/0.13.1.json`. Its package version was materialized in the publication workspace rather than committed at the recorded `gitHead`, so 0.13.1 is not presented as a clean source-identical release.
+
+The 0.13.2 release candidate corrects that process: version metadata and lockfile, an empty Unreleased section, registry-pinned README setup, and `docs/releases/0.13.2.json` must exist in the reviewed commit before manual publication. Publish only that clean merged commit, then verify the registry metadata and installed archive before synchronizing the website.
+
 The commands above let you repeat the check. See npm's [signature and attestation verification](https://docs.npmjs.com/cli/v11/commands/npm-audit/) and [viewing provenance](https://docs.npmjs.com/viewing-package-provenance/) documentation for current verification behavior.
 
 ## Publishing provenance is a maintainer action
 
-The 0.13.0 registry metadata contains a signature but no provenance attestation. To add provenance to a future release, the maintainer must choose an authorized supported build/publish workflow, configure the correct repository identity and npm permissions, publish the exact tested artifact, and verify the resulting registry attestation afterward. A local `npm pack`, `gitHead`, checksum, badge or successful CI run is not a substitute for a verified attestation. Do not label older releases retroactively as provenance-verified.
+The 0.13.0 and 0.13.1 registry metadata contain signatures but no provenance attestations. To add provenance to a future release, the maintainer must choose an authorized supported build/publish workflow, configure the correct repository identity and npm permissions, publish the exact tested artifact, and verify the resulting registry attestation afterward. A local `npm pack`, `gitHead`, checksum, badge or successful CI run is not a substitute for a verified attestation. Do not label older releases retroactively as provenance-verified.
 
 npm describes the supported providers and identity requirements in [generating provenance](https://docs.npmjs.com/generating-provenance-statements/) and [trusted publishing](https://docs.npmjs.com/trusted-publishers/). Provenance provides origin/build evidence, not proof that source code is safe.
 

@@ -37,7 +37,9 @@ describe('documented applications without mocks', () => {
         const run = args => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 10000, windowsHide: true });
         expect(run(['--check']).status).toBe(0);
         expect(run(['--check']).stdout).toBe('');
+        expect(run(['--release-check']).status).toBe(0);
         expect(run(['--check', '--check']).status).toBe(1);
+        expect(run(['--release-check', '--check']).status).toBe(1);
         expect(run(['--unknown']).stderr).toContain('Usage:');
     });
 
@@ -50,17 +52,20 @@ describe('documented applications without mocks', () => {
             fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n- Pending.\n');
           },
           async exercise(workspace, run) {
-            for (const args of [['--unknown'], ['--check', '--check']]) {
+            for (const args of [['--unknown'], ['--check', '--check'], ['--release-check', '--check']]) {
                 await expect(run(args)).rejects.toThrow('Usage:');
             }
+            await expect(run(['--release-check'])).rejects.toThrow('Move unreleased changes');
             await expect(run(['--release', '--check'])).rejects.toThrow('Move unreleased changes');
             fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), `# Changelog\n\n## ${version}\n\n- Released.\n`);
             expect(await run(['--release'])).toBe('');
+            expect(await run(['--release-check'])).toBe('');
             const snapshot = fs.readFileSync(path.join(workspace, `docs/releases/${version}.json`), 'utf8');
             expect(JSON.parse(snapshot).channel).toBe(version);
             // Git on Windows can restore the same generated file with CRLF line endings.
             fs.writeFileSync(path.join(workspace, `docs/releases/${version}.json`), snapshot.replace(/\n/g, '\r\n'));
             expect(await run(['--release'])).toBe('');
+            expect(await run(['--release-check'])).toBe('');
             expect(await run(['--check'])).toBe('');
             const readmeFile = path.join(workspace, 'README.md');
             const originalReadme = fs.readFileSync(readmeFile, 'utf8');
@@ -68,6 +73,12 @@ describe('documented applications without mocks', () => {
             const originalCatalogue = fs.readFileSync(catalogueFile, 'utf8');
             const snapshotFile = path.join(workspace, `docs/releases/${version}.json`);
             const originalSnapshot = fs.readFileSync(snapshotFile, 'utf8');
+            fs.unlinkSync(snapshotFile);
+            await expect(run(['--release-check'])).rejects.toThrow('is missing or stale');
+            fs.writeFileSync(snapshotFile, originalSnapshot);
+            fs.writeFileSync(snapshotFile, originalSnapshot.replace('"channel":', '"release":'));
+            await expect(run(['--release-check'])).rejects.toThrow('is missing or stale');
+            fs.writeFileSync(snapshotFile, originalSnapshot);
             for (const after of ['<!-- redweb:realtime:start -->', '<!-- redweb:realtime:end -->']) {
                 const invalid = originalReadme.replace('<!-- redweb:setup:end -->', '')
                     .replace(after, after + '\n<!-- redweb:setup:end -->');
@@ -111,6 +122,7 @@ describe('documented applications without mocks', () => {
             expect(fs.readFileSync(path.join(workspace, `docs/releases/${version}.json`), 'utf8').replace(/\r\n/g, '\n')).toBe(snapshot);
             expect(await run([])).toBe('');
             expect(JSON.parse(fs.readFileSync(path.join(workspace, 'docs/generated.json'), 'utf8')).channel).toBe('unreleased');
+            await expect(run(['--release-check'])).rejects.toThrow('does not match package version');
             const developmentReadme = fs.readFileSync(readmeFile, 'utf8');
             expect(developmentReadme).toContain('npx --yes --package TARBALL redweb init my-realtime --template realtime');
             expect(developmentReadme).toContain('cd my-realtime\nnpm install --save-exact TARBALL');

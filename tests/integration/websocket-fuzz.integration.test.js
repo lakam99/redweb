@@ -1,14 +1,14 @@
 const net = require('net');
 const WebSocket = require('ws');
 const { BaseHandler, SocketRoute, SocketServer } = require('../..');
-const { silentLogger, waitForListening, waitForOpen, withTimeout } = require('../helpers/network');
+const { silentLogger, waitForCondition, waitForListening, waitForOpen, withTimeout } = require('../helpers/network');
 
-async function exchange(socket, payload, label, expectClose = false) {
+async function exchange(socket, payload, label) {
     let message, closed, error;
     try {
         return await withTimeout(new Promise((resolve, reject) => {
-            message = data => { if (!expectClose) resolve(data); };
-            closed = () => expectClose ? resolve() : reject(new Error(`${label}: connection closed before reply`));
+            message = resolve;
+            closed = () => reject(new Error(`${label}: connection closed before reply`));
             error = reject;
             socket.on('message', message); socket.once('close', closed); socket.once('error', error);
             socket.send(payload);
@@ -84,10 +84,21 @@ describe('WebSocket hostile input integration without mocks', () => {
 
     async function connect() {
         const port = server.server.address().port;
+        const expectedConnections = server.routes[0].clients.size + 1;
         const socket = new WebSocket(`ws://127.0.0.1:${port}/fuzz`);
         clients.add(socket);
         await waitForOpen(socket);
+        await waitForCondition(() => server.routes[0].clients.size === expectedConnections, 'fuzz route registration', 2000);
         return socket;
+    }
+
+    async function rejectMalformed(socket, payload, label) {
+        const closed = new Promise(resolve => socket.once('close', resolve));
+        socket.send(payload);
+        await waitForCondition(() => server.routes[0].clients.size === 0, `${label} server release`, 2000);
+        expect([WebSocket.CLOSING, WebSocket.CLOSED]).toContain(socket.readyState);
+        if (socket.readyState !== WebSocket.CLOSED) socket.terminate();
+        await withTimeout(closed, `${label} client cleanup`, 2000);
     }
 
     test('contains mutated upgrade requests and remains available', async () => {
@@ -113,7 +124,7 @@ describe('WebSocket hostile input integration without mocks', () => {
         ];
         for (const [index, payload] of malformed.entries()) {
             const socket = await connect();
-            await exchange(socket, payload, `malformed frame ${index} close`, true);
+            await rejectMalformed(socket, payload, `malformed frame ${index}`);
             clients.delete(socket);
         }
 

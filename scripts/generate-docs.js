@@ -6,12 +6,15 @@ const { Documentation, fence } = require('../src/docs/Documentation');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
-if (args.some(arg => !['--check', '--release'].includes(arg)) || new Set(args).size !== args.length) {
-    throw new Error('Usage: node scripts/generate-docs.js [--check] [--release]');
+const releaseCheck = args.includes('--release-check');
+if (args.some(arg => !['--check', '--release', '--release-check'].includes(arg))
+    || new Set(args).size !== args.length || releaseCheck && args.length !== 1) {
+    throw new Error('Usage: node scripts/generate-docs.js [--check] [--release] | --release-check');
 }
 const target = path.join(root, 'docs', 'generated.json');
+const checking = args.includes('--check') || releaseCheck;
 const channel = args.includes('--release') ? require('../package.json').version
-    : args.includes('--check') && fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')).channel : 'unreleased';
+    : checking && fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')).channel : 'unreleased';
 const documentation = new Documentation(root, channel);
 const catalogue = documentation.build();
 const output = JSON.stringify(catalogue, null, 2) + '\n';
@@ -36,11 +39,21 @@ for (let index = 1; index < ordered.length; index++) {
     }
 }
 const generatedReadme = regions.reduce((markdown, { region, content }) => markdown.replace(region, () => content), readme);
-if (args.includes('--check')) {
+if (checking) {
     if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n') !== output) {
         throw new Error('Generated documentation is stale. Run npm run generate:docs.');
     }
     if (readme !== generatedReadme) throw new Error('README recipe is stale. Run npm run generate:docs.');
+    if (releaseCheck) {
+        const version = require('../package.json').version;
+        if (channel !== version) {
+            throw new Error(`Release documentation channel ${channel} does not match package version ${version}. Run npm run generate:docs -- --release.`);
+        }
+        const snapshot = path.join(root, 'docs', 'releases', `${version}.json`);
+        if (!fs.existsSync(snapshot) || fs.readFileSync(snapshot, 'utf8').replace(/\r\n/g, '\n') !== output) {
+            throw new Error(`Release documentation snapshot ${version} is missing or stale. Run npm run generate:docs -- --release.`);
+        }
+    }
 } else {
     if (args.includes('--release')) {
         const snapshot = path.join(root, 'docs', 'releases', `${channel}.json`);
@@ -54,4 +67,4 @@ if (args.includes('--check')) {
     fs.writeFileSync(readmePath, generatedReadme);
 }
 // Keep npm pack --json stdout machine-readable when this runs as a lifecycle hook.
-console.error(`Documentation ${args.includes('--check') ? 'checked' : 'generated'}: ${catalogue.pages.length} pages (${channel}).`);
+console.error(`Documentation ${checking ? 'checked' : 'generated'}: ${catalogue.pages.length} pages (${channel}).`);
