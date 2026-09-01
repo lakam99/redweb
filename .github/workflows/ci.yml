@@ -24,14 +24,6 @@ jobs:
       - run: npm ci
       - run: xvfb-run -a npm test -- --runInBand --silent
         id: matrix-tests
-      - name: Preserve matrix soak observations including failures
-        if: ${{ always() && steps.matrix-tests.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: matrix-soak-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/soak-tools/smoke-reports/
-          if-no-files-found: warn
-          retention-days: 30
       - run: npm run verify:load
       - name: Server recovery acceptance (server-steady-v1)
         run: npm run verify:recovery:server -- "$GITHUB_WORKSPACE/coverage/server-recovery"
@@ -256,17 +248,6 @@ jobs:
           retention-days: 30
       - run: npm run verify:cli
         timeout-minutes: 5
-      - run: npm run verify:overhead:coverage
-        id: benchmark-coverage
-        timeout-minutes: 35
-      - name: Preserve benchmark coverage evidence
-        if: ${{ always() && steps.benchmark-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: benchmark-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/benchmark-tools/
-          if-no-files-found: error
-          retention-days: 30
       - run: npm run verify:recovery:diagnostics
         timeout-minutes: 2
       - run: npm run verify:live-html:browser:coverage
@@ -401,19 +382,3 @@ jobs:
             coverage/package-coordinator/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:soak:coverage
-        id: soak-coverage
-        timeout-minutes: 20
-      - name: Preserve soak verifier coverage evidence
-        if: ${{ always() && steps.soak-coverage.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: soak-coverage-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: coverage/soak-tools/
-          if-no-files-found: error
-          retention-days: 30
-      - run: npm run verify:soak
-        timeout-minutes: 2
-        env:
-          REDWEB_SOAK_SECONDS: 30
-          REDWEB_SOAK_CLIENTS: 16

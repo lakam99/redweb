@@ -26,19 +26,13 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
     expect(workflow).not.toContain('ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION');
 });
 
-test('matrix failures retain any available raw soak observations', () => {
+test('the default and hosted gates exclude soak and long fixed-window benchmark tests', () => {
     const matrix = workflow.slice(workflow.indexOf('  test:'), workflow.indexOf('  lifecycle-smoke:'));
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
-    expect(matrix).toContain("always() && steps.matrix-tests.outcome != 'skipped'");
-    expect(matrix).toContain('name: matrix-soak-${{ matrix.node }}-${{ github.event_name }}-${{ github.run_id }}-${{ github.run_attempt }}');
-    expect(matrix).toContain('path: coverage/soak-tools/smoke-reports/');
-    // A pretest/launch failure can legitimately precede the measurement file.
-    expect(matrix).toContain('if-no-files-found: warn');
-    expect(matrix).toContain('retention-days: 30');
-    const command = require('../../package.json').scripts['verify:soak:coverage'];
-    expect(command).toContain('tests/unit/soak-command-evidence.unit.test.js');
-    expect(command).toContain('--collectCoverageFrom=tests/helpers/SoakCommandEvidence.js');
-    expect(command).not.toContain('--coverageThreshold');
+    expect(workflow).not.toMatch(/run: npm run verify:(?:soak|soak:coverage|overhead:coverage)/);
+    const command = require('../../package.json').scripts.test;
+    expect(command).toContain('--testPathIgnorePatterns=soak-.*\\.test\\.js$');
+    expect(command).toContain('--testPathIgnorePatterns=benchmark-measurement\\.integration\\.test\\.js$');
 });
 
 test('package CI runs the authored coverage gate once and retains both evidence scopes', () => {

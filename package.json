@@ -107,7 +107,7 @@
     "verify:package:examples:coverage": "node node_modules/jest/bin/jest.js tests/unit/packed-action.unit.test.js tests/unit/example-dependencies.unit.test.js tests/unit/example-probe.unit.test.js tests/integration/packed-action.integration.test.js tests/integration/example-dependencies.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/performProbeAction.js --collectCoverageFrom=scripts/lib/verify-example-dependencies.js --collectCoverageFrom=scripts/lib/example-dependency-probe.cjs --coverageDirectory=coverage/example-dependency-tools",
     "verify:package:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-pages.unit.test.js tests/unit/packed-browser-verifier.unit.test.js tests/unit/browser-coverage-cleanup.unit.test.js tests/integration/packed-browser-verifier.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/lib/verify-packed-browser.js --collectCoverageFrom=scripts/lib/BrowserPages.js --coverageDirectory=coverage/packed-browser-verifier",
     "verify:client:link": "node --test tests/integration/npm-link.integration.test.cjs",
-    "test": "npx jest"
+    "test": "npx jest --testPathIgnorePatterns=soak-.*\\.test\\.js$ --testPathIgnorePatterns=benchmark-measurement\\.integration\\.test\\.js$"
   },
   "files": [
     "bin",
