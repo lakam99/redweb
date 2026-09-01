@@ -254,7 +254,7 @@ describe('production multiplayer policies', () => {
     });
 
     test('one heartbeat monitor manages pong, timeout, errors, detach, and idempotent stop', async () => {
-        const deferred = () => new Promise(resolve => setImmediate(resolve));
+        const afterTimeout = timeoutMs => new Promise(resolve => setTimeout(resolve, timeoutMs + 10));
         expect(() => new HeartbeatMonitor({ intervalMs: 0, timeoutMs: 1 })).toThrow('intervalMs');
         expect(() => new HeartbeatMonitor({ intervalMs: 1.5, timeoutMs: 1 })).toThrow('intervalMs');
         expect(() => new HeartbeatMonitor({ intervalMs: 1, timeoutMs: 0 })).toThrow('timeoutMs');
@@ -282,7 +282,7 @@ describe('production multiplayer policies', () => {
         healthy.emit('pong');
         now = 5;
         monitor.tick();
-        await deferred();
+        await afterTimeout(5);
         expect(unresponsive.terminated).toBe(1);
         now = 10;
         monitor.tick();
@@ -304,7 +304,7 @@ describe('production multiplayer policies', () => {
         monitor.tick();
         now = 25;
         monitor.tick();
-        await deferred();
+        await afterTimeout(5);
         expect(errors).toEqual(expect.arrayContaining(['ping failed', 'terminate failed']));
         monitor.attach(new EventEmitter());
         monitor.stop();
@@ -326,7 +326,7 @@ describe('production multiplayer policies', () => {
         expect(silent.terminate).not.toHaveBeenCalled();
         longNow = 30;
         longerTimeout.tick();
-        await deferred();
+        await afterTimeout(30);
         expect(silent.terminate).toHaveBeenCalledTimes(1);
         longerTimeout.stop();
 
@@ -336,14 +336,14 @@ describe('production multiplayer policies', () => {
         responsive.ping = jest.fn(); responsive.terminate = jest.fn();
         stalledMonitor.attach(responsive); stalledMonitor.tick();
         stalledNow = 5; stalledMonitor.tick(); stalledMonitor.tick();
-        responsive.emit('pong'); await deferred();
+        responsive.emit('pong'); await afterTimeout(5);
         expect(responsive.terminate).not.toHaveBeenCalled();
         stalledNow = 10; stalledMonitor.tick();
         expect(responsive.ping).toHaveBeenCalledTimes(2);
         const silentAfterDelay = new EventEmitter();
         silentAfterDelay.ping = jest.fn(); silentAfterDelay.terminate = jest.fn();
         stalledMonitor.attach(silentAfterDelay); stalledMonitor.tick();
-        stalledNow = 15; stalledMonitor.tick(); await deferred();
+        stalledNow = 15; stalledMonitor.tick(); await afterTimeout(5);
         expect(silentAfterDelay.terminate).toHaveBeenCalledTimes(1);
 
         const reattached = new EventEmitter();
@@ -352,7 +352,7 @@ describe('production multiplayer policies', () => {
         stalledNow = 20; stalledMonitor.tick();
         expect(stalledMonitor.detach(reattached)).toBe(true);
         stalledMonitor.attach(reattached);
-        await deferred();
+        await afterTimeout(5);
         expect(reattached.terminate).not.toHaveBeenCalled();
 
         const pendingAtStop = new EventEmitter();
@@ -360,7 +360,7 @@ describe('production multiplayer policies', () => {
         stalledMonitor.attach(pendingAtStop); stalledMonitor.tick();
         stalledNow = 25; stalledMonitor.tick();
         stalledMonitor.stop();
-        await deferred();
+        await afterTimeout(5);
         expect(reattached.terminate).not.toHaveBeenCalled();
         expect(pendingAtStop.terminate).not.toHaveBeenCalled();
     });

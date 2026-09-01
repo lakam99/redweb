@@ -158,8 +158,8 @@ describe('single-source documentation', () => {
     });
 
     test('released documentation does not describe its shipped capabilities as unpublished', () => {
-        const docs = new Documentation(root, version).build();
-        const text = [fs.readFileSync(path.join(root, 'README.md'), 'utf8'), docs.llms, ...docs.pages.map(page => page.markdown)].join('\n');
+        const docs = JSON.parse(fs.readFileSync(path.join(root, `docs/releases/${version}.json`), 'utf8'));
+        const text = [docs.llms, ...docs.pages.map(page => page.markdown)].join('\n');
         for (const stale of [
             'Redweb itself remains unreleased',
             'This command is currently **unreleased**',
@@ -182,7 +182,7 @@ describe('single-source documentation', () => {
         expect(builder.links(code, 'docs/CLI.md')).toBe(code);
         expect(() => builder.links('[unknown](missing.md)', 'docs/CLI.md')).toThrow('Undocumented link target');
         expect(() => new Documentation(root, '../release')).toThrow('exact package version');
-        expect(new Documentation(root, version).build().channel).toBe(version);
+        expect(JSON.parse(fs.readFileSync(path.join(root, `docs/releases/${version}.json`), 'utf8')).channel).toBe(version);
         expect(() => builder.setup('../unknown')).toThrow('Unknown starter template');
     });
 
