@@ -1,7 +1,7 @@
 declare module 'redweb' {
     export { defineSocketContract } from 'redweb/contract';
     export type { SocketContract, ContractClient, SocketSchema, ContractInput, ContractOutput, ContractMessage } from 'redweb/contract';
-    import { Application, RequestHandler } from 'express';
+    import { Application as ExpressApplication, RequestHandler } from 'express';
     import { CorsOptions } from 'cors';
     import { Server as NodeHttpServer } from 'http';
     import { Server as NodeHttpsServer } from 'https';
@@ -22,7 +22,7 @@ declare module 'redweb' {
         listenCallback?: () => void;
         encoding?: RedWebEncoding;
         ssl?: { key: string; cert: string };
-        server?: Application;
+        server?: ExpressApplication;
         corsOptions?: CorsOptions | false;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
@@ -477,7 +477,7 @@ declare module 'redweb' {
     }
 
     export class BaseHttpServer {
-        app: Application;
+        app: ExpressApplication;
         server?: NodeHttpServer;
         constructor(options?: RedWebOptions);
         shutdown?(): Promise<void>;
@@ -653,6 +653,8 @@ declare module 'redweb' {
     export type LivePageClass = new () => object;
 
     export interface LiveHtmlServerBaseOptions extends Omit<RedWebOptions, 'enableHtmxRendering'> {
+        /** Custom routes share the live-page SocketServer; paths must be unique. */
+        socketRoutes?: Array<new () => SocketRoute>;
         development?: LiveDevelopmentOptions;
         pages: readonly LivePageClass[];
         templateRoot?: string;
@@ -682,7 +684,7 @@ declare module 'redweb' {
     export type LiveHtmlStartOptions = Omit<LiveHtmlServerBaseOptions, 'pages'> & LiveHtmlAuthentication;
 
     export class LiveHtmlServer {
-        app: Application;
+        app: ExpressApplication;
         server: NodeHttpServer | NodeHttpsServer;
         http: HttpServer | HttpsServer;
         sockets: SocketServer | null;
@@ -698,6 +700,45 @@ declare module 'redweb' {
         pageOrPages: LivePageClass | readonly LivePageClass[],
         options?: LiveHtmlStartOptions
     ): LiveHtmlServer;
+
+    export interface ApplicationContext {
+        app: ExpressApplication;
+        server: NodeHttpServer | NodeHttpsServer;
+        http: HttpServer | HttpsServer;
+        sockets: SocketServer | null;
+        services: ApplicationService[];
+    }
+
+    /** Application-wide resources; route-specific SocketService classes stay on their routes. */
+    export interface ApplicationService {
+        onInit(app: ApplicationContext, signal: AbortSignal): void | Promise<void>;
+        onShutdown(): void | Promise<void>;
+    }
+
+    export type ApplicationOptions = Omit<LiveHtmlServerBaseOptions, 'pages' | 'services' | 'listen' | 'socketRoutes'> & LiveHtmlAuthentication & {
+        pages?: readonly LivePageClass[];
+        sockets?: ReadonlyArray<new () => SocketRoute>;
+        services?: ReadonlyArray<new () => ApplicationService>;
+        httpServices?: RedWebOptions['services'];
+        startupTimeoutMs?: number;
+        /** Install process signal handlers only when run() is called; defaults to true. */
+        signals?: boolean;
+    };
+
+    export class Application {
+        constructor(options?: ApplicationOptions);
+        readonly app: ExpressApplication | null;
+        readonly server: NodeHttpServer | NodeHttpsServer | null;
+        readonly http: HttpServer | HttpsServer | null;
+        readonly sockets: SocketServer | null;
+        readonly services: ApplicationService[];
+        /** Resolves after services initialize and the single HTTP/WS listener is ready. */
+        run(): Promise<Application & ApplicationContext>;
+        shutdown(): Promise<void>;
+    }
+
+    /** Inert until run(); repeated run/shutdown calls share their respective promises. */
+    export function defineApp(options?: ApplicationOptions): Application;
 
     export interface StaticExportOptions {
         outDir: string;

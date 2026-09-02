@@ -15,6 +15,7 @@ class LiveHtmlServer {
         }
         const {
             pages,
+            socketRoutes = [],
             templateRoot,
             livePaths,
             sessionTtlMs,
@@ -29,6 +30,9 @@ class LiveHtmlServer {
             server: suppliedApp,
             ...httpOptions
         } = options;
+        if (!Array.isArray(socketRoutes) || socketRoutes.some(Route => typeof Route !== 'function')) {
+            throw new TypeError('`socketRoutes` must be an array of route classes.');
+        }
         const settings = developmentSettings(development, ['inspect', 'refresh'], { refresh: process.env.REDWEB_DEV_REFRESH === '1' });
         this._inspection = createInspection({ inspect: settings.inspect });
         const app = suppliedApp === undefined ? express() : suppliedApp;
@@ -58,11 +62,10 @@ class LiveHtmlServer {
         validateListenerOptions({ ...this.http, listen });
         this._ownedServer = new OwnedServerLifecycle(this.http.server);
         try {
-            if (this.manager.hasLivePages) {
-                const Route = this.manager.route();
+            if (this.manager.hasLivePages || socketRoutes.length) {
                 this.sockets = new SocketServer({
                     server: this.http.server,
-                    routes: [Route],
+                    routes: [...(this.manager.hasLivePages ? [this.manager.route()] : []), ...socketRoutes],
                     listen,
                     port: this.http.port,
                     bind: this.http.bind,
