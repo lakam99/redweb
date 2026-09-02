@@ -11,15 +11,19 @@ Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLIC
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.14.0. Install that exact version when following these examples.
+> Unreleased development documentation. Package metadata is 0.14.0, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
+
+Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces). This is an explicit prerequisite, not an npm package name. Both commands must use the same tarball. The published redweb-client dependency installs automatically; no separate client checkout or linking is required:
 
 ```sh
-npx --yes redweb@0.14.0 init my-realtime --template realtime
+npx --yes --package TARBALL redweb init my-realtime --template realtime
 cd my-realtime
-npm install --save-exact redweb@0.14.0
+npm install --save-exact TARBALL
 npm test
 npm run dev
 ```
+
+This prerelease Redweb artifact is development-only until its release checks finish. For released applications, use an available versioned release guide.
 <!-- redweb:setup:end -->
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
@@ -274,3 +278,13 @@ All canonical browser-facing examples run in headed Chromium: counter, chat, car
 An unresolved Linux CI process-cleanup assertion and the diagnostics added to investigate it are tracked in [process cleanup observations](docs/PROCESS_CLEANUP_OBSERVATION.md). Passing runs do not establish its cause or waive the original failure.
 
 Edit canonical recipes/guides, then run `npm run generate:docs`; do not maintain independent copies of the examples. See [documentation maintenance](docs/DOCUMENTATION.md) and the [full acceptance checklist](docs/AGENT_READY_ACCEPTANCE.md) for verification evidence and remaining release work.
+## Unreleased: socket-bound TSX pages
+
+Custom socket handlers can now be referenced directly by server TSX controls:
+`rw-submit={Join}` and `rw-click={Move.with({ cell, revision })}`. Attach the page
+with `@page('/', { socket: MatchRoute })`; update its private state through the
+checked `socket.page(GamePage)` accessor. Redweb uses the existing renderer and
+redweb-client runtime on one connection, without handwritten browser DOM code.
+
+See [Socket pages](docs/SOCKET_PAGES.md) for configuration, security, recovery and
+the required linked development client. This feature is not in published 0.14.0/0.2.0.

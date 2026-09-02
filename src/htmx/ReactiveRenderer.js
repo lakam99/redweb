@@ -223,6 +223,12 @@ class ReactiveRenderer {
             return node && [...node.html.matchAll(/\b(?:data-rw-state|rw-bind)\s*=\s*["']([^"']+)["']/g)].some(match => match[1] === payload.name);
         });
         if (!this.disposed && generation === this.generation && socket && (patches.length || explicit.length)) {
+            try { if (this.authorize) await this.authorize(); }
+            catch (error) {
+                if (this.disposed || generation !== this.generation) return;
+                throw error;
+            }
+            if (this.disposed || generation !== this.generation) return;
             socket.sendEvent('redweb:patch', { patches, states: explicit });
         }
     }

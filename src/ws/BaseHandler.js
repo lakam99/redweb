@@ -23,6 +23,8 @@ class BaseHandler {
         if (validationResult === false) {
             throw new Error('Invalid message');
         }
+        const guard = require('./HandlerGuard').guards.get(socket);
+        if (guard) await guard();
         return this.onMessage(socket, message);
     }
 

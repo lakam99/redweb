@@ -83,7 +83,7 @@ class SocketContract {
         if (!this.#validators.has(type)) throw new TypeError('Handler message type is not defined in the contract.');
         if (typeof callback !== 'function') throw new TypeError('A contract handler requires a callback.');
         const contract = this;
-        return class ContractHandler extends BaseHandler {
+        class ContractHandler extends BaseHandler {
             constructor() { super(type); }
             async handleMessage(socket, message) {
                 if (socket.context?.protocol?.version !== contract.version) throw new TypeError('The route must negotiate this contract version before handling messages.');
@@ -93,7 +93,8 @@ class SocketContract {
                 return super.handleMessage(socket, { ...message, payload });
             }
             onMessage(socket, message) { return callback(socket, message.payload, message); }
-        };
+        }
+        return require('../htmx/SocketAction').register(ContractHandler, type);
     }
 
     client(socket) { return new ContractClient(this, socket); }

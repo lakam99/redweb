@@ -89,7 +89,7 @@ function createElement(type, properties, key) {
     }
     let result;
     if (type === Fragment) result = trustedHtml(renderChild(props.children));
-    else if (typeof type === 'string') result = renderIntrinsic(type, props);
+    else if (typeof type === 'string') result = renderIntrinsic(type, require('./SocketAction').attributes(props));
     else if (typeof type === 'function') result = renderComponent(type, props);
     else throw new TypeError('JSX element types must be intrinsic names or function components.');
     const elementKey = key ?? props.key;

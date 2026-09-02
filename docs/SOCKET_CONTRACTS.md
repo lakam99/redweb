@@ -12,6 +12,9 @@ see [room authorization](ROOM_AUTHORIZATION.md) and the complete
 
 ## One schema, two sides
 
+The development branch also supports [typed handlers in server TSX](SOCKET_PAGES.md)
+with per-connection page state; that extension is not part of the 0.14.0 release.
+
 Import `defineSocketContract` from `redweb/contract` for a shared module, or from `redweb` in server-only code. The standalone entry does not import the HTTP server or Node socket listener. Browser consumers need a bundler capable of consuming the CommonJS package; this is not a native browser script URL or a React integration.
 
 `defineSocketContract(version, schemas, options?)` accepts an object mapping message names to [Standard Schema v1](https://standardschema.dev/) validators. Zod is used by the starter, but is not a Redweb runtime dependency. Use your existing compatible schema library. The version must match the negotiated protocol version, and `error` is reserved for protocol errors. Contracts support 1–256 types, names up to 256 characters, and versions up to 64 characters.

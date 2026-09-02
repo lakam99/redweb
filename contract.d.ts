@@ -19,6 +19,14 @@ export type ContractMessage<Schemas extends SocketSchemas> = {
     [Type in keyof Schemas & string]: ProtocolEnvelope<ContractOutput<Schemas[Type]>> & { type: Type };
 }[keyof Schemas & string];
 
+declare const socketActionBrand: unique symbol;
+export interface SocketAction { readonly [socketActionBrand]: true; }
+export interface SocketHandler<Input> {
+    new (): BaseHandler;
+    /** Bind a JSON payload to a server-rendered rw-click/rw-submit control. */
+    with(payload: Input): SocketAction;
+}
+
 export interface ContractClient<Schemas extends SocketSchemas> {
     envelope<Type extends keyof Schemas & string>(type: Type, payload: ContractInput<Schemas[Type]>, metadata?: ProtocolMetadata):
         Promise<ProtocolEnvelope<ContractInput<Schemas[Type]>> & { type: Type }>;
@@ -36,7 +44,7 @@ export interface SocketContract<Schemas extends SocketSchemas> {
     handler<Type extends keyof Schemas & string>(type: Type, callback: (
         socket: RedWebSocket, payload: ContractOutput<Schemas[Type]>,
         message: ProtocolEnvelope<ContractOutput<Schemas[Type]>> & { type: Type },
-    ) => unknown): new () => BaseHandler;
+    ) => unknown): SocketHandler<ContractInput<Schemas[Type]>>;
     client(socket: SendableSocket): ContractClient<Schemas>;
     send<Type extends keyof Schemas & string>(socket: RedWebSocket, type: Type, payload: ContractInput<Schemas[Type]>, metadata?: ProtocolMetadata): Promise<boolean>;
 }

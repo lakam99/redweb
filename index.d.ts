@@ -36,6 +36,8 @@ declare module 'redweb' {
         sendJson(data: unknown): boolean;
         broadcast(data: unknown): number;
         context?: RedWebConnectionContext;
+        /** Present on an attached page connection; checks the actual page class and connection lifetime. */
+        page?<Page extends object>(PageClass: new () => Page): Page;
         joinRoom?(roomId: string): boolean;
         /** Bounded permission check followed by atomic membership insertion. */
         enterRoom?(roomId: string): Promise<boolean>;
@@ -555,6 +557,8 @@ declare module 'redweb' {
     }
 
     export type PageOptions = {
+        /** Use a registered custom route for this private live page's typed TSX commands and rendering. */
+        socket?: new () => SocketRoute;
         template?: string;
         css?: string | readonly string[];
         live?: boolean;
