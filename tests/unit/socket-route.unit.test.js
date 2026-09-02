@@ -18,6 +18,25 @@ function createSocket(readyState) {
 }
 
 describe('SocketRoute units', () => {
+    test.each([0, -1, 1.5, '100', null, Infinity, NaN, 2147483648])('rejects invalid native closing deadline %s before constructing handlers', closeTimeout => {
+        let constructed = false;
+        class Handler extends NoopHandler { constructor() { super(); constructed = true; } }
+        expect(() => new SocketRoute({ path: '/close', handlers: [Handler], websocketOptions: { closeTimeout } }))
+            .toThrow('websocketOptions.closeTimeout');
+        expect(constructed).toBe(false);
+    });
+
+    test.each([undefined, 1, 100, 2147483647])('copies native closing deadline %s without mutating caller options', async closeTimeout => {
+        const options = Object.freeze({ closeTimeout, maxPayload: 1024 });
+        const route = new SocketRoute({ path: '/close', handlers: [NoopHandler], websocketOptions: options, logger: null });
+        try {
+            expect(route.websocketOptions).toEqual({ closeTimeout: closeTimeout ?? 5000, maxPayload: 1024 });
+            expect(route.server.options.closeTimeout).toBe(closeTimeout ?? 5000);
+            expect(route.server.options.maxPayload).toBe(1024);
+            expect(options.closeTimeout).toBe(closeTimeout);
+        } finally { await route.shutdown(); }
+    });
+
     test.each([
         [undefined, 'beginning with'],
         [{ handlers: [NoopHandler] }, 'beginning with'],

@@ -177,7 +177,7 @@ const route = new SocketRoute({
     handlers: [EchoHandler],
     services: [HeartbeatService],
     shutdownTimeoutMs: 250,
-    websocketOptions: { maxPayload: 1024 },
+    websocketOptions: { maxPayload: 1024, closeTimeout: 5000 },
     admission: {
         origins: ['https://game.example'],
         timeoutMs: 1000,

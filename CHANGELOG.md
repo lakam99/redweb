@@ -2,6 +2,7 @@
 
 ## 0.14.0
 
+- Bound already-closing WebSocket peers with the native `ws` closing-handshake deadline: `websocketOptions.closeTimeout` defaults to 5000ms instead of 30000ms and remains configurable. Real TCP tests cover a peer withholding FIN; heartbeat, session expiry, and shutdown deadlines remain separate.
 - Introduce deferred `defineApp({ pages, sockets, services, port })` composition and `await app.run()` with one owned HTTP/WebSocket listener, ordered application service initialization, cancellation, bounded shutdown, and partial-startup rollback.
 - Run the five canonical headed-browser example scenarios through `defineApp`; cover its lifecycle with real HTTP/WSS, process, and unit tests. Recognize the unified page/socket registrations in `redweb doctor` without executing application code.
 - Simplify all six generated starters around `app.run()` and remove their copied startup helper. Move dashboard auth/database ownership into an application service; retain real generated-app process tests and centralize lifecycle coverage on the framework implementation.

@@ -287,7 +287,10 @@ declare module 'redweb' {
         handlers: Array<new () => BaseHandler>;
         services?: Array<new () => SocketService>;
         allowDuplicateConnections?: boolean;
-        websocketOptions?: Omit<ServerOptions, 'noServer' | 'path' | 'server' | 'port'>;
+        websocketOptions?: Omit<ServerOptions, 'noServer' | 'path' | 'server' | 'port'> & {
+            /** Closing-handshake deadline in milliseconds (1..2147483647). Default: 5000. Not an idle timeout. */
+            closeTimeout?: number;
+        };
         trustProxy?: boolean;
         getClientKey?: (request: import('http').IncomingMessage) => string;
         exposeErrors?: boolean;

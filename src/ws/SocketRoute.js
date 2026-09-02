@@ -117,6 +117,10 @@ class SocketRoute {
         const reservedOption = ['noServer', 'path', 'server', 'port']
             .find(option => Object.prototype.hasOwnProperty.call(websocketOptions, option));
         if (reservedOption) throw new TypeError(`Redweb controls websocketOptions.${reservedOption}.`);
+        const { closeTimeout = 5000 } = websocketOptions;
+        if (!Number.isInteger(closeTimeout) || closeTimeout < 1 || closeTimeout > 2147483647) {
+            throw new TypeError('`websocketOptions.closeTimeout` must be an integer between 1 and 2147483647 milliseconds.');
+        }
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) {
             throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
         }
@@ -135,7 +139,7 @@ class SocketRoute {
          * @type {string}
          */
         this.path = path;
-        this.websocketOptions = { ...websocketOptions };
+        this.websocketOptions = { ...websocketOptions, closeTimeout };
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
@@ -165,7 +169,7 @@ class SocketRoute {
             throw new Error('Handler names must be unique within a route.');
         }
         this.clients = new Map();
-        this.server = new WebSocketServer({ ...websocketOptions, noServer: true });
+        this.server = new WebSocketServer({ ...this.websocketOptions, noServer: true });
         this.server.on('connection', this.handleConnection.bind(this));
         this.allowDuplicateConnections = Boolean(allowDuplicateConnections);
 

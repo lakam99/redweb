@@ -226,7 +226,7 @@
         "handlers: array of handler classes (required)",
         "services: array of SocketService subclasses (optional)",
         "allowDuplicateConnections: allow multiple clients from the same IP",
-        "websocketOptions: options passed to ws WebSocketServer, such as maxPayload or perMessageDeflate",
+        "websocketOptions: options passed to ws WebSocketServer, such as maxPayload or perMessageDeflate; closeTimeout defaults to 5000 milliseconds (integer 1..2147483647) and bounds an already-started closing handshake, not healthy idle connections",
         "admission: authenticate, validate origins, and optionally place a client before upgrade",
         "maxPendingUpgrades: finite concurrent admission/negotiation work (default 64)",
         "limits: connection, message-rate, pending-message, and outbound-buffer ceilings",

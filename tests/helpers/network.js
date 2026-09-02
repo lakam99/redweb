@@ -128,9 +128,10 @@ async function closeWebSocket(socket) {
     await closed;
 }
 
-function openRawWebSocket(port, route) {
+function openRawWebSocket(port, route, { allowHalfOpen = false, headers = {} } = {}) {
+    let socket;
     return withTimeout(new Promise((resolve, reject) => {
-        const socket = net.connect(port, '127.0.0.1');
+        socket = net.connect({ port, host: '127.0.0.1', allowHalfOpen });
         let response = '';
         socket.once('connect', () => {
             const key = crypto.randomBytes(16).toString('base64');
@@ -141,18 +142,21 @@ function openRawWebSocket(port, route) {
                 'Connection: Upgrade',
                 `Sec-WebSocket-Key: ${key}`,
                 'Sec-WebSocket-Version: 13',
+                ...Object.entries(headers).map(([name, value]) => `${name}: ${value}`),
                 '',
                 '',
             ].join('\r\n'));
         });
-        socket.on('data', chunk => {
+        const readHandshake = chunk => {
             response += chunk.toString('latin1');
             if (!response.includes('\r\n\r\n')) return;
+            socket.off('data', readHandshake);
             if (!response.startsWith('HTTP/1.1 101')) return reject(new Error(`Unexpected upgrade response: ${response}`));
             resolve(socket);
-        });
+        };
+        socket.on('data', readHandshake);
         socket.once('error', reject);
-    }), 'raw WebSocket upgrade');
+    }), 'raw WebSocket upgrade').catch(error => { socket?.destroy(); throw error; });
 }
 
 module.exports = {
