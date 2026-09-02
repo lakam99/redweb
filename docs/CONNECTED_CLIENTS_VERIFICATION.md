@@ -57,8 +57,9 @@ membership rollback is not an arbitrary application/database transaction.
 
 ## Release boundary
 
-Implementation is committed as unreleased. Before manual publication, choose a
-new version and generate its release catalogue using the existing release workflow.
+The implementation above was tested as unreleased. Release preparation now targets
+**0.16.0**, with matching package/lock metadata and a generated immutable release
+catalogue. This preparation does not publish the package or change runtime code.
 After publication, update the site's dependency pins, lockfiles and catalogue;
 remove development-preview notices and retest the archive against registry packages
 before manual deployment. Immutable published documentation snapshots are unchanged.

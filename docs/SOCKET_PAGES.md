@@ -1,8 +1,8 @@
 # Server-side TSX for custom socket routes
 
-## Development: connected clients
+## Connected clients (0.16.0)
 
-The following convenience layer is **unreleased** and is not in Redweb 0.15.0.
+The following convenience layer requires Redweb **0.16.0**; it is not in Redweb 0.15.0.
 It uses existing redweb-client 0.3.0 without a client upgrade.
 
 `connectedClients({ identity, page, project })` creates one route-owned group.
