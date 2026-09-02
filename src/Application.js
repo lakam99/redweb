@@ -146,17 +146,31 @@ class Application {
     async _listen() {
         const { server } = this;
         let ready, failed;
+        const detach = () => {
+            if (ready) server.off('listening', ready);
+            if (failed) server.off('error', failed);
+        };
         try {
             await this._withinStartup(() => new Promise((resolve, reject) => {
-                ready = resolve;
-                failed = reject;
+                failed = error => { detach(); reject(error); };
+                ready = () => {
+                    try {
+                        // Node 18 can complete even a numeric-host lookup after
+                        // AbortSignal closed the server. Close before accepting peers.
+                        if (this._abort.signal.aborted) server.close();
+                        detach();
+                        resolve();
+                    } catch (error) { failed(error); }
+                };
                 server.once('listening', ready);
                 server.once('error', failed);
                 server.listen({ port: this.options.port, host: this.options.bind, signal: this._abort.signal });
             }), 'Application listener startup');
         } finally {
-            if (ready) server.off('listening', ready);
-            if (failed) server.off('error', failed);
+            // Aborted native lookup may still emit an error or begin listening
+            // on older Node releases. Keep these one-shot guards until it settles.
+            // On newer Node, the unreachable closed server/guards are GC-able.
+            if (!this._abort.signal.aborted) detach();
         }
     }
 

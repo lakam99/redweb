@@ -154,3 +154,29 @@ test.each([false, true])('disposal closes admission and retains native close fai
     }
     expect(app.server.listening).toBe(false);
 });
+
+test.each(['listening', 'error', 'close-failure'])('cancelled native listener retains a terminal-event guard: %s', async mode => {
+    // Unit-only fault boundary. Node 18/22 subprocess tests exercise the real
+    // DNS and numeric-host cancellation paths without replacing native APIs.
+    const { EventEmitter } = require('node:events');
+    const server = new EventEmitter();
+    let started = 0, closed = 0;
+    server.listen = () => { started++; };
+    server.close = () => { closed++; if (mode === 'close-failure') throw new Error('native close failed'); };
+    const app = defineApp(config);
+    app.server = server;
+    app._startupDeadline = require('node:perf_hooks').performance.now() + 1000;
+    const rejected = expect(app._listen()).rejects.toThrow('cancelled');
+    await Promise.resolve();
+    expect(started).toBe(1);
+    app._abort.abort();
+    await rejected;
+    expect(server.listenerCount('error')).toBe(1);
+    if (mode === 'error') server.emit('error', new Error('late DNS failure'));
+    else server.emit('listening');
+    await Promise.resolve();
+    expect(closed).toBe(mode === 'error' ? 0 : 1);
+    expect(server.listenerCount('error')).toBe(0);
+    expect(server.listenerCount('listening')).toBe(0);
+    await app.shutdown();
+});
