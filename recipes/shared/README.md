@@ -40,3 +40,10 @@ and application-specific rate limits. These starters are demonstrations, not a h
 Never commit secrets; `.env` is ignored but is not loaded automatically.
 
 `npx --no-install redweb doctor --json` reports configuration problems without changing your files.
+## Dependency security
+
+This starter includes an application-root npm override for Express 4's `qs`
+dependency, selecting patched `qs@6.16.0`. Keep the override when merging this
+starter into an existing application, refresh its lockfile and run `npm audit`.
+Overrides in Redweb's own package do not apply to installed consumers. Recheck
+upstream Express/body-parser releases before removing this temporary mitigation.

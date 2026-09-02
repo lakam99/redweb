@@ -61,6 +61,8 @@ describe('ProjectInitializer', () => {
             expect(result.created).toContain('README.md');
             expect(fs.readFileSync(path.join(result.root, 'README.md'), 'utf8')).toContain('npm test');
             const manifest = JSON.parse(fs.readFileSync(path.join(result.root, 'package.json'), 'utf8'));
+            expect(manifest.overrides).toEqual({ express: { qs: '6.16.0' } });
+            expect(manifest.overrides).toEqual(require('../../package.json').overrides);
             expect(manifest.devDependencies.c8).toBeDefined();
             expect(manifest.scripts['test:coverage']).toContain('c8 --all --src=dist --include=dist/**');
             expect(JSON.parse(fs.readFileSync(path.join(result.root, 'tsconfig.json'), 'utf8')).compilerOptions.sourceMap).toBe(true);

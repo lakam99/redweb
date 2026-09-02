@@ -65,6 +65,10 @@ archive; Chrome and the tutorial's Node version are required.
 
 ## Release boundaries and outstanding dependency audit
 
+The follow-up [release preparation](SOCKET_PAGE_RELEASE_PREPARATION.md) prepares
+client 0.3.0 and records the tested application-root qs mitigation. The initial
+observations below remain historical; they do not override that later status.
+
 The old published versions (Redweb 0.14.0/client 0.2.0) do not contain these APIs.
 Local tarballs retaining those development metadata versions were verification
 inputs, not artifacts to publish over existing releases. Release a new client,

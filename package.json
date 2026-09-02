@@ -162,6 +162,9 @@
     "redweb-client": "^0.2.0",
     "ws": "^8.21.3"
   },
+  "overrides": {
+    "express": { "qs": "6.16.0" }
+  },
   "devDependencies": {
     "@types/jest": "^29.5.12",
     "c8": "^10.1.3",

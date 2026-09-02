@@ -8,7 +8,7 @@ const TEMPLATES = Object.freeze(['realtime', 'chat', 'site', 'socket', 'dashboar
 
 function projectFiles(version, template = 'realtime', root = path.resolve(__dirname, '../..')) {
     if (!TEMPLATES.includes(template)) throw new Error('Unknown starter template.');
-    const { devDependencies, dependencies } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const { devDependencies, dependencies, overrides } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
     const read = relative => fs.readFileSync(path.join(root, 'recipes', relative), 'utf8');
     const manifest = {
         name: 'redweb-app', private: true, version: '0.0.0',
@@ -24,6 +24,7 @@ function projectFiles(version, template = 'realtime', root = path.resolve(__dirn
             ...(['chat', 'socket', 'dashboard'].includes(template) ? { zod: devDependencies.zod } : {}),
             ...(template === 'dashboard' ? { express: dependencies.express } : {}),
         },
+        overrides,
         devDependencies: {
             typescript: devDependencies.typescript, nodemon: devDependencies.nodemon, ws: dependencies.ws, c8: devDependencies.c8,
             ...(template === 'dashboard' ? {
