@@ -8,6 +8,7 @@ const SocketService = require('./ws/SocketService');
 const OwnedServerLifecycle = require('./OwnedServerLifecycle');
 const { validateListenerOptions } = require('./serverLifecycle');
 const { awaitStartupCleanup } = require('./StartupCleanup');
+const { performance } = require('node:perf_hooks');
 
 function classes(value, name) {
     if (!Array.isArray(value) || value.some(Type => typeof Type !== 'function')) {
@@ -16,12 +17,20 @@ function classes(value, name) {
     return [...value];
 }
 
-function bounded(operation, milliseconds, label) {
-    let timer;
+function bounded(operation, milliseconds, label, signal) {
+    let timer, abort;
     return Promise.race([
-        Promise.resolve().then(operation),
+        Promise.resolve().then(() => {
+            if (signal?.aborted) throw new Error('Application startup was cancelled.');
+            return operation();
+        }),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} exceeded its deadline.`)), milliseconds); }),
-    ]).finally(() => clearTimeout(timer));
+        new Promise((_, reject) => {
+            abort = () => reject(new Error('Application startup was cancelled.'));
+            signal?.addEventListener('abort', abort, { once: true });
+            if (signal?.aborted) abort();
+        }),
+    ]).finally(() => { clearTimeout(timer); signal?.removeEventListener('abort', abort); });
 }
 
 /** One deferred application definition, one listener and one cleanup owner. */
@@ -55,18 +64,29 @@ class Application {
         this._cleanupPromise = null;
         this._stopping = false;
         this._abort = new AbortController();
-        this._onSignal = () => { void this.shutdown().catch(() => { process.exitCode = 1; }); };
-        this._onError = () => { process.exitCode = 1; this._onSignal(); };
+        this._onSignal = () => this._stopProcess();
+        this._onClose = () => {
+            if (this._stopping) return;
+            if (this.options.signals) this._stopProcess();
+            else void this.shutdown().catch(() => {});
+        };
+        this._onError = () => {
+            if (this.options.signals) process.exitCode = 1;
+            this._onClose();
+        };
     }
 
     run() {
         if (this._runPromise) return this._runPromise;
         if (this._stopping) return Promise.reject(new Error('An application cannot run after shutdown. Define a new application.'));
+        this._startupDeadline = performance.now() + this.options.startupTimeoutMs;
         this._runPromise = this._start().catch(async error => {
             this._stopping = true;
             this._abort.abort();
             try {
-                const results = await Promise.allSettled([awaitStartupCleanup(error), this._cleanup()]);
+                const results = await Promise.allSettled([
+                    this._withinShutdown(() => awaitStartupCleanup(error), 'Construction rollback'), this._cleanup(),
+                ]);
                 const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
                 if (errors.length) throw new AggregateError(errors, 'Application rollback failed.');
             }
@@ -87,6 +107,7 @@ class Application {
             this._live = new LiveHtmlServer({ ...httpOptions, pages, socketRoutes: sockets });
             this.http = this._live.http;
             this.sockets = this._live.sockets;
+            this._owner = this._live._ownedServer;
         } else {
             const Server = options.ssl ? HttpsServer : HttpServer;
             this.http = new Server(httpOptions);
@@ -105,13 +126,13 @@ class Application {
             if (typeof service.onInit !== 'function' || typeof service.onShutdown !== 'function') {
                 throw new TypeError('Application services require onInit(app, signal) and onShutdown().');
             }
-            await bounded(() => service.onInit(this, this._abort.signal), startupTimeoutMs, 'Application service initialization');
+            await this._withinStartup(() => service.onInit(this, this._abort.signal), 'Application service initialization');
         }
         this._checkStarting();
         await this._listen();
         this._checkStarting();
         this.server.on('error', this._onError);
-        this.server.once('close', this._onSignal);
+        this.server.once('close', this._onClose);
         if (options.listenCallback) options.listenCallback();
         else options.logger?.log?.(`Redweb application listening on ${options.bind}:${this.server.address().port}`);
         return this;
@@ -125,26 +146,43 @@ class Application {
         const { server } = this;
         let ready, failed;
         try {
-            await bounded(() => new Promise((resolve, reject) => {
+            await this._withinStartup(() => new Promise((resolve, reject) => {
                 ready = resolve;
                 failed = reject;
                 server.once('listening', ready);
                 server.once('error', failed);
                 server.listen(this.options.port, this.options.bind);
-            }), this.options.startupTimeoutMs, 'Application listener startup');
+            }), 'Application listener startup');
         } finally {
-            server.off('listening', ready);
-            server.off('error', failed);
+            if (ready) server.off('listening', ready);
+            if (failed) server.off('error', failed);
         }
     }
 
     shutdown() {
         if (!this._shutdownPromise) {
             this._stopping = true;
+            this._deadline ??= performance.now() + this.options.shutdownTimeoutMs;
             this._abort.abort();
             this._shutdownPromise = Promise.resolve(this._runPromise).catch(() => {}).then(() => this._cleanup());
         }
         return this._shutdownPromise;
+    }
+
+    _stopProcess() {
+        if (this._processStopping) return;
+        this._processStopping = true;
+        const timer = setTimeout(() => { process.exitCode = 1; process.exit(); }, this.options.shutdownTimeoutMs);
+        void this.shutdown().then(() => clearTimeout(timer), () => { process.exitCode = 1; timer.unref(); });
+    }
+
+    _withinShutdown(operation, label) {
+        this._deadline ??= performance.now() + this.options.shutdownTimeoutMs;
+        return bounded(operation, Math.max(0, this._deadline - performance.now()), label);
+    }
+
+    _withinStartup(operation, label) {
+        return bounded(operation, Math.max(0, this._startupDeadline - performance.now()), label, this._abort.signal);
     }
 
     _cleanup() {
@@ -154,22 +192,28 @@ class Application {
 
     async _dispose() {
         const errors = [];
-        const close = async operation => {
-            try { await operation(); } catch (error) { errors.push(error); }
+        const close = async (operation, label) => {
+            try { await this._withinShutdown(operation, label); } catch (error) { errors.push(error); }
         };
         // Drain handlers and close listeners before releasing their dependencies.
-        if (this._live) await close(() => this._live.shutdown());
-        else {
-            if (this.sockets) await close(() => this.sockets.shutdown());
-            if (this._owner) await close(() => this._owner.close(this.options.shutdownTimeoutMs, () => this.http.shutdown()));
+        if (this.server?.listening) {
+            try { this.server.close(); } catch (error) { errors.push(error); }
+        }
+        if (this.sockets) await close(() => this.sockets.shutdown(), 'Socket shutdown');
+        if (this._live) await close(() => this._live.manager.shutdown(), 'Page shutdown');
+        if (this._owner) {
+            await close(() => this._owner.close(Math.max(0, this._deadline - performance.now()), () => this.http.shutdown()), 'HTTP shutdown');
+            errors.push(...this._owner.forceClose());
         }
         for (const service of [...this.services].reverse()) {
-            await close(() => bounded(() => service.onShutdown(), this.options.shutdownTimeoutMs, 'Application service shutdown'));
+            await close(() => service.onShutdown(), 'Application service shutdown');
         }
         this.server?.off('error', this._onError);
-        this.server?.off('close', this._onSignal);
-        process.off('SIGINT', this._onSignal);
-        process.off('SIGTERM', this._onSignal);
+        this.server?.off('close', this._onClose);
+        if (!errors.length || !this._processStopping) {
+            process.off('SIGINT', this._onSignal);
+            process.off('SIGTERM', this._onSignal);
+        }
         if (errors.length) throw new AggregateError(errors, 'Application shutdown failed.');
     }
 }

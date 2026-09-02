@@ -4,7 +4,7 @@ const http = require('node:http');
 const WebSocket = require('ws');
 const { RedwebClient } = require('redweb-client');
 const { defineApp, page, SocketRoute, BaseHandler } = require('../..');
-const { request, waitForOpen, nextMessage, closeWebSocket, waitForListening, websocketUpgradeStatus } = require('../helpers/network');
+const { request, waitForOpen, nextMessage, closeWebSocket, waitForListening, websocketUpgradeStatus, withTimeout, waitForClose } = require('../helpers/network');
 
 class Home { render() { return '<h1>Home</h1>'; } }
 class About { render() { return '<h1>About</h1>'; } }
@@ -152,4 +152,54 @@ test.each(['route-constructor', 'route-collision', 'later-page', 'http-options']
     await app.shutdown();
     expect(created).toBe(1);
     expect(disposed).toBe(1);
+});
+
+test('one shutdown deadline rejects a stalled route, closes admission and peers, and attempts service cleanup', async () => {
+    let release, entered;
+    const stalled = new Promise(resolve => { release = resolve; });
+    const stopping = new Promise(resolve => { entered = resolve; });
+    class Stalled extends Match {
+        async shutdown() { entered(); await stalled; await super.shutdown(); }
+    }
+    let serviceClosed = false;
+    class Resource { onInit() {} onShutdown() { serviceClosed = true; } }
+    const app = defineApp({ ...config, sockets: [Stalled], services: [Resource], shutdownTimeoutMs: 30 });
+    let peer;
+    try {
+        await app.run();
+        peer = new WebSocket(`ws://127.0.0.1:${app.server.address().port}/match`);
+        await waitForOpen(peer);
+        const closed = waitForClose(peer);
+        const result = app.shutdown().catch(error => error);
+        await withTimeout(stopping, 'route shutdown entry');
+        expect(app.server.listening).toBe(false);
+        const error = await withTimeout(result, 'bounded application shutdown', 1000);
+        expect(error).toBeInstanceOf(AggregateError);
+        expect(error.errors.some(error => error.message.includes('Socket shutdown exceeded'))).toBe(true);
+        await closed;
+        expect(serviceClosed).toBe(true);
+    } finally {
+        release();
+        if (peer) await closeWebSocket(peer);
+        await app.sockets.shutdown();
+        await app.shutdown().catch(() => {});
+    }
+});
+
+test('shutdown cancels a pending initializer without waiting for its startup deadline', async () => {
+    let entered, signal, disposed = false;
+    const initializing = new Promise(resolve => { entered = resolve; });
+    class Pending {
+        onInit(_app, input) { signal = input; entered(); return new Promise(() => {}); }
+        onShutdown() { disposed = true; }
+    }
+    const app = defineApp({ ...config, services: [Pending], startupTimeoutMs: 5000, shutdownTimeoutMs: 30 });
+    const run = app.run();
+    const rejected = expect(run).rejects.toThrow('cancelled');
+    await initializing;
+    await withTimeout(app.shutdown(), 'cancel pending initialization', 1000);
+    await rejected;
+    expect(signal.aborted).toBe(true);
+    expect(disposed).toBe(true);
+    expect(app.server.listening).toBe(false);
 });
