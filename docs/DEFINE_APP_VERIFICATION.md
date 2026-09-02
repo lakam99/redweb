@@ -59,3 +59,16 @@ abort-reason identity as well as foreign-context errors. A native-process abort
 regression passes on Node 18 and 22; the lifecycle scope now has 74 passing tests
 and all-four 100% coverage. The corrected starter coordinator gate passes all
 56 tests with all-four 100% coverage of its three coordinator modules.
+
+## Release catalogue checks
+
+The prepared package and lockfile are `0.14.0`. The 68-page generated catalogue
+matches `docs/releases/0.14.0.json`; older release snapshots were not edited.
+The package dry run includes the unified runtime and shared entrypoint tests,
+and the release-documentation guard passes. No package was published.
+
+The optional docs MCP adapter previously hard-coded an unreleased-channel
+expectation. Its tests now compare against the loaded canonical channel and
+exercise both valid channel variants. All seven tests pass, including actual
+MCP subprocesses and isolated production-only package installation; all three
+adapter modules have 100% line, branch, and function coverage.

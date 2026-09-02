@@ -24,7 +24,7 @@ test('catalogue search and paged reads preserve exact canonical content', () => 
   try {
     const docs = new DocCatalogue(f.file)
     const results = docs.search('chat')
-    assert.equal(results.channel, 'unreleased')
+    assert.equal(results.channel, canonical.channel)
     assert.ok(results.results.some(item => item.id === 'recipes/chat'))
     assert.ok(results.results.length <= 8)
     assert.equal(docs.search('chat', 1).results.length, 1)
@@ -57,7 +57,7 @@ test('catalogue search and paged reads preserve exact canonical content', () => 
     assert.throws(() => docs.read(first.id, { length: 16001 }))
     // Mutating returned metadata cannot change later responses.
     results.channel = 'pretend-release'
-    assert.equal(docs.read(first.id).channel, 'unreleased')
+    assert.equal(docs.read(first.id).channel, canonical.channel)
   } finally { f.close() }
 })
 
@@ -81,12 +81,14 @@ test('startup rejects inconsistent metadata, hashes, identities and oversized in
       f.put(data)
       assert.throws(() => new DocCatalogue(f.file))
     }
-    const release = structuredClone(canonical)
-    release.channel = release.packageVersion
-    release.basePath = `/docs/reference/${release.channel}`
-    for (const page of release.pages) page.url = `${release.basePath}/${page.id}.md`
-    f.put(release)
-    assert.equal(new DocCatalogue(f.file).search('chat').channel, release.channel)
+    for (const channel of ['unreleased', canonical.packageVersion]) {
+      const catalogue = structuredClone(canonical)
+      catalogue.channel = channel
+      catalogue.basePath = `/docs/reference/${channel}`
+      for (const page of catalogue.pages) page.url = `${catalogue.basePath}/${page.id}.md`
+      f.put(catalogue)
+      assert.equal(new DocCatalogue(f.file).search('chat').channel, channel)
+    }
     writeFileSync(f.file, '{invalid')
     assert.throws(() => new DocCatalogue(f.file))
     truncateSync(f.file, 16 * 1024 * 1024 + 1)
