@@ -63,7 +63,7 @@ async function main() {
             fs.mkdirSync(reports);
             const preload = path.join(root, 'scripts/lib/record-application-coverage.cjs');
             const retainedWorkers = path.join(target, 'process-reports');
-            const instrumented = await reportCommand(execution, ['--test', 'test/app.test.cjs', 'test/run-app.test.cjs',
+            const instrumented = await reportCommand(execution, ['--test', 'test/app.test.cjs', 'test/lifecycle.test.cjs',
                 ...(template === 'dashboard' ? ['test/rate-window.test.cjs'] : [])], { cwd: project, environment: {
                     NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${JSON.stringify(preload)}`,
                     REDWEB_APPLICATION_COVERAGE_DIRECTORY: reports,

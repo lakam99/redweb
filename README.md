@@ -4,17 +4,19 @@ Build a TypeScript website and its realtime backend together. Decorated classes 
 
 Use the same package for a live site, static HTML, Express HTTP endpoints, or routed WebSocket services.
 
+Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLICATION.md), followed by `await app.run()`, for one owned HTTP/WebSocket listener.
+
 ## Install
 
 Start with a complete, tested counter application:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.13.5. Install that exact version when following these examples.
+> Documentation for Redweb 0.14.0. Install that exact version when following these examples.
 
 ```sh
-npx --yes redweb@0.13.5 init my-realtime --template realtime
+npx --yes redweb@0.14.0 init my-realtime --template realtime
 cd my-realtime
-npm install --save-exact redweb@0.13.5
+npm install --save-exact redweb@0.14.0
 npm test
 npm run dev
 ```
@@ -22,12 +24,11 @@ npm run dev
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
 
-This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, shutdown helper, and real-network tests; the file is not a standalone copy-and-run program.
+This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, and real-network tests; startup and shutdown belong to Redweb itself. The file is not a standalone copy-and-run program.
 
 <!-- redweb:realtime:start -->
 ```tsx
-import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
-import { runApp } from './run-app';
+import { action, defineApp, page, state } from 'redweb';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -49,11 +50,9 @@ export class CounterPage {
     }
 }
 
-export function createApp(options: LiveHtmlStartOptions = {}) {
-    return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
-}
+export const app = defineApp({ pages: [CounterPage], port: Number(process.env.PORT ?? 8181), templateRoot: __dirname });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });
 ```
 <!-- redweb:realtime:end -->
 
@@ -95,8 +94,7 @@ The `http-ws` starter answers `GET /health` and accepts `{"type":"hello"}` at `w
 
 <!-- redweb:http-ws:start -->
 ```tsx
-import { BaseHandler, HttpServer, METHODS, SocketRoute, SocketServer, type RedWebSocket, type SocketServerOptions } from 'redweb';
-import { runApp } from './run-app';
+import { BaseHandler, defineApp, METHODS, SocketRoute, type RedWebSocket } from 'redweb';
 
 export class Hello extends BaseHandler {
     constructor() { super('hello'); }
@@ -112,29 +110,19 @@ export class ChatRoute extends SocketRoute {
     }
 }
 
-export function createApp(options: Pick<SocketServerOptions, 'port' | 'bind' | 'logger'> = {}) {
-    const http = new HttpServer({
-        listen: false,
-        publicPaths: [],
-        services: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
-    });
+export const app = defineApp({
+    sockets: [ChatRoute],
+    port: Number(process.env.PORT ?? 8181),
+    bind: '127.0.0.1',
+    publicPaths: [],
+    httpServices: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
+});
 
-    return new SocketServer({
-        port: options.port ?? Number(process.env.PORT ?? 8181),
-        bind: options.bind ?? '127.0.0.1',
-        logger: options.logger,
-        server: http.server,
-        routes: [ChatRoute],
-        listen: true,
-        closeServerOnShutdown: true, // One owner closes routes and the shared HTTP listener.
-    });
-}
-
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });
 ```
 <!-- redweb:http-ws:end -->
 
-Follow the [shared-listener notes](recipes/http-ws/README.md) and initialize with `--template http-ws` using the matching artifact above. The socket service explicitly owns cleanup of the supplied HTTP listener. `/health` reports liveness, not readiness. This demonstrates raw JSON messages, not a chatroom UI.
+Follow the [shared-listener notes](recipes/http-ws/README.md) and initialize with `--template http-ws` using the matching artifact above. The unified application owns cleanup of its HTTP and socket resources. `/health` reports liveness, not readiness. This demonstrates raw JSON messages, not a chatroom UI.
 
 For validated, inferred client/server payloads, use [shared socket contracts](docs/SOCKET_CONTRACTS.md). The client wraps your transport; it does not create or reconnect one for you.
 
@@ -265,7 +253,7 @@ The isolated browser harness copies its verification helpers explicitly and chec
 
 `npm run verify:live-html:browser:coverage` combines the existing full browser workload (counter, chat, CSS, JSX, components, forms and dashboard) with explicit failure-path unit tests. Its 100% authored-tool coverage is separate from frontend coverage and release acceptance. The native workload requires the dashboard's supported Node version. Known limitations of the unchanged legacy browser tool— including uncertain descendant cleanup—are characterized, not silently fixed or counted as verified cleanup; see the [coverage audit](docs/COVERAGE_SCOPE_AUDIT.md).
 
-The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. Redweb 0.13.5 depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md).
+The frontend is maintained in `redweb-client/live-html`; Redweb emits only a two-line mounting bootstrap. Redweb 0.14.0 depends on published `redweb-client@^0.2.0`, so ordinary application installation needs no client checkout or link. Contributors editing the client can still use the [linked development workflow](docs/CLIENT_DEVELOPMENT.md).
 
 `npm run measure:browser:client` separately serves the exact installed socket-only module with and without instrumentation through the same real HTTP/WebSocket/browser cases and retains its source hash and counters. It exits unsuccessfully until all four coverage metrics reach 100%; incomplete results are not a passing dependency-coverage claim. Reports are local under `coverage/browser-client` and do not alter the installed dependency or published package.
 

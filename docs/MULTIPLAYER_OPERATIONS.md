@@ -19,6 +19,12 @@ process.once('SIGTERM', async () => {
 
 If `drainHandlers` is enabled, handlers should observe `socket.context.signal` and return promptly. Set the platform termination grace period above the application's maximum cooperative handler time plus `shutdownTimeoutMs`.
 
+## Closing connections
+
+Once a WebSocket closing handshake starts, Redweb lets the native `ws` transport finish it for up to 5000ms, then terminate the peer if necessary. This releases connections that exchange close frames but never finish TCP shutdown. Configure `websocketOptions: { closeTimeout: 10000 }` on a route if its peers need longer; values must be integers from 1 through 2147483647 milliseconds.
+
+This is not an idle timeout: healthy open connections are unaffected. Heartbeats detect unresponsive open peers, session TTL controls retained application state after disconnection, and `shutdownTimeoutMs` separately bounds route shutdown.
+
 ## Placement and partitions
 
 The admission `place(principal, request, context)` hook can return another node's `ws`/`wss` URL before upgrade. Keep placement decisions short-lived and retryable. A redirect is not a reservation: the destination must still authenticate, enforce capacity, and reject stale placement.

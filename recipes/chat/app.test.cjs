@@ -1,8 +1,10 @@
 const test = require('node:test');
 const { once } = require('node:events');
 const assert = require('node:assert/strict');
-const { listen, live, connect } = require('./network.cjs');
+const { listen: listenApp, live, connect } = require('./network.cjs');
 const { createChatroomPage, chatInputs } = require('../dist/chatroom.js');
+// Each test gets an independent room rather than the default module-level room.
+const listen = t => listenApp(t, { pages: [createChatroomPage()] });
 
 test('the standalone canonical chat reports an occupied default port', { timeout: 10000 }, async t => {
     const net = require('node:net');

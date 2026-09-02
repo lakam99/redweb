@@ -7,14 +7,21 @@ const { createInspection } = require('../development/Inspection');
 const developmentSettings = require('../development/settings');
 const OwnedServerLifecycle = require('../OwnedServerLifecycle');
 const { listenServer, validateListenerOptions } = require('../serverLifecycle');
+const { scheduleStartupCleanup } = require('../StartupCleanup');
 
 class LiveHtmlServer {
     constructor(options = {}) {
+        try { this.initialize(options); }
+        catch (error) { throw scheduleStartupCleanup(error, () => this.shutdown()); }
+    }
+
+    initialize(options) {
         if (!options || typeof options !== 'object' || Array.isArray(options)) {
             throw new TypeError('Live HTML server options must be an object.');
         }
         const {
             pages,
+            socketRoutes = [],
             templateRoot,
             livePaths,
             sessionTtlMs,
@@ -29,6 +36,9 @@ class LiveHtmlServer {
             server: suppliedApp,
             ...httpOptions
         } = options;
+        if (!Array.isArray(socketRoutes) || socketRoutes.some(Route => typeof Route !== 'function')) {
+            throw new TypeError('`socketRoutes` must be an array of route classes.');
+        }
         const settings = developmentSettings(development, ['inspect', 'refresh'], { refresh: process.env.REDWEB_DEV_REFRESH === '1' });
         this._inspection = createInspection({ inspect: settings.inspect });
         const app = suppliedApp === undefined ? express() : suppliedApp;
@@ -58,11 +68,10 @@ class LiveHtmlServer {
         validateListenerOptions({ ...this.http, listen });
         this._ownedServer = new OwnedServerLifecycle(this.http.server);
         try {
-            if (this.manager.hasLivePages) {
-                const Route = this.manager.route();
+            if (this.manager.hasLivePages || socketRoutes.length) {
                 this.sockets = new SocketServer({
                     server: this.http.server,
-                    routes: [Route],
+                    routes: [...(this.manager.hasLivePages ? [this.manager.route()] : []), ...socketRoutes],
                     listen,
                     port: this.http.port,
                     bind: this.http.bind,
@@ -100,11 +109,11 @@ class LiveHtmlServer {
             try { await this.sockets.shutdown(); }
             catch (error) { errors.push(error); }
         }
-        try { await this.manager.shutdown(); }
+        try { await this.manager?.shutdown(); }
         catch (error) {
             errors.push(error);
         }
-        try { await this._ownedServer.close(this.manager.shutdownTimeoutMs, () => this.http.shutdown()); }
+        try { await this._ownedServer?.close(this.manager.shutdownTimeoutMs, () => this.http.shutdown()); }
         catch (error) { errors.push(error); }
         if (errors.length) throw new AggregateError(errors, 'Live HTML shutdown failed.');
     }

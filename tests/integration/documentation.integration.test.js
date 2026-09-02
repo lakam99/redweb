@@ -37,7 +37,10 @@ describe('documented applications without mocks', () => {
         const run = args => spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 10000, windowsHide: true });
         expect(run(['--check']).status).toBe(0);
         expect(run(['--check']).stdout).toBe('');
-        expect(run(['--release-check']).status).toBe(0);
+        const released = JSON.parse(fs.readFileSync(path.join(root, 'docs/generated.json'), 'utf8')).channel !== 'unreleased';
+        const release = run(['--release-check']);
+        expect(release.status).toBe(released ? 0 : 1);
+        if (!released) expect(release.stderr).toContain('does not match package version');
         expect(run(['--check', '--check']).status).toBe(1);
         expect(run(['--release-check', '--check']).status).toBe(1);
         expect(run(['--unknown']).stderr).toContain('Usage:');
@@ -49,6 +52,10 @@ describe('documented applications without mocks', () => {
           prepare(workspace) {
             copyDocumentationSource(root, workspace);
             fs.rmSync(path.join(workspace, `docs/releases/${require('../../package.json').version}.json`));
+            const cataloguePath = path.join(workspace, 'docs/generated.json');
+            const catalogue = JSON.parse(fs.readFileSync(cataloguePath, 'utf8'));
+            catalogue.channel = version;
+            fs.writeFileSync(cataloguePath, JSON.stringify(catalogue));
             fs.writeFileSync(path.join(workspace, 'CHANGELOG.md'), '# Changelog\n\n## Unreleased\n\n- Pending.\n');
           },
           async exercise(workspace, run) {

@@ -26,16 +26,13 @@ async function exercise(mode) {
         bundles: { 'live-html.js': hash('unit bundle') } };
     if (mode === 'client-lock') client.integrity = 'wrong';
     let clientChecks = 0, harnessChecks = 0;
-    const diagnosis = { ok: true, installedVersion: metadata.version, source: { registrations: 1 },
-        issues: [{ code: 'SOURCE_UNRESOLVED', message: 'Asset templateRoot is not statically known.' }] };
+    const diagnosis = { ok: true, installedVersion: metadata.version, source: { registrations: 1 }, issues: [] };
     if (mode.startsWith('doctor-')) {
         const kind = mode.slice(7);
         if (kind === 'ok') diagnosis.ok = false;
         if (kind === 'version') diagnosis.installedVersion = '0.0.0';
         if (kind === 'registrations') diagnosis.source.registrations = 0;
-        if (kind === 'issues') diagnosis.issues = [];
-        if (kind === 'code') diagnosis.issues[0].code = 'WRONG';
-        if (kind === 'message') diagnosis.issues[0].message = 'wrong';
+        if (kind === 'issues') diagnosis.issues = [{ code: 'SOURCE_UNRESOLVED', message: 'Unexpected dynamic registration' }];
     }
     if (mode === 'manifest-bin') metadata.bin.redweb = 'missing';
     if (mode.startsWith('command-')) metadata.scripts['example:' + mode.slice(8)] = 'wrong';
@@ -208,7 +205,7 @@ test.each([
     ['client-lock', 'Registry client must match'], ['client-bytes', 'differs from the locally tested'],
     ['runtime-bytes', 'Browser report measured a different client'],
     ...['manifest-bin', 'missing-bin', 'missing-preset'].map(mode => [mode, 'Packed initializer or TypeScript preset']),
-    ...['ok', 'version', 'registrations', 'issues', 'code', 'message'].map(kind => ['doctor-' + kind, 'Packed doctor did not validate']),
+    ...['ok', 'version', 'registrations', 'issues'].map(kind => ['doctor-' + kind, 'Packed doctor did not validate']),
     ...['counter', 'chatroom', 'cards', 'components', 'jsx'].map(kind => ['command-' + kind, 'Packed example commands']),
     ['cards-count', 'Packed card collection'], ['cards-metadata', 'Packed card collection'],
     ...['empty', 'count', 'metadata'].map(kind => ['components-' + kind, 'Packed reusable components']),

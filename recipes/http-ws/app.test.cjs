@@ -4,8 +4,8 @@ const net = require('node:net');
 const { once } = require('node:events');
 const WebSocket = require('ws');
 const { SocketRoute } = require('redweb');
-const { createApp, Hello } = require('../dist/app.js');
-const { listen, connect } = require('./network.cjs');
+const { Hello } = require('../dist/app.js');
+const { createApp, listen, connect } = require('./network.cjs');
 
 test('an absent PORT binds the documented default or reports that exact port occupied', { timeout: 10000 }, async () => {
     const { spawnSync } = require('node:child_process');
@@ -15,12 +15,11 @@ test('an absent PORT binds the documented default or reports that exact port occ
         const assert = require('node:assert/strict');
         const { once } = require('node:events');
         const WebSocket = require('ws');
-        const { createApp } = require('./dist/app.js');
+        const { app } = require('./dist/app.js');
         (async () => {
-            const app = createApp();
             let socket;
             try {
-                try { if (!app.server.listening) await once(app.server, 'listening'); }
+                try { await app.run(); }
                 catch (error) {
                     assert.equal(error.code, 'EADDRINUSE');
                     assert.equal(error.port, 8181);
@@ -60,17 +59,16 @@ test('HTTP and separate message handlers share one port, with strict socket path
 
 for (const failingRoute of [false, true]) {
     test(`shutdown closes incomplete HTTP peers${failingRoute ? ' despite a route failure' : ' idempotently'}`, { timeout: 10000 }, async t => {
-        const app = createApp({ port: 0, logger: null });
+        const app = createApp({ port: 0, logger: null, shutdownTimeoutMs: 30 });
         t.after(() => app.shutdown().catch(() => {}));
-        if (!app.server.listening) await once(app.server, 'listening');
-        assert.equal(app.closeServerOnShutdown, true);
+        await app.run();
         const failure = new Error('Application cleanup failed');
         if (failingRoute) {
             class FailingRoute extends SocketRoute {
                 constructor() { super({ path: '/fails', handlers: [Hello] }); }
                 async shutdown() { await super.shutdown(); throw failure; }
             }
-            app.addRoute(FailingRoute);
+            app.sockets.addRoute(FailingRoute);
         }
         const accepted = once(app.server, 'connection');
         const peer = net.connect(app.server.address().port, '127.0.0.1');
@@ -82,7 +80,7 @@ for (const failingRoute of [false, true]) {
         const closed = once(serverPeer, 'close');
         const shutdown = app.shutdown();
         assert.equal(app.shutdown(), shutdown);
-        if (failingRoute) await assert.rejects(shutdown, error => error.errors.length === 1 && error.errors[0] === failure);
+        if (failingRoute) await assert.rejects(shutdown, error => error.errors.length === 1 && error.errors[0].errors[0] === failure);
         else await shutdown;
         await closed;
         assert.equal(serverPeer.destroyed, true);

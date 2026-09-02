@@ -8,12 +8,12 @@ Imagine one front door with two signs. Ordinary HTTP visitors ask for a page or 
 
 ## Follow the design
 
-1. `HttpServer({ listen: false })` builds the Express application and Node server without opening a port. `/health` answers ordinary HTTP requests; `publicPaths: []` avoids exposing an incidental working-directory folder.
-2. Pass that Node server to `SocketServer`, alongside the `/chat` route. `listen: true` explicitly starts the supplied listener; `closeServerOnShutdown: true` assigns its cleanup to the socket service.
+1. `defineApp` describes one application without opening a port. `httpServices` registers `/health`; `publicPaths: []` avoids exposing an incidental working-directory folder.
+2. Register `ChatRoute` in `sockets`, then call `app.run()`. Redweb creates one HTTP server and attaches its WebSocket upgrade listener before opening the port.
 3. The URL selects `ChatRoute`. A raw JSON message with `type: "hello"` selects `Hello`; there is no secondary action dispatcher.
-4. `createApp()` returns the one cleanup owner. Its `shutdown()` processes route failures and still closes the shared HTTP peers. The generated entrypoint helper adds bounded process shutdown without another handwritten signal policy.
+4. The application is the one cleanup owner. Its `shutdown()` processes route failures and still closes the shared HTTP peers. Signal handling and cleanup deadlines are built into Redweb rather than copied into the generated project.
 
-The framework ordinarily leaves supplied listeners caller-owned. These explicit flags are a choice made by this starter, not a change to that default. Use [migration and ownership guidance](../MIGRATION.md) when adapting an existing application; do not let two independent services compete to close the same listener.
+The low-level server APIs still support caller-owned listeners. Use [application composition](../APPLICATION.md) for the unified entry point and [migration and ownership guidance](../MIGRATION.md) when adapting an existing application; do not let two independent services compete to close the same listener.
 
 ## Check that it works
 

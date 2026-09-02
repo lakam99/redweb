@@ -22,6 +22,27 @@ describe('read-only source diagnostics using the real TypeScript parser', () => 
         return new SourceInspector(ts, root, { fileNames: sources, options: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, moduleResolution: ts.ModuleResolutionKind.Node10 } }).inspect();
     }
 
+    test('unified definitions inspect page assets and socket registrations without combining independent apps', () => {
+        const source = file('app.ts', `
+            import { defineApp as define, Application, page, SocketRoute, BaseHandler } from 'redweb';
+            @page('/', { css: 'missing.css' }) class Home {}
+            @page('/') class Other {}
+            class Join extends BaseHandler { constructor() { super('join'); } }
+            class Match extends SocketRoute { constructor() { super({ path: '/match', handlers: [Join] }); } }
+            define({ pages: [Home, Other], sockets: [Match, Match] });
+            new Application({ pages: [Other], sockets: [Match] });
+            define({});
+            define();
+            define({ sockets: [] });
+            define({ pages: [] });
+            throw new Error('Application code must never execute');
+        `);
+        const report = inspect([source]);
+        expect(report.issues.map(issue => issue.code).sort()).toEqual(['ASSET_UNAVAILABLE', 'DUPLICATE_ROUTE', 'DUPLICATE_ROUTE']);
+        expect(report.source.registrations).toBe(7);
+        expect(report.source.unresolved).toBe(0);
+    });
+
     test('finds missing and escaping assets plus duplicate pages in the same registration', () => {
         file('src/app.css', 'body {}');
         const source = file('src/app.tsx', `

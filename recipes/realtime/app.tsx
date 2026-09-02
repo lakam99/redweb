@@ -1,5 +1,4 @@
-import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
-import { runApp } from './run-app';
+import { action, defineApp, page, state } from 'redweb';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -21,8 +20,6 @@ export class CounterPage {
     }
 }
 
-export function createApp(options: LiveHtmlStartOptions = {}) {
-    return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
-}
+export const app = defineApp({ pages: [CounterPage], port: Number(process.env.PORT ?? 8181), templateRoot: __dirname });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });

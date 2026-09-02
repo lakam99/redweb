@@ -11,7 +11,7 @@ The page class is a recipe and the server is the kitchen. `render()` prepares HT
 1. The initializer supplies `redweb/tsconfig.json` inheritance, TypeScript, the stylesheet and the entrypoint helper. Keep the file as `.tsx`; do not point its JSX settings at `react/jsx-runtime`.
 2. `defineSite()` supplies one layout and CSS declaration. Its page decorators register `/` and `/about`, with metadata beside each page.
 3. Each `render()` returns ordinary TSX. Function components can share presentation; page-specific data remains in your server code. Text and attribute values are escaped, and URL protocols are restricted.
-4. `createApp()` combines both pages on one listener. The standalone entrypoint owns bounded shutdown through the shared helper; importing the module starts nothing.
+4. `defineApp({ pages: [HomePage, AboutPage] })` combines both pages on one listener. `app.run()` owns startup and bounded shutdown; importing the definition starts nothing.
 
 Keep CSS in external files. The [rendering reference](../LIVE_HTML.md) covers components, templates, assets and static export. For interactive pages, start from the [realtime counter](../../recipes/realtime/README.md): assignments to decorated state update the browser through Redweb's runtime. Non-live site pages do not acquire that behavior just because their markup is JSX.
 

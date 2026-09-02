@@ -1,5 +1,14 @@
 # Lifecycle coverage must measure actual code
 
+> Historical report, superseded by the `defineApp` migration. The generated
+> `run-app` helper and `verify-starter-lifecycle.js` described below have been
+> removed. The current `verify:starters:lifecycle:coverage` gate measures the
+> shared `Application` and `StartupCleanup` implementation, while
+> `verify:starters:source-coverage` measures all six original TypeScript starters.
+> Generated applications also run real child-process lifecycle tests. The
+> observations and paths below are retained as historical evidence, not current
+> commands or release results.
+
 The lifecycle gate previously trusted c8's exit code. A real command with all four
 100% thresholds and an empty source match exits successfully with `{}` coverage:
 c8 compares a nonnumeric empty-map percentage against the thresholds.

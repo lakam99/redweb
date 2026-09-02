@@ -78,4 +78,5 @@ let JsxPage = (() => {
 })();
 exports.JsxPage = JsxPage;
 if (require.main === module)
-    (0, redweb_1.start)(JsxPage, { port: 8181 });
+    void (0, redweb_1.defineApp)({ pages: [JsxPage], port: 8181 }).run()
+        .catch(error => { console.error(error); process.exitCode = 1; });

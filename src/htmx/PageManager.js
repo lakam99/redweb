@@ -16,6 +16,7 @@ const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
 const PageLifetime = require('./PageLifetime');
 const requestSnapshot = require('../context/RequestSnapshot');
+const { scheduleStartupCleanup } = require('../StartupCleanup');
 
 const PROTOCOL_VERSION = '1';
 const DEFAULT_HEARTBEAT = Object.freeze({ intervalMs: 15_000, timeoutMs: 10_000 });
@@ -122,7 +123,8 @@ class PageManager {
         this.renderAbortController = new AbortController();
         setMaxListeners(maxSessions + maxConcurrentRenders + 1, this.renderAbortController.signal);
         this.closing = false;
-        pages.forEach(PageClass => this.register(PageClass));
+        try { pages.forEach(PageClass => this.register(PageClass)); }
+        catch (error) { throw scheduleStartupCleanup(error, () => this.shutdown()); }
         this.hasLivePages = [...this.records.values()].some(record => record.metadata.live !== false);
     }
 

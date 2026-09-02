@@ -52,7 +52,8 @@ test.each(['measure-starter-coverage.js', 'verify-starter-source-coverage.js'])
         expect(application).toBeTruthy();
         expect(fs.existsSync(path.dirname(path.dirname(application)))).toBe(false);
         const log = fs.readFileSync(path.join(retained, 'realtime', authored ? 'plain.txt' : 'test-output.txt'), 'utf8');
-        expect(log).toContain('# pass 14');
+        // One realtime behavior test plus four shared application-entrypoint tests.
+        expect(log).toContain('# pass 5');
         expect(log).toContain('# fail 0');
         if (authored) expect(fs.readdirSync(path.join(retained, 'realtime/process-reports')).length).toBeGreaterThan(0);
     }), 2400000); // Covers even all six 3×120s command paths plus cleanup; no outer kill.

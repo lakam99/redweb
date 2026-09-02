@@ -1,6 +1,6 @@
 # Upgrade an existing Redweb application
 
-Match the installed package to its versioned documentation. Redweb 0.13.5 contains the capabilities described by the 0.13.5 guides; a later development checkout may not match that release. See [release verification](RELEASE_TRUST.md) and the changelog shipped with your selected package. Keep your lockfile and rollback artifact, and run your own real HTTP/WebSocket/browser tests after upgrading.
+Match the installed package to its versioned documentation. Redweb 0.14.0 contains the capabilities described by the 0.14.0 guides; a later development checkout may not match that release. See [release verification](RELEASE_TRUST.md) and the changelog shipped with your selected package. Keep your lockfile and rollback artifact, and run your own real HTTP/WebSocket/browser tests after upgrading.
 
 ## 0.8 migration notes
 

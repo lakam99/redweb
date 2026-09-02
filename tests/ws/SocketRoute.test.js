@@ -42,6 +42,7 @@ describe('SocketRoute', () => {
         });
 
         expect(WebSocketServer).toHaveBeenLastCalledWith({
+            closeTimeout: 5000,
             noServer: true,
             maxPayload: 1024,
             perMessageDeflate: false,

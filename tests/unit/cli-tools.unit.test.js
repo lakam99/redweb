@@ -1,5 +1,10 @@
 'use strict';
 
+test('starter renderer rejects unknown templates before reading recipe files', () => {
+    const { projectFiles } = require('../../src/cli/templates');
+    expect(() => projectFiles('0.0.0', 'not-a-template')).toThrow('Unknown starter template');
+});
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -81,8 +86,9 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
         const initializer = new ProjectInitializer(version);
         const plan = initializer.initialize(target, { dryRun: true });
         expect(plan.created).toEqual([]);
-        expect(plan.planned).toHaveLength(11);
-        expect(plan.planned).toEqual(expect.arrayContaining(['src/run-app.ts', 'test/run-app.test.cjs']));
+        expect(plan.planned).toHaveLength(10);
+        expect(plan.planned).toContain('test/lifecycle.test.cjs');
+        expect(plan.planned).not.toContain('src/run-app.ts');
         expect(fs.existsSync(target)).toBe(false);
         const created = initializer.initialize(target, { existing: true });
         expect(created.created).toEqual(['tsconfig.json']);

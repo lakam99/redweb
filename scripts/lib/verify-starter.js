@@ -26,7 +26,7 @@ async function verifyApplication(packageRoot, target, template, execution, { tim
     // Deployment must use compiled output/assets, not accidentally depend on the source tree.
     fs.renameSync(path.join(target, 'src'), path.join(target, 'source-not-deployed'));
     // Consumers inspect TAP summaries; Node's default reporter varies by version.
-    return execution.command(['--test', '--test-reporter=tap', 'test/app.test.cjs', 'test/run-app.test.cjs'], { cwd: target, timeoutMs });
+    return execution.command(['--test', '--test-reporter=tap', 'test/app.test.cjs', 'test/lifecycle.test.cjs'], { cwd: target, timeoutMs });
 }
 
 function linkApplication(packageRoot, target, template, manifest) {

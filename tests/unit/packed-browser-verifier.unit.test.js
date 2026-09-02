@@ -27,11 +27,13 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
         stderr: mode === 'no-stderr' ? undefined : { destroy() { events.push('stderr'); if (mode === 'stderr') throw cleanup; } },
         unref() { events.push('unref'); if (mode === 'unref') throw cleanup; } };
     const browser = mode === 'no-child' ? {} : { child };
-    const start = (_Page, options) => {
-        expect(options).toEqual({ port: 0, bind: '127.0.0.1', logger: null });
+    const defineApp = ({ pages, ...options }) => {
+        expect(pages).toHaveLength(1);
+        expect(options).toEqual({ port: 0, bind: '127.0.0.1', logger: null, signals: false });
         if (mode === 'start') throw primary;
         const index = servers.length;
-        const app = { server: { address: () => ({ port: 9000 + index }) }, shutdown: async () => {
+        const app = { server: { address: () => ({ port: 9000 + index }) },
+            run: async () => { events.push('listen'); if (mode === 'listen') throw primary; }, shutdown: async () => {
             events.push(`shutdown-${index}`);
             if (['shutdown', 'combined'].includes(mode) && index === 0) throw cleanup;
         } };
@@ -57,7 +59,7 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
     const nativeRequire = createRequire(filename);
     const requireBoundary = name => {
         if (name === 'node:fs') return { existsSync: () => mode !== 'no-browser' };
-        if (name === packageRoot) { if (mode === 'import') throw primary; return { start }; }
+        if (name === packageRoot) { if (mode === 'import') throw primary; return { defineApp }; }
         if (name === path.join(packageRoot, 'examples/live-html/counter.js')) return { CounterPage: class {} };
         if (name === path.join(packageRoot, 'examples/live-html/chatroom.js')) return { createChatroomPage: () => class {} };
         if (name === path.join(packageRoot, 'examples/live-html/cards.js')) return { CardsPage: class {} };
@@ -81,7 +83,6 @@ test.each(['pass', 'environment', 'no-browser', 'import', 'start', 'listen', 'la
             },
         };
         if (name === '../../tests/helpers/network') return {
-            waitForListening: async () => { events.push('listen'); if (mode === 'listen') throw primary; },
             withTimeout: (promise, label, milliseconds) => {
                 expect(milliseconds).toBe(12000);
                 if (mode.startsWith('late-') && label === 'browser page startup') {

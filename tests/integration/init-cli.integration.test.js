@@ -60,7 +60,7 @@ describe('redweb init CLI integration', () => {
     test('scaffolds, safely reruns, compiles, and serves through the shipped preset', async () => {
         const first = run(['init', 'game', '--template', 'site'], workspace);
         expect(first.status).toBe(0);
-        expect(first.stdout).toContain('Created: package.json, tsconfig.json, src/app.tsx, src/run-app.ts, src/app.css');
+        expect(first.stdout).toContain('Created: package.json, tsconfig.json, src/app.tsx, src/app.css');
         expect(first.stdout).toContain('Unreleased builds: install the matching Redweb tarball first (see README.md)');
 
         const target = path.join(workspace, 'game');
@@ -120,7 +120,7 @@ describe('redweb init CLI integration', () => {
         fs.writeFileSync(source, 'user-owned source', 'utf8');
         const second = run(['init', 'game', '--template', 'site'], workspace);
         expect(second.status).toBe(0);
-        expect(second.stdout).toContain('Kept existing: package.json, tsconfig.json, src/app.tsx, src/run-app.ts, src/app.css');
+        expect(second.stdout).toContain('Kept existing: package.json, tsconfig.json, src/app.tsx, src/app.css');
         expect(fs.readFileSync(source, 'utf8')).toBe('user-owned source');
     }, 180000);
 

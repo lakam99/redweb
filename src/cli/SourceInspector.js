@@ -108,6 +108,11 @@ class SourceInspector {
             this.group(args[0], 'page', node, args[1]);
         } else if (api === 'LiveHtmlServer') {
             this.group(read.property(args[0], 'pages'), 'page', node, args[0]);
+        } else if (['defineApp', 'Application'].includes(api)) {
+            for (const [field, kind] of [['pages', 'page'], ['sockets', 'route']]) {
+                const registrations = read.property(args[0], field);
+                if (registrations !== undefined) this.group(registrations, kind, node, args[0]);
+            }
         } else if (['SocketServer', 'SecureSocketServer'].includes(api)) {
             const routes = read.property(args[0], 'routes');
             if (routes !== undefined) this.group(routes, 'route', node);

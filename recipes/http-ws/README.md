@@ -4,7 +4,7 @@ One Node server answers ordinary HTTP requests and upgrades `/chat` connections 
 
 After starting the application, request `http://127.0.0.1:8181/health` to receive `{"ok":true}`. Connect a WebSocket to `ws://127.0.0.1:8181/chat` and send `{"type":"hello"}` to receive `{"type":"hello","message":"Hello from the server!"}`. This is a raw JSON socket example, not a chatroom UI or the versioned socket-contract protocol. Use the chat or socket starter for those applications.
 
-The HTTP builder does not bind a port. The socket service explicitly takes responsibility for listening and closing the supplied server with `listen: true` and `closeServerOnShutdown: true`. Call the returned application's `shutdown()`; it processes route failures and still closes its HTTP/TCP peers. Do not separately close the HTTP builder. Importing this module creates no listener; the standalone entrypoint uses the same bounded `runApp` helper as the other starters.
+`defineApp` registers the socket route and the HTTP endpoint on one owned listener. `app.run()` opens it; `app.shutdown()` closes it even when route cleanup fails. You do not need separate server variables, listener flags, or a startup helper. Importing the definition creates no listener.
 
 `/health` reports liveness, not readiness or completed application work. Loopback binding is intentional. Before exposing the service, choose your deployment bind address, configure HTTPS/WSS, trusted origins, authentication, authorization, payload/connection limits, and any persistence you need. Shared listeners do not automatically provide these policies. Shutdown may force connections closed; it does not guarantee message delivery or durable work.
 

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, eventual } = require('../verify-live-html-browser');
-const { withTimeout, waitForListening } = require('../../tests/helpers/network');
+const { withTimeout } = require('../../tests/helpers/network');
 const { verificationError } = require('./verificationError');
 const { BrowserPages } = require('./BrowserPages');
 const { BrowserAcceptance } = require('./BrowserAcceptance');
@@ -41,9 +41,9 @@ async function verifyPackedBrowser(packageRoot, execution, example) {
     };
     try {
         for (const name of selected) {
-            const server = installed.start(examples[name](), { port: 0, bind: '127.0.0.1', logger: null });
+            const server = installed.defineApp({ pages: [examples[name]()], port: 0, bind: '127.0.0.1', logger: null, signals: false });
             servers[name] = server;
-            await bounded(waitForListening(server.server), 'packed server startup');
+            await bounded(server.run(), 'packed server startup');
         }
         launchAttempted = true;
         const launched = await launchBrowserWithRetry(executable, execution.directory, { headless: false });

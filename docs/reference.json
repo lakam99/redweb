@@ -1,6 +1,45 @@
 {
   "api": [
     {
+      "id": "defineapp",
+      "name": "defineApp / Application",
+      "type": "Application",
+      "summary": "Define pages, socket routes and application services together. Nothing listens until run(); one owner starts and stops the shared HTTP/WebSocket listener.",
+      "usage": "import { defineApp } from 'redweb';\nimport { HomePage, DashboardPage } from './pages';\nimport { MatchRoute, ChatRoute } from './sockets';\nimport { GameSimulation } from './simulation';\n\nconst app = defineApp({\n  pages: [HomePage, DashboardPage],\n  sockets: [MatchRoute, ChatRoute],\n  services: [GameSimulation],\n  port: 8181,\n});\n\nawait app.run();",
+      "options": [
+        "pages: decorated page classes (default [])",
+        "sockets: SocketRoute classes (default [])",
+        "services: application-wide classes with onInit(app, signal) and onShutdown() (default [])",
+        "port: number (default 8181); use 0 for an ephemeral test port",
+        "bind: string (default 0.0.0.0)",
+        "httpServices: existing Express service descriptors; route-specific SocketService classes remain on socket routes",
+        "startupTimeoutMs / shutdownTimeoutMs: total lifecycle budgets (default 5000 each)",
+        "signals: install owned process signal handling when run begins (default true); embedded applications/tests can set false",
+        "Existing live-page/HTTP options, including templateRoot, authentication, origins, server (Express app), development and ssl",
+        "Static export remains exportStatic(); defineApp does not accept a static export flag"
+      ],
+      "methods": [
+        { "name": "defineApp(options) / new Application(options)", "detail": "Create a deferred definition. Registration arrays are copied; imports and definitions open no port or process handlers." },
+        { "name": "run(): Promise<Application>", "detail": "Initialize services in order and bind one HTTP/WS listener. Repeated calls share startup while running. A stopped application cannot restart." },
+        { "name": "shutdown(): Promise<void>", "detail": "Cancel pending startup and perform bounded, idempotent cleanup. Close HTTP/socket resources before releasing application services in reverse order. Preserve cleanup errors." },
+        { "name": "options", "detail": "Copied definition, available for defining independent test applications with port: 0 and signals: false. Captured objects and supplied Express apps are not deep-cloned." },
+        { "name": "app / server / http / sockets / services", "detail": "Runtime Express application, native listener, HTTP adapter, optional WebSocket server and service instances. HTTP members are null before startup; await run before use." },
+        { "name": "revoke(principal): Promise<number>", "detail": "Revoke matching live-page sessions; zero before live pages have been initialized." },
+        { "name": "inspect(): DevelopmentSnapshot | null", "detail": "Return opt-in live-page inspection metadata, or null when unavailable/disabled." }
+      ],
+      "article": {
+        "eli5": "One front door serves pages and ongoing socket conversations. The application prepares its staff before opening that door, then closes the door and sends the staff home in order.",
+        "useWhen": "Use it as the entry point for a multi-page site, a realtime UI, a routed socket backend, or their combination. Lower-level server classes remain available for custom ownership.",
+        "walkthrough": [
+          "Declare pages with decorators and socket routes with message-type handlers, then register their classes in one definition.",
+          "Acquire app-wide resources in service onInit(app, signal), not constructors. onInit can register Express endpoints through app.app before listening.",
+          "Await run to know startup succeeded; no separately stored HTTP server or second socket startup call is necessary. CommonJS entry points use an async function or handle the returned promise; top-level await requires a suitable ESM configuration.",
+          "For tests, use an ephemeral port, disable process signal ownership and await shutdown in cleanup. The generated applications ship real HTTP/socket and process tests."
+        ],
+        "watchFor": "This is lifecycle composition, not dependency injection or durable/distributed state. Services must cooperate with cancellation and release partially acquired resources. Deadlines cannot interrupt synchronous event-loop blocking. Shared page-class closure objects stay shared; use separate classes/rooms when isolation is required."
+      }
+    },
+    {
       "id": "httpserver",
       "name": "HttpServer",
       "type": "HTTP",
@@ -187,7 +226,7 @@
         "handlers: array of handler classes (required)",
         "services: array of SocketService subclasses (optional)",
         "allowDuplicateConnections: allow multiple clients from the same IP",
-        "websocketOptions: options passed to ws WebSocketServer, such as maxPayload or perMessageDeflate",
+        "websocketOptions: options passed to ws WebSocketServer, such as maxPayload or perMessageDeflate; closeTimeout defaults to 5000 milliseconds (integer 1..2147483647) and bounds an already-started closing handshake, not healthy idle connections",
         "admission: authenticate, validate origins, and optionally place a client before upgrade",
         "maxPendingUpgrades: finite concurrent admission/negotiation work (default 64)",
         "limits: connection, message-rate, pending-message, and outbound-buffer ceilings",

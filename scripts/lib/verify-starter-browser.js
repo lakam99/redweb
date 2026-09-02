@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { browserCandidates, launchBrowserWithRetry, stopBrowser, openPage, eventual, combineFailures } = require('../verify-live-html-browser');
-const { waitForListening, withTimeout } = require('../../tests/helpers/network');
+const { withTimeout } = require('../../tests/helpers/network');
 const { BrowserPages } = require('./BrowserPages');
 const { BrowserAcceptance } = require('./BrowserAcceptance');
 const { verificationError } = require('./verificationError');
@@ -33,9 +33,10 @@ async function verifyStarterBrowser(execution, template) {
             const root = path.join(execution.directory, template);
             assert.ok(fs.existsSync(path.join(root, 'source-not-deployed')) && !fs.existsSync(path.join(root, 'src')),
                 `${template} browser acceptance requires source-removed generated output`);
-            const app = require(path.join(root, 'dist/app')).createApp({ port: 0, bind: '127.0.0.1', logger: null });
+            const { createApp } = require(path.join(root, 'test/network.cjs'));
+            const app = createApp();
             apps.push(app);
-            await bounded(waitForListening(app.server), `${template} starter startup`);
+            await bounded(app.run(), `${template} starter startup`);
             origins[template] = `http://127.0.0.1:${app.server.address().port}`;
         }
         launchAttempted = true;

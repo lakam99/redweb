@@ -1,4 +1,4 @@
-import { page, start, state } from 'redweb';
+import { defineApp, page, state } from 'redweb';
 
 @page('/', { template: 'counter.html', css: 'counter.css' })
 export class CounterPage {
@@ -18,4 +18,5 @@ export class CounterPage {
 
 }
 
-if (require.main === module) start(CounterPage, { port: 8080 });
+if (require.main === module) void defineApp({ pages: [CounterPage], port: 8080 }).run()
+    .catch(error => { console.error(error); process.exitCode = 1; });

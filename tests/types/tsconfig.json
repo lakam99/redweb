@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "redweb"
   },
-  "files": ["public-api.ts", "jsx-api.tsx", "socket-contract.ts", "action-input.ts"]
+  "files": ["public-api.ts", "jsx-api.tsx", "socket-contract.ts", "action-input.ts", "define-app.tsx"]
 }

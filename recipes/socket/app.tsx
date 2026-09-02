@@ -1,7 +1,6 @@
-import { SocketRoute, SocketServer, type SocketServerOptions } from 'redweb';
+import { defineApp, SocketRoute } from 'redweb';
 import { match } from './contract';
 import { Join, Move, Resume } from './handlers';
-import { runApp } from './run-app';
 
 export class MatchRoute extends SocketRoute {
     constructor() {
@@ -19,12 +18,6 @@ export class MatchRoute extends SocketRoute {
     }
 }
 
-export function createApp(options: SocketServerOptions = {}) {
-    return new SocketServer({
-        port: Number(process.env.PORT ?? 8181),
-        routes: [MatchRoute],
-        ...options,
-    });
-}
+export const app = defineApp({ sockets: [MatchRoute], port: Number(process.env.PORT ?? 8181) });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });
