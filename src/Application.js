@@ -143,35 +143,25 @@ class Application {
         if (this._stopping) throw new Error('Application startup was cancelled.');
     }
 
-    async _listen() {
+    _listen() {
         const { server } = this;
-        let ready, failed;
-        const detach = () => {
-            if (ready) server.off('listening', ready);
-            if (failed) server.off('error', failed);
-        };
-        try {
-            await this._withinStartup(() => new Promise((resolve, reject) => {
-                failed = error => { detach(); reject(error); };
-                ready = () => {
-                    try {
-                        // Node 18 can complete even a numeric-host lookup after
-                        // AbortSignal closed the server. Close before accepting peers.
-                        if (this._abort.signal.aborted) server.close();
-                        detach();
-                        resolve();
-                    } catch (error) { failed(error); }
-                };
-                server.once('listening', ready);
-                server.once('error', failed);
-                server.listen({ port: this.options.port, host: this.options.bind, signal: this._abort.signal });
-            }), 'Application listener startup');
-        } finally {
-            // Aborted native lookup may still emit an error or begin listening
-            // on older Node releases. Keep these one-shot guards until it settles.
-            // On newer Node, the unreachable closed server/guards are GC-able.
-            if (!this._abort.signal.aborted) detach();
-        }
+        return this._withinStartup(() => new Promise((resolve, reject) => {
+            // A cancelled or timed-out native lookup can still complete on
+            // Node 18. Only native settlement detaches these one-shot guards.
+            const detach = () => { server.off('listening', ready); server.off('error', failed); };
+            const failed = error => { detach(); reject(error); };
+            const ready = () => {
+                try {
+                    if (this._abort.signal.aborted) server.close();
+                    detach();
+                    resolve();
+                } catch (error) { failed(error); }
+            };
+            server.once('listening', ready);
+            server.once('error', failed);
+            try { server.listen({ port: this.options.port, host: this.options.bind, signal: this._abort.signal }); }
+            catch (error) { failed(error); }
+        }), 'Application listener startup');
     }
 
     shutdown() {

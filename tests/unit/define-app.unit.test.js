@@ -155,23 +155,32 @@ test.each([false, true])('disposal closes admission and retains native close fai
     expect(app.server.listening).toBe(false);
 });
 
-test.each(['listening', 'error', 'close-failure'])('cancelled native listener retains a terminal-event guard: %s', async mode => {
+test.each(['listening', 'error', 'close-failure', 'deadline', 'synchronous-failure'])('abandoned native listener retains a terminal-event guard: %s', async mode => {
     // Unit-only fault boundary. Node 18/22 subprocess tests exercise the real
     // DNS and numeric-host cancellation paths without replacing native APIs.
     const { EventEmitter } = require('node:events');
     const server = new EventEmitter();
     let started = 0, closed = 0;
-    server.listen = () => { started++; };
+    server.listen = () => { started++; if (mode === 'synchronous-failure') throw new Error('native listen failed'); };
     server.close = () => { closed++; if (mode === 'close-failure') throw new Error('native close failed'); };
     const app = defineApp(config);
     app.server = server;
-    app._startupDeadline = require('node:perf_hooks').performance.now() + 1000;
-    const rejected = expect(app._listen()).rejects.toThrow('cancelled');
+    app._startupDeadline = require('node:perf_hooks').performance.now() + (mode === 'deadline' ? 30 : 1000);
+    const rejected = expect(app._listen()).rejects.toThrow(mode === 'deadline' ? 'deadline'
+        : mode === 'synchronous-failure' ? 'native listen failed' : 'cancelled');
     await Promise.resolve();
     expect(started).toBe(1);
-    app._abort.abort();
+    if (mode !== 'deadline' && mode !== 'synchronous-failure') app._abort.abort();
     await rejected;
+    if (mode === 'synchronous-failure') {
+        expect(server.listenerCount('error')).toBe(0);
+        expect(server.listenerCount('listening')).toBe(0);
+        await app.shutdown();
+        return;
+    }
     expect(server.listenerCount('error')).toBe(1);
+    // The outer run() failure handler aborts only after the deadline rejection.
+    if (mode === 'deadline') app._abort.abort();
     if (mode === 'error') server.emit('error', new Error('late DNS failure'));
     else server.emit('listening');
     await Promise.resolve();
