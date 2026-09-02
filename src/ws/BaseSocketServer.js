@@ -12,6 +12,7 @@ const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy'
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
 const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
 const OwnedServerLifecycle = require('../OwnedServerLifecycle');
+const { scheduleStartupCleanup } = require('../StartupCleanup');
 const {
   listenServer,
   closeServer,
@@ -62,15 +63,14 @@ class BaseSocketServer {
       for (const RouteClass of RouteClasses) {
         const route = new RouteClass(server, { logger: this.logger });
         if (this.routes.some(existing => existing.path === route.path)) {
-          this.disposeRoutes([route]);
+          this.routes.push(route);
           throw new Error('WebSocket route paths must be unique.');
         }
         this.routes.push(route);
       }
     } catch (error) {
       this._ownedServer?.dispose();
-      this.disposeRoutes(this.routes);
-      throw error;
+      throw scheduleStartupCleanup(error, () => this.disposeRoutes(this.routes));
     }
 
     this._upgradeHandler = this.handleUpgrade.bind(this);
@@ -90,17 +90,18 @@ class BaseSocketServer {
     } catch (error) {
       this.server.off('upgrade', this._upgradeHandler);
       this._ownedServer?.dispose();
-      this.disposeRoutes(this.routes);
-      throw error;
+      throw scheduleStartupCleanup(error, () => this.disposeRoutes(this.routes));
     }
   }
 
-  disposeRoutes(routes) {
-    routes.forEach(route => {
-      Promise.resolve()
-        .then(() => route.shutdown?.())
-        .catch(error => this.logger?.error?.('Error shutting down route:', error));
-    });
+  async disposeRoutes(routes) {
+    const errors = await settleTasks(routes.map(route => () => route.shutdown?.()));
+    if (errors.length) {
+      for (const error of errors) {
+        try { this.logger?.error?.('Error shutting down route:', error); } catch { /* Preserve the cleanup failure even if logging fails. */ }
+      }
+      throw new AggregateError(errors, 'Route construction rollback failed.');
+    }
   }
 
   handleUpgrade(req, sock, head) {
@@ -208,8 +209,7 @@ class BaseSocketServer {
   addRoute(RouteClass) {
     const route = new RouteClass(this.server, { logger: this.logger });
     if (this.routes.some(existing => existing.path === route.path)) {
-      this.disposeRoutes([route]);
-      throw new Error(`A WebSocket route already exists at ${route.path}.`);
+      throw scheduleStartupCleanup(new Error(`A WebSocket route already exists at ${route.path}.`), () => this.disposeRoutes([route]));
     }
     this.routes.push(route);
     return route;

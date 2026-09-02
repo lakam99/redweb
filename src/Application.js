@@ -7,6 +7,7 @@ const SocketServer = require('./ws/SocketServer');
 const SocketService = require('./ws/SocketService');
 const OwnedServerLifecycle = require('./OwnedServerLifecycle');
 const { validateListenerOptions } = require('./serverLifecycle');
+const { awaitStartupCleanup } = require('./StartupCleanup');
 
 function classes(value, name) {
     if (!Array.isArray(value) || value.some(Type => typeof Type !== 'function')) {
@@ -64,7 +65,11 @@ class Application {
         this._runPromise = this._start().catch(async error => {
             this._stopping = true;
             this._abort.abort();
-            try { await this._cleanup(); }
+            try {
+                const results = await Promise.allSettled([awaitStartupCleanup(error), this._cleanup()]);
+                const errors = results.filter(result => result.status === 'rejected').map(result => result.reason);
+                if (errors.length) throw new AggregateError(errors, 'Application rollback failed.');
+            }
             catch (cleanup) { throw new AggregateError([error, cleanup], 'Application startup and cleanup failed.', { cause: error }); }
             throw error;
         });

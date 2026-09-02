@@ -7,9 +7,15 @@ const { createInspection } = require('../development/Inspection');
 const developmentSettings = require('../development/settings');
 const OwnedServerLifecycle = require('../OwnedServerLifecycle');
 const { listenServer, validateListenerOptions } = require('../serverLifecycle');
+const { scheduleStartupCleanup } = require('../StartupCleanup');
 
 class LiveHtmlServer {
     constructor(options = {}) {
+        try { this.initialize(options); }
+        catch (error) { throw scheduleStartupCleanup(error, () => this.shutdown()); }
+    }
+
+    initialize(options) {
         if (!options || typeof options !== 'object' || Array.isArray(options)) {
             throw new TypeError('Live HTML server options must be an object.');
         }
@@ -103,11 +109,11 @@ class LiveHtmlServer {
             try { await this.sockets.shutdown(); }
             catch (error) { errors.push(error); }
         }
-        try { await this.manager.shutdown(); }
+        try { await this.manager?.shutdown(); }
         catch (error) {
             errors.push(error);
         }
-        try { await this._ownedServer.close(this.manager.shutdownTimeoutMs, () => this.http.shutdown()); }
+        try { await this._ownedServer?.close(this.manager.shutdownTimeoutMs, () => this.http.shutdown()); }
         catch (error) { errors.push(error); }
         if (errors.length) throw new AggregateError(errors, 'Live HTML shutdown failed.');
     }

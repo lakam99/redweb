@@ -129,3 +129,27 @@ test('shutdown during initialization cancels binding and cleans the partial serv
     await closing;
     expect(app.server.listening).toBe(false);
 });
+
+test.each(['route-constructor', 'route-collision', 'later-page', 'http-options'])
+('startup rollback disposes shared pages after %s failure', async mode => {
+    let created = 0, disposed = 0;
+    class Shared {
+        constructor() { created++; }
+        render() { return '<h1>Shared</h1>'; }
+        async disposed() { await Promise.resolve(); disposed++; }
+    }
+    page('/', { shared: true })(Shared);
+    class Fails { constructor() { throw new Error('route construction failed'); } }
+    class Collision extends SocketRoute {
+        constructor() { super({ path: '/__redweb/live', handlers: [] }); }
+    }
+    const app = defineApp({ ...config,
+        pages: mode === 'later-page' ? [Shared, class Undecorated {}] : [Shared],
+        sockets: mode === 'route-constructor' ? [Fails] : mode === 'route-collision' ? [Collision] : [],
+        ...(mode === 'http-options' ? { encoding: 'invalid' } : {}),
+    });
+    await expect(app.run()).rejects.toThrow();
+    await app.shutdown();
+    expect(created).toBe(1);
+    expect(disposed).toBe(1);
+});
