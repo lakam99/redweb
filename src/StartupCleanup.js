@@ -5,7 +5,7 @@ const { isNativeError } = require('node:util').types;
 
 /** Preserve synchronous constructor errors while letting async owners await rollback. */
 function scheduleStartupCleanup(error, cleanup) {
-    const failure = isNativeError(error) ? error : new Error('Application construction failed.', { cause: error });
+    const failure = error instanceof Error || isNativeError(error) ? error : new Error('Application construction failed.', { cause: error });
     const previous = pending.get(failure);
     // Each partially constructed owner must start releasing its resources even
     // when another owner's cleanup stalls. Retain every failure for the caller.

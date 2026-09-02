@@ -5,6 +5,24 @@ const path = require('node:path');
 const { once } = require('node:events');
 const { withTimeout } = require('../helpers/network');
 
+test('native abort reasons retain their identity during constructor rollback', () => {
+    // Node 18 DOMException is an Error but is not recognized by isNativeError.
+    // A native process avoids Jest's additional JavaScript context boundary.
+    const result = require('node:child_process').spawnSync(process.execPath, ['-e', `
+        const assert = require('node:assert/strict');
+        const { scheduleStartupCleanup, awaitStartupCleanup } = require('./src/StartupCleanup');
+        const reason = AbortSignal.abort().reason;
+        let cleaned = false;
+        assert.equal(reason.name, 'AbortError');
+        assert.equal(scheduleStartupCleanup(reason, () => { cleaned = true; }), reason);
+        awaitStartupCleanup(reason).then(() => {
+            assert.equal(cleaned, true);
+        }).catch(error => { console.error(error); process.exitCode = 1; });
+    `], { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8', timeout: 5000, windowsHide: true });
+    expect(result.error).toBeUndefined();
+    expect({ status: result.status, signal: result.signal, stderr: result.stderr }).toEqual({ status: 0, signal: null, stderr: '' });
+});
+
 test.each(['SIGINT', 'SIGTERM', 'close', 'pending', 'leaked', 'dns-error', 'dns-success', 'numeric-cancel'])
 ('application owns native process shutdown: %s', async mode => {
     const child = fork(path.resolve(__dirname, '../fixtures/define-app-process.cjs'), [mode], { silent: true, windowsHide: true });

@@ -52,3 +52,10 @@ CI also identified an obsolete test-count assertion in the starter coordinator's
 input-mutation check. Its expected successful fixture now includes one realtime
 test and four application-entrypoint tests; failure-on-input-mutation assertions
 are unchanged.
+
+The reviewer caught a Node 18 distinction: `DOMException` is an `Error` there
+but is not recognized by `isNativeError`. Keeping both checks preserves native
+abort-reason identity as well as foreign-context errors. A native-process abort
+regression passes on Node 18 and 22; the lifecycle scope now has 74 passing tests
+and all-four 100% coverage. The corrected starter coordinator gate passes all
+56 tests with all-four 100% coverage of its three coordinator modules.
