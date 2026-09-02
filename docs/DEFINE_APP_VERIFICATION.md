@@ -1,7 +1,9 @@
 # Unified application verification
 
-Candidate branch: `codex/define-app`. These are scoped verification results, not
-a claim that the final release or all repository gates are complete.
+Implementation history for `codex/define-app`. These are scoped results recorded
+during development, not a substitute for final release status. The exact-head
+checks and reviewer discussion are retained in
+[PR #23](https://github.com/lakam99/redweb/pull/23).
 
 ## Starter migration (2026-09-01, Windows / Node 22.21.0)
 
@@ -72,3 +74,28 @@ expectation. Its tests now compare against the loaded canonical channel and
 exercise both valid channel variants. All seven tests pass, including actual
 MCP subprocesses and isolated production-only package installation; all three
 adapter modules have 100% line, branch, and function coverage.
+
+## Broader regression findings
+
+The first completed Windows run finished with 174 passing suites and four
+failing suites (1,984 passing tests, seven failures, five skips). It began before
+the final source repairs and version update, so it is not final-head evidence.
+
+- The standalone-example unit launcher still stubbed `start`. It now explicitly
+  tests `defineApp().run()` and its rejection handler. Both original-TypeScript
+  coverage runs (standard and legacy decorators) pass with unchanged real page
+  behavior checks alongside the separately labelled launcher units.
+- Current guide version labels were left at 0.13.5. They now match 0.14.0; the
+  candidate catalogue was corrected before publication. No published release
+  snapshot was changed. The documentation unit/coverage and release guard pass.
+- The HTML load workload timed out awaiting disconnected-session expiry. Its
+  unchanged standalone replay passed: 200 expired renders, 110 clients, and
+  8,288,824 bytes heap growth. A standalone pass does not establish the earlier
+  timeout's cause.
+- Server recovery reproduced a server-connection cleanup timeout in isolation.
+  Evidence remains in `coverage/server-recovery-candidate-kFjY7N/`; this failed
+  run is not acceptance. Its limits and workload have not been weakened.
+
+Coverage review also added real acceptance for non-live pages with custom
+socket routes and direct invalid socket-registration validation. Later exact-head
+test results and any further repairs belong to the PR's final verification record.

@@ -96,13 +96,18 @@ test('one listener serves multiple pages, live updates and independent message h
     await expect(app.run()).rejects.toThrow('cannot run after shutdown');
 });
 
-test.each(['http', 'socket', 'static-page'])('%s-only definitions run without a second listener', async kind => {
-    const app = defineApp({ ...config, sockets: kind === 'socket' ? [Match] : [], pages: kind === 'static-page' ? [About] : [],
+test.each([
+    ['http', [], []], ['socket', [Match], []], ['static-page', [], [About]],
+    ['static-page-and-socket', [Match], [About]],
+])('%s definitions run without a second listener', async (_kind, sockets, pages) => {
+    const app = defineApp({ ...config, sockets, pages,
         httpServices: [{ serviceName: '/health', method: 'get', function: (_req, res) => res.send('healthy') }] });
     try {
         await app.run();
-        expect(app.server.listenerCount('upgrade')).toBe(kind === 'socket' ? 1 : 0);
+        expect(app.server.listenerCount('upgrade')).toBe(sockets.length ? 1 : 0);
         expect((await request({ port: app.server.address().port, path: '/health' })).body).toBe('healthy');
+        if (pages.length) expect((await request({ port: app.server.address().port, path: '/about' })).body).toContain('<h1>About</h1>');
+        if (sockets.length) expect(await websocketUpgradeStatus(`ws://127.0.0.1:${app.server.address().port}/match`)).toBe(101);
     } finally { await app.shutdown(); }
 });
 

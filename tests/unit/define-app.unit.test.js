@@ -2,6 +2,16 @@
 
 const { defineApp, SocketService } = require('../..');
 
+test.each([null, [42]])('low-level live server rejects invalid socket route registrations: %p', async socketRoutes => {
+    const { LiveHtmlServer } = require('../..');
+    const { awaitStartupCleanup } = require('../../src/StartupCleanup');
+    let failure;
+    try { new LiveHtmlServer({ socketRoutes }); }
+    catch (error) { failure = error; }
+    expect(failure.message).toBe('`socketRoutes` must be an array of route classes.');
+    await awaitStartupCleanup(failure);
+});
+
 test.each([null, false, [], 'app'])('rejects invalid application options %p before acquiring resources', options => {
     expect(() => defineApp(options)).toThrow('options must be an object');
 });
