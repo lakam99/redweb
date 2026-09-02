@@ -1,5 +1,78 @@
 # Server-side TSX for custom socket routes
 
+## Development: connected clients
+
+The following convenience layer is **unreleased** and is not in Redweb 0.15.0.
+It uses existing redweb-client 0.3.0 without a client upgrade.
+
+`connectedClients({ identity, page, project })` creates one route-owned group.
+Register it as `connections` in `SocketRoute`; rooms and handler drain tracking
+are enabled by default. Create a fresh group inside each application factory.
+It reuses RoomRegistry capacity, authorization and disconnect cleanup, not a second
+membership map. Normal raw SocketRoute/SocketContract APIs remain unchanged.
+
+```ts
+const players = connectedClients({
+    identity: context => account(context.request),
+    page: () => GamePage,
+    project: (player, room, online) => ({
+        game: games.resume(room, player.identity).snapshot(player.identity),
+        online,
+    }),
+});
+const match = players.bind(contract);
+const Join = match.handler('join', (player, { room }) =>
+    player.join(room, () => games.join(room, player.identity)));
+```
+
+This is a composition excerpt: the application supplies `account`, `games`, the
+typed `contract`, and decorated `GamePage` state fields. Register the resulting
+handler, contract protocol and `connections: players` on the page's SocketRoute.
+Handler `.with(payload)` bindings keep their inferred input type.
+
+The client exposes `identity`, `page`, `rooms`, `room` (exactly one membership),
+`join(room, commit?)`, `leave(room)` and an explicit underlying `socket` escape hatch.
+`players.get(socket)` supports page lifecycle callbacks, and
+`players.refresh(room)` publishes changes made outside a handler. Successful
+handlers automatically refresh their client's current rooms. Room changes batch
+refresh requests; multiple tabs count as one online identity, but receive separate
+private page projections.
+
+Identity must remain exactly equal to the admitted principal. The group checks it
+after payload validation and before/after asynchronous projection work. Existing
+page authorization and generation guards remain in force. Access is not granted
+by a button or a room name. The application still defines room access, game rules,
+seat recovery, revisions and durable storage.
+
+`join` checks membership capacity/permission before its synchronous domain commit.
+A rejected commit removes newly added membership, but does not remove pre-existing
+membership. Domain operations must validate before changing their own state:
+Redweb cannot roll back arbitrary application or database side effects. Async
+domain commits are rejected; they must not be used as an external transaction.
+
+Projection callbacks return partial page state and must be side-effect-free.
+Authorization and projection work use bounded operations (5000ms defaults;
+`authorizationTimeoutMs` and `projectionTimeoutMs` configure them). Disconnect
+cancels delivery; late results and late failures cannot overwrite or disconnect a
+newer generation. Recipient failures do not reject someone else's committed move.
+Cancellation cannot stop arbitrary work inside user callbacks, only its acceptance.
+
+Throw `ClientError` only for deliberately public text, or classify domain errors
+with `reject(error): string | undefined`. Unexpected exceptions retain normal
+private server error handling. Optional `errorState(message)` returns page fields
+such as a notice; the framework owns protocol errors and form completion.
+
+An optional `raw.update(state)` adapter returns `{ type, payload }` for non-HTML
+clients. Optional `raw.reject(message)` returns an uncorrelated display event.
+Redweb performs the final authorized send, not the adapter. State events are
+uncorrelated; successful raw requests complete with `redweb:result`, while safe
+rejections use correlated protocol errors. With redweb-client use
+`request(type, payload, { responseType: 'redweb:result' })` and subscribe to state
+separately. This is an opt-in completion contract, not a silent change to existing
+raw handlers. Custom adapters must not send from inside their callbacks.
+
+## Socket-bound pages (0.15.0)
+
 Added in Redweb 0.15.0 with redweb-client 0.3.0, installed automatically by Redweb.
 Earlier Redweb 0.14.0/client 0.2.0 packages do not provide this extension.
 Contributors editing both packages can use the optional npm-link workflow in the repository's `docs/CLIENT_DEVELOPMENT.md`.

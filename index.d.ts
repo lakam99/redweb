@@ -59,6 +59,50 @@ declare module 'redweb' {
         readonly protocol?: Readonly<{ version: string }>;
     }
 
+    /** A deliberate, safe command rejection, unlike an unexpected application error. */
+    export class ClientError extends Error { constructor(message: string); }
+    export interface ClientEvent { type: string; payload: unknown; }
+    export interface ConnectedClientsOptions<Page extends object, Identity> {
+        /** Must still equal the admitted principal. Returning another identity never transfers a connection. */
+        identity(context: RedWebConnectionContext): Identity | undefined | false | Promise<Identity | undefined | false>;
+        page(): new () => Page;
+        project(client: ConnectedClient<Page, Identity>, room: string, online: readonly Identity[]): Partial<Page> | Promise<Partial<Page>>;
+        authorizationTimeoutMs?: number;
+        projectionTimeoutMs?: number;
+        /** Explicitly classify domain errors safe to display; all other failures remain private. */
+        reject?(error: unknown): string | undefined;
+        errorState?(message: string): Partial<Page>;
+        /** Optional non-HTML client support. Redweb performs the final checked send. */
+        raw?: {
+            update(state: Partial<Page>): ClientEvent | Promise<ClientEvent>;
+            reject?(message: string): ClientEvent | Promise<ClientEvent>;
+        };
+    }
+    export class ConnectedClient<Page extends object, Identity = unknown> {
+        private constructor();
+        readonly socket: RedWebSocket;
+        readonly identity: Identity;
+        readonly page: Page;
+        readonly rooms: readonly string[];
+        /** Requires exactly one current room; use rooms for multi-room applications. */
+        readonly room: string;
+        /** Reserve room capacity, run a synchronous domain commit, and roll back new membership if it rejects. */
+        join(room: string, commit?: () => unknown): Promise<void>;
+        leave(room: string): boolean;
+    }
+    export class ConnectedClients<Page extends object, Identity = unknown> {
+        constructor(options: ConnectedClientsOptions<Page, Identity>);
+        get(socket: RedWebSocket): ConnectedClient<Page, Identity>;
+        refresh(room: string): Promise<unknown>;
+        bind<Schemas extends import('redweb/contract').SocketSchemas>(contract: import('redweb/contract').SocketContract<Schemas>): {
+            readonly protocol: { readonly versions: readonly string[] };
+            handler<Type extends keyof Schemas & string>(type: Type, callback: (
+                client: ConnectedClient<Page, Identity>, payload: import('redweb/contract').ContractOutput<Schemas[Type]>,
+            ) => unknown): import('redweb/contract').SocketHandler<import('redweb/contract').ContractInput<Schemas[Type]>>;
+        };
+    }
+    export function connectedClients<Page extends object, Identity>(options: ConnectedClientsOptions<Page, Identity>): ConnectedClients<Page, Identity>;
+
     export interface AdmissionContext {
         signal: AbortSignal;
         networkIdentity: string;
@@ -285,6 +329,8 @@ declare module 'redweb' {
     /** ─────────────────── ROUTES & HANDLERS ─────────────────── */
 
     export interface SocketRouteConfig {
+        /** Opt-in server-side clients, with RoomRegistry membership and private page projection. */
+        connections?: ConnectedClients<any, any>;
         path: string;
         handlers: Array<new () => BaseHandler>;
         services?: Array<new () => SocketService>;
@@ -415,6 +461,7 @@ declare module 'redweb' {
         leave(roomId: string, socket: RedWebSocket): boolean;
         leaveAll(socket: RedWebSocket): number;
         members(roomId: string): RedWebSocket[];
+        roomsFor(socket: RedWebSocket): string[];
         has(roomId: string, socket: RedWebSocket): boolean;
         broadcast(roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;
         broadcastFrom(socket: RedWebSocket, roomId: string, data: unknown, options?: { except?: RedWebSocket }): number;

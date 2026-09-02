@@ -107,6 +107,8 @@ class RoomRegistry {
         return [...(this.rooms.get(roomId) || [])];
     }
 
+    roomsFor(socket) { return [...(this.memberships.get(socket) || [])]; }
+
     has(roomId, socket) {
         this.validateRoomId(roomId);
         return Boolean(this.rooms.get(roomId)?.has(socket));

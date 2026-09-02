@@ -16,12 +16,17 @@ const {
 const { BaseHandler } = require('./src/ws/BaseHandler');
 const { defineSocketContract } = require('./contract');
 const { Application, defineApp } = require('./src/Application');
+const { connectedClients, ConnectedClients, ConnectedClient, ClientError } = require('./src/ws/ConnectedClients');
 const HttpServer = require('./src/http/HttpServer');
 const HttpsServer = require('./src/http/HttpsServer');
 const { action, attribute, codeBlock, component, defineSite, each, exportStatic, html, HtmlRenderer, LiveHtmlServer, LivePage, page, start, state, url, view } = require('./src/htmx');
 module.exports = {
     Application,
     defineApp,
+    connectedClients,
+    ConnectedClients,
+    ConnectedClient,
+    ClientError,
     HttpServer,
     HttpsServer,
     BaseHttpServer,

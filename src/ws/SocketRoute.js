@@ -93,11 +93,12 @@ class SocketRoute {
         limits,
         orderedMessages = false,
         heartbeat,
-        rooms,
+        connections,
+        rooms = connections ? true : undefined,
         sessions,
         metrics,
         distribution,
-        drainHandlers = false,
+        drainHandlers = Boolean(connections),
         protocol,
         maxPendingUpgrades = 64,
     } = {}) {
@@ -192,7 +193,7 @@ class SocketRoute {
             throw error;
         }
         try {
-            this.runtime = new RouteRuntime(this, { heartbeat, rooms, sessions, distribution, drainHandlers });
+            this.runtime = new RouteRuntime(this, { heartbeat, rooms, sessions, distribution, drainHandlers, connections });
             Object.assign(this, this.runtime.expose());
         } catch (error) {
             this.disposeServices();

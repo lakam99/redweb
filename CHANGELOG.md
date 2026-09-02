@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add opt-in `connectedClients` over the existing RoomRegistry: verified per-connection identity, synchronous room/domain joins with membership rollback, deduplicated presence and checked per-player page projection. Typed handlers bind without changing the browser-safe socket contract. Raw command completion is independent of state updates; only deliberate rejections expose text.
+- Fence obsolete projection failures, bound asynchronous adapters by connection lifetime, and keep a failed recipient from rejecting another player's committed command. Add mock-free socket regressions and unit coverage; no client package changes are needed.
 ## 0.15.0
 
 - Include an Express-subtree `qs@6.16.0` override in generated application manifests and document the temporary root-policy requirement for existing consumers. This mitigation does not propagate from Redweb's dependency manifest or silently upgrade Express.
