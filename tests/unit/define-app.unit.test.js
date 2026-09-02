@@ -79,3 +79,78 @@ test('default signal ownership is acquired by run and removed by explicit shutdo
     await app.shutdown();
     expect(['SIGINT', 'SIGTERM'].map(event => process.listenerCount(event))).toEqual(before);
 });
+
+test('default definition is inert and can be disposed without binding the default port', async () => {
+    const app = defineApp();
+    expect(app.options.port).toBe(8181);
+    expect(app.options.pages).toEqual([]);
+    await app.shutdown();
+});
+
+test('immediate shutdown prevents a queued native listen from starting', async () => {
+    const app = defineApp(config);
+    const result = expect(app.run()).rejects.toThrow('cancelled');
+    await app.shutdown();
+    await result;
+    expect(app.server.listening).toBe(false);
+});
+
+test('an expired startup budget does not invoke another startup operation', async () => {
+    const app = defineApp(config);
+    app._startupDeadline = 0;
+    let invoked = false;
+    await expect(app._withinStartup(() => { invoked = true; }, 'Next phase')).rejects.toThrow('deadline');
+    await expect(app._listen()).rejects.toThrow('deadline');
+    expect(invoked).toBe(false);
+    await app.shutdown();
+    expect(() => app._checkStarting()).toThrow('cancelled');
+});
+
+test('already cancelled startup never invokes queued work', async () => {
+    const app = defineApp(config);
+    app._startupDeadline = require('node:perf_hooks').performance.now() + 1000;
+    app._abort.abort();
+    let invoked = false;
+    await expect(app._withinStartup(() => { invoked = true; }, 'Next phase')).rejects.toThrow('cancelled');
+    expect(invoked).toBe(false);
+    await app.shutdown();
+});
+
+test.each(['close', 'error', 'failed-cleanup'])('embedded applications own external listener termination: %s', async mode => {
+    let closed = 0;
+    class Resource {
+        onInit() {}
+        onShutdown() { closed++; if (mode === 'failed-cleanup') throw new Error('cleanup failed'); }
+    }
+    const app = defineApp({ ...config, services: [Resource] });
+    await app.run();
+    if (mode === 'error') app.server.emit('error', new Error('unit listener failure'));
+    else {
+        const closed = new Promise(resolve => app.server.once('close', resolve));
+        app.server.close();
+        await closed;
+    }
+    const result = app.shutdown();
+    if (mode === 'failed-cleanup') await expect(result).rejects.toThrow('shutdown failed');
+    else await result;
+    expect(closed).toBe(1);
+    expect(app.server.listening).toBe(false);
+});
+
+test.each([false, true])('disposal closes admission and retains native close failures: %s', async fail => {
+    const app = defineApp(config);
+    await app.run();
+    const close = app.server.close;
+    // A native close failure is a unit boundary fault, not an integration substitute.
+    if (fail) app.server.close = () => { throw new Error('native close failed'); };
+    try {
+        const result = app._cleanup();
+        if (fail) await expect(result).rejects.toThrow('shutdown failed');
+        else await result;
+    } finally {
+        app.server.close = close;
+        await app.shutdown().catch(() => {});
+        if (app.server.listening) await new Promise(resolve => app.server.close(resolve));
+    }
+    expect(app.server.listening).toBe(false);
+});

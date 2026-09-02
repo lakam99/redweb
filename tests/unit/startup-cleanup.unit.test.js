@@ -2,7 +2,7 @@
 
 const { scheduleStartupCleanup, awaitStartupCleanup } = require('../../src/StartupCleanup');
 
-test('preserves the original constructor error and awaits nested rollback in order', async () => {
+test('preserves the original constructor error and awaits every nested rollback', async () => {
     const error = new TypeError('construction failed');
     const events = [];
     expect(awaitStartupCleanup(error)).toBeUndefined();
@@ -10,6 +10,18 @@ test('preserves the original constructor error and awaits nested rollback in ord
     scheduleStartupCleanup(error, async () => { events.push('outer'); });
     await awaitStartupCleanup(error);
     expect(events).toEqual(['inner', 'outer']);
+});
+
+test('a pending inner rollback does not prevent outer cleanup from starting', async () => {
+    const error = new Error('primary');
+    let release, outer = false;
+    const pending = new Promise(resolve => { release = resolve; });
+    scheduleStartupCleanup(error, () => pending);
+    scheduleStartupCleanup(error, () => { outer = true; });
+    await Promise.resolve();
+    expect(outer).toBe(true);
+    release();
+    await awaitStartupCleanup(error);
 });
 
 test('retains both rollback failures instead of skipping outer cleanup', async () => {

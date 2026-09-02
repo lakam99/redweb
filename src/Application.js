@@ -77,8 +77,8 @@ class Application {
     }
 
     run() {
-        if (this._runPromise) return this._runPromise;
         if (this._stopping) return Promise.reject(new Error('An application cannot run after shutdown. Define a new application.'));
+        if (this._runPromise) return this._runPromise;
         this._startupDeadline = performance.now() + this.options.startupTimeoutMs;
         this._runPromise = this._start().catch(async error => {
             this._stopping = true;
@@ -133,8 +133,9 @@ class Application {
         this._checkStarting();
         this.server.on('error', this._onError);
         this.server.once('close', this._onClose);
-        if (options.listenCallback) options.listenCallback();
-        else options.logger?.log?.(`Redweb application listening on ${options.bind}:${this.server.address().port}`);
+        if (options.listenCallback) await this._withinStartup(() => options.listenCallback(), 'Application listening callback');
+        else this.http.logger?.log?.(`Redweb application listening on ${options.bind}:${this.server.address().port}`);
+        this._checkStarting();
         return this;
     }
 
@@ -151,7 +152,7 @@ class Application {
                 failed = reject;
                 server.once('listening', ready);
                 server.once('error', failed);
-                server.listen(this.options.port, this.options.bind);
+                server.listen({ port: this.options.port, host: this.options.bind, signal: this._abort.signal });
             }), 'Application listener startup');
         } finally {
             if (ready) server.off('listening', ready);
@@ -182,7 +183,9 @@ class Application {
     }
 
     _withinStartup(operation, label) {
-        return bounded(operation, Math.max(0, this._startupDeadline - performance.now()), label, this._abort.signal);
+        const remaining = this._startupDeadline - performance.now();
+        if (remaining <= 0) return Promise.reject(new Error(`${label} exceeded its deadline.`));
+        return bounded(operation, remaining, label, this._abort.signal);
     }
 
     _cleanup() {

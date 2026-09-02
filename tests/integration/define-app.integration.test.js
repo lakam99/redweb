@@ -74,6 +74,7 @@ test('one listener serves multiple pages, live updates and independent message h
     }
     expect(events).toEqual(['init', 'shutdown']);
     expect(app.server.listening).toBe(false);
+    await expect(app.run()).rejects.toThrow('cannot run after shutdown');
 });
 
 test.each(['http', 'socket', 'static-page'])('%s-only definitions run without a second listener', async kind => {
@@ -84,6 +85,28 @@ test.each(['http', 'socket', 'static-page'])('%s-only definitions run without a 
         expect(app.server.listenerCount('upgrade')).toBe(kind === 'socket' ? 1 : 0);
         expect((await request({ port: app.server.address().port, path: '/health' })).body).toBe('healthy');
     } finally { await app.shutdown(); }
+});
+
+test('HTTPS and WSS share the same TLS listener', async () => {
+    const path = require('node:path');
+    const app = defineApp({ ...config, sockets: [Match],
+        ssl: { key: path.join(__dirname, '../fixtures/localhost.key'), cert: path.join(__dirname, '../fixtures/localhost.crt') },
+        httpServices: [{ serviceName: '/health', method: 'get', function: (_req, res) => res.send('secure') }] });
+    let peer;
+    try {
+        await app.run();
+        const port = app.server.address().port;
+        expect((await request({ protocol: 'https:', port, path: '/health' })).body).toBe('secure');
+        peer = new WebSocket(`wss://127.0.0.1:${port}/match`, { rejectUnauthorized: false });
+        await waitForOpen(peer);
+        const reply = nextMessage(peer);
+        peer.send(JSON.stringify({ type: 'join' }));
+        expect(JSON.parse((await reply).data.toString())).toEqual({ type: 'joined' });
+        expect(app.server.listenerCount('upgrade')).toBe(1);
+    } finally {
+        if (peer) await closeWebSocket(peer);
+        await app.shutdown();
+    }
 });
 
 test('occupied-port failure unwinds initialized services in reverse order', async () => {
@@ -141,17 +164,41 @@ test.each(['route-constructor', 'route-collision', 'later-page', 'http-options']
     page('/', { shared: true })(Shared);
     class Fails { constructor() { throw new Error('route construction failed'); } }
     class Collision extends SocketRoute {
-        constructor() { super({ path: '/__redweb/live', handlers: [] }); }
+        constructor() { super({ path: '/__redweb/live', handlers: [Join] }); }
     }
     const app = defineApp({ ...config,
         pages: mode === 'later-page' ? [Shared, class Undecorated {}] : [Shared],
         sockets: mode === 'route-constructor' ? [Fails] : mode === 'route-collision' ? [Collision] : [],
         ...(mode === 'http-options' ? { encoding: 'invalid' } : {}),
     });
-    await expect(app.run()).rejects.toThrow();
+    await expect(app.run()).rejects.toThrow(mode === 'route-collision' ? 'WebSocket route paths must be unique' : undefined);
     await app.shutdown();
     expect(created).toBe(1);
     expect(disposed).toBe(1);
+});
+
+test('a stalled construction rollback still disposes independently owned shared pages', async () => {
+    let disposed = 0, release;
+    const stalled = new Promise(resolve => { release = resolve; });
+    class Shared {
+        render() { return '<h1>Shared</h1>'; }
+        disposed() { disposed++; }
+    }
+    page('/', { shared: true })(Shared);
+    class Slow extends Match { async shutdown() { await stalled; await super.shutdown(); } }
+    class Bad { constructor() { throw new Error('route construction failed'); } }
+    const app = defineApp({ ...config, pages: [Shared], sockets: [Slow, Bad], shutdownTimeoutMs: 30 });
+    let failure;
+    try {
+        failure = await app.run().catch(error => error);
+        expect(failure.cause.message).toBe('route construction failed');
+        expect(failure.errors[1].errors[0].message).toContain('Construction rollback exceeded');
+        expect(disposed).toBe(1);
+    } finally {
+        release();
+        await require('../../src/StartupCleanup').awaitStartupCleanup(failure?.cause);
+        await app.shutdown();
+    }
 });
 
 test('one shutdown deadline rejects a stalled route, closes admission and peers, and attempts service cleanup', async () => {
