@@ -7,10 +7,10 @@ const { BaseSocketServer } = require('./BaseSocketServer');
  * @return {Object} WebSocket server instance.
  */
 class SocketServer extends BaseSocketServer {
-    constructor(options = {}) {
+    constructor(options) {
+        const ownsServer = !options?.server;
         const server = options?.server || http.createServer();
-        super(server, options);
-        server.listen(this.port, () => console.log(`RedWeb SocketServer listening on port ${this.port}`));
+        super(server, options, ownsServer, 'SocketServer');
         return this;
     }
 }

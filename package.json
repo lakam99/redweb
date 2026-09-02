@@ -1,27 +1,179 @@
 {
   "name": "redweb",
-  "version": "0.7.1",
-  "description": "A way to quickly set up an express server",
+  "version": "0.14.0",
+  "description": "A small Node.js foundation for HTTP, WebSockets, multiplayer services, and server-rendered HTML",
   "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "redweb": "bin/redweb.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./client": {
+      "types": "./client.d.ts",
+      "import": "./client.js",
+      "require": "./client.js",
+      "default": "./client.js"
+    },
+    "./contract": {
+      "types": "./contract.d.ts",
+      "import": "./contract.js",
+      "require": "./contract.js",
+      "default": "./contract.js"
+    },
+    "./jsx-runtime": {
+      "types": "./jsx-runtime.d.ts",
+      "import": "./jsx-runtime.js",
+      "require": "./jsx-runtime.js",
+      "default": "./jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./jsx-dev-runtime.d.ts",
+      "import": "./jsx-dev-runtime.js",
+      "require": "./jsx-dev-runtime.js",
+      "default": "./jsx-dev-runtime.js"
+    },
+    "./tsconfig.json": "./config/tsconfig.json",
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "test": "node tester.js"
+    "pretest": "node scripts/build-live-html-examples.js --check && node scripts/generate-protocol-types.js --check && node scripts/generate-docs.js --check && tsc -p tests/types/tsconfig.json && tsc -p tests/types/tsconfig.jsxdev.json && tsc -p tests/types/tsconfig.standard.json",
+    "prepack": "node scripts/build-live-html-examples.js --check && node scripts/generate-docs.js --check",
+    "prepublishOnly": "node scripts/generate-docs.js --release-check",
+    "generate:docs": "node scripts/generate-docs.js",
+    "verify:docs:mcp": "npm --prefix integrations/docs-mcp test",
+    "verify:cli": "c8 --all --src=bin --include=bin/redweb.js --reporter=text --reporter=json --reports-dir=coverage/cli-entrypoint --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node node_modules/jest/bin/jest.js tests/integration/init-cli.integration.test.js tests/integration/add-cli.integration.test.js --testNamePattern=\"redweb init CLI integration|human and subprocess CLI\" --runInBand --coverage=false",
+    "verify:agents:controls": "node scripts/evaluation/validate.js",
+    "verify:live-html:browser:coverage": "node node_modules/jest/bin/jest.js tests/integration/frozen-live-browser.integration.test.js tests/unit/frozen-live-browser.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-live-html-browser.js --coverageDirectory=coverage/frozen-live-browser",
+    "verify:evaluation:controls:coverage": "node node_modules/jest/bin/jest.js tests/integration/evaluation-controls.integration.test.js tests/unit/evaluation-controls-boundaries.unit.test.js tests/integration/evaluation-verifier.integration.test.js tests/unit/evaluation-verifier-boundaries.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/evaluation/validate.js --collectCoverageFrom=scripts/evaluation/verify.js --coverageDirectory=coverage/frozen-controls",
+    "verify:evaluation:prepare:coverage": "node node_modules/jest/bin/jest.js tests/integration/evaluation-prepare.integration.test.js tests/unit/evaluation-prepare-boundaries.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/evaluation/prepare.js --coverageDirectory=coverage/frozen-prepare",
+    "verify:evaluation:trial:coverage": "node node_modules/jest/bin/jest.js tests/unit/evaluation-evidence.unit.test.js tests/integration/evaluation-trial.integration.test.js tests/unit/evaluation-trial-boundaries.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/evaluation/run-trial.js --coverageDirectory=coverage/frozen-trial",
+    "verify:evaluation:process:coverage": "node node_modules/jest/bin/jest.js tests/unit/evaluation-process-boundaries.unit.test.js tests/unit/evaluation-evidence.unit.test.js tests/unit/evaluation-process.unit.test.js tests/integration/evaluation-frozen.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/evaluation/seal.js --collectCoverageFrom=scripts/evaluation/process.js --coverageDirectory=coverage/frozen-process-seal",
+    "example:counter": "node examples/live-html/counter.js",
+    "example:chatroom": "node examples/live-html/chatroom.js",
+    "example:cards": "node examples/live-html/cards.js",
+    "example:components": "node examples/live-html/components.js",
+    "example:jsx": "node examples/live-html/jsx-page.js",
+    "generate:protocol-types": "node scripts/generate-protocol-types.js",
+    "verify:overhead": "node scripts/verify-disabled-overhead.js",
+    "verify:overhead:coverage": "node node_modules/jest/bin/jest.js tests/unit/benchmark-command.unit.test.js tests/integration/benchmark-measurement.integration.test.js tests/unit/benchmark-traffic.unit.test.js tests/unit/benchmark-batch.unit.test.js tests/unit/benchmark-comparison.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/benchmark-worker.js --collectCoverageFrom=scripts/verify-disabled-overhead.js --collectCoverageFrom=scripts/lib/BenchmarkBatch.js --collectCoverageFrom=scripts/lib/BenchmarkComparison.js --collectCoverageFrom=scripts/lib/BenchmarkWorkload.js --collectCoverageFrom=scripts/lib/measureBenchmarkBatch.js --coverageDirectory=coverage/benchmark-tools",
+    "verify:soak": "node --expose-gc scripts/verify-soak.js",
+    "verify:soak:coverage": "node node_modules/jest/bin/jest.js tests/unit/soak-measurement.unit.test.js tests/unit/soak-clients.unit.test.js tests/unit/soak-command.unit.test.js tests/unit/soak-command-evidence.unit.test.js tests/integration/soak-tools.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-soak.js --collectCoverageFrom=scripts/lib/SoakClients.js --collectCoverageFrom=scripts/lib/SoakMeasurement.js --collectCoverageFrom=tests/helpers/SoakCommandEvidence.js --coverageDirectory=coverage/soak-tools",
+    "verify:memory": "node scripts/verify-memory-overhead.js",
+    "verify:memory:coverage": "node node_modules/jest/bin/jest.js tests/unit/memory-command.unit.test.js tests/unit/memory-measurement.unit.test.js tests/integration/memory-measurement.integration.test.js tests/unit/verification-workspace.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/memory-worker.js --collectCoverageFrom=scripts/verify-memory-overhead.js --collectCoverageFrom=scripts/lib/MemoryMeasurement.js --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --coverageDirectory=coverage/memory-tools",
+    "verify:load": "node scripts/verify-load.js",
+    "verify:load:coverage": "node node_modules/jest/bin/jest.js tests/unit/load-command.unit.test.js tests/unit/load-traffic.unit.test.js tests/unit/load-measurement.unit.test.js tests/integration/load-measurement.integration.test.js tests/unit/realtime-harness.unit.test.js tests/integration/realtime-harness.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-load.js --collectCoverageFrom=scripts/lib/LoadMeasurement.js --collectCoverageFrom=scripts/lib/measureLoadTraffic.js --collectCoverageFrom=scripts/realtime-harness.js --coverageDirectory=coverage/load-tools",
+    "verify:recovery": "node --expose-gc scripts/verify-recovery.js",
+    "verify:recovery:original:coverage": "node node_modules/jest/bin/jest.js tests/unit/original-recovery.unit.test.js tests/integration/recovery-verifier.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/verify-recovery.js --coverageDirectory=coverage/original-recovery",
+    "verify:recovery:server": "node scripts/verify-server-recovery.js",
+    "verify:recovery:coverage": "node node_modules/jest/bin/jest.js tests/unit/server-recovery-policy.unit.test.js tests/unit/server-recovery-candidate.unit.test.js tests/unit/server-recovery-cli.unit.test.js tests/unit/recovery-split.unit.test.js tests/unit/recovery-coordinator-boundaries.unit.test.js tests/unit/recovery-worker-boundaries.unit.test.js tests/unit/recovery-worker-error.unit.test.js tests/integration/server-recovery-candidate.integration.test.js tests/integration/recovery-split.integration.test.js tests/integration/recovery-channel.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/lib/ServerRecoveryPolicy.js --collectCoverageFrom=scripts/lib/ServerRecoveryCandidate.js --collectCoverageFrom=scripts/verify-server-recovery.js --collectCoverageFrom=scripts/diagnostics/recovery-split.cjs --collectCoverageFrom=scripts/diagnostics/recovery-split-worker.cjs --coverageDirectory=coverage/server-recovery-acceptance",
+    "verify:assets:coverage": "c8 --all --src=recipes/shared --include=recipes/shared/copy-assets.cjs --reporter=text --reporter=json --reports-dir=coverage/recipe-assets --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node node_modules/jest/bin/jest.js tests/integration/copy-assets.integration.test.js --runInBand --coverage=false",
+    "verify:room:coverage": "node node_modules/jest/bin/jest.js tests/unit/room-verifier.unit.test.js tests/integration/documentation.integration.test.js --testNamePattern=\"room cleanup|shared page/room\" --runInBand --coverage --collectCoverageFrom=scripts/lib/verify-room-example.js --coverageDirectory=coverage/room-verifier",
+    "verify:action:coverage": "node node_modules/jest/bin/jest.js tests/unit/action-verifier.unit.test.js tests/integration/action-verifier.integration.test.js tests/integration/action-input.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/lib/verify-action-input.js --coverageDirectory=coverage/action-verifier",
+    "verify:reports:coverage": "node node_modules/jest/bin/jest.js tests/unit/report-command.unit.test.js tests/integration/command-report.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/lib/reportCommand.js --coverageDirectory=coverage/command-report",
+    "verify:build:coverage": "node node_modules/jest/bin/jest.js tests/integration/protocol-generator.integration.test.js tests/integration/example-builder.integration.test.js tests/integration/documentation.integration.test.js tests/integration/script-coverage.integration.test.js --testNamePattern=\"protocol generator|example builder|release snapshots|unit fault: script verifier|real command evidence\" --runInBand --coverage=false",
+    "verify:recorder:coverage": "node node_modules/jest/bin/jest.js tests/unit/application-recorder.unit.test.js tests/integration/script-coverage.integration.test.js --testNamePattern=\"native coverage recorder|real command evidence associates\" --runInBand --coverage --collectCoverageFrom=scripts/lib/record-application-coverage.cjs --coverageDirectory=coverage/application-recorder-authored",
+    "verify:recovery:diagnostics": "c8 --all --include=scripts/diagnostics/recovery-heap-graph.cjs --include=scripts/diagnostics/recovery-heap-summary.cjs --reporter=text --reporter=json --reports-dir=coverage/recovery-native-exact --check-coverage --lines=100 --branches=100 --functions=100 --statements=100 node --test tests/unit/recovery-heap-graph.unit.test.js",
+    "verify:live-html": "node scripts/build-live-html-examples.js --check && npx jest tests/integration/live-html.integration.test.js --runInBand --coverage=false",
+    "verify:live-html:browser": "node scripts/build-live-html-examples.js --check && node scripts/verify-live-html-browser.js",
+    "verify:browser:supplements": "node node_modules/jest/bin/jest.js tests/unit/browser-supplements.unit.test.js tests/integration/browser-supplements.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/verify-live-page-ownership.js --collectCoverageFrom=scripts/lib/verify-runtime-browser.js --coverageDirectory=coverage/browser-supplements-authored",
+    "verify:dashboard:coverage": "node node_modules/jest/bin/jest.js tests/unit/dashboard-verifier.unit.test.js tests/integration/dashboard-verifier.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/verify-dashboard-browser.js --coverageDirectory=coverage/dashboard-verifier",
+    "verify:starter:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-acceptance.unit.test.js tests/unit/browser-handle-release.unit.test.js tests/unit/starter-browser.unit.test.js tests/integration/starter-browser.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/BrowserAcceptance.js --collectCoverageFrom=scripts/lib/releaseBrowserHandles.js --collectCoverageFrom=scripts/lib/verify-starter-browser.js --coverageDirectory=coverage/starter-browser",
+    "verify:refresh:coverage": "node node_modules/jest/bin/jest.js tests/unit/refresh-controls-failures.unit.test.js tests/unit/refresh-observation.unit.test.js tests/unit/heading-readiness.unit.test.js tests/integration/refresh-observation.integration.test.js tests/integration/refresh-coverage.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/verify-refresh-controls.js --collectCoverageFrom=scripts/lib/verify-refresh-coverage.js --coverageDirectory=coverage/refresh-verifier",
+    "verify:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-coverage.unit.test.js tests/unit/application-coverage.unit.test.js tests/unit/packed-browser-harness.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/BrowserCoverage.js --collectCoverageFrom=scripts/lib/ApplicationCoverage.js --collectCoverageFrom=scripts/lib/assertCoverageFile.js --coverageDirectory=coverage/browser-collector && npm run verify:browser:coordinator:coverage",
+    "verify:browser:coordinator:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-coordinator-report.unit.test.js tests/unit/browser-coordinator-lifecycle.unit.test.js tests/unit/browser-coverage-cleanup.unit.test.js tests/unit/browser-supplements.unit.test.js tests/unit/refresh-controls-failures.unit.test.js tests/unit/refresh-observation.unit.test.js tests/unit/heading-readiness.unit.test.js tests/integration/browser-coordinator.integration.test.js tests/integration/browser-supplements.integration.test.js tests/integration/refresh-observation.integration.test.js tests/integration/refresh-coverage.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-browser-coverage.js --collectCoverageFrom=scripts/lib/verify-live-page-ownership.js --collectCoverageFrom=scripts/lib/verify-runtime-browser.js --collectCoverageFrom=scripts/lib/verify-refresh-controls.js --collectCoverageFrom=scripts/lib/verify-refresh-coverage.js --coverageDirectory=coverage/browser-coordinator",
+    "verify:feedback:commands": "node node_modules/jest/bin/jest.js tests/unit/browser-commands.unit.test.js tests/integration/feedback-browser.integration.test.js tests/integration/feedback-command-timeout.integration.test.js tests/integration/feedback-verifier.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/browserCommands.js --collectCoverageFrom=scripts/lib/verify-action-feedback.js --coverageDirectory=coverage/browser-commands",
+    "measure:browser:client": "node scripts/verify-browser-coverage.js client",
+    "verify:client:coordinator:coverage": "node node_modules/jest/bin/jest.js tests/unit/client-source-coordinator.unit.test.js tests/integration/client-source-preflight.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-client-source-coverage.js --coverageDirectory=coverage/client-source-coordinator",
+    "verify:client:source-coverage": "node node_modules/jest/bin/jest.js tests/unit/client-source-coverage.unit.test.js tests/integration/client-source-preflight.integration.test.js tests/integration/command-report.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/ClientSourceCoverage.js --collectCoverageFrom=scripts/lib/reportCommand.js --coverageDirectory=coverage/client-source-collector && node --test tests/integration/client-worker-retention.integration.test.cjs && node scripts/verify-client-source-coverage.js",
+    "verify:development:browser": "node scripts/verify-development-refresh-browser.js",
+    "verify:development:coverage": "node node_modules/jest/bin/jest.js tests/unit/development-refresh-cleanup.unit.test.js tests/unit/development-refresh-boundaries.unit.test.js tests/integration/development-refresh-verifier.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-development-refresh-browser.js --coverageDirectory=coverage/development-coordinator",
+    "verify:starters:lifecycle": "node node_modules/jest/bin/jest.js tests/integration/define-app-process.integration.test.js --runInBand --coverage=false",
+    "verify:starters:lifecycle:coverage": "node node_modules/jest/bin/jest.js tests/unit/define-app.unit.test.js tests/unit/define-app-process.unit.test.js tests/unit/startup-cleanup.unit.test.js tests/integration/define-app.integration.test.js tests/integration/define-app-process.integration.test.js --runInBand --coverage --collectCoverageFrom=src/Application.js --collectCoverageFrom=src/StartupCleanup.js --coverageDirectory=coverage/application-lifecycle",
+    "measure:starters:coverage": "node scripts/measure-starter-coverage.js",
+    "verify:starter-coordinators:coverage": "node node_modules/jest/bin/jest.js tests/unit/starter-coordinators.unit.test.js tests/integration/verification-summary.integration.test.js tests/integration/starter-coordinator-input.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/measure-starter-coverage.js --collectCoverageFrom=scripts/verify-starter-source-coverage.js --collectCoverageFrom=scripts/lib/finishVerificationSummary.js --coverageDirectory=coverage/starter-coordinators",
+    "verify:starters:source-coverage": "node node_modules/jest/bin/jest.js tests/unit/application-coverage.unit.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/ApplicationCoverage.js --collectCoverageFrom=scripts/lib/assertCoverageFile.js --coverageDirectory=coverage/application-collector && node scripts/verify-starter-source-coverage.js",
+    "verify:package:tools": "node node_modules/jest/bin/jest.js tests/unit/verification-workspace.unit.test.js tests/unit/client-candidate.unit.test.js tests/unit/packed-browser-harness.unit.test.js tests/unit/packed-browser-report.unit.test.js tests/integration/starter-verifier.integration.test.js tests/integration/starters.integration.test.js tests/integration/documentation.integration.test.js tests/integration/action-input.integration.test.js tests/integration/consumer-compiler.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/VerificationWorkspace.js --collectCoverageFrom=scripts/lib/ClientCandidate.js --collectCoverageFrom=scripts/lib/InstalledClient.js --collectCoverageFrom=scripts/lib/PackedBrowserHarness.js --collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js --collectCoverageFrom=scripts/lib/verificationError.js --collectCoverageFrom=scripts/lib/verify-starter.js --collectCoverageFrom=scripts/lib/verify-documentation.js --collectCoverageFrom=scripts/lib/compile-consumer.js --coverageDirectory=coverage/package-tools",
+    "verify:live-html:load": "node scripts/build-live-html-examples.js --check && node --expose-gc scripts/verify-live-html-load.js",
+    "verify:live-html:load:coverage": "node node_modules/jest/bin/jest.js tests/unit/live-html-load-command.unit.test.js tests/unit/live-html-load-tools.unit.test.js tests/integration/live-html-load-tools.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-live-html-load.js --collectCoverageFrom=scripts/lib/readLiveHtmlPage.js --collectCoverageFrom=scripts/lib/LiveHtmlLoadClient.js --coverageDirectory=coverage/live-html-load-tools",
+    "verify:jsx:performance": "node --expose-gc scripts/verify-jsx-performance.js",
+    "verify:jsx:coverage": "node node_modules/jest/bin/jest.js tests/unit/jsx-performance-command.unit.test.js tests/integration/jsx-performance.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-jsx-performance.js --coverageDirectory=coverage/jsx-performance-tools",
+    "verify:live-html:package": "node scripts/verify-live-html-package.js",
+    "verify:package:coordinator:coverage": "node node_modules/jest/bin/jest.js tests/unit/package-coordinator.unit.test.js tests/unit/packed-browser-report.unit.test.js tests/unit/packed-browser-report-failures.unit.test.js tests/integration/package-coordinator.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/verify-live-html-package.js --collectCoverageFrom=scripts/lib/preservePackedBrowserReport.js --coverageDirectory=coverage/package-coordinator",
+    "verify:package:examples:coverage": "node node_modules/jest/bin/jest.js tests/unit/packed-action.unit.test.js tests/unit/example-dependencies.unit.test.js tests/unit/example-probe.unit.test.js tests/integration/packed-action.integration.test.js tests/integration/example-dependencies.integration.test.js --runInBand --coverage --collectCoverageFrom=scripts/lib/performProbeAction.js --collectCoverageFrom=scripts/lib/verify-example-dependencies.js --collectCoverageFrom=scripts/lib/example-dependency-probe.cjs --coverageDirectory=coverage/example-dependency-tools",
+    "verify:package:browser:coverage": "node node_modules/jest/bin/jest.js tests/unit/browser-pages.unit.test.js tests/unit/packed-browser-verifier.unit.test.js tests/unit/browser-coverage-cleanup.unit.test.js tests/integration/packed-browser-verifier.integration.test.js --runInBand --silent --coverage --collectCoverageFrom=scripts/lib/verify-packed-browser.js --collectCoverageFrom=scripts/lib/BrowserPages.js --coverageDirectory=coverage/packed-browser-verifier",
+    "verify:client:link": "node --test tests/integration/npm-link.integration.test.cjs",
+    "test": "npx jest --testPathIgnorePatterns=soak-.*[.]test[.]js$ --testPathIgnorePatterns=benchmark-measurement[.]integration[.]test[.]js$"
   },
   "files": [
+    "bin",
+    "config",
     "src/*",
-    "index.d.ts"
+    "client.js",
+    "client.d.ts",
+    "contract.js",
+    "contract.d.ts",
+    "jsx-runtime.js",
+    "jsx-runtime.d.ts",
+    "jsx-dev-runtime.js",
+    "jsx-dev-runtime.d.ts",
+    "CHANGELOG.md",
+    "index.d.ts",
+    "docs",
+    "recipes",
+    "examples/live-html"
   ],
-  "keywords": [],
+  "homepage": "https://redweb.magnisolution.com/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lakam99/redweb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lakam99/redweb/issues"
+  },
+  "keywords": [
+    "typescript",
+    "jsx",
+    "server-rendering",
+    "websocket",
+    "realtime",
+    "multiplayer",
+    "express",
+    "ssr",
+    "static-site"
+  ],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
+    "@types/cors": "2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/node": "20.19.24",
+    "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
-    "ws": "^8.17.0"
+    "express": "^4.22.2",
+    "redweb-client": "^0.2.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
+    "c8": "^10.1.3",
+    "expect": "29.7.0",
     "jest": "^29.7.0",
-    "supertest": "^7.0.0"
+    "istanbul-lib-coverage": "3.2.2",
+    "istanbul-lib-instrument": "6.0.2",
+    "nodemon": "^3.1.11",
+    "redweb-dashboard-types": "npm:@types/node@^22.20.1",
+    "redweb-legacy-compiler-fixture": "file:tests/fixtures/legacy-compiler",
+    "supertest": "^7.0.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
   }
 }

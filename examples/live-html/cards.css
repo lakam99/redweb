@@ -1,0 +1,36 @@
+:root {
+    color-scheme: dark;
+    font-family: system-ui, sans-serif;
+    background: #111827;
+    color: #f9fafb;
+}
+
+main {
+    width: min(64rem, calc(100% - 2rem));
+    margin: 3rem auto;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem;
+}
+
+.card {
+    padding: 1rem;
+    border: 1px solid #374151;
+    border-radius: .75rem;
+    background: #1f2937;
+}
+
+button {
+    margin-top: 1rem;
+    padding: .7rem 1rem;
+    border: 0;
+    border-radius: .4rem;
+    background: #22d3ee;
+    color: #083344;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}

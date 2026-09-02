@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "jsx": "react-jsx",
+    "jsxImportSource": "redweb",
+    "strict": true,
+    "experimentalDecorators": false,
+    "useDefineForClassFields": true,
+    "skipLibCheck": false
+  }
+}

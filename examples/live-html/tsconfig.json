@@ -1,0 +1,14 @@
+{
+  "extends": "../../config/tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "baseUrl": "../..",
+    "paths": {
+      "redweb": ["."],
+      "redweb/*": ["*"]
+    }
+  },
+  "files": ["counter.ts", "chatroom.tsx", "cards.ts", "components.ts", "jsx-page.tsx"]
+}

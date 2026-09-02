@@ -1,0 +1,16 @@
+:root { font-family: system-ui, sans-serif; color: #e8edf5; background: #111827; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.home { width: min(64rem, 100%); margin: 3rem auto; padding: 0 1.5rem; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+form { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem; }
+input, button { font: inherit; border: 1px solid #526179; border-radius: .5rem; padding: .75rem; }
+input { background: #1f2937; max-width: 100%; }
+button { background: #a7f3d0; color: #102c23; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+.cards { margin-top: 2rem; }
+.card-grid { padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: 1rem; }
+.card-grid li { border: 1px solid #526179; border-radius: .75rem; padding: 1.25rem; overflow-wrap: anywhere; }
+h2 { font-size: 1.25rem; }
+[role="alert"] { color: #fca5a5; }
