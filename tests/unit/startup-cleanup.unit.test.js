@@ -2,6 +2,16 @@
 
 const { scheduleStartupCleanup, awaitStartupCleanup } = require('../../src/StartupCleanup');
 
+test('preserves native errors from another JavaScript context by identity', async () => {
+    const error = require('node:vm').runInNewContext('new TypeError("foreign constructor failure")');
+    expect(error instanceof Error).toBe(false);
+    let cleaned = false;
+    expect(scheduleStartupCleanup(error, () => { cleaned = true; })).toBe(error);
+    await awaitStartupCleanup(error);
+    expect(cleaned).toBe(true);
+    expect(error.message).toBe('foreign constructor failure');
+});
+
 test('preserves the original constructor error and awaits every nested rollback', async () => {
     const error = new TypeError('construction failed');
     const events = [];

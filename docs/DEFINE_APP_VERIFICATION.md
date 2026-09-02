@@ -37,3 +37,18 @@ failure or replace a completed full-suite run. Final regression, package, CI,
 release-catalogue, and exact-PR-head review remain outstanding.
 
 No soak or long fixed-window acceptance test was run for this migration.
+
+## Follow-up regression repair
+
+The earlier Linux CI matrix exposed `StartupCleanup` replacing native errors
+from another JavaScript context with a generic error. The existing owned-listener
+integration reproduced both failures locally. Using Node's `isNativeError`
+preserves the original error identity/message without treating arbitrary thrown
+values as native errors. A real VM-context regression was added; lifecycle
+coverage is now 73 passing tests at all-four 100%, and all eight owned-listener
+integration tests pass. The VM/owned-listener suites also pass on Node 18.
+
+CI also identified an obsolete test-count assertion in the starter coordinator's
+input-mutation check. Its expected successful fixture now includes one realtime
+test and four application-entrypoint tests; failure-on-input-mutation assertions
+are unchanged.
