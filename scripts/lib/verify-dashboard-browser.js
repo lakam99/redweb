@@ -66,7 +66,7 @@ async function verifyDashboard(execution, { openPage, debugPort }) {
             await waitForPage(page, `Boolean(document.querySelector('#card-title')) && document.documentElement.getAttribute('data-rw-connection') === 'open'`);
         };
         await evaluate(first, `document.querySelector('#account').value = 'alice'; document.querySelector('#password').value = 'incorrect-browser-password'; document.querySelector('form').requestSubmit();`);
-        await waitForPage(first, `document.body.textContent.includes('Check your credentials')`);
+        await waitForPage(first, `Boolean(document.body?.textContent.includes('Check your credentials'))`);
         await first.command('Page.navigate', { url: `${origin}/login` });
         await waitForPage(first, `Boolean(document.querySelector('#account'))`);
         await signIn(first);

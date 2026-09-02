@@ -11,13 +11,13 @@ const filename = path.resolve(__dirname, '../../scripts/lib/verify-dashboard-bro
 // Explicit boundary-fault units, not substitutes for native browser acceptance.
 test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', 'create', 'listen',
     'open', 'evaluate', 'false-ready', 'context', 'navigation', 'object-found', 'readiness-error',
-    'timeout', 'close', 'terminate', 'shutdown', 'combined', 'unref', 'late', 'late-close', 'unsettled'])
+    'timeout', 'close', 'terminate', 'shutdown', 'combined', 'unref', 'late', 'late-close', 'unsettled', 'missing-body'])
 ('dashboard verification unit: %s', async mode => {
     const events = [], execution = { directory: path.resolve('unit-dashboard') };
     const primary = new Error('unit operation failed');
     const cleanup = new Error('unit cleanup failed');
     const release = new Error('unit handle release failed');
-    let firstReadiness = true, clock = 0, resolveLate;
+    let firstReadiness = true, missingBody = true, clock = 0, resolveLate;
     const app = { server: { address: () => ({ port: 9000 }), unref() {
         events.push('unref'); if (mode === 'unref') throw release;
     } }, run: async () => { if (mode === 'listen') throw primary; }, shutdown: async () => {
@@ -32,6 +32,12 @@ test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', '
         events.push('terminate'); if (mode === 'terminate') throw cleanup;
     } }, evaluate: async expression => {
         if (['evaluate', 'combined', 'unref'].includes(mode)) throw primary;
+        if (mode === 'missing-body' && missingBody && expression.includes('Check your credentials')) {
+            missingBody = false;
+            const result = vm.runInNewContext(expression, { document: { body: null } });
+            expect(result).toBe(false);
+            return result;
+        }
         if (expression.startsWith('Boolean(') && firstReadiness) {
             firstReadiness = false;
             if (mode === 'readiness-error') throw primary;
@@ -90,13 +96,14 @@ test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', '
         return page;
     } }).catch(error => error);
     if (mode === 'unsettled') { resolveLate(page); await new Promise(resolve => setImmediate(resolve)); }
-    const passing = ['pass', 'false-ready', 'context', 'navigation', 'object-found', 'close', 'terminate', 'shutdown'];
+    const passing = ['pass', 'false-ready', 'context', 'navigation', 'object-found', 'close', 'terminate', 'shutdown', 'missing-body'];
     if (passing.includes(mode)) expect(result).toBeUndefined();
     else if (mode === 'skip') expect(result.message).toMatch(/SKIP/);
     else if (mode === 'timeout') expect(result.message).toMatch(/Dashboard browser condition failed/);
     else expect(result).toBe(primary);
     if (events.includes('created')) expect(events).toContain('shutdown');
     if (mode === 'pass') expect(events).toContain('navigate');
+    if (mode === 'missing-body') expect(missingBody).toBe(false);
     if (['credentials', 'provision'].includes(mode)) expect(events).toContain('store-close');
     if (events.includes('close')) expect(events).toContain('terminate');
     if (['close', 'terminate', 'shutdown', 'combined', 'unref', 'late-close', 'unsettled'].includes(mode)) {
