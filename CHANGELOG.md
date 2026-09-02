@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+
+- Refresh API and guide examples around concise `defineApp`, plain decorated pages, reusable TSX components, CSS, and connected clients. Keep lower-level HTTP, socket, template, and protocol APIs explicitly documented as alternatives.
+- Correct socket-open ordering, shared-listener composition, room authorization, connection-registry ownership, send policy, HTTPS ownership, function-component return types, and shutdown guidance. No runtime API changes.
+- Generate repeated examples from shared source files and exercise the exact counter, component, and multi-page examples in headed Chromium under both decorator modes. Preserve previously published documentation snapshots.
+
 ## 0.16.0
 
 - Add opt-in `connectedClients` over the existing RoomRegistry: verified per-connection identity, synchronous room/domain joins with membership rollback, deduplicated presence and checked per-player page projection. Typed handlers bind without changing the browser-safe socket contract. Raw command completion is independent of state updates; only deliberate rejections expose text.
