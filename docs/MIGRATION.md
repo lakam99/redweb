@@ -1,6 +1,6 @@
 # Upgrade an existing Redweb application
 
-Match the installed package to its versioned documentation. Redweb 0.15.0 contains the capabilities described by the 0.15.0 guides; a later development checkout may not match that release. See [release verification](RELEASE_TRUST.md) and the changelog shipped with your selected package. Keep your lockfile and rollback artifact, and run your own real HTTP/WebSocket/browser tests after upgrading.
+Match the installed package to its versioned documentation. Redweb 0.16.0 contains the capabilities described by the 0.16.0 guides; a later development checkout may not match that release. See [release verification](RELEASE_TRUST.md) and the changelog shipped with your selected package. Keep your lockfile and rollback artifact, and run your own real HTTP/WebSocket/browser tests after upgrading.
 
 ## 0.8 migration notes
 
@@ -19,10 +19,10 @@ Match the installed package to its versioned documentation. Redweb 0.15.0 contai
 
 ## Live HTML migration
 
-The executable `.htmx` sandbox and `enableHtmxRendering` option were replaced. Templates are ordinary `.html` files registered through decorated plain classes. Move calculations and imports into the page class, mark reactive fields with `@state()`, expose browser-callable methods with `@action()`, and start the page with `start(PageClass)`.
+The executable `.htmx` sandbox and `enableHtmxRendering` option were replaced. Templates are ordinary `.html` files registered through decorated plain classes. Move calculations and imports into the page class, mark reactive fields with `@state()`, expose browser-callable methods with `@action()`, and register it with `defineApp({ pages: [PageClass] })`, then call `app.run()`.
 
 For server-rendered TSX, extend `redweb/tsconfig.json`; do not configure React's JSX runtime. `redweb init --existing` creates a missing root configuration without overwriting one you already have. Check the effective configuration with your installed CLI: `npx --no-install redweb doctor --json`. Review warnings and fix errors before compiling; preservation does not imply correctness.
 
-In the reactive-rendering candidate, ordinary TSX expressions reading decorated state update after assignment. Replace arrays/objects instead of mutating them in place. Use stable JSX keys for lists. Existing explicit HTML bindings remain supported. See [rendering and lifecycle](LIVE_HTML.md) for owner isolation, component lifetimes and reconnect behavior, and [runtime diagnostics](RUNTIME_DIAGNOSTICS.md) for failure categories and retry limits.
+Ordinary TSX expressions reading decorated state update after assignment. Replace arrays/objects instead of mutating them in place. Use stable JSX keys for lists. Existing explicit HTML bindings remain supported. See [rendering and lifecycle](LIVE_HTML.md) for owner isolation, component lifetimes and reconnect behavior, and [runtime diagnostics](RUNTIME_DIAGNOSTICS.md) for failure categories and retry limits.
 
 Shared page state is process-local, not durable or automatically private. Add explicit identity, authorization and persistence for your application. The [private dashboard recipe](../recipes/dashboard/README.md) demonstrates one single-process implementation; it is not a distributed session store.

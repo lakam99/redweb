@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { page, start, BaseHandler, SocketRoute, RedWebSocket, RedWebRequest, LivePageRequestContext } from 'redweb';
+import { page, defineApp, BaseHandler, SocketRoute, RedWebSocket, RedWebRequest, LivePageRequestContext } from 'redweb';
 
 // A runnable local demonstration, not a production credential store.
-export function createApp(port = 8181) {
+export async function createApp(port = 8181) {
     const token = randomBytes(32).toString('base64url');
     let enabled = true;
     const authenticate = (request: Pick<RedWebRequest, 'headers'>) =>
@@ -28,9 +28,9 @@ export function createApp(port = 8181) {
         }
     }
 
-    const app = start(Home, { listen: false, authenticate, logger: null });
-    const team = app.sockets!.addRoute(Team);
-    app.server.listen(port, '127.0.0.1');
+    const app = defineApp({ pages: [Home], sockets: [Team], authenticate, port, bind: '127.0.0.1', logger: null });
+    await app.run();
+    const team = app.sockets!.routes.find(route => route instanceof Team)!;
     return {
         app, team, token,
         async revoke() {
@@ -43,9 +43,8 @@ export function createApp(port = 8181) {
 }
 
 if (require.main === module) {
-    const demo = createApp();
-    console.log('Local demo: http://127.0.0.1:8181/ and ws://127.0.0.1:8181/team');
-    console.log(`Authorization: Bearer ${demo.token}`); // One fresh local-demo credential per run.
-    process.once('SIGTERM', () => void demo.shutdown().catch(console.error));
-    process.once('SIGINT', () => void demo.shutdown().catch(console.error));
+    createApp().then(demo => {
+        console.log('Local demo: http://127.0.0.1:8181/ and ws://127.0.0.1:8181/team');
+        console.log(`Authorization: Bearer ${demo.token}`); // One fresh local-demo credential per run.
+    });
 }

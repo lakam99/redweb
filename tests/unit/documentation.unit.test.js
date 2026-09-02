@@ -149,7 +149,8 @@ describe('single-source documentation', () => {
             const file = recipe.files.find(file => file.path === guide.recipe.file);
             expect(guide.files).toBeUndefined();
             expect(guide.markdown).toContain(builder.setup(guide.recipe.template));
-            expect(guide.markdown).toContain(file.content.trimEnd());
+            const source = guide.codeSource ? fs.readFileSync(path.join(root, guide.codeSource), 'utf8') : file.content;
+            expect(guide.markdown).toContain(source.replace(/\r\n/g, '\n').trimEnd());
             expect(guide.markdown).toContain(`](${recipe.url})`);
             expect(guide.markdown).toContain("## Explain it like I'm five");
             expect(guide.markdown).toContain('## Check that it works');
@@ -168,8 +169,11 @@ describe('single-source documentation', () => {
             'This checkout contains unreleased work even while its package metadata still matches an older npm version',
             'the current development candidate',
         ]) expect(text).not.toContain(stale);
-        expect(text).toContain(`These commands are available in \`redweb@${version}\``);
-        expect(text).toContain(`This API is available in \`redweb@${version}\``);
+        // Current guidance is editable; already published snapshots retain their
+        // historical wording even when an earlier release had stale version text.
+        const current = new Documentation(root).build();
+        expect(current.pages.find(page => page.id === 'cli').markdown.includes(`These commands are available in \`redweb@${version}\``)).toBe(true);
+        expect(current.pages.find(page => page.id === 'development').markdown.includes(`This API is available in \`redweb@${version}\``)).toBe(true);
     });
 
     test('resolves source-relative links without rewriting code examples', () => {

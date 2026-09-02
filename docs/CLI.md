@@ -4,7 +4,7 @@ Use the version installed in your project (`npx --no-install redweb`) when troub
 
 ## Add pages, components, and socket routes
 
-These commands are available in `redweb@0.15.0`.
+These commands are available in `redweb@0.16.0`.
 
 ```sh
 npx --no-install redweb add page dashboard
@@ -25,7 +25,7 @@ The planner parses source and performs an in-memory TypeScript emit, without imp
 
 `--dry-run` writes nothing; `--json` returns a versioned report with planned/created paths, source/output/test paths, a named import, `registration.status: "pending"`, and explicit build/test argument arrays. Human commands are quoted for PowerShell on Windows and a POSIX shell elsewhere. Run the reported build and then its test from the project root. The test imports **only the generated artifact**, starts an isolated loopback server on a temporary port, and exercises a real HTTP/WebSocket action or message exchange. It never imports the existing application entry point.
 
-Registration is intentionally your next step. Add a page to the existing `start([...])` list; add a socket route to the server's route list. For components, create an owned field (`widget = new NotificationsComponent()`) and render `{this.widget}`. Adjust the report's project-root-relative named import to the file where you use it; Node-compatible imports use the emitted `.js` extension. No imports, registration lists, package scripts, manifests, or configuration files are rewritten. Add the new test to your project's normal test command yourself; a generated test is not claimed to be automatically registered.
+Registration is intentionally your next step. Register pages and socket routes in `defineApp({ pages: [...], sockets: [...] })`. For components, create an owned field (`widget = new NotificationsComponent()`) and render `{this.widget}`. Adjust the report's project-root-relative named import to the file where you use it; Node-compatible imports use the emitted `.js` extension. No imports, registration lists, package scripts, manifests, or configuration files are rewritten. Add the new test to your project's normal test command yourself; a generated test is not claimed to be automatically registered.
 
 The shared writer rejects any destination conflict before writing and creates files exclusively. It rejects path escapes, unsafe portable names, case aliases and symbolic-link ancestors. Concurrent failures report which files were completed and which path was attempted; writing is not transactional and does not lock the filesystem tree. Existing application files are never overwritten.
 
@@ -85,7 +85,7 @@ The `source` JSON object reports inspected file count, registration-group count,
 
 Supported syntax includes named/namespace TypeScript imports from Redweb, imported local constants, literal strings, constant arrays/objects, known spreads, and simple handler/route constructors. The reader starts with the configuration's source files and follows relative source imports within the project. Declaration files and dependency implementation code are not inspected; an explicitly configured source outside the project can be read, but additional outside-project imports are not followed automatically.
 
-Duplicate paths are checked **within one registration group**, not across independent servers. The reader recognizes `start`, `exportStatic`, `site.export`, `LiveHtmlServer`, `SocketServer`, and `SecureSocketServer`. Handler names are checked in a `SocketRoute` configuration, including classes based on `BaseHandler` and contract handler factories. It does not evaluate arbitrary factory calls, CommonJS destructuring imports, custom boot wrappers, dynamic route additions, or application control flow.
+Duplicate paths are checked **within one registration group**, not across independent servers. The reader recognizes `defineApp`, `Application`, `start`, `exportStatic`, `site.export`, `LiveHtmlServer`, `SocketServer`, and `SecureSocketServer`. Handler names are checked in a `SocketRoute` configuration, including classes based on `BaseHandler` and contract handler factories. It does not evaluate arbitrary factory calls, CommonJS destructuring imports, custom boot wrappers, dynamic route additions, or application control flow.
 
 Page assets are checked for registered pages using their decorator's source directory, the owning site's shared-CSS directory, or a statically known explicit `templateRoot`. Shared stylesheet names are deduplicated with site-root precedence, like the runtime. `__dirname` is interpreted as the source directory for this source-only check. Missing assets, directory paths, path traversal, and links escaping the effective root are reported. This does **not** verify compiled/deployed asset copies: keep the starter's build/network tests and production checks.
 

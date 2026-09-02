@@ -25,15 +25,11 @@ class AboutPage {
     render() { return <main><h1>About this app</h1></main>; }
 }
 
-const app = defineApp({ pages: [HomePage, AboutPage], port: 8181 });
-
-async function main() {
-    await app.run();
-}
-void main().catch(error => { console.error(error); process.exitCode = 1; });
+const app = defineApp({ pages: [HomePage, AboutPage] });
+app.run();
 ```
 
-The final error handler is for this CommonJS TypeScript entry point; an ESM project that permits top-level await can simply use `await app.run()`. A module that is also imported by tests should export its application definition and guard its entry-point invocation with `require.main === module`. Importing a definition never opens a port or installs signal handlers.
+`run()` returns a Promise. Await it when startup completion matters; an ESM entry point can use top-level `await app.run()`. In CommonJS, the direct call above also works; add rejection handling when the application needs a custom failure policy. A module imported by tests should export its definition separately or guard startup with `require.main === module`. Constructing a definition never opens a port or installs signal handlers.
 
 ## Add socket routes and services
 

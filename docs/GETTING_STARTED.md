@@ -33,7 +33,7 @@ When setup fails, run `npx --no-install redweb doctor --json` from the applicati
 
 - A page is a decorated class. Its `render()` returns server-side TSX.
 - State is server-owned data. An ordinary TSX expression reading `@state()` updates automatically when that property is assigned. Replace arrays/objects rather than mutating them in place.
-- Only decorated actions are browser-callable. Validate and authorize every untrusted input; hiding a button is not access control.
+- Ordinary live pages expose decorated actions. Socket-bound pages expose their registered typed handlers through TSX controls. Validate and authorize every untrusted input; hiding a button is not access control.
 - A class component owns reusable state/actions and has its own update boundary. Function components are convenient presentation helpers.
 - Pages are connection-scoped by default. `shared: true` intentionally shares one page instance; do not put private visitor data there.
 - Shared in-memory state survives visitors and reloads, not server restarts. Durable cards/history require application-owned persistence. Multiple processes do not automatically share memory.
@@ -47,7 +47,7 @@ For private raw socket subscriptions, see [room authorization and shared request
 
 Build first. Deploy `dist/`, the package manifest, and the lockfile, then install runtime dependencies with `npm ci --omit=dev`. The starters are tested with `src/` unavailable after compilation. Configure HTTPS/WSS and a proxy that supports WebSocket upgrades when using a reverse proxy.
 
-These deployment commands require a verified release pair. `redweb@0.15.0` installs published `redweb-client@0.3.0` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
+These deployment commands require a verified release pair. `redweb@0.16.0` installs published `redweb-client@0.3.0` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
 
 Before public access, add authentication, authorization, trusted-origin policy, input/rate limits, application persistence where needed, and bounded shutdown. Treat reconnect/session tokens as credentials. Do not promise exactly-once delivery or durable sessions from an in-memory starter. See [operations](MULTIPLAYER_OPERATIONS.md) and [guarantees and limits](PRODUCTION_READINESS.md).
 

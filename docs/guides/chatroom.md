@@ -8,7 +8,7 @@ The room is a noticeboard managed by the server. Each visitor gets a little wind
 
 ## Follow the design
 
-1. The [application entrypoint](../../recipes/chat/app.tsx) starts a page created by `createChatroomPage()`. The component source shown below is copied from the maintained example, not a separate implementation.
+1. The [application entrypoint](../../recipes/chat/app.tsx) imports `ChatroomPage` and registers it with `defineApp({ pages: [ChatroomPage] })`. The component source shown below is copied from the maintained example, not a separate implementation.
 2. `ChatRoom` owns shared message/member data. `ChatroomComponent` owns a participant's state, server-callable actions and view. Normal TypeScript conditions choose the join screen or conversation screen.
 3. Decorated join/send actions validate form values through the starter's Zod schemas. Redweb provides loading/error feedback; invalid input does not require custom browser glue to preserve the draft.
 4. `connected()` restores online participation when a retained participant reconnects. `disconnected()` removes online presence; later disposal releases retained identity. A name reserved briefly for reconnect does not mean the person is still online.

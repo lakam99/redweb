@@ -111,14 +111,21 @@ class Documentation {
         return normalize(file.content);
     }
 
+    code(entry, field) {
+        return entry.recipe ? this.recipeCode(entry.recipe) : entry.codeSource ? this.read(entry.codeSource) : entry[field];
+    }
+
     topic(topic) {
         let markdown = `${this.notice()}\n\n${this.links(this.read(topic.source), topic.source)}`;
+        markdown = markdown.replace(/<!-- source: ([\w./-]+) -->/g,
+            (_match, file) => fence(this.read(file), language(file)));
         if (topic.recipe) {
             const { template, file } = topic.recipe;
             markdown += [
                 '\n## Build and run the complete application', this.setup(template),
-                `The [complete ${template} recipe](${this.basePath}/recipes/${template}.md) contains every generated file, its real acceptance tests, and deployment instructions. The source below is one of those files, not a standalone program; initialize the whole project before modifying it.`,
-                `## Source walkthrough: ${file}`, fence(this.recipeCode(topic.recipe), language(file)),
+                `The [complete ${template} recipe](${this.basePath}/recipes/${template}.md) contains every generated file, its real acceptance tests, and deployment instructions.`,
+                ...(topic.codeSource ? [] : [`The source below is one of those files, not a standalone program; initialize the whole project before modifying it.`,
+                    `## Source walkthrough: ${file}`, fence(this.recipeCode(topic.recipe), language(file))]),
             ].join('\n\n') + '\n';
         }
         return { ...topic, markdown };
@@ -128,8 +135,8 @@ class Documentation {
         const pages = this.topics.map(topic => this.topic(topic));
         pages.push(...TEMPLATES.map(template => this.recipe(template)));
         const reference = this.reference;
-        const api = reference.api.map(section => ({ ...section, usage: section.recipe ? this.recipeCode(section.recipe) : section.usage }));
-        const examples = reference.examples.map(example => ({ ...example, code: example.recipe ? this.recipeCode(example.recipe) : example.codeSource ? this.read(example.codeSource) : example.code }));
+        const api = reference.api.map(section => ({ ...section, usage: this.code(section, 'usage') }));
+        const examples = reference.examples.map(example => ({ ...example, code: this.code(example, 'code') }));
         for (const example of examples) {
             pages.push({ id: `examples/${example.id}`, title: example.title, summary: example.summary, source: 'docs/reference.json', markdown: [
                 `# ${example.title}`, this.notice(), example.summary,
