@@ -9,7 +9,7 @@ const { projectFiles, TEMPLATES } = require('../../src/cli/templates');
 const { copyDocumentationSource } = require('../helpers/documentation');
 
 const root = path.resolve(__dirname, '../..');
-const { version } = require('../../package.json');
+const { version, dependencies } = require('../../package.json');
 
 describe('single-source documentation', () => {
     test('operational guidance distinguishes blocking server recovery from the original diagnostic', () => {
@@ -71,7 +71,7 @@ describe('single-source documentation', () => {
 
     test('deployment guidance identifies the published release pair and future checkout boundary', () => {
         const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
-        expect(guide).toContain(`\`redweb@${version}\` installs published \`redweb-client@0.2.0\``);
+        expect(guide).toContain(`\`redweb@${version}\` installs published \`redweb-client@${dependencies['redweb-client'].replace(/^\^/, '')}\``);
         expect(guide).toContain('Future unreleased Redweb changes require their matching tested tarball');
         expect(guide).toContain('a clean production install does not preserve that link');
         expect(guide).not.toContain('as though the matching client were already published');

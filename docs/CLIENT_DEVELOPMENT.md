@@ -1,17 +1,16 @@
 # Developing Redweb with redweb-client
 
 The Live HTML implementation is maintained in published `redweb-client/live-html`
-starting with client 0.2.0. This Redweb development branch requires `^0.2.0`;
+starting with client 0.2.0. Redweb 0.15.0 requires client `^0.3.0`;
 normal application installation retrieves it automatically. The linking workflow
 below is optional for contributors editing both repositories.
 Redweb serves that module and emits only its import and `mountLivePage()` call.
 DOM reconciliation, reactive updates, delegated actions, form feedback and page
 disposal belong to the client. The root `redweb-client` entry remains socket-only.
 
-The unreleased socket-bound TSX feature is an exception to the released baseline
-above: its new command bindings and terminal-response filtering require matching
-`codex/socket-page-actions` client/core builds linked together until new releases
-are published. See [socket pages](SOCKET_PAGES.md).
+Socket-bound TSX command bindings and terminal-response filtering use the published
+client 0.3.0 runtime. No link is needed for applications using Redweb 0.15.0.
+See [socket pages](SOCKET_PAGES.md).
 
 ## Link the sibling repositories
 
@@ -112,7 +111,7 @@ For example, from Redweb in PowerShell (use a fresh output directory):
 npm --prefix ../redweb-client run build
 New-Item -ItemType Directory -Path coverage/client-candidate
 npm pack ../redweb-client --pack-destination coverage/client-candidate
-$env:REDWEB_CLIENT_CANDIDATE = (Resolve-Path coverage/client-candidate/redweb-client-0.2.0.tgz).Path
+$env:REDWEB_CLIENT_CANDIDATE = (Resolve-Path coverage/client-candidate/redweb-client-0.3.0.tgz).Path
 npm run verify:live-html:package
 Remove-Item Env:REDWEB_CLIENT_CANDIDATE
 ```
@@ -148,7 +147,7 @@ bundles with the source-tested local build and run the same browser checks.
 A candidate pass is not a registry release pass. `npm run verify:package:tools` includes the fingerprint/containment
 unit regressions; its scoped coverage is not coverage of every browser driver.
 
-Published `redweb-client@0.2.0` supplies both required entry points; version 0.1.0
+Historically, published `redweb-client@0.2.0` supplied both required entry points; version 0.1.0
 does not. The 0.2.0 archive's runtime bundles match the previously source-tested
 build, and the clean registry-installed package gate passes without an override.
 The developer link can remain in place because registry checks own independent

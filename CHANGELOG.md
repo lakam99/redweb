@@ -2,11 +2,13 @@
 
 ## Unreleased
 
+## 0.15.0
+
 - Include an Express-subtree `qs@6.16.0` override in generated application manifests and document the temporary root-policy requirement for existing consumers. This mitigation does not propagate from Redweb's dependency manifest or silently upgrade Express.
 - Bind server TSX controls directly to typed socket handlers with `rw-submit={Join}` and `rw-click={Move.with(payload)}`. Socket-bound pages use their registered route and the existing renderer/client runtime on one connection.
 - Expose a checked, connection-owned `socket.page(PageClass)` accessor for private server state. Preserve admission, exact page/route ownership, post-validation authorization, reconnect and cancellation fences; reserve internal rendering commands.
 - Add explicit handler `false` return semantics for recoverable rejections without a success acknowledgement. Existing handlers returning `undefined` still succeed. Use a correlated `sendProtocolError` before returning `false` to complete requesting clients.
-- Keep typed contract metadata browser-safe; custom page commands require the matching unreleased redweb-client runtime with terminal-response filtering. No published package or deployed tutorial is changed by these development commits.
+- Keep typed contract metadata browser-safe; custom page commands use published redweb-client 0.3.0 with terminal-response filtering, installed automatically by Redweb.
 
 ## 0.14.0
 

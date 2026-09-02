@@ -1,8 +1,8 @@
 # Server-side TSX for custom socket routes
 
-This is an **unreleased** extension requiring the matching Redweb and redweb-client
-socket-page development builds. Existing published 0.14.0/0.2.0 packages do not provide it.
-Use the npm-link workflow in the repository's `docs/CLIENT_DEVELOPMENT.md`.
+Added in Redweb 0.15.0 with redweb-client 0.3.0, installed automatically by Redweb.
+Earlier Redweb 0.14.0/client 0.2.0 packages do not provide this extension.
+Contributors editing both packages can use the optional npm-link workflow in the repository's `docs/CLIENT_DEVELOPMENT.md`.
 
 A live page can attach to a registered custom `SocketRoute` using
 `@page('/', { socket: MatchRoute })`. There is no new view class, no second renderer,

@@ -1,6 +1,6 @@
 {
   "name": "redweb",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "A small Node.js foundation for HTTP, WebSockets, multiplayer services, and server-rendered HTML",
   "main": "index.js",
   "types": "index.d.ts",
@@ -159,7 +159,7 @@
     "@types/ws": "^8.18.1",
     "cors": "^2.8.5",
     "express": "^4.22.2",
-    "redweb-client": "^0.2.0",
+    "redweb-client": "^0.3.0",
     "ws": "^8.21.3"
   },
   "overrides": {
