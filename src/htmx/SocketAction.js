@@ -1,21 +1,8 @@
 'use strict';
 
 const { AsyncLocalStorage } = require('async_hooks');
-const bindings = new WeakMap();
+const { bindings } = require('../ws/SocketAction');
 const routes = new AsyncLocalStorage();
-
-/** Server-only identities: arbitrary objects/functions cannot become executable bindings. */
-function register(Handler, type) {
-    bindings.set(Handler, { Handler, type });
-    Object.defineProperty(Handler, 'with', { value(payload) {
-        const serialized = JSON.stringify(payload);
-        if (serialized === undefined || serialized.length > 65536) throw new TypeError('Socket action payload must be bounded JSON.');
-        const binding = Object.freeze({});
-        bindings.set(binding, { Handler, type, payload: JSON.parse(serialized) });
-        return binding;
-    } });
-    return Handler;
-}
 
 function attributes(properties) {
     let result = properties;
@@ -29,4 +16,4 @@ function attributes(properties) {
     return result;
 }
 
-module.exports = { register, attributes, withRoute: (handlers, render) => routes.run(handlers, render) };
+module.exports = { attributes, withRoute: (handlers, render) => routes.run(handlers, render) };

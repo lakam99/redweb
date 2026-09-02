@@ -288,3 +288,6 @@ redweb-client runtime on one connection, without handwritten browser DOM code.
 
 See [Socket pages](docs/SOCKET_PAGES.md) for configuration, security, recovery and
 the required linked development client. This feature is not in published 0.14.0/0.2.0.
+
+See [feature verification](docs/SOCKET_PAGE_VERIFICATION.md) for the scoped 100%
+coverage gates, headed packaged-tutorial acceptance, review fixes and release limits.

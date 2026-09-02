@@ -73,11 +73,15 @@ async function runFeedbackCases() {
     // Server-emitted command descriptors use the same feedback owner and a real socket.
     const command = document.createElement('button');
     command.setAttribute('rw-click', 'unit:command'); root.append(command);
-    for (const binding of [{ type: 'unit:command', payload: { cell: 4 } }, { type: 'unit:command' }]) {
+    let received;
+    const unsubscribe = window.feedbackTest.client.on('redweb:result', message => { received = message.payload; });
+    for (const binding of [{ type: 'unit:command', payload: { cell: 4 } }, { type: 'unit:command' }, { type: 'unit:command', payload: null }]) {
         command.setAttribute('data-rw-command', JSON.stringify(binding));
         await window.feedbackTest.performAction(command, { args: [] });
         check(feedback.get(command).status === 'success', 'bound command completes over a native socket');
+        check(JSON.stringify(received) === JSON.stringify(Object.hasOwn(binding, 'payload') ? binding.payload : {}), 'bound JSON payload is preserved');
     }
+    unsubscribe();
     command.setAttribute('data-rw-command', JSON.stringify({ type: 'unit:command', payload: { fixed: 'value' } }));
     await window.feedbackTest.performAction(command, { args: [{ field: 'draft' }] });
     check(feedback.get(command).status === 'success', 'form command merges fields');

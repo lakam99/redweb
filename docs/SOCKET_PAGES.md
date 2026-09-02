@@ -86,6 +86,14 @@ not intermediate correlated progress messages. Direct client users can opt into
 the same behavior using `client.request(type, payload, { responseType })`; omitting
 the option preserves the existing any-correlated-response behavior.
 
+For an expected application rejection, send a safe correlated error with
+`socket.sendProtocolError('GAME_REJECTED', safeMessage, { requestId })` and return
+`false` from the handler. Only literal `false` declines successful dispatch;
+`undefined` remains success. The browser shows error feedback, preserves the form,
+and keeps its connection usable. Returning `false` without sending a correlated
+reply leaves a requesting client waiting until its deadline. Unexpected exceptions
+retain the existing sanitized handler-failure behavior and close the connection.
+
 This browser support lives in redweb-client's existing feedback/transport modules.
 The server still owns validation, authorization, game revisions, room fan-out and
 private rendering. Disabled controls are presentation, never permissions.

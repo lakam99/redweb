@@ -16,6 +16,7 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         let permitted = true, called = 0, serverSocket;
         const contract = defineSocketContract('1', { move: options.schema || z.object({ cell: z.number().int() }).strict() });
         const Move = contract.handler('move', (socket, { cell }) => {
+            if (options.command) return options.command(socket, cell);
             called++; serverSocket = socket;
             if (socket.page) socket.page(Board).value = cell;
             else socket.sendEvent('raw', cell);
@@ -38,7 +39,7 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         class OtherPage { render() { return jsx('p', { children: 'other' }); } }
         page('/other-page', { socket: Other })(OtherPage);
         class Raw extends SocketRoute { constructor() { super({ path: '/raw', handlers: [Move], logger: silentLogger }); } }
-        const server = new LiveHtmlServer({ pages: [Board, OtherPage], socketRoutes: options.registered === false ? [Other] : [Match, Other, Raw], port: 0, bind: '127.0.0.1', logger: silentLogger,
+        const server = new LiveHtmlServer({ pages: [Board, OtherPage], socketRoutes: options.registered === false ? [Other] : [Match, Other, Raw], port: 0, bind: '127.0.0.1', logger: options.logger || silentLogger,
             authenticate: req => req.headers.cookie || true });
         servers.push(server); await waitForListening(server.server);
         const port = server.server.address().port, origin = `http://127.0.0.1:${port}`;
@@ -114,6 +115,26 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         a.socket.send(JSON.stringify({ v: '1', type: 'move', payload: { cell: 3 } }));
         await waitForCondition(() => a.frames.length, 'raw result');
         expect(a.frames).toEqual([{ v: '1', type: 'raw', payload: 3 }]); expect(f.socket.page).toBeUndefined();
+    });
+
+    test('an explicit async false rejects a command without acknowledging success or closing its socket', async () => {
+        const f = await fixture({ command: async (socket, cell) => {
+            if (cell === 0) { socket.sendProtocolError('MOVE_REJECTED', 'Choose another square.', { requestId: 'rejected' }); return false; }
+        } });
+        const a = await f.connect((await f.get()).url);
+        a.socket.send(JSON.stringify({ v: '1', type: 'move', payload: { cell: 0 }, requestId: 'rejected' }));
+        a.socket.send(JSON.stringify({ v: '1', type: 'move', payload: { cell: 1 }, requestId: 'accepted' }));
+        await waitForCondition(() => a.frames.some(frame => frame.requestId === 'accepted'), 'later successful command');
+        expect(a.frames.filter(frame => frame.requestId === 'rejected').map(frame => frame.type)).toEqual(['error']);
+        expect(a.frames.find(frame => frame.requestId === 'accepted').type).toBe('redweb:result');
+        expect(a.socket.readyState).toBe(WebSocket.OPEN);
+    });
+
+    test('broken upgrade authorization is sanitized rather than exposing callback details', async () => {
+        let broken = false;
+        const f = await fixture({ authorize: () => { if (broken) throw new Error('private policy details'); return true; } });
+        const doc = await f.get(); broken = true;
+        expect(await websocketUpgradeStatus(doc.url, { headers: { Cookie: 'alice', Origin: f.origin } })).toBe(500);
     });
 
     test.each([{ protocol: false }, { protocol: { versions: ['2'] } }, { protocol: { versions: ['1'], queryParameter: 'version' } }])('rejects incompatible page protocol %j', async route => {
@@ -214,5 +235,17 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         const b = await f.connect(doc.url); gate.resolve();
         await waitForCondition(() => b.frames.some(frame => frame.payload?.patches?.some(p => p.html.includes('>8</button>'))), 'fresh authorized snapshot');
         expect(b.socket.readyState).toBe(WebSocket.OPEN);
+    });
+
+    test('denied background publication closes the connection even when the application logger throws', async () => {
+        const logged = deferred();
+        const f = await fixture({ logger: { ...silentLogger, error(error) { logged.resolve(error); throw new Error('logger unavailable'); } } });
+        const doc = await f.get(), a = await f.connect(doc.url);
+        await waitForCondition(() => a.frames.length, 'authorized snapshot');
+        const session = f.server.manager.active.get(doc.config.pageId);
+        f.deny(); session.page.value = 99;
+        await logged.promise;
+        await waitForCondition(() => a.socket.readyState === WebSocket.CLOSED, 'rejected publication closure');
+        expect(a.frames.some(frame => frame.payload?.patches?.some(patch => patch.html.includes('>99</button>')))).toBe(false);
     });
 });

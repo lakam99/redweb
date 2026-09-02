@@ -8,6 +8,11 @@ Redweb serves that module and emits only its import and `mountLivePage()` call.
 DOM reconciliation, reactive updates, delegated actions, form feedback and page
 disposal belong to the client. The root `redweb-client` entry remains socket-only.
 
+The unreleased socket-bound TSX feature is an exception to the released baseline
+above: its new command bindings and terminal-response filtering require matching
+`codex/socket-page-actions` client/core builds linked together until new releases
+are published. See [socket pages](SOCKET_PAGES.md).
+
 ## Link the sibling repositories
 
 With `redweb` and `redweb-client` checked out beside each other:

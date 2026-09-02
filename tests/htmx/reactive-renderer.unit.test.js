@@ -160,4 +160,20 @@ describe('reactive renderer pure capture and lifecycle units', () => {
         await value.flush();
         expect(value.nodes.size).toBe(0);
     });
+
+    test.each(['detach', 'dispose'])('publication rechecks %s after successful authorization', async operation => {
+        const value = renderer();
+        await value.initialize(() => jsxDEV('p', { children: 'private' }).toString(), context);
+        value.authorize = async () => { value[operation](); };
+        // No sendEvent exists: attempting to publish after cancellation must fail this unit.
+        await expect(value.attach({}, [])).resolves.toBeUndefined();
+        expect(value.socket).toBeNull();
+    });
+
+    test('publication ignores an authorization rejection after disposal', async () => {
+        const value = renderer();
+        await value.initialize(() => jsxDEV('p', { children: 'private' }).toString(), context);
+        value.authorize = async () => { value.dispose(); throw new Error('obsolete authorization'); };
+        await expect(value.attach({}, [])).resolves.toBeUndefined();
+    });
 });

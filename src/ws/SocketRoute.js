@@ -452,8 +452,9 @@ class SocketRoute {
             return false;
         } else {
             try {
-                await handler.handleMessage(sock, data);
-                return true;
+                // A handler may send a recoverable protocol error and explicitly decline
+                // success. Undefined remains successful for existing command handlers.
+                return await handler.handleMessage(sock, data) !== false;
             } catch (error) {
                 if (this.sendAccessFailure(sock, error, { requestId: data.requestId })) return false;
                 if (error instanceof InboundContractValidationError) {

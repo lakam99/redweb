@@ -94,7 +94,7 @@ class SocketContract {
             }
             onMessage(socket, message) { return callback(socket, message.payload, message); }
         }
-        return require('../htmx/SocketAction').register(ContractHandler, type);
+        return require('./SocketAction').register(ContractHandler, type);
     }
 
     client(socket) { return new ContractClient(this, socket); }

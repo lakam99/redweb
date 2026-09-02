@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Bind server TSX controls directly to typed socket handlers with `rw-submit={Join}` and `rw-click={Move.with(payload)}`. Socket-bound pages use their registered route and the existing renderer/client runtime on one connection.
+- Expose a checked, connection-owned `socket.page(PageClass)` accessor for private server state. Preserve admission, exact page/route ownership, post-validation authorization, reconnect and cancellation fences; reserve internal rendering commands.
+- Add explicit handler `false` return semantics for recoverable rejections without a success acknowledgement. Existing handlers returning `undefined` still succeed. Use a correlated `sendProtocolError` before returning `false` to complete requesting clients.
+- Keep typed contract metadata browser-safe; custom page commands require the matching unreleased redweb-client runtime with terminal-response filtering. No published package or deployed tutorial is changed by these development commits.
+
 ## 0.14.0
 
 - Bound already-closing WebSocket peers with the native `ws` closing-handshake deadline: `websocketOptions.closeTimeout` defaults to 5000ms instead of 30000ms and remains configurable. Real TCP tests cover a peer withholding FIN; heartbeat, session expiry, and shutdown deadlines remain separate.
