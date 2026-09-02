@@ -1,5 +1,6 @@
 [
   { "id": "getting-started", "title": "Choose a starter and build a working app", "summary": "Requirements, fit, development, tests, and production boundaries.", "source": "docs/GETTING_STARTED.md" },
+  { "id": "application", "title": "One application, one listener", "summary": "Define pages, socket routes and application services together; run and shut down one owned HTTP/WebSocket listener.", "source": "docs/APPLICATION.md" },
   { "id": "guides/realtime-dashboard", "title": "Build a private realtime dashboard", "summary": "Persistent SQLite cards, account-private updates and sign-out across tabs, with explicit single-process limits.", "source": "docs/guides/realtime-dashboard.md", "recipe": { "template": "dashboard", "file": "src/cards.tsx" } },
   { "id": "guides/jsx-without-react", "title": "Render JSX without React", "summary": "TypeScript pages, a shared layout and external CSS, rendered on the server without browser framework code.", "source": "docs/guides/jsx-without-react.md", "recipe": { "template": "site", "file": "src/app.tsx" } },
   { "id": "guides/chatroom", "title": "Build a chatroom with live presence", "summary": "Reusable server-side components, validated forms and disconnect-aware presence, without custom browser socket glue.", "source": "docs/guides/chatroom.md", "recipe": { "template": "chat", "file": "src/chatroom.tsx" } },

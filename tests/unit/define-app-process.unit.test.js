@@ -50,7 +50,9 @@ test.each(['signal', 'close', 'error', 'failed-cleanup'])('process ownership bou
         expect(app.server.listening).toBe(false);
     } finally {
         await app.shutdown().catch(() => {});
-        if (process.argv.includes('--collectCoverageFrom=src/Application.js')) {
+        // Application belongs to the default runtime coverage inventory too.
+        if (!process.argv.some(argument => argument.startsWith('--collectCoverageFrom'))
+            || process.argv.includes('--collectCoverageFrom=src/Application.js')) {
             const combined = createCoverageMap(globalThis.__coverage__ || {});
             combined.merge(context.__coverage__);
             globalThis.__coverage__ ||= {};

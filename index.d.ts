@@ -732,12 +732,12 @@ declare module 'redweb' {
         readonly http: HttpServer | HttpsServer | null;
         readonly sockets: SocketServer | null;
         readonly services: ApplicationService[];
-        /** Resolves after services initialize and the single HTTP/WS listener is ready. */
+        /** Resolves after services initialize and the single HTTP/WS listener is ready. Cannot restart after shutdown. */
         run(): Promise<Application & ApplicationContext>;
         shutdown(): Promise<void>;
     }
 
-    /** Inert until run(); repeated run/shutdown calls share their respective promises. */
+    /** Inert until run(); repeated run calls share startup until shutdown; shutdown is idempotent. */
     export function defineApp(options?: ApplicationOptions): Application;
 
     export interface StaticExportOptions {

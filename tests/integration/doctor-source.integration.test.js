@@ -30,13 +30,13 @@ describe('doctor source repair workflow without executing application code', () 
 
     test('a literal action typo is repaired through the CLI and the compiled fix works over real HTTP/WebSockets', async () => {
         const source = `
-            import { page, action, state, start } from 'redweb';
+            import { page, action, state, defineApp } from 'redweb';
             @page('/') class Home {
                 @state() count = 0;
                 @action() save() { this.count++; }
                 render() { return <main><output>{this.count}</output><button rw-click="saev">Save</button></main>; }
             }
-            export function create() { return start(Home, { port: 0, bind: '127.0.0.1', logger: null }); }
+            export const app = defineApp({ pages: [Home], port: 0, bind: '127.0.0.1', logger: null, signals: false });
         `;
         fs.writeFileSync(path.join(root, 'tsconfig.json'), JSON.stringify({ extends: 'redweb/tsconfig.json', compilerOptions: { outDir: 'dist' }, include: ['*.tsx'] }));
         fs.writeFileSync(path.join(root, 'app.tsx'), source);
@@ -50,10 +50,10 @@ describe('doctor source repair workflow without executing application code', () 
         const compiled = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', root], { encoding: 'utf8', windowsHide: true });
         expect(compiled.stdout + compiled.stderr).toBe('');
         expect(compiled.status).toBe(0);
-        const server = require(path.join(root, 'dist/app.js')).create();
+        const server = require(path.join(root, 'dist/app.js')).app;
         let socket;
         try {
-            await waitForListening(server.server);
+            await server.run();
             const port = server.server.address().port;
             const response = await request({ port });
             expect(response.status).toBe(200);
