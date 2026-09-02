@@ -39,6 +39,7 @@ class Application {
         if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Application options must be an object.');
         const { pages = [], sockets = [], services = [], port = 8181, bind = '0.0.0.0',
             startupTimeoutMs = 5000, shutdownTimeoutMs = 5000, signals = true, ...rest } = options;
+        if ('static' in rest) throw new TypeError('Use exportStatic() for static output; defineApp() owns a live HTTP listener.');
         for (const name of ['listen', 'routes', 'socketRoutes', 'closeServerOnShutdown']) {
             if (name in rest) throw new TypeError(`defineApp owns \`${name}\`; use pages/sockets and run().`);
         }
@@ -174,6 +175,10 @@ class Application {
         return this._shutdownPromise;
     }
 
+    revoke(principal) { return this._live ? this._live.revoke(principal) : Promise.resolve(0); }
+
+    inspect() { return this._live ? this._live.inspect() : null; }
+
     _stopProcess() {
         if (this._processStopping) return;
         this._processStopping = true;
@@ -209,7 +214,11 @@ class Application {
         if (this.sockets) await close(() => this.sockets.shutdown(), 'Socket shutdown');
         if (this._live) await close(() => this._live.manager.shutdown(), 'Page shutdown');
         if (this._owner) {
-            await close(() => this._owner.close(Math.max(0, this._deadline - performance.now()), () => this.http.shutdown()), 'HTTP shutdown');
+            // OwnedServerLifecycle applies this same remaining deadline and
+            // force-closes peers when it expires. A second racing timer could
+            // report failure just before that successful force-close.
+            try { await this._owner.close(Math.max(0, this._deadline - performance.now()), () => this.http.shutdown()); }
+            catch (error) { errors.push(error); }
             errors.push(...this._owner.forceClose());
         }
         for (const service of [...this.services].reverse()) {

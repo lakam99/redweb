@@ -20,7 +20,7 @@ test.each(['pass', 'setup', 'skip', 'credentials', 'provision', 'store-close', '
     let firstReadiness = true, clock = 0, resolveLate;
     const app = { server: { address: () => ({ port: 9000 }), unref() {
         events.push('unref'); if (mode === 'unref') throw release;
-    } }, shutdown: async () => {
+    } }, run: async () => { if (mode === 'listen') throw primary; }, shutdown: async () => {
         events.push('shutdown');
         if (['shutdown', 'combined', 'unref'].includes(mode)) throw cleanup;
     } };

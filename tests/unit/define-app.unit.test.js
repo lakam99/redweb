@@ -9,7 +9,7 @@ test.each([null, false, [], 'app'])('rejects invalid application options %p befo
 test.each([
     { pages: [1] }, { sockets: {} }, { services: null }, { port: -1 }, { bind: '' },
     { startupTimeoutMs: 0 }, { startupTimeoutMs: 0.5 }, { shutdownTimeoutMs: 2147483648 },
-    { signals: 'yes' }, { listen: false }, { routes: [] }, { socketRoutes: [] }, { closeServerOnShutdown: true },
+    { signals: 'yes' }, { listen: false }, { routes: [] }, { socketRoutes: [] }, { closeServerOnShutdown: true }, { static: true },
     { services: [SocketService] }, { services: [class Timer extends SocketService {}] },
 ])('rejects ambiguous or invalid definition %p', options => {
     expect(() => defineApp(options)).toThrow();
@@ -29,12 +29,12 @@ test('definition copies registration arrays and neither constructs classes nor i
     await expect(app.run()).rejects.toThrow('cannot run after shutdown');
 });
 
-const config = { port: 0, bind: '127.0.0.1', logger: null, signals: false, startupTimeoutMs: 30, shutdownTimeoutMs: 30 };
+const config = { port: 0, bind: '127.0.0.1', logger: null, signals: false, startupTimeoutMs: 1000, shutdownTimeoutMs: 1000 };
 
 test('bounds an uncooperative initializer and still calls its cleanup', async () => {
     let closed = false;
     class Pending { onInit() { return new Promise(() => {}); } onShutdown() { closed = true; } }
-    const app = defineApp({ ...config, services: [Pending] });
+    const app = defineApp({ ...config, services: [Pending], startupTimeoutMs: 30 });
     await expect(app.run()).rejects.toThrow('initialization exceeded its deadline');
     expect(closed).toBe(true);
     expect(app.server.listening).toBe(false);

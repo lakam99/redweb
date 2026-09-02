@@ -2,15 +2,16 @@ import express, { type ErrorRequestHandler } from 'express';
 import { mkdirSync } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import { dirname, resolve } from 'node:path';
-import { page, start, type LivePageRequestContext } from 'redweb';
+import { defineApp, page, type LivePageRequestContext } from 'redweb';
 import { DashboardAuth, sessionToken } from './auth';
 import { Cards, PrivateCards } from './cards';
 import { DashboardStore } from './store';
-import { runApp } from './run-app';
 
-export interface DashboardOptions { port?: number; database?: string; origin?: string; sessionLifetimeMs?: number; }
+export interface DashboardOptions { port?: number; database?: string; origin?: string; sessionLifetimeMs?: number; signals?: boolean; shutdownTimeoutMs?: number; }
 
-export function databasePath() { return resolve(process.env.DASHBOARD_DATABASE ?? 'data/dashboard.sqlite'); }
+export function databasePath() {
+    return process.env.DASHBOARD_DATABASE === ':memory:' ? ':memory:' : resolve(process.env.DASHBOARD_DATABASE ?? 'data/dashboard.sqlite');
+}
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
@@ -37,11 +38,9 @@ export function createApp(options: DashboardOptions = {}) {
     }
     if (process.env.NODE_ENV === 'production' && !configuredOrigin?.startsWith('https://')) throw new Error('Production requires an explicit HTTPS DASHBOARD_ORIGIN.');
     const filename = options.database ?? databasePath();
-    mkdirSync(dirname(filename), { recursive: true });
-    const store = new DashboardStore(filename);
-    try {
-    const cards = new PrivateCards(store);
-    const auth = new DashboardAuth(store, options.sessionLifetimeMs);
+    let store: DashboardStore | undefined;
+    let cards: PrivateCards;
+    let auth: DashboardAuth | undefined;
     const app = express();
     app.disable('x-powered-by');
     app.use(express.urlencoded({ extended: false, limit: '4kb', parameterLimit: 4 }));
@@ -49,7 +48,7 @@ export function createApp(options: DashboardOptions = {}) {
         if (!response.destroyed) response.status(400).send('Invalid form submission.');
     };
     app.use(invalidBody);
-    const origin = () => configuredOrigin ?? `http://127.0.0.1:${(server.server.address() as { port: number }).port}`;
+    const origin = () => configuredOrigin ?? `http://127.0.0.1:${(server.server!.address() as { port: number }).port}`;
     const allowsOrigin = (candidate: string | undefined, request: IncomingMessage) =>
         allowsDashboardOrigin(candidate, origin(), Boolean(configuredOrigin), request.headers.host);
 
@@ -77,30 +76,31 @@ export function createApp(options: DashboardOptions = {}) {
         }
     }
 
-    auth.mount(app, origin, allowsOrigin, account => server.revoke(account));
-    const server = start([Login, Dashboard], {
+    class Workspace {
+        onInit() {
+            mkdirSync(dirname(filename), { recursive: true });
+            store = new DashboardStore(filename);
+            cards = new PrivateCards(store);
+            auth = new DashboardAuth(store, options.sessionLifetimeMs);
+            auth.mount(app, origin, allowsOrigin, account => server.revoke(account));
+        }
+        onShutdown() {
+            try { auth?.close(); }
+            finally { store?.close(); }
+        }
+    }
+    const server = defineApp({
+        pages: [Login, Dashboard], services: [Workspace], signals: options.signals, shutdownTimeoutMs: options.shutdownTimeoutMs,
         server: app, port, bind: configuredOrigin ? '0.0.0.0' : '127.0.0.1', logger: null, templateRoot: __dirname,
         origins: allowsOrigin,
         authenticate: request => request.method === 'GET' && request.url?.split('?')[0] === '/login'
-            ? true : store.session(sessionToken(request.headers.cookie))?.account,
+            ? true : store!.session(sessionToken(request.headers.cookie))?.account,
     });
-    let closing: Promise<void> | undefined;
-    const shutdown = () => {
-        auth.close();
-        if (!closing) {
-            closing = server.shutdown().finally(() => store.close());
-        }
-        return closing;
-    };
-    server.server.once('error', () => { void shutdown().catch(() => {}); });
-    return {
-        server: server.server,
-        shutdown,
-    };
-    } catch (error) { store.close(); throw error; }
+    return server;
 }
 
 if (require.main === module) {
-    const app = runApp(createApp);
-    app?.server.once('listening', () => console.log(`Dashboard: ${process.env.DASHBOARD_ORIGIN ?? `http://127.0.0.1:${(app.server.address() as { port: number }).port}`}/login`));
+    const app = createApp();
+    void app.run().then(running => console.log(`Dashboard: ${process.env.DASHBOARD_ORIGIN ?? `http://127.0.0.1:${(running.server.address() as { port: number }).port}`}/login`))
+        .catch(error => { console.error(error); process.exitCode = 1; });
 }

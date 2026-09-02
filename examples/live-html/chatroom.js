@@ -34,7 +34,7 @@ var __esDecorate = (this && this.__esDecorate) || function (ctor, descriptorIn, 
     done = true;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChatroomComponent = exports.chatInputs = void 0;
+exports.ChatroomPage = exports.ChatroomComponent = exports.chatInputs = void 0;
 exports.createChatroomPage = createChatroomPage;
 const jsx_runtime_1 = require('../../jsx-runtime');
 const redweb_1 = require('../..');
@@ -203,5 +203,8 @@ function createChatroomPage() {
     })();
     return ChatroomPage;
 }
+/** Default room; the factory remains available when independent rooms are needed. */
+exports.ChatroomPage = createChatroomPage();
 if (require.main === module)
-    (0, redweb_1.start)(createChatroomPage(), { port: 8080 });
+    void (0, redweb_1.defineApp)({ pages: [exports.ChatroomPage], port: 8080 }).run()
+        .catch(error => { console.error(error); process.exitCode = 1; });

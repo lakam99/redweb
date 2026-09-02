@@ -1,9 +1,6 @@
-import { start, type LiveHtmlStartOptions } from 'redweb';
-import { createChatroomPage } from './chatroom';
-import { runApp } from './run-app';
+import { defineApp } from 'redweb';
+import { ChatroomPage } from './chatroom';
 
-export function createApp(options: LiveHtmlStartOptions = {}) {
-    return start(createChatroomPage(), { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
-}
+export const app = defineApp({ pages: [ChatroomPage], port: Number(process.env.PORT ?? 8181), templateRoot: __dirname });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });

@@ -32,7 +32,7 @@ function application(execution, script, testSource = "require('node:test')('actu
         dependencies: {}, scripts: { test: 'node check.cjs' },
     }));
     fs.writeFileSync(path.join(target, 'check.cjs'), script);
-    for (const name of ['app.test.cjs', 'run-app.test.cjs']) fs.writeFileSync(path.join(target, 'test', name), testSource);
+    for (const name of ['app.test.cjs', 'lifecycle.test.cjs']) fs.writeFileSync(path.join(target, 'test', name), testSource);
     return target;
 }
 

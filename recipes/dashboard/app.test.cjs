@@ -29,8 +29,8 @@ async function fixture(t, options = {}) {
     t.after(async () => { await app?.shutdown(); rmSync(directory, { recursive: true, force: true }); });
     async function restart() {
         await app?.shutdown();
-        app = createApp({ port: 0, database, ...options });
-        if (!app.server.listening) await once(app.server, 'listening');
+        app = createApp({ port: 0, database, signals: false, ...options });
+        await app.run();
         return `http://127.0.0.1:${app.server.address().port}`;
     }
     return { database, restart, origin: await restart(), get app() { return app; } };
@@ -296,11 +296,11 @@ test('incomplete HTTP uploads cannot keep shutdown or the database alive indefin
     const database = join(directory, 'drain.sqlite');
     let app;
     t.after(async () => { await app?.shutdown(); rmSync(directory, { recursive: true, force: true }); });
-    assert.throws(() => createApp({ port: 0, database, sessionLifetimeMs: 0 }), /lifetime/);
+    await assert.rejects(createApp({ port: 0, database, sessionLifetimeMs: 0 }).run(), /lifetime/);
     assert.throws(() => createApp({ port: 0, database, origin: 'https://example.com/path' }), /exact/);
     assert.throws(() => createApp({ port: 0, database, origin: 'ftp://example.com' }), /exact/);
-    app = createApp({ port: 0, database });
-    await once(app.server, 'listening');
+    app = createApp({ port: 0, database, shutdownTimeoutMs: 30 });
+    await app.run();
     const socket = net.connect(app.server.address().port, '127.0.0.1');
     t.after(() => socket.destroy());
     socket.on('error', () => {});
@@ -350,14 +350,14 @@ test('production origin/cookies and malformed forms use real HTTP', async t => {
 test('unit: listener-error cleanup observes rejection without hiding it from the application owner', async t => {
     const directory = mkdtempSync(join(tmpdir(), 'redweb-dashboard-cleanup-'));
     const database = join(directory, 'cards.sqlite');
-    const app = createApp({ port: 0, database });
+    const app = createApp({ port: 0, database, signals: false });
     t.after(async () => {
         // This test deliberately makes the returned cleanup promise reject.
         // Await settlement before removing files, including on assertion failure.
         await Promise.allSettled([app.shutdown()]);
         rmSync(directory, { recursive: true, force: true });
     });
-    await once(app.server, 'listening');
+    await app.run();
     const failure = new Error('Injected database cleanup failure');
     const close = DashboardStore.prototype.close;
     // Unit-only fault injection, not a claim of a naturally occurring SQLite
@@ -369,7 +369,7 @@ test('unit: listener-error cleanup observes rejection without hiding it from the
     app.server.emit('error', new Error('Injected listener failure'));
     const closing = app.shutdown();
     assert.equal(app.shutdown(), closing);
-    await assert.rejects(closing, error => error === failure);
+    await assert.rejects(closing, error => error.errors.length === 1 && error.errors[0] === failure);
     assert.equal(injected.mock.callCount(), 1);
     assert.equal(app.server.listening, false);
     injected.mock.restore();
@@ -451,10 +451,10 @@ test('real administrator and standalone startup commands expose errors and persi
     try { assert.ok(store.credentials('carol')); }
     finally { store.close(); }
     app = createApp({ database, port: 0 });
-    await once(app.server, 'listening');
+    await app.run();
     const unavailable = run('dist/app.js', [], { PORT: String(app.server.address().port) });
     assert.equal(unavailable.status, 1);
-    assert.match(unavailable.stderr, /Application listener failed/);
+    assert.match(unavailable.stderr, /EADDRINUSE/);
     // Windows kill('SIGTERM') terminates immediately without invoking Node handlers.
     // An actual IPC message delivers the signal event there; Unix uses its OS signal.
     const signalControl = join(directory, 'signal.cjs');

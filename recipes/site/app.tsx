@@ -1,5 +1,4 @@
-import { defineSite, start, type LiveHtmlStartOptions } from 'redweb';
-import { runApp } from './run-app';
+import { defineApp, defineSite } from 'redweb';
 
 const site = defineSite({
     css: 'app.css',
@@ -18,8 +17,6 @@ export class AboutPage {
     render() { return <main class="home"><h1>About</h1><p>Shared layout, separate pages, no browser JavaScript.</p></main>; }
 }
 
-export function createApp(options: LiveHtmlStartOptions = {}) {
-    return start([HomePage, AboutPage], { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
-}
+export const app = defineApp({ pages: [HomePage, AboutPage], port: Number(process.env.PORT ?? 8181), templateRoot: __dirname });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });

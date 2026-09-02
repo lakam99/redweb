@@ -70,4 +70,5 @@ let CounterPage = (() => {
 })();
 exports.CounterPage = CounterPage;
 if (require.main === module)
-    (0, redweb_1.start)(CounterPage, { port: 8080 });
+    void (0, redweb_1.defineApp)({ pages: [CounterPage], port: 8080 }).run()
+        .catch(error => { console.error(error); process.exitCode = 1; });

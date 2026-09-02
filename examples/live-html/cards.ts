@@ -1,4 +1,4 @@
-import { action, html, page, start, state, view } from 'redweb';
+import { action, defineApp, html, page, state, view } from 'redweb';
 
 interface Card {
     title: string;
@@ -32,4 +32,5 @@ export class CardsPage {
     }
 }
 
-if (require.main === module) start(CardsPage, { port: 8080 });
+if (require.main === module) void defineApp({ pages: [CardsPage], port: 8080 }).run()
+    .catch(error => { console.error(error); process.exitCode = 1; });

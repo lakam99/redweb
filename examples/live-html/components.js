@@ -110,4 +110,5 @@ let ComponentsPage = (() => {
 })();
 exports.ComponentsPage = ComponentsPage;
 if (require.main === module)
-    (0, redweb_1.start)(ComponentsPage, { port: 8080 });
+    void (0, redweb_1.defineApp)({ pages: [ComponentsPage], port: 8080 }).run()
+        .catch(error => { console.error(error); process.exitCode = 1; });

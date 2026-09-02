@@ -1,4 +1,4 @@
-import { LivePage, action, component, page, start, state } from 'redweb';
+import { LivePage, action, component, defineApp, page, state } from 'redweb';
 import type { Child } from 'redweb/jsx-runtime';
 
 interface CardProperties {
@@ -38,4 +38,5 @@ export class JsxPage extends LivePage {
     }
 }
 
-if (require.main === module) start(JsxPage, { port: 8181 });
+if (require.main === module) void defineApp({ pages: [JsxPage], port: 8181 }).run()
+    .catch(error => { console.error(error); process.exitCode = 1; });

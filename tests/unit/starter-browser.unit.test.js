@@ -25,10 +25,10 @@ test.each(['pass', 'configured', 'invalid', 'no-browser', 'source', 'source-pres
             existsSync: file => file === 'chromium' ? mode !== 'no-browser'
                 : path.basename(file) === 'source-not-deployed' ? mode !== 'source' : path.basename(file) !== 'src' || mode === 'source-present',
         };
-        if (name.endsWith(path.join('dist', 'app'))) return { createApp() {
+        if (name.endsWith(path.join('test', 'network.cjs'))) return { createApp() {
             if (mode === 'start') throw primary;
             const index = apps.length;
-            const app = { server: { address: () => ({ port: 9000 + index }) }, async shutdown() {
+            const app = { server: { address: () => ({ port: 9000 + index }) }, async run() { if (mode === 'listen') throw primary; }, async shutdown() {
                 events.push(`shutdown-${index}`);
                 if (mode === 'shutdown' || mode === 'combined') throw cleanup;
             } };

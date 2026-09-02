@@ -28,12 +28,11 @@ This prerelease Redweb artifact is development-only until its release checks fin
 
 Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
 
-This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, shutdown helper, and real-network tests; the file is not a standalone copy-and-run program.
+This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, and real-network tests; startup and shutdown belong to Redweb itself. The file is not a standalone copy-and-run program.
 
 <!-- redweb:realtime:start -->
 ```tsx
-import { action, page, start, state, type LiveHtmlStartOptions } from 'redweb';
-import { runApp } from './run-app';
+import { action, defineApp, page, state } from 'redweb';
 
 @page('/', { css: 'app.css', shared: true })
 export class CounterPage {
@@ -55,11 +54,9 @@ export class CounterPage {
     }
 }
 
-export function createApp(options: LiveHtmlStartOptions = {}) {
-    return start(CounterPage, { port: Number(process.env.PORT ?? 8181), templateRoot: __dirname, ...options });
-}
+export const app = defineApp({ pages: [CounterPage], port: Number(process.env.PORT ?? 8181), templateRoot: __dirname });
 
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });
 ```
 <!-- redweb:realtime:end -->
 
@@ -101,8 +98,7 @@ The `http-ws` starter answers `GET /health` and accepts `{"type":"hello"}` at `w
 
 <!-- redweb:http-ws:start -->
 ```tsx
-import { BaseHandler, HttpServer, METHODS, SocketRoute, SocketServer, type RedWebSocket, type SocketServerOptions } from 'redweb';
-import { runApp } from './run-app';
+import { BaseHandler, defineApp, METHODS, SocketRoute, type RedWebSocket } from 'redweb';
 
 export class Hello extends BaseHandler {
     constructor() { super('hello'); }
@@ -118,29 +114,19 @@ export class ChatRoute extends SocketRoute {
     }
 }
 
-export function createApp(options: Pick<SocketServerOptions, 'port' | 'bind' | 'logger'> = {}) {
-    const http = new HttpServer({
-        listen: false,
-        publicPaths: [],
-        services: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
-    });
+export const app = defineApp({
+    sockets: [ChatRoute],
+    port: Number(process.env.PORT ?? 8181),
+    bind: '127.0.0.1',
+    publicPaths: [],
+    httpServices: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
+});
 
-    return new SocketServer({
-        port: options.port ?? Number(process.env.PORT ?? 8181),
-        bind: options.bind ?? '127.0.0.1',
-        logger: options.logger,
-        server: http.server,
-        routes: [ChatRoute],
-        listen: true,
-        closeServerOnShutdown: true, // One owner closes routes and the shared HTTP listener.
-    });
-}
-
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });
 ```
 <!-- redweb:http-ws:end -->
 
-Follow the [shared-listener notes](recipes/http-ws/README.md) and initialize with `--template http-ws` using the matching artifact above. The socket service explicitly owns cleanup of the supplied HTTP listener. `/health` reports liveness, not readiness. This demonstrates raw JSON messages, not a chatroom UI.
+Follow the [shared-listener notes](recipes/http-ws/README.md) and initialize with `--template http-ws` using the matching artifact above. The unified application owns cleanup of its HTTP and socket resources. `/health` reports liveness, not readiness. This demonstrates raw JSON messages, not a chatroom UI.
 
 For validated, inferred client/server payloads, use [shared socket contracts](docs/SOCKET_CONTRACTS.md). The client wraps your transport; it does not create or reconnect one for you.
 

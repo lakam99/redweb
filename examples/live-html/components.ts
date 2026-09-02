@@ -1,4 +1,4 @@
-import { action, component, html, page, start, state } from 'redweb';
+import { action, component, defineApp, html, page, state } from 'redweb';
 
 @component()
 export class CounterComponent {
@@ -38,4 +38,5 @@ export class ComponentsPage {
     }
 }
 
-if (require.main === module) start(ComponentsPage, { port: 8080 });
+if (require.main === module) void defineApp({ pages: [ComponentsPage], port: 8080 }).run()
+    .catch(error => { console.error(error); process.exitCode = 1; });

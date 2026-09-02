@@ -91,4 +91,8 @@ Use `httpServices` for the existing HTTP endpoint descriptor array. Keep route-s
 
 This is application composition, not dependency injection, a distributed worker manager, or durable storage. It does not automatically inject services into page constructors. `shared: true` shares in-process state across visitors, not across server processes or restarts. Static file export remains the separate `exportStatic()` API; a non-live page served over HTTP is not a static export.
 
+`app.revoke(principal)` revokes matching live-page sessions and returns their count; it returns zero when no live-page server has been created. `app.inspect()` exposes opt-in development metadata and otherwise returns `null`. These preserve the same live-page policies as `start()`.
+
+`app.options` is the copied definition. An independent test instance can use `defineApp({ ...app.options, port: 0, signals: false })`, followed by `await run()` and owned cleanup. This creates new page/service instances, but does not clone an Express application or objects deliberately captured by class closures. The chat module exports a default `ChatroomPage`; its optional `createChatroomPage()` factory creates isolated rooms for separate apps or tests.
+
 For rendering and CSS see [Live HTML](LIVE_HTML.md). For message validation and handler classes see [socket contracts](SOCKET_CONTRACTS.md). For deployment and persistence boundaries see [operations](MULTIPLAYER_OPERATIONS.md).

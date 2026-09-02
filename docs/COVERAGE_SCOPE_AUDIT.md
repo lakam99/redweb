@@ -1,5 +1,12 @@
 # Coverage scope and remaining work
 
+> This is a historical coverage inventory. Following the `defineApp` migration,
+> the generated `run-app` helper and its separate verifier no longer exist.
+> Current lifecycle coverage targets `Application` and `StartupCleanup` via
+> `verify:starters:lifecycle:coverage`; authored starter coverage remains under
+> `verify:starters:source-coverage`. Older results below do not establish coverage
+> of the current release candidate.
+
 This inventory separates shipped authored code from verification machinery.
 Passing behavior tests do not establish complete coverage; a coverage report's
 instrumentation hash alone does not prove correspondence with current source.

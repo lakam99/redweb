@@ -23,6 +23,25 @@ class Match extends SocketRoute {
 }
 const config = { port: 0, bind: '127.0.0.1', logger: null, signals: false };
 
+test('unified app exposes live-page revocation and opt-in metadata inspection', async () => {
+    const app = defineApp({ ...config, pages: [Home], authenticate: () => 'alice',
+        origins: (origin, request) => origin === `http://${request.headers.host}`, development: { inspect: true } });
+    expect(app.inspect()).toBeNull();
+    expect(await app.revoke('alice')).toBe(0);
+    try {
+        await app.run();
+        const port = app.server.address().port;
+        const response = await request({ port });
+        expect(response.status).toBe(200);
+        const live = JSON.parse(response.body.match(/id="__redweb_page">([^<]+)/)[1]);
+        expect(app.inspect()).not.toBeNull();
+        expect(await app.revoke('alice')).toBe(1);
+        expect(await app.revoke('alice')).toBe(0);
+        expect(await websocketUpgradeStatus(`ws://127.0.0.1:${port}${live.socketPath}?pageId=${live.pageId}`,
+            { headers: { Origin: `http://127.0.0.1:${port}` } })).not.toBe(101);
+    } finally { await app.shutdown(); }
+});
+
 test('one listener serves multiple pages, live updates and independent message handlers', async () => {
     const events = [];
     class Simulation {

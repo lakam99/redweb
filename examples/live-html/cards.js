@@ -88,4 +88,5 @@ let CardsPage = (() => {
 })();
 exports.CardsPage = CardsPage;
 if (require.main === module)
-    (0, redweb_1.start)(CardsPage, { port: 8080 });
+    void (0, redweb_1.defineApp)({ pages: [CardsPage], port: 8080 }).run()
+        .catch(error => { console.error(error); process.exitCode = 1; });

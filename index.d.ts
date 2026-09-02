@@ -727,6 +727,8 @@ declare module 'redweb' {
 
     export class Application {
         constructor(options?: ApplicationOptions);
+        /** Copied definition; use {...app.options, port: 0} to define an independent test instance. */
+        readonly options: Readonly<ApplicationOptions>;
         readonly app: ExpressApplication | null;
         readonly server: NodeHttpServer | NodeHttpsServer | null;
         readonly http: HttpServer | HttpsServer | null;
@@ -735,6 +737,8 @@ declare module 'redweb' {
         /** Resolves after services initialize and the single HTTP/WS listener is ready. Cannot restart after shutdown. */
         run(): Promise<Application & ApplicationContext>;
         shutdown(): Promise<void>;
+        revoke(principal: string | number | bigint | true): Promise<number>;
+        inspect(): DevelopmentSnapshot | null;
     }
 
     /** Inert until run(); repeated run calls share startup until shutdown; shutdown is idempotent. */

@@ -138,8 +138,7 @@ async function main() {
         await execution.command([require.resolve('typescript/bin/tsc'), '-p', initializedRoot, '--noEmit'], { cwd: initializedRoot });
         const diagnosis = JSON.parse(await execution.command([path.join(packageRoot, 'bin', 'redweb.js'), 'doctor', '--json', '--port', '0'], { cwd: initializedRoot }));
         if (!diagnosis.ok || diagnosis.installedVersion !== manifest.version || diagnosis.source.registrations !== 1 ||
-            diagnosis.issues.length !== 1 || diagnosis.issues[0].code !== 'SOURCE_UNRESOLVED' ||
-            diagnosis.issues[0].message !== 'Asset templateRoot is not statically known.') {
+            diagnosis.issues.length !== 0) {
             throw new Error('Packed doctor did not validate the initialized consumer.');
         }
         if (manifest.scripts['example:counter'] !== 'node examples/live-html/counter.js' ||

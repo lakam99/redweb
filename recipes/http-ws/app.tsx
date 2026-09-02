@@ -1,5 +1,4 @@
-import { BaseHandler, HttpServer, METHODS, SocketRoute, SocketServer, type RedWebSocket, type SocketServerOptions } from 'redweb';
-import { runApp } from './run-app';
+import { BaseHandler, defineApp, METHODS, SocketRoute, type RedWebSocket } from 'redweb';
 
 export class Hello extends BaseHandler {
     constructor() { super('hello'); }
@@ -15,22 +14,12 @@ export class ChatRoute extends SocketRoute {
     }
 }
 
-export function createApp(options: Pick<SocketServerOptions, 'port' | 'bind' | 'logger'> = {}) {
-    const http = new HttpServer({
-        listen: false,
-        publicPaths: [],
-        services: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
-    });
+export const app = defineApp({
+    sockets: [ChatRoute],
+    port: Number(process.env.PORT ?? 8181),
+    bind: '127.0.0.1',
+    publicPaths: [],
+    httpServices: [{ serviceName: '/health', method: METHODS.GET, function: (_req, res) => res.json({ ok: true }) }],
+});
 
-    return new SocketServer({
-        port: options.port ?? Number(process.env.PORT ?? 8181),
-        bind: options.bind ?? '127.0.0.1',
-        logger: options.logger,
-        server: http.server,
-        routes: [ChatRoute],
-        listen: true,
-        closeServerOnShutdown: true, // One owner closes routes and the shared HTTP listener.
-    });
-}
-
-if (require.main === module) runApp(createApp);
+if (require.main === module) void app.run().catch(error => { console.error(error); process.exitCode = 1; });

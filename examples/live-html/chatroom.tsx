@@ -1,4 +1,4 @@
-import { action, component, page, start, state, type ActionInput } from 'redweb';
+import { action, component, defineApp, page, state, type ActionInput } from 'redweb';
 import { z } from 'zod';
 
 const MAX_VISIBLE_MEMBERS = 100;
@@ -164,4 +164,8 @@ export function createChatroomPage() {
     return ChatroomPage;
 }
 
-if (require.main === module) start(createChatroomPage(), { port: 8080 });
+/** Default room; the factory remains available when independent rooms are needed. */
+export const ChatroomPage = createChatroomPage();
+
+if (require.main === module) void defineApp({ pages: [ChatroomPage], port: 8080 }).run()
+    .catch(error => { console.error(error); process.exitCode = 1; });

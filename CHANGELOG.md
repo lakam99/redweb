@@ -4,6 +4,8 @@
 
 - Introduce deferred `defineApp({ pages, sockets, services, port })` composition and `await app.run()` with one owned HTTP/WebSocket listener, ordered application service initialization, cancellation, bounded shutdown, and partial-startup rollback.
 - Run the five canonical headed-browser example scenarios through `defineApp`; cover its lifecycle with real HTTP/WSS, process, and unit tests. Recognize the unified page/socket registrations in `redweb doctor` without executing application code.
+- Simplify all six generated starters around `app.run()` and remove their copied startup helper. Move dashboard auth/database ownership into an application service; retain real generated-app process tests and centralize lifecycle coverage on the framework implementation.
+- Guard late native listener completion after cancellation or timeout on Node 18, and avoid racing duplicate deadlines during owned HTTP peer cleanup.
 
 ## 0.13.5
 

@@ -1,12 +1,17 @@
 const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const WebSocket = require('ws');
-const { createApp } = require('../dist/app.js');
+const { defineApp } = require('redweb');
+const { app: definition } = require('../dist/app.js');
 
-async function listen(t) {
-    const app = createApp({ port: 0, bind: '127.0.0.1', logger: null });
+function createApp(options = {}) {
+    return defineApp({ ...definition.options, port: 0, bind: '127.0.0.1', logger: null, signals: false, ...options });
+}
+
+async function listen(t, options) {
+    const app = createApp(options);
     t.after(() => app.shutdown());
-    if (!app.server.listening) await once(app.server, 'listening');
+    await app.run();
     return `http://127.0.0.1:${app.server.address().port}`;
 }
 
@@ -56,4 +61,4 @@ async function live(t, origin, headers = {}) {
     };
 }
 
-module.exports = { listen, connect, live };
+module.exports = { createApp, listen, connect, live };
