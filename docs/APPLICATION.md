@@ -2,7 +2,7 @@
 
 `defineApp()` describes the application. `await app.run()` initializes it and opens one port for HTTP pages and WebSocket routes. You do not create an HTTP server and then pass it to a second socket server.
 
-This API is currently unreleased. Use the matching checkout or development tarball, not the published 0.13.5 package.
+Added in Redweb 0.14.0. Earlier releases do not export `defineApp`.
 
 ## The entry point
 

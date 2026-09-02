@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0
 
 - Introduce deferred `defineApp({ pages, sockets, services, port })` composition and `await app.run()` with one owned HTTP/WebSocket listener, ordered application service initialization, cancellation, bounded shutdown, and partial-startup rollback.
 - Run the five canonical headed-browser example scenarios through `defineApp`; cover its lifecycle with real HTTP/WSS, process, and unit tests. Recognize the unified page/socket registrations in `redweb doctor` without executing application code.
