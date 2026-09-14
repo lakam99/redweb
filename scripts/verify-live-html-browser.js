@@ -84,20 +84,23 @@ function jsonRequest(url, method = 'GET') {
 function launchBrowser(executable, profile, { headless = true } = {}) {
     const child = spawn(executable, [
         ...(headless ? ['--headless=new'] : []),
+        '--disable-background-networking',
+        '--disable-breakpad',
+        '--disable-component-update',
+        '--disable-default-apps',
+        '--disable-extensions',
         '--disable-gpu',
         '--disable-dev-shm-usage',
+        '--disable-sync',
+        '--metrics-recording-only',
+        '--no-service-autorun',
         '--no-first-run',
         '--no-default-browser-check',
+        '--renderer-process-limit=2',
         '--remote-debugging-port=0',
         `--user-data-dir=${profile}`,
         'about:blank',
-    ], {
-        stdio: ['ignore', 'ignore', 'pipe'],
-        windowsHide: headless,
-        // Chromium owns several descendants. A dedicated POSIX process group lets
-        // verification remove the whole tree instead of leaking renderers between gates.
-        detached: process.platform !== 'win32',
-    });
+    ], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: headless });
     const endpoint = new Promise((resolve, reject) => {
         let stderr = '';
         const timer = setTimeout(() => reject(new Error(`Browser did not expose DevTools. ${stderr}`)), 20_000);
@@ -116,25 +119,13 @@ function launchBrowser(executable, profile, { headless = true } = {}) {
 
 async function stopBrowser(child) {
     const exited = () => child.exitCode !== null || child.signalCode !== null;
-    if (!child) return;
+    if (!child || exited()) return;
     const waitForExit = milliseconds => new Promise(resolve => {
         if (exited()) return resolve();
         const done = () => { clearTimeout(timer); child.off('exit', done); resolve(); };
         const timer = setTimeout(done, milliseconds);
         child.once('exit', done);
     });
-    if (process.platform !== 'win32' && Number.isInteger(child.pid)) {
-        try {
-            // Browser profiles are disposable test resources. Killing the isolated
-            // group also removes descendants left behind after the launcher exits.
-            process.kill(-child.pid, 'SIGKILL');
-        } catch (error) {
-            if (error?.code !== 'ESRCH') throw error;
-        }
-        await waitForExit(2_000);
-        return;
-    }
-    if (exited()) return;
     child.kill();
     await waitForExit(2_000);
     if (!exited()) {
@@ -156,7 +147,8 @@ async function launchBrowserWithRetry(executable, profileRoot, options) {
             await stopBrowser(browser.child);
         }
     }
-    throw new AggregateError(errors, 'Browser did not expose DevTools after two bounded attempts.');
+    const diagnostics = errors.map((error, index) => `Attempt ${index + 1}: ${error.message}`).join('\n');
+    throw new AggregateError(errors, `Browser did not expose DevTools after two bounded attempts.\n${diagnostics}`);
 }
 
 async function openPage(debugPort, url) {

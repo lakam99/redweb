@@ -20,7 +20,7 @@ class FrozenBrowserBoundary {
     constructor(directory, options = {}) {
         this.options = options; this.directory = directory;
         this.apps = []; this.children = []; this.sockets = []; this.logs = []; this.errors = [];
-        this.requests = []; this.removals = []; this.groupKills = []; this.timers = new Map(); this.time = 0;
+        this.requests = []; this.removals = []; this.timers = new Map(); this.time = 0;
         this.primary = new Error('unit primary failure');
         this.cleanup = Object.assign(new Error('unit profile cleanup failure'), { code: 'EACCES' });
         this.done = new Promise(resolve => { this.finish = resolve; });
@@ -95,19 +95,7 @@ class FrozenBrowserBoundary {
                 const token = {}; this.timers.set(token, { callback, milliseconds }); return token;
             },
             clearTimeout: token => this.timers.delete(token),
-            process: {
-                platform: options.platform || 'win32',
-                env: { REDWEB_BROWSER: options.candidates ? '' : 'unit-browser' },
-                kill: (pid, signal) => {
-                    this.groupKills.push([pid, signal]);
-                    if (options.groupKillError) throw Object.assign(this.cleanup, { code: options.groupKillError });
-                    const child = this.children.find(candidate => candidate.pid === -pid);
-                    if (child && child.exitCode === null && child.signalCode === null) {
-                        child.signalCode = signal;
-                        child.emit('exit', null);
-                    }
-                },
-            },
+            process: { platform: options.platform || 'win32', env: { REDWEB_BROWSER: options.candidates ? '' : 'unit-browser' } },
             console: { log: line => this.logs.push(line), error: error => { this.errors.push(error); this.finish(); } },
             require: name => Object.hasOwn(dependencies, name) ? dependencies[name] : nativeRequire(name),
         };
@@ -119,7 +107,6 @@ class FrozenBrowserBoundary {
     spawn(executable, args, settings) {
         const child = Object.assign(new EventEmitter(), {
             stderr: new EventEmitter(), exitCode: null, signalCode: null, kills: [], executable, args, settings,
-            pid: 1000 + this.children.length,
         });
         child.kill = signal => {
             child.kills.push(signal);
