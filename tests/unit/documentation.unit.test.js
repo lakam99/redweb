@@ -107,6 +107,7 @@ describe('single-source documentation', () => {
         const docs = builder.build();
         expect(builder.build()).toEqual(docs);
         expect(docs.channel).toBe('unreleased');
+        expect(builder.foundationSetup()).toContain('npx --yes --package TARBALL redweb init my-app');
         expect(docs.packageVersion).toBe(version);
         expect(docs.pages).toHaveLength(require('../../docs/topics.json').length + TEMPLATES.length + 1 + docs.api.length + docs.examples.length);
         expect(new Set(docs.pages.map(page => page.id)).size).toBe(docs.pages.length);

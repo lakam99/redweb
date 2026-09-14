@@ -137,6 +137,18 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         expect(await websocketUpgradeStatus(doc.url, { headers: { Cookie: 'alice', Origin: f.origin } })).toBe(500);
     });
 
+    test('unexpected command authorization failures propagate to the socket runtime', async () => {
+        let broken = false;
+        const f = await fixture({ authorize: () => { if (broken) throw new Error('policy unavailable'); return true; } });
+        const a = await f.connect((await f.get()).url);
+        await waitForCondition(() => a.frames.length, 'initial snapshot');
+        broken = true;
+        const route = f.server.sockets.routes.find(candidate => candidate.path === '/match');
+        const socket = [...route.clients.values()][0];
+        await expect(route.handleMessage(socket, { v: '1', type: 'move', payload: { cell: 1 } }))
+            .rejects.toThrow('Authorization policy failed.');
+    });
+
     test.each([{ protocol: false }, { protocol: { versions: ['2'] } }, { protocol: { versions: ['1'], queryParameter: 'version' } }])('rejects incompatible page protocol %j', async route => {
         await expect(fixture({ route })).rejects.toThrow('protocol version 1');
     });
