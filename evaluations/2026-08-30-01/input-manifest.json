@@ -1,0 +1,12 @@
+{
+  "createdAt": "2026-08-30T06:40:00.471Z",
+  "workspace": "C:\\Users\\arkam\\AppData\\Local\\Temp\\framework-adoption-4makom",
+  "sourceCommit": "2624d8b0d03cef8f4b5b902198bbb51257998ea7",
+  "archive": "C:\\Users\\arkam\\AppData\\Local\\Temp\\framework-adoption-4makom\\artifacts\\redweb-0.12.0.tgz",
+  "archiveSha256": "c753ae17463f7d8e17eade6d631534180cc1f632b34e44af04fed562abe9f914",
+  "documentation": "C:\\Users\\arkam\\AppData\\Local\\Temp\\framework-adoption-4makom\\artifacts\\package\\docs\\generated.json",
+  "catalogueSha256": "5c3efb25f537f11e44d24181a18a62ae900677b3fde1a9f5c2f1e667ebd6282e",
+  "node": "v22.21.0",
+  "platform": "win32",
+  "arch": "x64"
+}

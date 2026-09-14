@@ -1,0 +1,5 @@
+{
+  "extends": "redweb/tsconfig.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "strict": true },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

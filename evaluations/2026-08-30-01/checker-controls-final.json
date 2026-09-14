@@ -1,0 +1,783 @@
+[
+  {
+    "fault": "working-control",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:58:25.184Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 916
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 825
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 142
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 42
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 483
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:58831",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "browserVersions": [
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          }
+        ],
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:58831\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:28.245Z",
+      "durationMs": 3061,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "event-inputs",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:58:28.245Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 862
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 770
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 89
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 73
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 34
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 30
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 652
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:64595",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "browserVersions": [
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          }
+        ],
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:64595\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:31.254Z",
+      "durationMs": 3009,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "change-inputs",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:58:31.254Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 814
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 1702
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 67
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 70
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 590
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:54379",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "browserVersions": [
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          }
+        ],
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:54379\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:35.106Z",
+      "durationMs": 3852,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "lazy-asset",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:58:35.106Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 820
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 786
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 124
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 40
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 38
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 504
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 1
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:58372",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "browserVersions": [
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          },
+          {
+            "protocolVersion": "1.3",
+            "product": "Chrome/152.0.7977.64",
+            "revision": "@506c834ecceaa943c5f41e6cfe7f68acb5c45346",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+            "jsVersion": "15.2.124.18"
+          }
+        ],
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:58372\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:37.946Z",
+      "durationMs": 2840,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "local-counter",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:58:37.946Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 830
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 809
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7083,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:52232",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:52232\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:47.651Z",
+      "durationMs": 9705,
+      "notRun": [
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "draft-loss",
+    "expectedFailure": "draft-preservation",
+    "result": {
+      "startedAt": "2026-08-30T06:58:47.651Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 822
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 778
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 121
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 40
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "draft-preservation",
+          "passed": false,
+          "durationMs": 33,
+          "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:56368",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:56368\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:49.828Z",
+      "durationMs": 2177,
+      "notRun": [
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "unsafe-html",
+    "expectedFailure": "literal-message-safety",
+    "result": {
+      "startedAt": "2026-08-30T06:58:49.828Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 822
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 779
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 72
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 71
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 34
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": false,
+          "durationMs": 7029,
+          "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:58283",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:58283\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:58:59.696Z",
+      "durationMs": 9868,
+      "notRun": [
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "stale-presence",
+    "expectedFailure": "disconnect-presence",
+    "result": {
+      "startedAt": "2026-08-30T06:58:59.696Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 854
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 863
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 115
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 41
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 33
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": false,
+          "durationMs": 5020,
+          "error": "Disconnected Bob remained in presence longer than five seconds."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:61704",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Disconnected Bob remained in presence longer than five seconds.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:61704\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:59:07.672Z",
+      "durationMs": 7976,
+      "notRun": [
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "http-updates",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:59:07.672Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 810
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 781
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7023,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:61451",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:61451\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:59:17.290Z",
+      "durationMs": 9618,
+      "notRun": [
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "wildcard-bind",
+    "expectedFailure": "loopback-binding",
+    "result": {
+      "startedAt": "2026-08-30T06:59:17.290Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": false,
+          "durationMs": 852,
+          "error": "Application listens on a non-loopback interface."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:62057",
+      "listenerAddresses": [
+        "0.0.0.0"
+      ],
+      "error": "Application listens on a non-loopback interface.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:62057\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:59:18.345Z",
+      "durationMs": 1055,
+      "notRun": [
+        "http-and-two-tabs",
+        "shared-server-counter",
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "early-sse",
+    "expectedFailure": "http-and-two-tabs",
+    "result": {
+      "startedAt": "2026-08-30T06:59:18.346Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 816
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": false,
+          "durationMs": 5389,
+          "error": "Persistent HTTP data stream prevents independent WebSocket-only verification."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:62060",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Persistent HTTP data stream prevents independent WebSocket-only verification.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:62060\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:59:25.143Z",
+      "durationMs": 6797,
+      "notRun": [
+        "shared-server-counter",
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "name": "redweb-docs-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Optional read-only MCP access to a version-labelled Redweb documentation catalogue",
+  "type": "module",
+  "license": "ISC",
+  "engines": { "node": ">=22" },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test --experimental-test-coverage --test-coverage-include=src/*.mjs --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0"
+  }
+}

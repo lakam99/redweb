@@ -1,0 +1,567 @@
+[
+  {
+    "fault": "working-control",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:54:39.919Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 1069
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 827
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 97
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 38
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 34
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 40
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 594
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:52940",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:52940\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:54:43.202Z",
+      "durationMs": 3283,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "event-inputs",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:54:43.202Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 797
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 781
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 92
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 52
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 8
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 500
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:51839",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:51839\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:54:45.951Z",
+      "durationMs": 2749,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "lazy-asset",
+    "expectedFailure": null,
+    "result": {
+      "startedAt": "2026-08-30T06:54:45.951Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 789
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 807
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 94
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 36
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 34
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": true,
+          "durationMs": 39
+        },
+        {
+          "name": "fresh-page-snapshot",
+          "passed": true,
+          "durationMs": 606
+        },
+        {
+          "name": "actual-websocket-traffic",
+          "passed": true,
+          "durationMs": 0
+        }
+      ],
+      "passed": true,
+      "origin": "http://127.0.0.1:58911",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "browser": {
+        "networkEventCounts": {
+          "Network.webSocketCreated": 3,
+          "Network.webSocketWillSendHandshakeRequest": 3,
+          "Network.webSocketHandshakeResponseReceived": 3,
+          "Network.webSocketFrameReceived": 18,
+          "Network.webSocketFrameSent": 7
+        }
+      },
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:58911\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:54:48.852Z",
+      "durationMs": 2901,
+      "notRun": []
+    }
+  },
+  {
+    "fault": "local-counter",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:54:48.852Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 789
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 750
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7068,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:61455",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:61455\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:54:58.540Z",
+      "durationMs": 9688,
+      "notRun": [
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "draft-loss",
+    "expectedFailure": "draft-preservation",
+    "result": {
+      "startedAt": "2026-08-30T06:54:58.540Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 808
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 782
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 87
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 66
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "draft-preservation",
+          "passed": false,
+          "durationMs": 31,
+          "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:60558",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Expected values to be strictly equal:\n\n'' !== 'unsent draft'\n",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:60558\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:55:00.705Z",
+      "durationMs": 2165,
+      "notRun": [
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "unsafe-html",
+    "expectedFailure": "literal-message-safety",
+    "result": {
+      "startedAt": "2026-08-30T06:55:00.705Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 813
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 768
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 59
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 54
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": false,
+          "durationMs": 7021,
+          "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:53515",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for literal unsafe-looking message",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:53515\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:55:10.457Z",
+      "durationMs": 9752,
+      "notRun": [
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "stale-presence",
+    "expectedFailure": "disconnect-presence",
+    "result": {
+      "startedAt": "2026-08-30T06:55:10.457Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 788
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 817
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": true,
+          "durationMs": 98
+        },
+        {
+          "name": "named-presence",
+          "passed": true,
+          "durationMs": 37
+        },
+        {
+          "name": "message-delivery",
+          "passed": true,
+          "durationMs": 31
+        },
+        {
+          "name": "draft-preservation",
+          "passed": true,
+          "durationMs": 32
+        },
+        {
+          "name": "literal-message-safety",
+          "passed": true,
+          "durationMs": 35
+        },
+        {
+          "name": "disconnect-presence",
+          "passed": false,
+          "durationMs": 5019,
+          "error": "Disconnected Bob remained in presence longer than five seconds."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:65203",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Disconnected Bob remained in presence longer than five seconds.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:65203\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:55:18.298Z",
+      "durationMs": 7841,
+      "notRun": [
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "http-updates",
+    "expectedFailure": "shared-server-counter",
+    "result": {
+      "startedAt": "2026-08-30T06:55:18.298Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": true,
+          "durationMs": 800
+        },
+        {
+          "name": "http-and-two-tabs",
+          "passed": true,
+          "durationMs": 791
+        },
+        {
+          "name": "shared-server-counter",
+          "passed": false,
+          "durationMs": 7008,
+          "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment"
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:63449",
+      "listenerAddresses": [
+        "127.0.0.1"
+      ],
+      "error": "Uncaught (in promise) Error: Timed out waiting for first shared increment",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:63449\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:55:28.009Z",
+      "durationMs": 9711,
+      "notRun": [
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  },
+  {
+    "fault": "wildcard-bind",
+    "expectedFailure": "loopback-binding",
+    "result": {
+      "startedAt": "2026-08-30T06:55:28.009Z",
+      "root": "C:\\Users\\arkam\\Documents\\redweb\\scripts\\evaluation\\fixtures",
+      "checks": [
+        {
+          "name": "loopback-binding",
+          "passed": false,
+          "durationMs": 839,
+          "error": "Application listens on a non-loopback interface."
+        }
+      ],
+      "passed": false,
+      "origin": "http://127.0.0.1:58353",
+      "listenerAddresses": [
+        "0.0.0.0"
+      ],
+      "error": "Application listens on a non-loopback interface.",
+      "application": {
+        "output": "{\"url\":\"http://127.0.0.1:58353\"}\n",
+        "errors": ""
+      },
+      "endedAt": "2026-08-30T06:55:29.064Z",
+      "durationMs": 1055,
+      "notRun": [
+        "http-and-two-tabs",
+        "shared-server-counter",
+        "named-presence",
+        "message-delivery",
+        "draft-preservation",
+        "literal-message-safety",
+        "disconnect-presence",
+        "fresh-page-snapshot",
+        "actual-websocket-traffic"
+      ]
+    }
+  }
+]

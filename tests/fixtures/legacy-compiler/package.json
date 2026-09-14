@@ -1,0 +1,8 @@
+{
+  "name": "redweb-legacy-compiler-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "typescript": "4.9.5"
+  }
+}

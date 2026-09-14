@@ -2,15 +2,35 @@
  * @typedef {Object} SocketServerOptions
  * @property {import('http').Server} [server]                    HTTP server to bind to
  * @property {number}              [port=3000]                  Port to listen on
+ * @property {boolean}             [listen=true]                Whether owned servers should automatically start listening
  * @property {Array<new () => import('./SocketRoute').SocketRoute>} [routes]
  */
 
 const DefaultRoute = require('./DefaultRoute');
+const { createInspection } = require('../development/Inspection');
+const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
+const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
+const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
+const OwnedServerLifecycle = require('../OwnedServerLifecycle');
+const { scheduleStartupCleanup } = require('../StartupCleanup');
+const {
+  listenServer,
+  closeServer,
+  settleTasks,
+  throwCleanupErrors,
+  validateListenerOptions,
+} = require('../serverLifecycle');
 
 const SOCKET_OPTIONS = {
   port: 3000,
+  bind: '0.0.0.0',
   ssl:  null,
-  routes: []
+  listen: true,
+  routes: [],
+  fallbackToRoot: false,
+  closeServerOnShutdown: undefined,
+  logger: console,
+  listenCallback: undefined,
 };
 
 /**
@@ -21,25 +41,165 @@ class BaseSocketServer {
    * @param {import('http').Server} server
    * @param {SocketServerOptions}  [options]
    */
-  constructor(server, options = {}) {
-    this.clients = new Map();
+  constructor(server, options = {}, ownsServer = false, name = 'SocketServer') {
+    if (!server || typeof server.on !== 'function') throw new TypeError('A Node HTTP(S) server is required.');
+    this._inspection = createInspection(options.development);
     Object.assign(this, { ...SOCKET_OPTIONS, ...options });
+    validateListenerOptions(this);
+    if (!Array.isArray(this.routes)) throw new TypeError('`routes` must be an array.');
     this.server = server;
+    this.ownsServer = ownsServer;
+    this.closeServerOnShutdown = options.closeServerOnShutdown ?? ownsServer;
+    this.draining = false;
+    this.pendingUpgrades = new Map();
+    this._ownedServer = this.closeServerOnShutdown ? new OwnedServerLifecycle(server) : null;
+    this.rawConnections = this._ownedServer?.connections ?? null;
+    this._connectionHandler = this._ownedServer?.onConnection ?? null;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
-    if (!options.routes?.length) options.routes = [DefaultRoute];
-    this.routes = options.routes.map(RouteClass => new RouteClass(server));
+    const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
+    this.routes = [];
+    try {
+      for (const RouteClass of RouteClasses) {
+        const route = new RouteClass(server, { logger: this.logger });
+        if (this.routes.some(existing => existing.path === route.path)) {
+          this.routes.push(route);
+          throw new Error('WebSocket route paths must be unique.');
+        }
+        this.routes.push(route);
+      }
+    } catch (error) {
+      this._ownedServer?.dispose();
+      throw scheduleStartupCleanup(error, () => this.disposeRoutes(this.routes));
+    }
 
-    this.server.on('upgrade', this.handleUpgrade.bind(this));
+    this._upgradeHandler = this.handleUpgrade.bind(this);
+    this.server.on('upgrade', this._upgradeHandler);
+
+    const shouldListen = (ownsServer && this.listen !== false) || (!ownsServer && options.listen === true);
+    try {
+      if (shouldListen) {
+        listenServer(this.server, {
+          port: this.port,
+          bind: this.bind,
+          callback: this.listenCallback,
+          logger: this.logger,
+          name,
+        });
+      }
+    } catch (error) {
+      this.server.off('upgrade', this._upgradeHandler);
+      this._ownedServer?.dispose();
+      throw scheduleStartupCleanup(error, () => this.disposeRoutes(this.routes));
+    }
+  }
+
+  async disposeRoutes(routes) {
+    const errors = await settleTasks(routes.map(route => () => route.shutdown?.()));
+    if (errors.length) {
+      for (const error of errors) {
+        try { this.logger?.error?.('Error shutting down route:', error); } catch { /* Preserve the cleanup failure even if logging fails. */ }
+      }
+      throw new AggregateError(errors, 'Route construction rollback failed.');
+    }
   }
 
   handleUpgrade(req, sock, head) {
-    const route = this.routes.find(r => r.path === req.url);
-    if (!route) return sock.destroy();
+    // Upgrade sockets are detached from Node's HTTP request lifecycle. A peer
+    // may reset one while admission is pending or after a rejection response;
+    // consume that transport-level event so it cannot crash the process.
+    if (typeof sock.on === 'function') sock.on('error', Function.prototype);
+    // Some websocket clients (e.g., certain UE plugins) are finicky about the
+    // HTTP upgrade path they send. Normalise the path and fall back to a default
+    // route so we can still complete the upgrade instead of tearing the socket down.
+    const path = (() => {
+      try {
+        return new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname;
+      } catch {
+        return req.url;
+      }
+    })();
 
+    const route =
+      this.routes.find(r => r.path === path) ||
+      (this.fallbackToRoot ? this.routes.find(r => r.path === '/') : undefined);
+
+    if (!route) return sock.destroy();
+    if (this.draining) return this.rejectFailure(sock, 'SERVER_DRAINING');
+    if (route.isReady?.() === false) return this.rejectFailure(sock, 'ROUTE_UNAVAILABLE');
+
+    try { route.runtime.prepareRequest(req); }
+    catch { return this.rejectFailure(sock, 'REQUEST_INVALID'); }
+
+    if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
+      let reservation;
+      try {
+        reservation = route.reserveUpgrade(req);
+      } catch {
+        this.logAdmissionFailure('WebSocket admission reservation failed:');
+        return this.rejectFailure(sock, 'ADMISSION_FAILED');
+      }
+      if (!reservation) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
+      const controller = new AbortController();
+      this.pendingUpgrades.set(sock, { controller, route, reservation });
+      void Promise.resolve()
+        .then(() => route.authorizeUpgrade(req, sock, controller.signal))
+        .then(accepted => {
+          if (sock.destroyed) return;
+          if (this.draining) return this.rejectFailure(sock, 'SERVER_DRAINING');
+          if (!accepted) {
+            const redirect = req[PLACEMENT_REDIRECT];
+            if (redirect) return this.rejectUpgrade(sock, 307, 'Temporary Redirect', { Location: redirect, 'Cache-Control': 'no-store' });
+            const rejection = req[UPGRADE_REJECTION] || req[PROTOCOL_REJECTION];
+            return rejection
+              ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
+              : this.rejectFailure(sock, 'AUTHENTICATION_REQUIRED');
+          }
+          this.completeUpgrade(route, req, sock, head);
+        })
+        .catch(() => {
+          this.logAdmissionFailure('WebSocket admission failed:');
+          if (!sock.destroyed) this.rejectFailure(sock, 'ADMISSION_FAILED');
+        })
+        .finally(async () => {
+          await req[ADMISSION_SETTLEMENT];
+          this.pendingUpgrades.delete(sock);
+          route.releaseUpgrade(reservation);
+        });
+      return;
+    }
+
+    this.completeUpgrade(route, req, sock, head);
+  }
+
+  completeUpgrade(route, req, sock, head) {
     route.server.handleUpgrade(req, sock, head, (s, r) =>
       route.server.emit('connection', s, r)
     );
+  }
+
+  logAdmissionFailure(message) {
+    try { this.logger?.error?.(message, new RequestFailure('ADMISSION_FAILED')); }
+    catch { /* A failing application logger must not prevent rejection or cleanup. */ }
+  }
+
+  rejectFailure(socket, code) {
+    const { statusCode, statusText, headers } = new RequestFailure(code).rejection;
+    return this.rejectUpgrade(socket, statusCode, statusText, headers);
+  }
+
+  rejectUpgrade(socket, statusCode, statusText, headers = {}) {
+    try {
+      const extraHeaders = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join('');
+      socket.end?.(
+        `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+        extraHeaders +
+        'Connection: close\r\n' +
+        'Content-Length: 0\r\n\r\n'
+      );
+    } catch {
+      socket.destroy?.();
+    }
   }
 
   /**
@@ -47,15 +207,53 @@ class BaseSocketServer {
    * @param {new () => import('./SocketRoute').SocketRoute} RouteClass
    */
   addRoute(RouteClass) {
-    this.routes.push(new RouteClass(this.server));
+    const route = new RouteClass(this.server, { logger: this.logger });
+    if (this.routes.some(existing => existing.path === route.path)) {
+      throw scheduleStartupCleanup(new Error(`A WebSocket route already exists at ${route.path}.`), () => this.disposeRoutes([route]));
+    }
+    this.routes.push(route);
+    return route;
   }
 
   /**
    * Gracefully tear down all routes (and their services)
    */
   shutdown() {
-    this.routes.forEach(route => route.shutdown?.());
-    this.server.close();
+    if (!this._shutdownPromise) this._shutdownPromise = this.performShutdown();
+    return this._shutdownPromise;
+  }
+
+  isReady() {
+    return !this.draining && this.routes.every(route => route.isReady?.() !== false);
+  }
+
+  inspect() { return this._inspection ? this._inspection.snapshot(this) : null; }
+
+  beginDrain() {
+    if (this.draining) return false;
+    this.draining = true;
+    this.pendingUpgrades.forEach(({ controller }) => controller.abort());
+    this.routes.forEach(route => route.beginDrain?.());
+    return true;
+  }
+
+  async performShutdown() {
+    this.beginDrain();
+    this.server.off?.('upgrade', this._upgradeHandler);
+    const deadline = Date.now() + Math.max(0, ...this.routes.map(route => route.shutdownTimeoutMs));
+    const errors = await settleTasks(this.routes.map(route => () => route.shutdown?.()));
+    if (this.closeServerOnShutdown) {
+      try {
+        await this.closeOwnedServer(Math.max(0, deadline - Date.now()));
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    throwCleanupErrors(errors, 'One or more WebSocket server cleanup operations failed.');
+  }
+
+  closeOwnedServer(timeoutMs) {
+    return this._ownedServer.close(timeoutMs, () => closeServer(this.server));
   }
 }
 
