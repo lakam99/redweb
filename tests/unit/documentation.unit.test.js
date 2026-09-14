@@ -221,6 +221,7 @@ describe('single-source documentation', () => {
                 expect(guide.markdown).not.toContain('TARBALL');
             }
             expect(builder.setup('dashboard')).toContain(`npm install --save-exact redweb@${version}\nnpm run add-user -- alice\nnpm test\nnpm run dev`);
+            expect(builder.foundationSetup()).toContain(`npx --yes redweb@${version} init my-app`);
             expect(docs.llms).toContain(`Documentation for Redweb ${version}`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).toContain(`npx --yes redweb@${version} init`);
             // Published setup is registry-pinned. Its exact generated README

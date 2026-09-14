@@ -10,31 +10,21 @@ Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLIC
 
 Start with a neutral, tested application foundation:
 
-```sh
-npx --yes redweb@0.16.1 init my-app
-cd my-app
-npm install --save-exact redweb@0.16.1
-npm test
-npm run dev
-```
-
-Add dependency sets without copying example-domain code: `npx --yes redweb@0.16.1 init my-game --with auth,multiplayer`. Use `--bare` only to omit generated tests. The application, CSS, TypeScript configuration, build scripts, and development watcher remain.
-
-For a complete, tested counter example:
-
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.16.1. Install that exact version when following these examples.
+> Documentation for Redweb 0.16.2. Install that exact version when following these examples.
 
 ```sh
-npx --yes redweb@0.16.1 init my-realtime --template realtime
-cd my-realtime
-npm install --save-exact redweb@0.16.1
+npx --yes redweb@0.16.2 init my-app
+cd my-app
+npm install --save-exact redweb@0.16.2
 npm test
 npm run dev
 ```
 <!-- redweb:setup:end -->
 
-Open two tabs at `http://localhost:8181`. Clicking either button changes the counter on the server and updates both tabs.
+Append `--with auth,multiplayer` when you need those dependency sets without copying example-domain code. Use `--bare` only to omit generated tests. The application, CSS, TypeScript configuration, build scripts, and development watcher remain.
+
+The optional realtime example below is available with `redweb init my-realtime --template realtime`. Open two tabs at `http://localhost:8181`; clicking either button changes the counter on the server and updates both tabs.
 
 This is the starter's exact `src/app.tsx`. The initializer also supplies its stylesheet, compiler configuration, and real-network tests; startup and shutdown belong to Redweb itself. The file is not a standalone copy-and-run program.
 

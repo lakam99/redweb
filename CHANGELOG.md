@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.2
+
+- Make `redweb init` generate a neutral, runnable TypeScript/TSX foundation by default so tutorials and original applications share one low-boilerplate starting structure.
+- Add composable `--with auth,multiplayer` dependency profiles without copying dashboard, chat, counter, or game-domain source. Keep named templates as explicit finished examples.
+- Add `--bare` as the same application foundation without its test directory, test scripts, or test-only coverage dependency. Report the selected foundation, capabilities, and test inclusion in machine-readable and human CLI output.
+- Cover the generated default with unit tests and actual CLI, TypeScript, HTTP, CSS, rerun, and lifecycle integration checks; no mocks or fixed-duration soak tests.
+
 ## 0.16.1
 
 - Refresh API and guide examples around concise `defineApp`, plain decorated pages, reusable TSX components, CSS, and connected clients. Keep lower-level HTTP, socket, template, and protocol APIs explicitly documented as alternatives.

@@ -7,7 +7,7 @@ const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const TEMPLATES = Object.freeze(['realtime', 'chat', 'site', 'socket', 'dashboard', 'http-ws']);
 const CAPABILITIES = Object.freeze(['auth', 'multiplayer']);
 
-function projectFiles(version, template = 'realtime', root = path.resolve(__dirname, '../..'), options = {}) {
+function projectFiles(version, template = null, root = path.resolve(__dirname, '../..'), options = {}) {
     if (template !== null && !TEMPLATES.includes(template)) throw new Error('Unknown starter template.');
     if (options.with !== undefined && !Array.isArray(options.with)) throw new TypeError('Initializer capabilities must be an array.');
     const capabilities = new Set(options.with || []);

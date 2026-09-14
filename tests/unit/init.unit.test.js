@@ -79,6 +79,7 @@ describe('ProjectInitializer', () => {
     });
 
     test('selects complete recipes and rejects unsupported templates before writing', () => {
+        expect(projectFiles('1.2.3').some(file => file.path === 'src/app.tsx')).toBe(true);
         for (const template of TEMPLATES) {
             const result = new ProjectInitializer('1.2.3').initialize(path.join(workspace, template), { template });
             expect(result.created).toContain('test/app.test.cjs');

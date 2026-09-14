@@ -89,6 +89,16 @@ class Documentation {
             : fence(`npx --yes redweb@${this.channel} init my-${template} --template ${template}\ncd my-${template}\nnpm install --save-exact redweb@${this.channel}\n${acceptance}`, 'sh');
     }
 
+    foundationSetup() {
+        return this.channel === 'unreleased'
+            ? [
+                'Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces):',
+                fence('npx --yes --package TARBALL redweb init my-app\ncd my-app\nnpm install --save-exact TARBALL\nnpm test\nnpm run dev', 'sh'),
+                'This prerelease Redweb artifact is development-only until its release checks finish.',
+            ].join('\n\n')
+            : fence(`npx --yes redweb@${this.channel} init my-app\ncd my-app\nnpm install --save-exact redweb@${this.channel}\nnpm test\nnpm run dev`, 'sh');
+    }
+
     recipe(template) {
         const files = projectFiles(this.manifest.version, template, this.root).map(file => ({ ...file, content: normalize(file.content) }));
         const source = `recipes/${template}/README.md`;

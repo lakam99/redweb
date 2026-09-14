@@ -98,8 +98,8 @@ describe('documented applications without mocks', () => {
                 }
             }
             fs.writeFileSync(readmeFile, originalReadme);
-            expect(originalReadme).toContain(`npx --yes redweb@${version} init my-realtime --template realtime`);
-            expect(originalReadme).toContain(`cd my-realtime\nnpm install --save-exact redweb@${version}`);
+            expect(originalReadme).toContain(`npx --yes redweb@${version} init my-app`);
+            expect(originalReadme).toContain(`cd my-app\nnpm install --save-exact redweb@${version}`);
             expect(originalReadme).not.toContain('TARBALL');
             fs.writeFileSync(readmeFile, originalReadme.replace('increment() { this.count += 1; }', 'increment() { this.count += 2; }'));
             await expect(run(['--check'])).rejects.toThrow('README recipe is stale');
@@ -131,8 +131,8 @@ describe('documented applications without mocks', () => {
             expect(JSON.parse(fs.readFileSync(path.join(workspace, 'docs/generated.json'), 'utf8')).channel).toBe('unreleased');
             await expect(run(['--release-check'])).rejects.toThrow('does not match package version');
             const developmentReadme = fs.readFileSync(readmeFile, 'utf8');
-            expect(developmentReadme).toContain('npx --yes --package TARBALL redweb init my-realtime --template realtime');
-            expect(developmentReadme).toContain('cd my-realtime\nnpm install --save-exact TARBALL');
+            expect(developmentReadme).toContain('npx --yes --package TARBALL redweb init my-app');
+            expect(developmentReadme).toContain('cd my-app\nnpm install --save-exact TARBALL');
             expect(developmentReadme).not.toContain(`npx --yes redweb@${version}`);
             expect(await run(['--check'])).toBe('');
             fs.unlinkSync(path.join(workspace, 'docs/generated.json'));

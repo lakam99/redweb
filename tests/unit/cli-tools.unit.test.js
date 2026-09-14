@@ -193,6 +193,8 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
         expect(existing.stdout).toContain('No application or package files were generated.');
         expect(existing.stdout).toContain('not validated');
         expect((await run(['init', '--dry-run'], workspace, version)).stdout).toContain('Foundation: neutral default; capabilities: base; tests: included.');
+        expect((await run(['init', 'profiled', '--template', 'site', '--with', 'auth', '--bare', '--dry-run'], workspace, version)).stdout)
+            .toContain('Foundation: example template "site"; capabilities: auth; tests: omitted.');
         expect((await run(['init'], workspace, version)).stdout).toContain('npm install');
         const failure = await run(['invalid', '--json'], workspace, version);
         expect(failure.exitCode).toBe(1);

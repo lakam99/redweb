@@ -8,12 +8,14 @@ const STARTER_COMMAND_TIMEOUT_MS = 60000;
 
 // Both CI and the tarball gate use the exact generated tests, with real consumers and network listeners.
 async function verifyStarter(packageRoot, execution, template, { timeoutMs = STARTER_COMMAND_TIMEOUT_MS } = {}) {
-    const target = path.join(execution.directory, template);
-    const output = await execution.command([path.join(packageRoot, 'bin/redweb.js'), 'init', target, '--template', template, '--json'],
+    const name = template ?? 'foundation';
+    const target = path.join(execution.directory, name);
+    const output = await execution.command([path.join(packageRoot, 'bin/redweb.js'), 'init', target,
+        ...(template ? ['--template', template] : []), '--json'],
         { timeoutMs });
     const report = JSON.parse(output);
-    if (report.created.length < 9) throw new Error(`Incomplete ${template} starter`);
-    return verifyApplication(packageRoot, target, template, execution, { timeoutMs });
+    if (report.created.length < 9) throw new Error(`Incomplete ${name} starter`);
+    return verifyApplication(packageRoot, target, name, execution, { timeoutMs });
 }
 
 async function verifyApplication(packageRoot, target, template, execution, { timeoutMs = STARTER_COMMAND_TIMEOUT_MS } = {}) {
