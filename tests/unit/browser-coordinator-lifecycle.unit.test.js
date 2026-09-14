@@ -33,6 +33,7 @@ async function exercise(fault = '', mode = 'runtime') {
     };
     const application = {
         server: { address: () => ({ port: 1 }), unref() { events.push('app-unref'); if (fault === 'app-unref') throw cleanup; } },
+        sockets: { routes: [{ addHandler(Handler) { events.push(`handler:${new Handler().name}`); } }] },
         shutdown: async () => { events.push('application'); if (fault.startsWith('app-')) throw primary; },
     };
     const browser = { child: { exitCode: null, signalCode: null,

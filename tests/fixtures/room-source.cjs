@@ -12,20 +12,19 @@ test('room access uses actual HTTP, admission, joining, broadcast and revocation
     await verifyRoomApplication(await createApp(0));
 }, 30000);
 
-test('unit: local-demo launcher, signal cleanup and authorization truth table', async () => {
+test('unit: local-demo launcher and authorization truth table', async () => {
     const realRequire = createRequire(filename);
     const redweb = realRequire('redweb');
     const module = { exports: {} };
-    const signals = new Map();
     let pageOptions, applicationOptions, roomOptions;
     const shutdown = jest.fn().mockResolvedValue(undefined);
-    const listen = jest.fn();
+    const run = jest.fn().mockResolvedValue(undefined);
     const unitApi = { ...redweb,
         page: (route, options) => { pageOptions = options; return redweb.page(route, options); },
         SocketRoute: class { constructor(options) { roomOptions = options; } },
-        start: (_Page, options) => {
+        defineApp: options => {
             applicationOptions = options;
-            return { server: { listen }, shutdown, sockets: { addRoute: Route => new Route() } };
+            return { run, shutdown, revoke: jest.fn(), sockets: { routes: options.sockets.map(Route => new Route()) } };
         },
     };
     const load = name => name === 'redweb' ? unitApi : realRequire(name);
@@ -34,14 +33,12 @@ test('unit: local-demo launcher, signal cleanup and authorization truth table', 
     globalThis.__redwebApplicationCoverage__ ||= {};
     vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
         module, exports: module.exports, require: load, __filename: filename, __dirname: path.dirname(filename),
-        process: { once: (signal, callback) => signals.set(signal, callback) }, console: { log, error: jest.fn() },
+        process: {}, console: { log, error: jest.fn() },
         __redwebApplicationCoverage__: globalThis.__redwebApplicationCoverage__,
     }, { filename });
-    expect(listen).toHaveBeenCalledWith(8181, '127.0.0.1');
-    expect([...signals.keys()]).toEqual(['SIGTERM', 'SIGINT']);
-    for (const callback of signals.values()) callback();
-    await Promise.resolve();
-    expect(shutdown).toHaveBeenCalledTimes(2);
+    await new Promise(resolve => setImmediate(resolve));
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(applicationOptions).toEqual(expect.objectContaining({ port: 8181, bind: '127.0.0.1' }));
     expect(pageOptions.authorize({ principal: 'alice' })).toBe(true);
     expect(pageOptions.authorize({ principal: 'bob' })).toBe(false);
     expect(roomOptions.rooms.authorize({ principal: 'alice' }, 'team')).toBe(true);
