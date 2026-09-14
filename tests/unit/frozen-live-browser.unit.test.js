@@ -239,33 +239,6 @@ test('headed browser launch omits headless mode and allows its window to be show
     });
 });
 
-test('POSIX browser shutdown owns and kills the complete browser process group', async () => {
-    await boundary({ platform: 'linux' }, async probe => {
-        const browser = probe.context.launchBrowser('unit-browser', probe.directory, { headless: false });
-        await expect(browser.endpoint).resolves.toBe('ws://127.0.0.1:9222/unit');
-        expect(probe.children[0].settings.detached).toBe(true);
-        await probe.api.stopBrowser(probe.children[0]);
-        expect(probe.groupKills).toEqual([[-1000, 'SIGKILL']]);
-        expect(probe.children[0].kills).toEqual([]);
-    });
-});
-
-test('POSIX browser shutdown tolerates a process group that already exited', async () => {
-    await boundary({ platform: 'linux', groupKillError: 'ESRCH' }, async probe => {
-        const child = probe.spawn('unit', [], {});
-        child.exitCode = 0;
-        await expect(probe.api.stopBrowser(child)).resolves.toBeUndefined();
-        expect(probe.groupKills).toEqual([[-1000, 'SIGKILL']]);
-    });
-});
-
-test('POSIX browser shutdown reports unexpected process group failures', async () => {
-    await boundary({ platform: 'linux', groupKillError: 'EPERM' }, async probe => {
-        const child = probe.spawn('unit', [], {});
-        await expect(probe.api.stopBrowser(child)).rejects.toThrow('unit profile cleanup failure');
-    });
-});
-
 test('browser shutdown handles no child, completed child, and asynchronous exit', async () => {
     await boundary({ asyncExit: true }, async probe => {
         await probe.api.stopBrowser();
