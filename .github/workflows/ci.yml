@@ -282,7 +282,7 @@ jobs:
           path: coverage/client-source-coordinator/
           if-no-files-found: error
           retention-days: 30
-      - run: npm run verify:browser:coverage
+      - run: xvfb-run -a npm run verify:browser:coverage
         id: browser-coverage
         timeout-minutes: 10
       - name: Preserve browser collector and native coverage evidence

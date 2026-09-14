@@ -31,6 +31,7 @@ test('the default and hosted gates exclude soak and long fixed-window benchmark 
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
     expect(workflow).toContain('run: xvfb-run -a npm run verify:starter:browser:coverage');
     expect(workflow).toContain('run: xvfb-run -a npm run verify:package:browser:coverage');
+    expect(workflow).toContain('run: xvfb-run -a npm run verify:browser:coverage');
     expect(workflow).not.toMatch(/run: npm run verify:(?:soak|soak:coverage|overhead:coverage)/);
     const command = require('../../package.json').scripts.test;
     const patterns = [...command.matchAll(/--testPathIgnorePatterns=([^ ]+)/g)].map(match => new RegExp(match[1]));

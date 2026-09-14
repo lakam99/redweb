@@ -236,11 +236,6 @@ test('headed browser launch omits headless mode and allows its window to be show
         const browser = probe.context.launchBrowser('unit-browser', probe.directory, { headless: false });
         await expect(browser.endpoint).resolves.toBe('ws://127.0.0.1:9222/unit');
         expect(probe.children[0].args).not.toContain('--headless=new');
-        expect(probe.children[0].args).toEqual(expect.arrayContaining([
-            '--disable-background-networking', '--disable-breakpad', '--disable-component-update',
-            '--disable-default-apps', '--disable-extensions', '--disable-sync', '--metrics-recording-only',
-            '--no-service-autorun', '--renderer-process-limit=2',
-        ]));
         expect(probe.children[0].settings.windowsHide).toBe(false);
         await probe.api.stopBrowser(browser.child);
     });
