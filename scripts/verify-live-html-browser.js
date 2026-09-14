@@ -84,10 +84,19 @@ function jsonRequest(url, method = 'GET') {
 function launchBrowser(executable, profile, { headless = true } = {}) {
     const child = spawn(executable, [
         ...(headless ? ['--headless=new'] : []),
+        '--disable-background-networking',
+        '--disable-breakpad',
+        '--disable-component-update',
+        '--disable-default-apps',
+        '--disable-extensions',
         '--disable-gpu',
         '--disable-dev-shm-usage',
+        '--disable-sync',
+        '--metrics-recording-only',
+        '--no-service-autorun',
         '--no-first-run',
         '--no-default-browser-check',
+        '--renderer-process-limit=2',
         '--remote-debugging-port=0',
         `--user-data-dir=${profile}`,
         'about:blank',
@@ -138,7 +147,8 @@ async function launchBrowserWithRetry(executable, profileRoot, options) {
             await stopBrowser(browser.child);
         }
     }
-    throw new AggregateError(errors, 'Browser did not expose DevTools after two bounded attempts.');
+    const diagnostics = errors.map((error, index) => `Attempt ${index + 1}: ${error.message}`).join('\n');
+    throw new AggregateError(errors, `Browser did not expose DevTools after two bounded attempts.\n${diagnostics}`);
 }
 
 async function openPage(debugPort, url) {
