@@ -4,7 +4,7 @@ const { VerificationWorkspace } = require('../../scripts/lib/VerificationWorkspa
 const { TEMPLATES } = require('../../src/cli/templates');
 
 describe('generated starters use real HTTP and sockets', () => {
-    test.each(TEMPLATES)('%s compiles and passes its shipped network tests without src/', async template => {
+    test.each([['default', null], ...TEMPLATES.map(template => [template, template])])('%s compiles and passes its shipped network tests without src/', async (_name, template) => {
         await new VerificationWorkspace().run(async execution => {
             const output = await verifyStarter(path.resolve(__dirname, '../..'), execution, template);
             if (output.startsWith('# SKIP')) expect(template).toBe('dashboard');

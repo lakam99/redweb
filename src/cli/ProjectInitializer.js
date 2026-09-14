@@ -11,7 +11,7 @@ class ProjectInitializer {
 
     initialize(target, options = {}) {
         const root = path.resolve(target);
-        const templateFiles = projectFiles(this.version, options.template);
+        const templateFiles = projectFiles(this.version, options.template ?? null, undefined, options);
         const files = options.existing ? templateFiles.filter(file => file.path === 'tsconfig.json') : templateFiles;
         return new FilePlan(root, files).write({ dryRun: options.dryRun });
     }

@@ -265,8 +265,10 @@ class PageManager {
                 if (!isHtml(result)) throw new TypeError('Page layouts must return html.');
                 return renderValue(result);
             };
-            const withContext = callback => LivePage.withRenderContext(context, callback);
+            const withContext = callback => require('./SocketAction').withRoute(record.socketHandlers,
+                () => LivePage.withRenderContext(context, callback));
             const markup = await lifetime.wait(() => renderer ? renderer.initialize(render, withContext) : withContext(render));
+            if (record.metadata.socket && !renderer.enabled) throw new TypeError('Socket-bound pages must render TSX.');
             const document = this.createDocument(record, request);
             if (record.metadata.live === false) {
                 const result = document(markup, null);
@@ -277,7 +279,7 @@ class PageManager {
             session.renderLifetime = renderer;
             const config = {
                 pageId: session.id,
-                socketPath: this.paths.socket,
+                socketPath: record.socketPath || this.paths.socket,
                 runtimePath: this.paths.runtime,
                 version: PROTOCOL_VERSION,
             };
@@ -322,7 +324,7 @@ class PageManager {
         session.timer.unref?.();
     }
 
-    async authenticate(request) {
+    async authenticate(request, RouteClass) {
         let id;
         try {
             id = new URL(request.url, `http://${request.headers.host || 'localhost'}`).searchParams.get('pageId');
@@ -332,6 +334,7 @@ class PageManager {
         if (typeof id !== 'string' || id.length > 128) return false;
         const session = this.pending.get(id) || this.active.get(id);
         if (!session || session.socket || session.detaching) return false;
+        if (session.record?.metadata.socket !== RouteClass) return false;
         try {
             const principal = await this.identity.resolve(request, session.lifetime.signal);
             if (!Object.is(principal, session.principal)) return false;
@@ -385,7 +388,7 @@ class PageManager {
     connectionContext(session, socket) { return Object.freeze({ ...session.context, socket, signal: session.connection.signal, principal: session.principal }); }
 
     checkConnected(session, socket) {
-        if (!this.available(session) || session.socket !== socket) throw new AccessDenied('ACCESS_CANCELLED');
+        if (!this.available(session) || session.socket !== socket || (socket.readyState !== undefined && socket.readyState !== 1)) throw new AccessDenied('ACCESS_CANCELLED');
         session.connection.check();
     }
 

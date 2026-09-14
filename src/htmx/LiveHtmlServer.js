@@ -71,7 +71,7 @@ class LiveHtmlServer {
             if (this.manager.hasLivePages || socketRoutes.length) {
                 this.sockets = new SocketServer({
                     server: this.http.server,
-                    routes: [...(this.manager.hasLivePages ? [this.manager.route()] : []), ...socketRoutes],
+                    routes: [...(this.manager.hasLivePages ? [this.manager.route()] : []), ...require('./PageSocketRoute').bindRoutes(this.manager, socketRoutes)],
                     listen,
                     port: this.http.port,
                     bind: this.http.bind,

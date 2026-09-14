@@ -20,18 +20,15 @@ New pages can return TSX directly. Run `npx redweb init` for a starter project, 
 Redweb renders TSX immediately to `HtmlFragment` values:
 
 ```tsx
-import { LivePage, action, component, page, state } from 'redweb';
+import { action, defineApp, page, state } from 'redweb';
 import type { Child } from 'redweb/jsx-runtime';
 
-const Panel = component((props: { title: string; children?: Child }) => (
-  <section class="panel">
-    <h2>{props.title}</h2>
-    {props.children}
-  </section>
-));
+function Panel({ title, children }: { title: string; children?: Child }) {
+  return <section class="panel"><h2>{title}</h2>{children}</section>;
+}
 
 @page('/counter', { css: 'counter.css' })
-class CounterPage extends LivePage {
+class CounterPage {
   @state() count = 0;
 
   @action()
@@ -47,6 +44,9 @@ class CounterPage extends LivePage {
     );
   }
 }
+
+const app = defineApp({ pages: [CounterPage] });
+app.run();
 ```
 
 Intrinsic elements, fragments (`<>...</>`), nested readonly arrays, and synchronous function components are supported. Strings, numbers, and attributes are escaped once; null, undefined, and boolean children render nothing. Safe existing `html` fragments compose in either direction.
@@ -75,7 +75,7 @@ State changes remain assignment-driven. Mutating an array or object in place is 
 
 Each HTTP/page session retains its own request context and snapshots, even when the underlying page state is shared. Reconnect sends a current root snapshot. Disconnect discards unfinished update results; session disposal aborts its render signal and releases snapshots. Async rendering has a five-second limit, and a snapshot tree is bounded to 1 MiB of retained HTML and 1,024 owners. These bounds include nested snapshots, not just visible document size. As with ordinary JavaScript, synchronous application code cannot be preempted; async work should honor cancellation and avoid unbounded operations. A failed update is logged and closes the affected connection instead of emitting partial HTML.
 
-This layer deliberately owns page concerns only: `@page`, `@state`, `@view`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Continue using Redweb's `services` option for ordinary HTTP APIs; a unified controller decorator surface is a separate compatibility decision rather than hidden behavior in the rendering layer.
+This layer deliberately owns page concerns only: `@page`, `@state`, `@view`, and `@action`. It does not clone jax.on's `@get`/`@post` controller API. Use `defineApp({ httpServices })` for ordinary HTTP endpoints; application lifecycle `services` is a separate option. Typed socket handlers can also bind directly to TSX on [socket-bound pages](SOCKET_PAGES.md).
 
 ## Page model
 
@@ -93,7 +93,7 @@ The decorators support both TypeScript's current standard decorator emit and the
 
 Pages use connection scope by default: each rendered browser page receives its own instance. `shared: true` creates one instance shared by every visitor to that page class and is appropriate for intentionally shared state such as a bounded chatroom history. `scope: 'shared'` remains available as the explicit equivalent.
 
-`start(PageClass)` creates the Live HTML server. `@page()` captures its source directory when the module is evaluated, so colocated templates and styles work for unexported classes, CommonJS, ESM, and barrel exports without module scanning. Pass `templateRoot` explicitly only when page assets live in a different directory. Template and stylesheet traversal outside that root is rejected.
+Use `defineApp({ pages: [PageClass] })` and `app.run()` for application startup. `start(PageClass)` remains a lower-level convenience. `@page()` captures its source directory when the module is evaluated, so colocated templates and styles work for unexported classes, CommonJS, ESM, and barrel exports without module scanning. Pass `templateRoot` explicitly only when page assets live in a different directory. Template and stylesheet traversal outside that root is rejected.
 
 ## Colocated CSS
 
@@ -106,7 +106,7 @@ class ProfilePage {}
 
 For composed styles, use `css: ['base.css', 'profile.css']`. Paths resolve from the same captured source directory as the template and cannot traverse outside it. Redweb reads each file once at startup, injects stylesheet links into the server-rendered document, and serves the CSS from a content-addressed URL with the correct content type and immutable caching. Remote URLs and static asset hosting remain under the application's control.
 
-## Declarative HTML templates
+## Alternative: declarative HTML templates
 
 Template files use the ordinary `.html` extension and contain no executable server code:
 
@@ -125,7 +125,7 @@ During SSR Redweb fills the bound element with the current property value, and s
 
 Ordinary values are escaped during SSR and applied with `textContent` in the browser. The `html` tagged template returns an explicit `HtmlFragment`; its interpolations are escaped, while the resulting fragment may be applied as HTML.
 
-## Rendering collections
+## Template collections (TSX can use map directly)
 
 Keep collection data as an ordinary array and decorate the method that renders one item:
 
@@ -145,56 +145,19 @@ For a small, auditable safety model, primitive values may be interpolated into q
 
 ## Reusable components
 
-For stateless snippets, pass a render function directly to `component()`:
+For stateless snippets, use an ordinary TSX function:
 
-```ts
-const Badge = component((properties: { label: string }) =>
-  html`<strong class="badge">${properties.label}</strong>`
-);
+```tsx
+function Badge({ label }: { label: string }) {
+  return <strong class="badge">{label}</strong>;
+}
 ```
 
-Function components are synchronous and must return `html`. Use a decorated class when a component needs state, actions, or lifecycle hooks.
+Function components are synchronous and return an `HtmlFragment` (the value produced by TSX) or a readonly array of `HtmlFragment` values. The `component(fn)` wrapper remains available for template composition; it is not required for TSX functions. Use a decorated class when a component needs state, actions, or lifecycle hooks.
 
 Decorate a plain class with `@component()` to give a reusable HTML snippet its own server state, actions, and lifecycle. Store component instances in page fields and interpolate them like any other safe HTML fragment:
 
-```ts
-import { action, component, html, page, start, state } from 'redweb';
-
-@component()
-class Counter {
-  @state()
-  count = 0;
-
-  constructor(private readonly label: string) {}
-
-  @action()
-  increment() {
-    this.count += 1;
-  }
-
-  render() {
-    return html`
-      <article>
-        <h2>${this.label}</h2>
-        <output data-rw-state="count">${this.count}</output>
-        <button rw-click="increment">Increment</button>
-      </article>
-    `;
-  }
-}
-
-@page('/')
-class Dashboard {
-  primary = new Counter('Primary');
-  secondary = new Counter('Independent');
-
-  render() {
-    return html`<main>${this.primary}${this.secondary}</main>`;
-  }
-}
-
-start(Dashboard);
-```
+<!-- source: docs/snippets/components.tsx -->
 
 The field path is the component's public protocol namespace, so both counters can expose `count` and `increment` without collisions. Browser events carry that visible namespace and the server resolves it through its component registry; client-supplied object paths are never evaluated. It is routing metadata, not an authorization boundary—component actions must enforce the same application authorization as page actions. Components may contain other decorated components, and state updates retain the complete nested namespace.
 
@@ -221,25 +184,25 @@ const markup = html`
 
 ### Nested components and code
 
-Plain functions returning `html` fragments are reusable server components. `each()` validates and joins arrays of those fragments, including nested lists:
+Use ordinary TSX functions and `map` for nested presentation. `codeBlock` returns a safe fragment that composes directly with TSX:
 
-```ts
-import { codeBlock, each, html } from 'redweb';
+```tsx
+import { codeBlock } from 'redweb';
 
-const method = (entry: Method) => html`
-  <section>
-    <h3>${entry.name}</h3>
-    <p>${entry.description}</p>
-    ${codeBlock(entry.usage, { language: 'ts', label: 'TypeScript' })}
-  </section>
-`;
+type MethodInfo = { name: string; description: string; usage: string };
 
-const reference = each(apiSections, section => html`
-  <article>
-    <h2>${section.name}</h2>
-    ${each(section.methods, method)}
+function Method({ name, description, usage }: MethodInfo) {
+  return <section><h3>{name}</h3><p>{description}</p>
+    {codeBlock(usage, { language: 'ts', label: 'TypeScript' })}
+  </section>;
+}
+
+// apiSections is the application's documentation data.
+const reference = <>{apiSections.map(section =>
+  <article key={section.name}><h2>{section.name}</h2>
+    {section.methods.map(method => <Method key={method.name} {...method} />)}
   </article>
-`);
+)}</>;
 ```
 
 `codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, or a `highlight(source, language)` callback that returns one, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
@@ -254,7 +217,7 @@ this.players = [...this.players, player];
 
 ## Browser actions and input
 
-Only methods decorated with `@action()` may be invoked by the browser:
+On ordinary live pages, browser-invoked methods must be decorated with `@action()`. [Socket-bound pages](SOCKET_PAGES.md) instead bind their registered typed socket handlers. For a page action:
 
 ```ts
 @action()
@@ -289,9 +252,9 @@ Pages can implement these optional hooks:
 
 Timers and subscriptions created by a page should be owned by that page and stopped in `disconnected()` or `disposed()`. `dispose()` is idempotent.
 
-Shutdown aborts the render signal and waits up to `shutdownTimeoutMs` (one second by default) for active `loading()` and `render()` hooks. If a hook ignores cancellation, Redweb disposes its page, force-closes the affected HTTP connection, completes the remaining cleanup phases, and then reports the timeout.
+With lower-level `start`/`LiveHtmlServer`, shutdown aborts the render signal and waits up to `shutdownTimeoutMs` (one second by default) for active `loading()` and `render()` hooks. If a hook ignores cancellation, Redweb disposes its page, force-closes the affected HTTP connection, completes the remaining cleanup phases, and then reports the timeout. `defineApp` instead coordinates cleanup within a five-second total application budget by default; see [application lifecycle](APPLICATION.md).
 
-Live HTML shuts down sockets, page resources, and its owned HTTP listener in successive phases. `shutdownTimeoutMs` bounds phases rather than imposing one total wall-clock deadline. The final HTTP phase also waits up to this duration before destroying remaining TCP peers, including incomplete HTTP requests and unfinished TLS handshakes. This applies to both static and live pages, even when native listener close has already started. Successful forced transport closure does not prove that application work completed, data was persisted, or a response reached its client. Cleanup failures remain reported after the other phases are attempted. Applications must separately close their database handles, workers, and other resources; arbitrary synchronous work cannot be preempted by a JavaScript timer.
+Lower-level Live HTML shuts down sockets, page resources, and its owned HTTP listener in successive phases. Its `shutdownTimeoutMs` bounds phases rather than imposing one total wall-clock deadline. The final HTTP phase also waits up to this duration before destroying remaining TCP peers, including incomplete HTTP requests and unfinished TLS handshakes. This applies to both static and live pages, even when native listener close has already started. Successful forced transport closure does not prove that application work completed, data was persisted, or a response reached its client. Cleanup failures remain reported after the other phases are attempted. Applications must separately close their database handles, workers, and other resources; arbitrary synchronous work cannot be preempted by a JavaScript timer.
 
 HTTP rendering produces an unpredictable page ID. The browser presents it during a same-origin, versioned WebSocket upgrade. Pending and disconnected sessions expire, the registry is bounded by `maxSessions`, and a page ID cannot own two active sockets simultaneously.
 
@@ -302,7 +265,7 @@ For authenticated pages, provide `authenticate(request)`. It runs for both the H
 Use the same Standard Schema v1 validators supported by socket contracts to validate a form once, at the server boundary. Redweb adds no runtime schema-library dependency; install your chosen validator in the application (`npm install zod` for this example).
 
 ```tsx
-import { action, page, start, state, type ActionInput } from 'redweb';
+import { action, defineApp, page, state, type ActionInput } from 'redweb';
 import { z } from 'zod';
 
 const input = z.object({
@@ -322,12 +285,13 @@ class AmountPage {
     return <form rw-submit="save">
       <label>Amount <input name="amount" /></label>
       <button type="submit">Add</button>
-      <output>{this.total}</output>
+      Total {this.total}
     </form>;
   }
 }
 
-start(AmountPage);
+const app = defineApp({ pages: [AmountPage] });
+app.run();
 ```
 
 The browser sends form values as one object (repeated names become arrays). The schema converts `amount` from its submitted string to an integer between 1 and 1,000, rejecting overflow and out-of-range values after conversion. `ActionInput<typeof input>` describes that transformed result; TypeScript cannot infer a method parameter annotation from its decorator. An optional second `LivePageConnectionContext` parameter receives trusted server context, never a caller-supplied replacement. Both standard and legacy TypeScript decorators are supported, including scoped component actions. A validated action accepts exactly one submitted argument; ordinary `@action()` retains its existing argument behavior.
@@ -340,7 +304,7 @@ The same bounded validation implementation is shared with socket contracts. Thei
 
 ## Action authorization
 
-Identity and permission are separate: the server's existing `authenticate(request)` hook establishes `context.principal`; an action policy decides whether that identity may perform this operation. In Redweb 0.14.0, add `authorize` to the action decorator instead of repeating permission checks inside each method:
+Identity and permission are separate: the server's existing `authenticate(request)` hook establishes `context.principal`; an action policy decides whether that identity may perform this operation. In Redweb 0.15.0, add `authorize` to the action decorator instead of repeating permission checks inside each method:
 
 ```tsx
 // Inside a page/component; `input` is the amount schema from the example above.
@@ -365,7 +329,7 @@ Denial returns recoverable `ACCESS_DENIED`; timeout returns `ACCESS_TIMEOUT`; co
 
 ## Protected pages and shared request identity
 
-In Redweb 0.14.0, a page can declare `authorize(context)` alongside its route. This is an API pattern for an application that already supplies the server's `authenticate(request)` hook, not a standalone login system:
+In Redweb 0.15.0, a page can declare `authorize(context)` alongside its route. This is an API pattern for an application that already supplies the server's `authenticate(request)` hook, not a standalone login system:
 
 ```tsx
 @page('/account/:id', {
@@ -389,7 +353,7 @@ Denied HTTP authentication returns `AUTHENTICATION_REQUIRED` (401); authenticati
 
 ## Explicit session revocation
 
-After invalidating a credential or changing permissions in your own authority, call `await server.revoke(principal)` before publishing further private updates. `server` is the object returned by `start()`. This revokes matching rendered page tokens, live connections, and unfinished renders in this process. It is not a permanent identity denylist: a later HTTP request may establish a new session only if your authentication and page policy still allow it. Coordinate revocation across every application instance yourself.
+After invalidating a credential or changing permissions in your own authority, call `await server.revoke(principal)` before publishing further private updates. `server` can be your Application from `defineApp` or the lower-level object returned by `start()`. This revokes matching rendered page tokens, live connections, and unfinished renders in this process. It is not a permanent identity denylist: a later HTTP request may establish a new session only if your authentication and page policy still allow it. Coordinate revocation across every application instance yourself.
 
 All affected lifetimes are marked unavailable and their transports stopped synchronously, before application-visible abort listeners or cleanup hooks run. Therefore an abort listener cannot publish a final framework state update to another affected connection. Old page tokens cannot reconnect, and late authentication, policy, loading, connection-hook, validation, or render completions cannot restore them. In-flight identity lookups whose principal is not yet known are conservatively cancelled too; an unrelated in-progress login may need retrying. The returned number counts affected page sessions/render operations, including those unresolved lookups, not unique people or sockets.
 
@@ -425,7 +389,7 @@ The injected module uses the published `redweb-client` package served by the sam
 
 ## Options
 
-`start(PageClass, options)` accepts normal HTTP options plus the following Live HTML controls. `new LiveHtmlServer({ pages, ...options })` remains available for explicit composition:
+`defineApp({ pages, ...options })` accepts these Live HTML controls. `start(PageClass, options)` and `new LiveHtmlServer({ pages, ...options })` remain lower-level alternatives:
 
 - `pages`: non-empty array of decorated class constructors when using `LiveHtmlServer` directly.
 - `templateRoot`: optional root for all `.html` templates and CSS files; when omitted, each page uses the source directory captured by its `@page()` decorator.
@@ -433,7 +397,7 @@ The injected module uses the published `redweb-client` package served by the sam
 - `sessionTtlMs`: pending/reconnect session lifetime; defaults to 30 seconds.
 - `maxSessions`: maximum pending plus active page sessions; defaults to 1,000.
 - `maxConcurrentRenders`: maximum simultaneous HTTP page renders, independent of live session occupancy; defaults to `maxSessions`.
-- `shutdownTimeoutMs`: phase-local render/route drain and final owned-HTTP cleanup timeout, not a total application shutdown deadline; defaults to one second.
+- `shutdownTimeoutMs`: `defineApp` uses a five-second total application shutdown budget by default. The lower-level `start`/`LiveHtmlServer` option instead defaults to one second per render/route drain and final owned-HTTP cleanup phase; it is not a total application deadline.
 - `heartbeat`: optional `{ intervalMs, timeoutMs }` WebSocket liveness policy. Live HTML defaults to a 15-second ping interval and 10-second pong timeout so half-open browsers are disconnected and component `disconnected()` hooks update presence promptly. When a pong first expires, one unreferenced timer gives it an additional `timeoutMs` grace window to reach JavaScript. Pong handling, detach/reattach, and shutdown cancel that owned timer; a peer that remains silent is terminated when it fires. Scheduler latency means `timeoutMs` is a liveness threshold, not a hard wall-clock deadline; use connection and queue limits as the resource bounds.
 - `authenticate`: optional HTTP/WebSocket identity function for binding page sessions to an authenticated principal.
 - `origins`: optional exact origin list or predicate for deployments behind a trusted proxy. Without it, Redweb requires a scheme-and-host match (`http`/WS or `https`/WSS).
@@ -457,11 +421,10 @@ These commands assume the cloned repository's development dependencies are insta
 
 Set `live: false` when a page needs server rendering but no realtime session:
 
-```ts
+```tsx
 import { exportStatic, page } from 'redweb';
 
 @page('/docs', {
-  template: 'docs.html',
   css: ['base.css', 'docs.css'],
   live: false,
   head: {
@@ -473,36 +436,38 @@ import { exportStatic, page } from 'redweb';
   },
   cache: { maxAge: 300, staleWhileRevalidate: 3600 },
 })
-class DocsPage {}
+class DocsPage {
+  render() { return <h1>Redweb API reference</h1>; }
+}
 
 await exportStatic(DocsPage, { outDir: 'dist' });
 ```
 
-Non-live pages contain no page token or browser runtime. When served by `start()`, Redweb skips its WebSocket route, emits an ETag, honors `If-None-Match`, and applies the declared public cache policy. Interactive pages are always sent with `private, no-store`.
+Non-live pages contain no page token or browser runtime. When served through `defineApp`, Redweb skips their live-page WebSocket route, emits an ETag, honors `If-None-Match`, and applies the declared public cache policy. Other explicitly registered socket routes remain available. Interactive pages are always sent with `private, no-store`.
 
 `exportStatic()` accepts one decorated class or an array. It requires `live: false`, maps `/` to `index.html` and `/docs` to `docs/index.html`, emits content-addressed CSS beside the pages, and returns frozen lists of written files. It never deletes or cleans the output directory.
 
 For several pages, define shared defaults once:
 
-```ts
-import { defineSite, html } from 'redweb';
+```tsx
+import { defineSite } from 'redweb';
 
 const docs = defineSite({
   origin: 'https://example.com',
   css: 'site.css',
   head: { description: 'Redweb documentation' },
   cache: { maxAge: 300 },
-  layout: (content, context) => html`
-    <body data-path="${context.request.path}">
+  layout: (content, context) => (
+    <body data-path={context.request.path}>
       <nav>Redweb</nav>
-      <main>${content}</main>
+      <main>{content}</main>
     </body>
-  `,
+  ),
 });
 
 @docs.page('/docs', { head: { title: 'Documentation' } })
 class DocsPage {
-  render() { return html`<h1>Documentation</h1>`; }
+  render() { return <h1>Documentation</h1>; }
 }
 
 await docs.export(DocsPage, { outDir: 'dist', publicDir: 'public' });

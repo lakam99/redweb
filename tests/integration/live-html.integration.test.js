@@ -63,6 +63,53 @@ const {
     websocketUpgradeStatus,
 } = require('../helpers/network');
 
+test('static pages can own a native HTTPS listener without registering sockets', async () => {
+    const app = startPages(DefaultStaticPage, { port: 0, bind: '127.0.0.1', logger: silentLogger,
+        ssl: { key: path.join(__dirname, '../fixtures/localhost.key'), cert: path.join(__dirname, '../fixtures/localhost.crt') } });
+    try {
+        await waitForListening(app.server);
+        const response = await request({ protocol: 'https:', port: app.server.address().port, path: '/default-reference' });
+        expect(response.status).toBe(200); expect(response.body).toContain('Default cache');
+        expect(app.sockets).toBeNull();
+    } finally { await app.shutdown(); }
+});
+
+test('page-manager shutdown marks a pending native HTTP response for connection closure', async () => {
+    let entered, release;
+    const started = new Promise(resolve => { entered = resolve; });
+    const loading = new Promise(resolve => { release = resolve; });
+    class PendingPage { loading() { entered(); return loading; } render() { return '<p>pending</p>'; } }
+    page('/')(PendingPage);
+    const app = startPages(PendingPage, { port: 0, bind: '127.0.0.1', logger: silentLogger });
+    try {
+        await waitForListening(app.server);
+        const response = request({ port: app.server.address().port });
+        await started;
+        await app.manager.shutdown();
+        const result = await response;
+        expect(result.status).toBe(500); expect(result.headers.connection).toBe('close');
+    } finally { release(); await app.shutdown(); }
+});
+
+test('a render failure destroys a native response whose middleware already sent headers', async () => {
+    class Broken { render() { throw new Error('private render failure'); } }
+    page('/', { live: false })(Broken);
+    const server = require('express')();
+    server.use((_req, res, next) => { res.flushHeaders(); next(); });
+    const app = startPages(Broken, { port: 0, bind: '127.0.0.1', logger: silentLogger, server });
+    try {
+        await waitForListening(app.server);
+        await require('../helpers/network').withTimeout(new Promise((resolve, reject) => {
+            const outgoing = require('http').get({ host: '127.0.0.1', port: app.server.address().port }, response => {
+                response.once('aborted', resolve);
+                response.once('end', () => reject(new Error('Partial response must be aborted')));
+                response.on('error', () => {}); response.resume();
+            });
+            outgoing.once('error', reject);
+        }), 'partial response to abort');
+    } finally { await app.shutdown(); }
+});
+
 function pageConfig(html) {
     const match = html.match(/<script type="application\/json" id="__redweb_page">([^<]+)<\/script>/);
     if (!match) throw new Error('Live HTML bootstrap was not rendered.');

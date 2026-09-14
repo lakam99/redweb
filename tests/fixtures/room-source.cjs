@@ -9,7 +9,7 @@ const filename = path.join(process.env.REDWEB_EXAMPLE_DIRECTORY, 'room-access.js
 
 test('room access uses actual HTTP, admission, joining, broadcast and revocation', async () => {
     const { createApp } = require(filename);
-    await verifyRoomApplication(createApp(0));
+    await verifyRoomApplication(await createApp(0));
 }, 30000);
 
 test('unit: local-demo launcher, signal cleanup and authorization truth table', async () => {

@@ -57,13 +57,15 @@ describe('redweb init CLI integration', () => {
     // two CLI calls + tsc allow 30s each, assets 10s, and network/startup/cleanup
     // have their own bounded waits. The default 5s can expire during compilation
     // and abandon a live child as soon as the event loop resumes under coverage.
-    test('scaffolds, safely reruns, compiles, and serves through the shipped preset', async () => {
-        const first = run(['init', 'game', '--template', 'site'], workspace);
+    test('scaffolds, safely reruns, compiles, and serves through the neutral capability foundation', async () => {
+        const first = run(['init', 'game', '--with', 'auth,multiplayer'], workspace);
         expect(first.status).toBe(0);
         expect(first.stdout).toContain('Created: package.json, tsconfig.json, src/app.tsx, src/app.css');
         expect(first.stdout).toContain('Unreleased builds: install the matching Redweb tarball first (see README.md)');
 
         const target = path.join(workspace, 'game');
+        const manifest = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8'));
+        expect(manifest.dependencies).toEqual(expect.objectContaining({ express: expect.any(String), zod: expect.any(String), 'redweb-client': expect.any(String) }));
         const nodeModules = path.join(target, 'node_modules');
         fs.mkdirSync(nodeModules);
         fs.symlinkSync(root, path.join(nodeModules, 'redweb'), 'junction');
@@ -95,7 +97,7 @@ describe('redweb init CLI integration', () => {
             await waitForOutput(app, `:${port}`);
             const response = await request({ port });
             expect(response.status).toBe(200);
-            expect(response.body).toContain('<h1>Your server-rendered app is ready.</h1>');
+            expect(response.body).toContain('<h1>Redweb is ready.</h1>');
             expect(response.body).toContain('/__redweb/css/');
             expect(response.body).not.toContain('<script');
             const stylesheet = response.body.match(/<link rel="stylesheet" href="([^"]+)"/)[1];
@@ -118,11 +120,24 @@ describe('redweb init CLI integration', () => {
 
         const source = path.join(target, 'src', 'app.tsx');
         fs.writeFileSync(source, 'user-owned source', 'utf8');
-        const second = run(['init', 'game', '--template', 'site'], workspace);
+        const second = run(['init', 'game', '--with', 'auth,multiplayer'], workspace);
         expect(second.status).toBe(0);
         expect(second.stdout).toContain('Kept existing: package.json, tsconfig.json, src/app.tsx, src/app.css');
         expect(fs.readFileSync(source, 'utf8')).toBe('user-owned source');
     }, 180000);
+
+    test('bare initialization omits tests but keeps the runnable project foundation', () => {
+        const result = run(['init', 'bare-app', '--bare', '--json'], workspace);
+        expect(result.status).toBe(0);
+        const report = JSON.parse(result.stdout);
+        expect(report).toEqual(expect.objectContaining({ foundation: 'default', capabilities: [], tests: false }));
+        expect(report.planned).toContain('src/app.tsx');
+        expect(report.planned).toContain('scripts/copy-assets.cjs');
+        expect(report.planned.some(file => file.startsWith('test/'))).toBe(false);
+        const manifest = JSON.parse(fs.readFileSync(path.join(workspace, 'bare-app/package.json'), 'utf8'));
+        expect(manifest.scripts.build).toBeDefined();
+        expect(manifest.scripts.test).toBeUndefined();
+    });
 
     test('prints help and rejects unknown commands', () => {
         const help = run(['--help'], workspace);

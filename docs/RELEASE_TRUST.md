@@ -18,18 +18,41 @@ Use the [official Node release schedule](https://nodejs.org/en/about/previous-re
 
 ## Pin the package and the documentation together
 
-For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This guide is versioned for 0.14.0. Before registry publication, verify the packed candidate; after publication, repeat these registry checks from a clean application:
+### Temporary Express 4 dependency mitigation
+
+As verified on 2026-09-02, Express 4.22.2 selects `qs ~6.15.1`; the maintainer's
+[isBuffer advisory](https://github.com/ljharb/qs/security/advisories/GHSA-4mjr-xmp4-gh2g)
+and [bracket-key advisory](https://github.com/ljharb/qs/security/advisories/GHSA-x5fp-wj9c-mxmx)
+identify patched `qs@6.16.0`. Until compatible upstream ranges select that fix,
+use this temporary mitigation in the **application's root** `package.json`:
+
+```json
+{ "overrides": { "express": { "qs": "6.16.0" } } }
+```
+
+Merge it with existing overrides, run `npm install`, commit the resulting lockfile,
+and verify with `npm ls qs`, `npm audit --omit=dev`, and application HTTP/form tests.
+New generated starters include the same policy. It is scoped to Express so it
+does not force unrelated dependency trees onto another `qs` version.
+
+This is an application-level mitigation, not a transparent fix for every Redweb
+consumer. [npm ignores overrides inside installed dependencies](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/#overrides).
+An ordinary installation without this root policy can still select affected
+dependencies. No Express 5 migration, bundled fork or published shrinkwrap is
+introduced. Audit results remain time-sensitive and application-specific.
+
+For a published application, select an exact release, commit its lockfile, and use `npm ci` in CI/deployment. This guide is versioned for 0.16.2. Before registry publication, verify the packed candidate; after publication, repeat these registry checks from a clean application:
 
 ```sh
-npm view redweb@0.14.0 version engines dist.integrity dist.signatures dist.attestations gitHead --json
-npm install --save-exact redweb@0.14.0
+npm view redweb@0.16.2 version engines dist.integrity dist.signatures dist.attestations gitHead --json
+npm install --save-exact redweb@0.16.2
 npm audit signatures
 npm audit --omit=dev
 ```
 
 The signature command must run in the installed application directory. Keep TLS verification enabled and use a current npm CLI; a certificate/trust-store failure is not a reason to disable verification. A lockfile's integrity value detects changed package bytes; registry signatures authenticate registry metadata; provenance, when present and verified, links an artifact to a build/source identity. Vulnerability audit is a separate check against known advisories, not an application penetration test.
 
-Redweb 0.14.0 contains unified application startup, server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics, lifecycle work, and bounded heartbeat grace described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.14.0 and assume newer APIs exist.
+Redweb 0.16.2 contains neutral composable initialization, socket-bound TSX controls and connection-owned page state, unified application startup, server-rendered TSX, reactive state/actions, complete starters, shared socket contracts, authorization, diagnostics, lifecycle work, and bounded heartbeat grace described by these versioned guides. Keep the package and documentation version aligned; do not mix a development guide or a future checkout with 0.16.2 and assume newer APIs exist.
 
 Redweb is pre-1.0. Consult the changelog and versioned guide before upgrading, run your own real HTTP/WebSocket/browser tests, and keep a rollback artifact. Patch/minor numbers and a compatible TypeScript build alone do not prove wire compatibility, preserved sessions, database compatibility or application authorization. HTTP-created live-page sessions are process-owned; a restart or rolling replacement does not migrate them automatically. Raw socket protocol versions are negotiated only when the route opts in, and application payload compatibility remains your contract.
 

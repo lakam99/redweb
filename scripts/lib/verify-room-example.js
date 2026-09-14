@@ -12,7 +12,7 @@ async function verifyRoomExample(packageRoot, execution) {
         const target = path.join(execution.directory, `room-${experimentalDecorators ? 'legacy' : 'standard'}`);
         const compiled = await compileConsumer(packageRoot, execution, target, path.join(packageRoot, 'docs/snippets/room-access.tsx'), { experimentalDecorators });
         const { createApp } = require(compiled);
-        await verifyRoomApplication(createApp(0));
+        await verifyRoomApplication(await createApp(0));
     }
 }
 

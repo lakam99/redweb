@@ -1,16 +1,19 @@
 # Shared socket contracts
 
-Status: included in `redweb@0.14.0`.
+Status: included in `redweb@0.16.2`.
 
 A contract declares message payloads once. The same schema supplies runtime validation and inferred TypeScript types for senders and handlers. The URL still selects the route (`/match`), and the envelope's `type` selects an individual handler (`join`, `move`, `resume`). No socket decorators or second action dispatcher are required.
 
-Start with `npx --yes redweb@0.14.0 init my-match --template socket`. The complete maintained example lives in [the socket recipe](../recipes/socket/README.md): [contract](../recipes/socket/contract.ts), [handlers](../recipes/socket/handlers.ts), [server](../recipes/socket/app.tsx), and [real-network tests](../recipes/socket/app.test.cjs).
+Start with `npx --yes redweb@0.16.2 init my-match --template socket`. The complete maintained example lives in [the socket recipe](../recipes/socket/README.md): [contract](../recipes/socket/contract.ts), [handlers](../recipes/socket/handlers.ts), [server](../recipes/socket/app.tsx), and [real-network tests](../recipes/socket/app.test.cjs).
 
 Session ownership is separate from room fan-out. For authenticated group delivery,
 see [room authorization](ROOM_AUTHORIZATION.md) and the complete
 [shared page/private-room example](snippets/room-access.tsx).
 
 ## One schema, two sides
+
+Redweb 0.15.0 also supports [typed handlers in server TSX](SOCKET_PAGES.md)
+with per-connection page state; earlier releases do not include that extension.
 
 Import `defineSocketContract` from `redweb/contract` for a shared module, or from `redweb` in server-only code. The standalone entry does not import the HTTP server or Node socket listener. Browser consumers need a bundler capable of consuming the CommonJS package; this is not a native browser script URL or a React integration.
 

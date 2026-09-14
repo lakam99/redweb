@@ -179,6 +179,9 @@ function page(routePath, options = {}) {
         throw new TypeError('Page scope must be "connection" or "shared".');
     }
     if (typeof live !== 'boolean') throw new TypeError('Page live must be a boolean.');
+    if (options.socket !== undefined && (typeof options.socket !== 'function' || !live || scope !== 'connection')) {
+        throw new TypeError('Page socket requires a route class and a live connection-scoped page.');
+    }
     if (layout !== undefined && typeof layout !== 'function') throw new TypeError('Page layout must be a function.');
     const head = pageHead(options.head);
     const cache = pageCache(options.cache, live);
@@ -190,6 +193,7 @@ function page(routePath, options = {}) {
             path: routePath,
             template,
             scope,
+            ...(options.socket && { socket: options.socket }),
             ...(live === false && { live: false }),
             ...(head && { head }),
             ...(cache && { cache }),

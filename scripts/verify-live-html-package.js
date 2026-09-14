@@ -118,7 +118,7 @@ async function main() {
         }
         const installed = require(packageRoot);
         const manifest = require(path.join(packageRoot, 'package.json'));
-        for (const template of require('../src/cli/templates').TEMPLATES) {
+        for (const template of [null, ...require('../src/cli/templates').TEMPLATES]) {
             await verifyStarter(packageRoot, execution, template);
         }
         await verifyStarterBrowser(execution);

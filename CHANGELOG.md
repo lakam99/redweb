@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.16.2
+
+- Make `redweb init` generate a neutral, runnable TypeScript/TSX foundation by default so tutorials and original applications share one low-boilerplate starting structure.
+- Add composable `--with auth,multiplayer` dependency profiles without copying dashboard, chat, counter, or game-domain source. Keep named templates as explicit finished examples.
+- Add `--bare` as the same application foundation without its test directory, test scripts, or test-only coverage dependency. Report the selected foundation, capabilities, and test inclusion in machine-readable and human CLI output.
+- Cover the generated default with unit tests and actual CLI, TypeScript, HTTP, CSS, rerun, and lifecycle integration checks; no mocks or fixed-duration soak tests.
+
+## 0.16.1
+
+- Refresh API and guide examples around concise `defineApp`, plain decorated pages, reusable TSX components, CSS, and connected clients. Keep lower-level HTTP, socket, template, and protocol APIs explicitly documented as alternatives.
+- Correct socket-open ordering, shared-listener composition, room authorization, connection-registry ownership, send policy, HTTPS ownership, function-component return types, and shutdown guidance. No runtime API changes.
+- Generate repeated examples from shared source files and exercise the exact counter, component, and multi-page examples in headed Chromium under both decorator modes. Preserve previously published documentation snapshots.
+
+## 0.16.0
+
+- Add opt-in `connectedClients` over the existing RoomRegistry: verified per-connection identity, synchronous room/domain joins with membership rollback, deduplicated presence and checked per-player page projection. Typed handlers bind without changing the browser-safe socket contract. Raw command completion is independent of state updates; only deliberate rejections expose text.
+- Fence obsolete projection failures, bound asynchronous adapters by connection lifetime, and keep a failed recipient from rejecting another player's committed command. Add mock-free socket regressions and unit coverage; no client package changes are needed.
+
+## 0.15.0
+
+- Include an Express-subtree `qs@6.16.0` override in generated application manifests and document the temporary root-policy requirement for existing consumers. This mitigation does not propagate from Redweb's dependency manifest or silently upgrade Express.
+- Bind server TSX controls directly to typed socket handlers with `rw-submit={Join}` and `rw-click={Move.with(payload)}`. Socket-bound pages use their registered route and the existing renderer/client runtime on one connection.
+- Expose a checked, connection-owned `socket.page(PageClass)` accessor for private server state. Preserve admission, exact page/route ownership, post-validation authorization, reconnect and cancellation fences; reserve internal rendering commands.
+- Add explicit handler `false` return semantics for recoverable rejections without a success acknowledgement. Existing handlers returning `undefined` still succeed. Use a correlated `sendProtocolError` before returning `false` to complete requesting clients.
+- Keep typed contract metadata browser-safe; custom page commands use published redweb-client 0.3.0 with terminal-response filtering, installed automatically by Redweb.
+
 ## 0.14.0
 
 - Bound already-closing WebSocket peers with the native `ws` closing-handshake deadline: `websocketOptions.closeTimeout` defaults to 5000ms instead of 30000ms and remains configurable. Real TCP tests cover a peer withholding FIN; heartbeat, session expiry, and shutdown deadlines remain separate.

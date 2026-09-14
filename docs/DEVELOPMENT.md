@@ -1,13 +1,14 @@
 # Development refresh and inspection
 
-This API is available in `redweb@0.14.0`. Use documentation matching the installed package before enabling it.
+This API is available in `redweb@0.16.2`. Use documentation matching the installed package before enabling it.
 
 ## Browser refresh
 
 The generated `npm run dev` command enables browser refresh while rebuilding and restarting your application. No extra application code is needed. For an existing Live HTML application, enable it explicitly:
 
 ```ts
-const app = start(CounterPage, { development: { refresh: true } });
+const app = defineApp({ pages: [CounterPage], development: { refresh: true } });
+app.run();
 ```
 
 Alternatively, set `REDWEB_DEV_REFRESH=1` only for your development process. Explicit `development: { refresh: false }` overrides that environment flag. Setting `NODE_ENV=development` alone enables neither refresh nor inspection. Both features are refused at construction under `NODE_ENV=production`; changing environment variables after construction is not a mode switch. `npm start` does not set the refresh flag. Keep it out of production environments.
@@ -37,12 +38,13 @@ The injected `rw-dev-refresh` element and `__redweb_dev` ID belong to this helpe
 Enable inspection explicitly when starting a development application:
 
 ```ts
-const app = start(CounterPage, {
-    port: 8181,
+const app = defineApp({
+    pages: [CounterPage],
     development: { inspect: true },
 });
 
-// Read this in your development code, debugger, or integration test.
+// Await startup before reading live metadata (ESM entry point).
+await app.run();
 console.dir(app.inspect(), { depth: null });
 ```
 

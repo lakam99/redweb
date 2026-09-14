@@ -4,7 +4,27 @@ Redweb renders TypeScript/TSX on Node.js and connects server-owned state and act
 
 It is not React, a browser component framework, a database, an identity provider, or a managed multiplayer platform. Do not use React hooks or import `react/jsx-runtime`. An edge-only host without Node listeners cannot run a live Redweb server; exported static pages need no Node runtime.
 
-## Start with a complete recipe
+## Start a project
+
+Create the same neutral foundation whether you are following a tutorial or starting your own application:
+
+```sh
+npx --yes redweb@0.16.2 init my-app
+cd my-app
+npm install --save-exact redweb@0.16.2
+npm test
+npm run dev
+```
+
+Add capability dependencies without importing example-domain code:
+
+```sh
+npx --yes redweb@0.16.2 init my-game --with auth,multiplayer
+```
+
+The default includes its real tests. `--bare` omits only the test directory, test scripts, and test-only coverage dependency; it retains the runnable application, CSS, compiler configuration, build scripts, and development watcher.
+
+## Explore complete recipes
 
 Choose one of these complete applications:
 
@@ -15,7 +35,7 @@ Choose one of these complete applications:
 - [HTTP and WebSockets](../recipes/http-ws/README.md): one listener, an HTTP health endpoint and a raw `/chat` route with an explicit cleanup owner.
 - [Private dashboard](../recipes/dashboard/README.md): persistent SQLite cards, account sessions and private live updates (Node 22.13+).
 
-Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.
+Named templates are finished examples rather than the default project structure. Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.
 
 Requirements: Node.js satisfying the package's `engines` field and npm. Use a supported Node.js release in production. TypeScript and the development watcher are installed by the starter. No React, frontend bundler or broker is required. Only the dashboard starter uses a database; its native SQLite requirement is recipe-local.
 
@@ -33,7 +53,7 @@ When setup fails, run `npx --no-install redweb doctor --json` from the applicati
 
 - A page is a decorated class. Its `render()` returns server-side TSX.
 - State is server-owned data. An ordinary TSX expression reading `@state()` updates automatically when that property is assigned. Replace arrays/objects rather than mutating them in place.
-- Only decorated actions are browser-callable. Validate and authorize every untrusted input; hiding a button is not access control.
+- Ordinary live pages expose decorated actions. Socket-bound pages expose their registered typed handlers through TSX controls. Validate and authorize every untrusted input; hiding a button is not access control.
 - A class component owns reusable state/actions and has its own update boundary. Function components are convenient presentation helpers.
 - Pages are connection-scoped by default. `shared: true` intentionally shares one page instance; do not put private visitor data there.
 - Shared in-memory state survives visitors and reloads, not server restarts. Durable cards/history require application-owned persistence. Multiple processes do not automatically share memory.
@@ -47,7 +67,7 @@ For private raw socket subscriptions, see [room authorization and shared request
 
 Build first. Deploy `dist/`, the package manifest, and the lockfile, then install runtime dependencies with `npm ci --omit=dev`. The starters are tested with `src/` unavailable after compilation. Configure HTTPS/WSS and a proxy that supports WebSocket upgrades when using a reverse proxy.
 
-These deployment commands require a verified release pair. `redweb@0.14.0` installs published `redweb-client@0.2.0` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
+These deployment commands require a verified release pair. `redweb@0.16.2` installs published `redweb-client@0.3.0` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
 
 Before public access, add authentication, authorization, trusted-origin policy, input/rate limits, application persistence where needed, and bounded shutdown. Treat reconnect/session tokens as credentials. Do not promise exactly-once delivery or durable sessions from an in-memory starter. See [operations](MULTIPLAYER_OPERATIONS.md) and [guarantees and limits](PRODUCTION_READINESS.md).
 

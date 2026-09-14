@@ -79,7 +79,15 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
         'window.feedbackTest = { ...page.feedback, client: page.client };\n' +
         'window.morph = page.morph; window.runtimeTest = page.runtime;'));
     await verifyActionFeedback({
-        debugPort, pages: [], eventual, serverOptions: { server: app }, onServer,
+        debugPort, pages: [], eventual, serverOptions: { server: app }, onServer: server => {
+            // A native test handler exercises command bindings through the real runtime/transport.
+            class RuntimeCommand extends require('../src/ws/BaseHandler').BaseHandler {
+                constructor() { super('unit:command'); }
+                onMessage(socket, message) { socket.sendEvent('redweb:result', message.payload, { requestId: message.requestId }); }
+            }
+            server.sockets.routes[0].addHandler(RuntimeCommand);
+            onServer(server);
+        },
         openPage: async (_port, url) => {
             const tab = await visit(url);
             run.browser = await command(tab, 'Browser.getVersion');
@@ -161,7 +169,7 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
         const recordFailure = value => { const error = verificationError(value); failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
         const recordCleanup = error => { execution.cleanupFailure = verificationError(error); recordFailure(error); };
         try {
-            const launched = await launchBrowserWithRetry(executable, execution.directory);
+            const launched = await launchBrowserWithRetry(executable, execution.directory, { headless: false });
             browser = launched.browser;
             const debugPort = new URL(launched.endpoint).port;
             const visit = url => pages.open(debugPort, url);

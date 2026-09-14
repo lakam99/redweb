@@ -9,7 +9,7 @@ const { projectFiles, TEMPLATES } = require('../../src/cli/templates');
 const { copyDocumentationSource } = require('../helpers/documentation');
 
 const root = path.resolve(__dirname, '../..');
-const { version } = require('../../package.json');
+const { version, dependencies } = require('../../package.json');
 
 describe('single-source documentation', () => {
     test('operational guidance distinguishes blocking server recovery from the original diagnostic', () => {
@@ -71,7 +71,7 @@ describe('single-source documentation', () => {
 
     test('deployment guidance identifies the published release pair and future checkout boundary', () => {
         const guide = fs.readFileSync(path.join(root, 'docs/GETTING_STARTED.md'), 'utf8');
-        expect(guide).toContain(`\`redweb@${version}\` installs published \`redweb-client@0.2.0\``);
+        expect(guide).toContain(`\`redweb@${version}\` installs published \`redweb-client@${dependencies['redweb-client'].replace(/^\^/, '')}\``);
         expect(guide).toContain('Future unreleased Redweb changes require their matching tested tarball');
         expect(guide).toContain('a clean production install does not preserve that link');
         expect(guide).not.toContain('as though the matching client were already published');
@@ -149,7 +149,8 @@ describe('single-source documentation', () => {
             const file = recipe.files.find(file => file.path === guide.recipe.file);
             expect(guide.files).toBeUndefined();
             expect(guide.markdown).toContain(builder.setup(guide.recipe.template));
-            expect(guide.markdown).toContain(file.content.trimEnd());
+            const source = guide.codeSource ? fs.readFileSync(path.join(root, guide.codeSource), 'utf8') : file.content;
+            expect(guide.markdown).toContain(source.replace(/\r\n/g, '\n').trimEnd());
             expect(guide.markdown).toContain(`](${recipe.url})`);
             expect(guide.markdown).toContain("## Explain it like I'm five");
             expect(guide.markdown).toContain('## Check that it works');
@@ -168,8 +169,11 @@ describe('single-source documentation', () => {
             'This checkout contains unreleased work even while its package metadata still matches an older npm version',
             'the current development candidate',
         ]) expect(text).not.toContain(stale);
-        expect(text).toContain(`These commands are available in \`redweb@${version}\``);
-        expect(text).toContain(`This API is available in \`redweb@${version}\``);
+        // Current guidance is editable; already published snapshots retain their
+        // historical wording even when an earlier release had stale version text.
+        const current = new Documentation(root).build();
+        expect(current.pages.find(page => page.id === 'cli').markdown.includes(`These commands are available in \`redweb@${version}\``)).toBe(true);
+        expect(current.pages.find(page => page.id === 'development').markdown.includes(`This API is available in \`redweb@${version}\``)).toBe(true);
     });
 
     test('resolves source-relative links without rewriting code examples', () => {
@@ -217,6 +221,7 @@ describe('single-source documentation', () => {
                 expect(guide.markdown).not.toContain('TARBALL');
             }
             expect(builder.setup('dashboard')).toContain(`npm install --save-exact redweb@${version}\nnpm run add-user -- alice\nnpm test\nnpm run dev`);
+            expect(builder.foundationSetup()).toContain(`npx --yes redweb@${version} init my-app`);
             expect(docs.llms).toContain(`Documentation for Redweb ${version}`);
             expect(docs.pages.find(page => page.id === 'recipes/realtime').markdown).toContain(`npx --yes redweb@${version} init`);
             // Published setup is registry-pinned. Its exact generated README

@@ -6,6 +6,7 @@ const RoomRegistry = require('./RoomRegistry');
 const SessionRegistry = require('./SessionRegistry');
 const DistributionBridge = require('./DistributionBridge');
 const requestSnapshot = require('../context/RequestSnapshot');
+const { ConnectedClients } = require('./ConnectedClients');
 
 function joinRoom(roomId) { return this.__redwebRuntimeOwner.rooms.join(roomId, this); }
 function enterRoom(roomId) { return this.__redwebRuntimeOwner.rooms.enter(roomId, this); }
@@ -23,7 +24,7 @@ function publishEvent(type, payload) { return this.__redwebRuntimeOwner.route.pu
 function connectionContext() { return this.__redwebRuntimeOwner.ensureContext(this); }
 
 class RouteRuntime {
-    constructor(route, { heartbeat, rooms, sessions, distribution, drainHandlers }) {
+    constructor(route, { heartbeat, rooms, sessions, distribution, drainHandlers, connections }) {
         this.route = route;
         this.inFlight = drainHandlers ? new Set() : null;
         this.abortController = drainHandlers ? new AbortController() : null;
@@ -32,6 +33,7 @@ class RouteRuntime {
         this.requests = new WeakMap();
         this.needsContext = Boolean(route.admissionPolicy || route.protocolPolicy || rooms || sessions || drainHandlers);
         try {
+            if (connections !== undefined && !(connections instanceof ConnectedClients)) throw new TypeError('connections must be created with connectedClients().');
             this.heartbeat = heartbeat === undefined ? null : new HeartbeatMonitor(heartbeat, route.logger);
             this.rooms = rooms === undefined || rooms === false
                 ? null
@@ -40,9 +42,10 @@ class RouteRuntime {
                         socket.readyState === 1 && this.contexts.get(socket)?.active !== false,
                     contextFor: socket => this.ensureContext(socket),
                     policy: route.transportPolicy,
-                    onChange: action => {
+                    onChange: (action, roomId) => {
                         route.metrics?.increment(`redweb.room.${action}`);
                         route.metrics?.gauge('redweb.rooms.active', this.rooms.size);
+                        connections?.changed(roomId);
                     },
                 });
             this.sessions = sessions === undefined || sessions === false
@@ -54,6 +57,7 @@ class RouteRuntime {
             this.distribution = distribution === undefined || distribution === false
                 ? null
                 : new DistributionBridge(distribution, event => distribution.onEvent(event, route), route.logger);
+            connections?.attach(route, this.rooms);
         } catch (error) {
             this.heartbeat?.stop();
             this.sessions?.stop();

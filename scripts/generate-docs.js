@@ -28,7 +28,7 @@ const regions = ['realtime', 'setup', 'http-ws'].map(name => {
     if (readme.split(start).length !== 2 || readme.split(end).length !== 2 || matches.length !== 1) {
         throw new Error(`README must contain exactly one ${name} recipe region.`);
     }
-    const content = name === 'setup' ? `${documentation.notice()}\n\n${documentation.setup('realtime')}`
+    const content = name === 'setup' ? `${documentation.notice()}\n\n${documentation.foundationSetup()}`
         : fence(catalogue.pages.find(page => page.id === `recipes/${name}`).files.find(file => file.path === 'src/app.tsx').content, 'tsx');
     return { region, index: matches[0].index, length: matches[0][0].length, content: `${start}\n${content}\n${end}` };
 });
