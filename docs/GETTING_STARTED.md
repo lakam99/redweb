@@ -4,7 +4,27 @@ Redweb renders TypeScript/TSX on Node.js and connects server-owned state and act
 
 It is not React, a browser component framework, a database, an identity provider, or a managed multiplayer platform. Do not use React hooks or import `react/jsx-runtime`. An edge-only host without Node listeners cannot run a live Redweb server; exported static pages need no Node runtime.
 
-## Start with a complete recipe
+## Start a project
+
+Create the same neutral foundation whether you are following a tutorial or starting your own application:
+
+```sh
+npx --yes redweb@0.16.1 init my-app
+cd my-app
+npm install --save-exact redweb@0.16.1
+npm test
+npm run dev
+```
+
+Add capability dependencies without importing example-domain code:
+
+```sh
+npx --yes redweb@0.16.1 init my-game --with auth,multiplayer
+```
+
+The default includes its real tests. `--bare` omits only the test directory, test scripts, and test-only coverage dependency; it retains the runnable application, CSS, compiler configuration, build scripts, and development watcher.
+
+## Explore complete recipes
 
 Choose one of these complete applications:
 
@@ -15,7 +35,7 @@ Choose one of these complete applications:
 - [HTTP and WebSockets](../recipes/http-ws/README.md): one listener, an HTTP health endpoint and a raw `/chat` route with an explicit cleanup owner.
 - [Private dashboard](../recipes/dashboard/README.md): persistent SQLite cards, account sessions and private live updates (Node 22.13+).
 
-Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.
+Named templates are finished examples rather than the default project structure. Each generated recipe page contains its exact files, commands, limitations, and real HTTP/WebSocket acceptance tests. Follow that recipe's version-specific setup instructions rather than mixing an unreleased example with a published npm version.
 
 Requirements: Node.js satisfying the package's `engines` field and npm. Use a supported Node.js release in production. TypeScript and the development watcher are installed by the starter. No React, frontend bundler or broker is required. Only the dashboard starter uses a database; its native SQLite requirement is recipe-local.
 

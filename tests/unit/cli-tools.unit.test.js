@@ -37,6 +37,10 @@ describe('CLI command arguments', () => {
         expect(parseArguments(['doctor', '--port', '8181', '--json']).port).toBe(8181);
         expect(parseArguments(['doctor', '--port', '0']).port).toBe(0);
         expect(parseArguments(['init', '--template', 'chat']).template).toBe('chat');
+        expect(parseArguments(['init', 'game', '--with', 'auth,multiplayer', '--bare'])).toEqual({
+            command: 'init', target: 'game', existing: false, dryRun: false, json: false, port: null,
+            with: ['auth', 'multiplayer'], bare: true,
+        });
     });
 
     test.each([
@@ -46,6 +50,8 @@ describe('CLI command arguments', () => {
         ['doctor', '--port', '-1'], ['doctor', '--port', '1.5'], ['init', '--unknown'],
         ['init', '--template'], ['init', '--template', '../file'], ['init', '--existing', '--template', 'site'],
         ['doctor', '--template', 'chat'], ['init', '--template', 'site', '--template', 'chat'],
+        ['init', '--with'], ['init', '--with', 'unknown'], ['init', '--with', 'auth,auth'],
+        ['init', '--existing', '--with', 'auth'], ['init', '--existing', '--bare'],
     ])('rejects invalid arguments: %j', (...args) => {
         expect(() => parseArguments(args)).toThrow();
     });
@@ -181,12 +187,12 @@ describe('CLI filesystem safety and diagnostics without mocks', () => {
 
     test('provides machine-readable init/errors and honest human-readable output', async () => {
         const plan = await run(['init', '--json', '--dry-run'], workspace, version);
-        expect(JSON.parse(plan.stdout).dryRun).toBe(true);
+        expect(JSON.parse(plan.stdout)).toEqual(expect.objectContaining({ dryRun: true, foundation: 'default', capabilities: [], tests: true }));
         expect(fs.readdirSync(workspace)).toEqual([]);
         const existing = await run(['init', '--existing'], workspace, version);
         expect(existing.stdout).toContain('No application or package files were generated.');
         expect(existing.stdout).toContain('not validated');
-        expect((await run(['init', '--dry-run'], workspace, version)).stdout).toContain('Planned initialization');
+        expect((await run(['init', '--dry-run'], workspace, version)).stdout).toContain('Foundation: neutral default; capabilities: base; tests: included.');
         expect((await run(['init'], workspace, version)).stdout).toContain('npm install');
         const failure = await run(['invalid', '--json'], workspace, version);
         expect(failure.exitCode).toBe(1);

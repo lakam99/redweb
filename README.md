@@ -8,7 +8,19 @@ Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLIC
 
 ## Install
 
-Start with a complete, tested counter application:
+Start with a neutral, tested application foundation:
+
+```sh
+npx --yes redweb@0.16.1 init my-app
+cd my-app
+npm install --save-exact redweb@0.16.1
+npm test
+npm run dev
+```
+
+Add dependency sets without copying example-domain code: `npx --yes redweb@0.16.1 init my-game --with auth,multiplayer`. Use `--bare` only to omit generated tests. The application, CSS, TypeScript configuration, build scripts, and development watcher remain.
+
+For a complete, tested counter example:
 
 <!-- redweb:setup:start -->
 > Documentation for Redweb 0.16.1. Install that exact version when following these examples.
@@ -58,7 +70,7 @@ if (require.main === module) void app.run().catch(error => { console.error(error
 
 ## Choose what to build
 
-The links below describe each starter and its boundaries. Reuse the version-correct setup above, changing both the directory name and `--template realtime` to your chosen template. Every initialized project includes all application files and real tests; complete generated recipe pages and file contents are also available in the [documentation catalogue](docs/generated.json).
+The links below describe each optional example and its boundaries. Reuse the version-correct counter setup above, changing both the directory name and `--template realtime` to your chosen template. Every non-bare initialized project includes all application files and real tests; complete generated recipe pages and file contents are also available in the [documentation catalogue](docs/generated.json).
 
 | Build | Starter | Recipe notes |
 | --- | --- | --- |

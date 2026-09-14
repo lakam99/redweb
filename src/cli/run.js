@@ -36,9 +36,18 @@ async function run(args, cwd, version) {
             return { exitCode: 0, stdout: `${output}\n`, stderr: '' };
         }
         const result = new ProjectInitializer(version).initialize(root, options);
-        const report = { schemaVersion: 1, operation: 'init', dryRun: options.dryRun, ...result };
+        const report = {
+            schemaVersion: 1,
+            operation: 'init',
+            dryRun: options.dryRun,
+            foundation: options.template ?? 'default',
+            capabilities: options.with ?? [],
+            tests: !options.bare,
+            ...result,
+        };
         const output = options.json ? JSON.stringify(report) : [
             `${options.dryRun ? 'Planned initialization' : 'Initialization complete'} in ${result.root}`,
+            `Foundation: ${options.template ? `example template "${options.template}"` : 'neutral default'}; capabilities: ${options.with?.join(', ') || 'base'}; tests: ${options.bare ? 'omitted' : 'included'}.`,
             `Created: ${result.created.join(', ')}`,
             `Kept existing: ${result.skipped.join(', ')}`,
             `Planned: ${result.planned.join(', ')}`,
