@@ -26,6 +26,13 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
     expect(workflow).not.toContain('ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION');
 });
 
+test('CI de-duplicates matching push and PR runs without cancelling manual observation', () => {
+    expect(workflow).toContain("github.event_name == 'workflow_dispatch'");
+    expect(workflow).toContain("format('manual-{0}', github.ref_name)");
+    expect(workflow).toContain('github.event.pull_request.head.ref || github.ref_name');
+    expect(workflow).toContain('cancel-in-progress: true');
+});
+
 test('the default and hosted gates exclude soak and long fixed-window benchmark tests', () => {
     const matrix = workflow.slice(workflow.indexOf('  test:'), workflow.indexOf('  lifecycle-smoke:'));
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
