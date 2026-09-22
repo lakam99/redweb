@@ -281,6 +281,8 @@ describe('Live HTML integration without mocks', () => {
         const path = `/__redweb/upload?pageId=${encodeURIComponent(page.config.pageId)}&action=receiveFile`;
         const accepted = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': 'note.txt' }, body: 'safe' });
         expect(accepted.status).toBe(204);
+        const atLimit = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '8' }, body: '12345678' });
+        expect(atLimit.status).toBe(204);
         const rejected = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'image/png', 'content-length': '1' }, body: 'x' });
         expect(rejected.status).toBe(415);
         const large = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '9' }, body: '123456789' });
@@ -309,6 +311,13 @@ describe('Live HTML integration without mocks', () => {
             const response = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '1', 'x-redweb-upload-name': invalidName }, body: 'x' });
             expect(response.status).toBe(204);
             expect([...server.manager.pending.values()][0].page.nested.received).toBe('null:x');
+        }
+        for (const acceptedName of ['x'.repeat(256), '😀'.repeat(64)]) {
+            const encodedName = encodeURIComponent(acceptedName);
+            const response = await request({ port: page.port, path: componentPath, method: 'POST',
+                headers: { 'content-type': 'text/plain', 'content-length': '1', 'x-redweb-upload-name': encodedName }, body: 'x' });
+            expect(response.status).toBe(204);
+            expect([...server.manager.pending.values()][0].page.nested.received).toBe(`${acceptedName}:x`);
         }
         const activeClient = await connectClient(page.port, page.config);
         const activeUpload = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '1' }, body: 'x' });
@@ -348,6 +357,41 @@ describe('Live HTML integration without mocks', () => {
         const replacedHandler = await request({ port: pageResponse.port, path: uploadPath, method: 'POST',
             headers: { 'content-type': 'text/plain', 'content-length': '1' }, body: 'x' });
         expect(replacedHandler.status).toBe(403);
+    });
+
+    test('cancels a file request disconnected during identity lookup', async () => {
+        let releaseIdentity, identityEntered;
+        const entered = new Promise(resolve => { identityEntered = resolve; });
+        const identityGate = new Promise(resolve => { releaseIdentity = resolve; });
+        class IdentityPage {
+            failure = null;
+            async receive(file) {
+                try { for await (const _chunk of file.stream) {} }
+                catch (error) { this.failure = error.code; }
+            }
+            render() { return '<p>identity upload</p>'; }
+        }
+        page('/identity-upload')(IdentityPage);
+        upload({ maxBytes: 16 })(IdentityPage.prototype, 'receive', Object.getOwnPropertyDescriptor(IdentityPage.prototype, 'receive'));
+        const server = await start(options => startPages(IdentityPage, {
+            ...options,
+            authenticate: async request => {
+                if (request.url?.startsWith('/__redweb/upload')) { identityEntered(); await identityGate; }
+                return 'owner';
+            },
+        }));
+        const pageResponse = await getPage(server, '/identity-upload');
+        const uploadPath = `/__redweb/upload?pageId=${encodeURIComponent(pageResponse.config.pageId)}&action=receive`;
+        const outgoing = http.request({ host: '127.0.0.1', port: pageResponse.port, path: uploadPath, method: 'POST',
+            headers: { 'content-type': 'text/plain', 'content-length': '2' } });
+        outgoing.once('error', () => {});
+        outgoing.write('x');
+        try {
+            await require('../helpers/network').withTimeout(entered, 'upload identity lookup');
+            outgoing.destroy();
+            releaseIdentity();
+            await waitForCondition(() => [...server.manager.pending.values()][0].page.failure === 'ACCESS_CANCELLED', 'pre-disconnected upload cancellation');
+        } finally { outgoing.destroy(); releaseIdentity(); }
     });
 
     test('aborting an upload releases its handler and page work stays transport-ordered', async () => {

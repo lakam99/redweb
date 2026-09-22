@@ -6,6 +6,7 @@ const Module = require('module');
 const ts = require('typescript');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
+const { PassThrough } = require('stream');
 const {
     HtmlRenderer,
     LivePage,
@@ -72,6 +73,29 @@ test('standard resource, provider and upload decorators register reusable page c
     uploadInitializer.call({ constructor: OtherPage, receiveFile() {} });
     expect(getUploadMetadata(OtherPage)).toEqual(new Map());
     expect(getActionMetadata(OtherPage)).toEqual(new Set());
+});
+
+test.each(['request', 'response', 'lifetime'])('a closed upload %s cannot enter a page action', async closed => {
+    class UploadPage extends LivePage {
+        async receive(file) { for await (const _chunk of file.stream) {} }
+        render() { return '<p>upload</p>'; }
+    }
+    page('/closed-upload')(UploadPage);
+    upload()(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
+    const manager = new PageManager({ pages: [UploadPage] });
+    try {
+        await manager.render(manager.records.get('/closed-upload'), { params: {}, query: {}, body: null });
+        const session = [...manager.pending.values()][0];
+        const request = new PassThrough();
+        request.url = '/__redweb/upload'; request.method = 'POST'; request.headers = { 'content-type': 'text/plain' };
+        const response = new PassThrough();
+        if (closed === 'request') request.destroy();
+        if (closed === 'response') response.destroy();
+        const uploadTask = manager.receiveUploadTask(session, request, response, 'receive', null);
+        if (closed === 'lifetime') session.lifetime.controller.abort();
+        await expect(uploadTask)
+            .rejects.toMatchObject({ code: 'ACCESS_CANCELLED' });
+    } finally { await manager.shutdown(); }
 });
 
 describe('decorator-first Live HTML units', () => {
