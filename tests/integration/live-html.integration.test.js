@@ -1,6 +1,8 @@
 const WebSocket = require('ws');
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
+const ts = require('typescript');
 const { RedwebClient } = require('redweb-client');
 const { action, inject, LiveHtmlServer, LivePage, liveResource, codeBlock, component, defineSite, html, page, resource, start: startPages, state, upload } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
@@ -255,6 +257,47 @@ describe('Live HTML integration without mocks', () => {
         await client.connect();
         return client;
     }
+
+    test('the exact documented standard-decorator notes app renders and uploads to two live clients', async () => {
+        const root = path.resolve(__dirname, '../..');
+        const markdown = fs.readFileSync(path.join(root, 'docs/LIVE_HTML.md'), 'utf8');
+        const section = markdown.split('### Putting uploads, providers, and resources together')[1];
+        const source = section.match(/```tsx\s*([\s\S]*?)```/)?.[1];
+        expect(source).toBeTruthy();
+        const filename = path.join(root, 'docs', 'documented-notes.tsx');
+        const parsed = ts.readConfigFile(path.join(root, 'config/tsconfig.json'), ts.sys.readFile);
+        expect(parsed.error).toBeUndefined();
+        const options = ts.parseJsonConfigFileContent(parsed.config, ts.sys, root).options;
+        const host = ts.createCompilerHost(options);
+        const readFile = host.readFile.bind(host);
+        const fileExists = host.fileExists.bind(host);
+        host.readFile = file => path.resolve(file) === filename ? source : readFile(file);
+        host.fileExists = file => path.resolve(file) === filename || fileExists(file);
+        const program = ts.createProgram([filename], options, host);
+        expect(ts.getPreEmitDiagnostics(program).map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n'))).toEqual([]);
+        const compiled = ts.transpileModule(source, { compilerOptions: { ...options, module: ts.ModuleKind.CommonJS } });
+        const example = { exports: {} };
+        new Function('require', 'module', 'exports', compiled.outputText)(require, example, example.exports);
+        const app = example.exports.app;
+        const running = require('../..').defineApp({ ...app.options, port: 0, bind: '127.0.0.1', signals: false, logger: silentLogger });
+        servers.add(running);
+        await running.run();
+        const first = await getPage(running, '/notes');
+        const second = await getPage(running, '/notes');
+        expect(first.response.body).toContain('Shared note');
+        const updates = [[], []];
+        const peers = [await connectClient(first.port, first.config), await connectClient(second.port, second.config)];
+        peers.forEach((peer, index) => peer.on('redweb:patch', message => updates[index].push(message.payload)));
+        const uploadPath = `/__redweb/upload?pageId=${encodeURIComponent(first.config.pageId)}&action=saveNote`;
+        const saved = await request({ port: first.port, path: uploadPath, method: 'POST',
+            headers: { 'content-type': 'text/plain', 'content-length': '15' }, body: 'hello from disk' });
+        expect(saved.status).toBe(204);
+        await waitForCondition(() => updates.every(messages => messages.some(message => JSON.stringify(message).includes('hello from disk'))), 'documented note fan-out');
+        expect((await getPage(running, '/notes')).response.body).toContain('hello from disk');
+        await peers[1].request('redweb:html', { kind: 'action', name: 'clearNote', args: [] });
+        await waitForCondition(() => updates.every(messages => messages.length >= 2), 'documented note clear');
+        expect((await getPage(running, '/notes')).response.body).not.toContain('hello from disk');
+    }, 30000);
 
     test('projects keyed live resources through real page sockets and releases them at shutdown', async () => {
         const server = await start(createResourceServer);

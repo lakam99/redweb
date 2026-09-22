@@ -4,7 +4,7 @@ Build a TypeScript website and its realtime backend together. Decorated classes 
 
 Use the same package for a live site, static HTML, Express HTTP endpoints, or routed WebSocket services.
 
-Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLICATION.md), followed by `await app.run()`, for one owned HTTP/WebSocket listener.
+[`defineApp({ pages, sockets, services, providers, port })`](docs/APPLICATION.md) composes one owned HTTP/WebSocket listener. Register only what your app needs, then call `app.run()`.
 
 ## Install
 
@@ -90,7 +90,7 @@ Choose the recipe's `--template` option when initializing. Shared memory survive
 
 TSX and `html` templates escape text and attribute values and restrict URL protocols. Use external assets instead of inline executable markup. Ordinary `.html` templates remain available; the old executable `.htmx` sandbox does not.
 
-See [pages, components, forms, CSS and rendering](docs/LIVE_HTML.md), [private rooms and request identity](docs/ROOM_AUTHORIZATION.md), and [runtime failures and retry limits](docs/RUNTIME_DIAGNOSTICS.md).
+Start with the [complete upload-to-live-page example](docs/LIVE_HTML.md#putting-uploads-providers-and-resources-together), then explore [pages, components, forms, CSS and rendering](docs/LIVE_HTML.md), [private rooms and request identity](docs/ROOM_AUTHORIZATION.md), and [runtime failures and retry limits](docs/RUNTIME_DIAGNOSTICS.md).
 
 ## HTTP servers (Express)
 

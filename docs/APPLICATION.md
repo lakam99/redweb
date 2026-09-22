@@ -48,6 +48,8 @@ await app.run();
 
 These names refer to your application's classes. A page's decorator chooses its HTTP path. A `SocketRoute` chooses its WebSocket path, such as `/match`; its handlers dispatch `join`, `move`, and `resume` by message `type`. Live-page connections and custom socket routes share one upgrade listener. Do not register a custom socket route at the live-page socket path.
 
+`providers` is different from `services`: it is a named map of already-created application objects that a page explicitly requests through `@inject('name')`. Use it for a store or other dependency shared across page instances. Redweb does not construct, persist, or authorize those objects for you.
+
 In five-year-old terms: the app has one front door. Pages are ordinary visits, sockets are ongoing conversations, and services are the staff who prepare the building before the door opens and clean up after it closes.
 
 `services` are application-wide lifecycle classes, not HTTP endpoint descriptors or route-specific `SocketService` classes:
@@ -85,7 +87,7 @@ Use `httpServices` for the existing HTTP endpoint descriptor array. Keep route-s
 
 ## Boundaries
 
-This is application composition, not dependency injection, a distributed worker manager, or durable storage. It does not automatically inject services into page constructors. `shared: true` shares in-process state across visitors, not across server processes or restarts. Static file export remains the separate `exportStatic()` API; a non-live page served over HTTP is not a static export.
+This is application composition, not a general-purpose dependency-injection container, distributed worker manager, or durable storage. `services` are lifecycle classes and are not injected into page constructors. For an explicit application-owned dependency, register an instance in `providers` and declare a matching `@inject('name')` field on the page; see the [complete Live HTML example](LIVE_HTML.md#putting-uploads-providers-and-resources-together). `shared: true` shares in-process state across visitors, not across server processes or restarts. Static file export remains the separate `exportStatic()` API; a non-live page served over HTTP is not a static export.
 
 `app.revoke(principal)` revokes matching live-page sessions and returns their count; it returns zero when no live-page server has been created. `app.inspect()` exposes opt-in development metadata and otherwise returns `null`. These preserve the same live-page policies as `start()`.
 
