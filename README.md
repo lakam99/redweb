@@ -11,19 +11,15 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a neutral, tested application foundation:
 
 <!-- redweb:setup:start -->
-> Unreleased development documentation. Package metadata is 0.16.2, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
-
-Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces):
+> Documentation for Redweb 0.16.3. Install that exact version when following these examples.
 
 ```sh
-npx --yes --package TARBALL redweb init my-app
+npx --yes redweb@0.16.3 init my-app
 cd my-app
-npm install --save-exact TARBALL
+npm install --save-exact redweb@0.16.3
 npm test
 npm run dev
 ```
-
-This prerelease Redweb artifact is development-only until its release checks finish.
 <!-- redweb:setup:end -->
 
 Append `--with auth,multiplayer` when you need those dependency sets without copying example-domain code. Use `--bare` only to omit generated tests. The application, CSS, TypeScript configuration, build scripts, and development watcher remain.
