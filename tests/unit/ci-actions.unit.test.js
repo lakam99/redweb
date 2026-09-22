@@ -47,10 +47,12 @@ test('the default and hosted gates exclude soak and long fixed-window benchmark 
     const patterns = [...command.matchAll(/--testPathIgnorePatterns=([^ ]+)/g)].map(match => new RegExp(match[1]));
     expect(patterns).toHaveLength(2);
     for (const separator of ['/', '\\']) {
-        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-command.test.js`))).toBe(true);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}soak-tools.integration.test.js`))).toBe(true);
         expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurement.integration.test.js`))).toBe(true);
-        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-commandXtestYjs`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}soak-toolsXintegrationYtestZjs`))).toBe(false);
         expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurementXintegrationYtestZjs`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-command.unit.test.js`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}room-rotation-phase.integration.test.js`))).toBe(false);
     }
 });
 
