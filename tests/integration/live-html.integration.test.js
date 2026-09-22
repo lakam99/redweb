@@ -296,7 +296,7 @@ describe('Live HTML integration without mocks', () => {
         page('/abort-upload')(UploadPage);
         upload({ maxBytes: 16, accept: 'text/plain' })(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
         upload({ maxBytes: 16, accept: 'text/plain' })(UploadPage.prototype, 'ordered', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'ordered'));
-        const server = await start(options => startPages(UploadPage, options));
+        const server = await start(options => startPages(UploadPage, { ...options, uploadTimeoutMs: 40 }));
         const documentPage = await getPage(server, '/abort-upload');
         const abortPath = `/__redweb/upload?pageId=${encodeURIComponent(documentPage.config.pageId)}&action=receive`;
         const client = http.request({ host: '127.0.0.1', port: documentPage.port, path: abortPath, method: 'POST', headers: { 'content-type': 'text/plain' } });
@@ -314,6 +314,17 @@ describe('Live HTML integration without mocks', () => {
         expect((await first).status).toBe(204);
         expect((await second).status).toBe(204);
         expect(order).toEqual(['aborted', 'start:first', 'end:first', 'start:second', 'end:second']);
+
+        const timeoutPath = `/__redweb/upload?pageId=${encodeURIComponent(documentPage.config.pageId)}&action=receive`;
+        const timedOut = await new Promise((resolve, reject) => {
+            const slow = http.request({ host: '127.0.0.1', port: documentPage.port, path: timeoutPath, method: 'POST', headers: { 'content-type': 'text/plain' } }, response => {
+                response.resume(); response.once('end', () => resolve(response.statusCode));
+            });
+            slow.once('error', reject);
+            slow.write('slow');
+        });
+        expect(timedOut).toBe(408);
+        await waitForCondition(() => order.filter(value => value === 'aborted').length === 2, 'timed-out upload handler cleanup');
     });
 
     test('serves a site layout and generated metadata through a real HTTP listener', async () => {

@@ -1078,6 +1078,7 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
         expect(() => new PageManager({ pages: [PlainPage], maxConcurrentRenders: 0 })).toThrow('maxConcurrentRenders');
         expect(() => new PageManager({ pages: [PlainPage], shutdownTimeoutMs: -1 })).toThrow('shutdownTimeoutMs');
+        expect(() => new PageManager({ pages: [PlainPage], uploadTimeoutMs: 0 })).toThrow('uploadTimeoutMs');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
         expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');

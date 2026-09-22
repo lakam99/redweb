@@ -752,6 +752,8 @@ declare module 'redweb' {
         maxConcurrentRenders?: number;
         /** Phase-local render/route and final owned-HTTP cleanup bound; defaults to 1000ms, not a total application deadline. */
         shutdownTimeoutMs?: number;
+        /** Maximum time a live page upload may occupy its serialized page lane; defaults to 30000ms. */
+        uploadTimeoutMs?: number;
         heartbeat?: HeartbeatOptions;
         origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
         /** Explicit application-owned instances available through @inject fields on pages. */

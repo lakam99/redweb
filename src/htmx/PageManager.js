@@ -74,7 +74,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, providers = {}, logger = console }, reservedPaths = {}) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, uploadTimeoutMs = 30_000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, providers = {}, logger = console }, reservedPaths = {}) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -83,6 +83,7 @@ class PageManager {
             throw new TypeError('`maxConcurrentRenders` must be a positive integer.');
         }
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
+        if (!Number.isInteger(uploadTimeoutMs) || uploadTimeoutMs < 1 || uploadTimeoutMs > 300_000) throw new TypeError('`uploadTimeoutMs` must be an integer between 1 and 300000.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
         if (origins !== undefined && typeof origins !== 'function' &&
             (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
@@ -113,6 +114,7 @@ class PageManager {
         this.maxSessions = maxSessions;
         this.maxConcurrentRenders = maxConcurrentRenders;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
+        this.uploadTimeoutMs = uploadTimeoutMs;
         this.heartbeat = heartbeat;
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.providers = Object.freeze({ ...providers });
@@ -561,12 +563,15 @@ class PageManager {
             done(null, chunk);
         } }));
         const cancel = () => stream.destroy(new AccessDenied('ACCESS_CANCELLED'));
+        const timeout = () => stream.destroy(new RequestFailure('UPLOAD_TIMEOUT'));
         stream.once('error', () => {});
         request.once('aborted', cancel);
         request.once('error', cancel);
         response.once('close', cancel);
         session.lifetime.signal.addEventListener('abort', cancel, { once: true });
         if (request.destroyed || response.destroyed || session.lifetime.signal.aborted) cancel();
+        const timer = setTimeout(timeout, this.uploadTimeoutMs);
+        timer.unref?.();
         const uploadedName = request.headers['x-redweb-upload-name'];
         let decodedName = null;
         if (typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 768) {
@@ -586,6 +591,7 @@ class PageManager {
             request.off('error', cancel);
             response.off('close', cancel);
             session.lifetime.signal.removeEventListener('abort', cancel);
+            clearTimeout(timer);
         }
         response.status(204).end();
     }
