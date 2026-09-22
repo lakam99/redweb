@@ -85,4 +85,18 @@ describe('LiveResource', () => {
         expect(page.second).toBe('retained');
         LiveResource.release(page);
     });
+
+    test('a failed initial selector leaves no subscription on the page', () => {
+        const resource = liveResource();
+        const page = { key: 'shared', value: null };
+        expect(() => resource.bind(page, 'value', () => { throw new Error('selector failed'); })).toThrow('selector failed');
+        expect(() => LiveResource.refresh(page)).not.toThrow();
+        expect(() => resource.bind(page, 'value', () => ({}))).toThrow('keys');
+        expect(() => LiveResource.refresh(page)).not.toThrow();
+        const binding = resource.bind(page, 'value', owner => owner.key);
+        expect(resource.publish('shared', 'recovered')).toBe(1);
+        expect(page.value).toBe('recovered');
+        expect(resource.release(binding)).toBe(true);
+        expect(resource.subscribers.size).toBe(0);
+    });
 });

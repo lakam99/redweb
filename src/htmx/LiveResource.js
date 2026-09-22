@@ -42,7 +42,11 @@ class LiveResource {
         const bindings = PAGE_BINDINGS.get(page) || new Set();
         bindings.add(binding);
         PAGE_BINDINGS.set(page, bindings);
-        this.refresh(binding);
+        try { this.refresh(binding); }
+        catch (error) {
+            this.release(binding);
+            throw error;
+        }
         return binding;
     }
 

@@ -31,7 +31,7 @@ const { PageManager } = require('../../src/htmx/PageManager');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const TemplateRenderer = require('../../src/htmx/TemplateRenderer');
 const browserRuntime = require('../../src/htmx/browserRuntime');
-const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
+const { getActionMetadata, getInjectMetadata, getPageMetadata, getResourceMetadata, getStateMetadata, getUploadMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
 const { stopBrowser } = require('../../scripts/verify-live-html-browser');
 
@@ -42,6 +42,34 @@ function decorateAction(PageClass, name) {
 function decorateView(PageClass, stateName, name) {
     view(stateName)(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
 }
+
+test('standard resource, provider and upload decorators register reusable page capabilities', () => {
+    const updates = liveResource();
+    class ProjectPage extends LivePage {
+        receiveFile() { return 'received'; }
+    }
+    const initializers = [];
+    const field = (name) => ({ kind: 'field', static: false, private: false, name,
+        addInitializer: initializer => initializers.push(initializer) });
+    expect(resource(updates, page => page.projectId)(undefined, field('latest'))(null)).toBeNull();
+    expect(inject('projects')(undefined, field('projects'))(null)).toBeNull();
+    let uploadInitializer;
+    const uploadOptions = { maxBytes: 16, accept: 'text/plain' };
+    const decorated = upload(uploadOptions)(ProjectPage.prototype.receiveFile, {
+        kind: 'method', static: false, private: false, name: 'receiveFile',
+        addInitializer: initializer => { uploadInitializer = initializer; },
+    });
+    const instance = new ProjectPage();
+    initializers.forEach(initializer => initializer.call(instance));
+    uploadInitializer.call(instance);
+    expect(decorated).toBe(ProjectPage.prototype.receiveFile);
+    expect(getResourceMetadata(ProjectPage).get('latest').resource).toBe(updates);
+    expect(getInjectMetadata(ProjectPage).get('projects')).toBe('projects');
+    expect(getUploadMetadata(ProjectPage).get('receiveFile')).toEqual({ maxBytes: 16, accept: ['text/plain'] });
+    expect(getActionMetadata(ProjectPage).has('receiveFile')).toBe(true);
+    uploadInitializer.call({ constructor: class OtherPage {}, receiveFile() {} });
+    expect(getUploadMetadata(class OtherPage {})).toEqual(new Map());
+});
 
 describe('decorator-first Live HTML units', () => {
     test('lazy reactive payloads materialize once and keep legacy bindings compatible', () => {
@@ -1082,6 +1110,8 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
         expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');
+        expect(() => new PageManager({ pages: [PlainPage], providers: [] })).toThrow('providers');
+        expect(() => new PageManager({ pages: [PlainPage], providers: { constructor: 1 } })).toThrow('Provider names');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('absolute');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/live?unsafe="' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');

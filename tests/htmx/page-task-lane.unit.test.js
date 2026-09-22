@@ -24,8 +24,12 @@ describe('PageTaskLane', () => {
 
     test('continues after a failed task and closes an idle lane idempotently', async () => {
         const lane = new PageTaskLane();
-        await expect(lane.enqueue(() => { throw new Error('task failed'); })).rejects.toThrow('task failed');
-        await expect(lane.enqueue(() => 'next')).resolves.toBe('next');
+        const order = [];
+        const failed = lane.enqueue(() => { order.push('failed'); throw new Error('task failed'); });
+        const next = lane.enqueue(() => { order.push('next'); return 'next'; });
+        await expect(failed).rejects.toThrow('task failed');
+        await expect(next).resolves.toBe('next');
+        expect(order).toEqual(['failed', 'next']);
         lane.close();
         lane.close();
         expect(lane.enqueue(() => 'never')).toBeNull();

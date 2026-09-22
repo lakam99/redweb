@@ -271,6 +271,32 @@ describe('Live HTML integration without mocks', () => {
         const componentUpload = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': encodeURIComponent('part😀.txt') }, body: 'part' });
         expect(componentUpload.status).toBe(204);
         expect([...server.manager.pending.values()][0].page.nested.received).toBe('part😀.txt:part');
+        const missingSession = await request({ port: page.port, path: '/__redweb/upload?pageId=missing&action=receiveFile', method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '1' }, body: 'x' });
+        expect(missingSession.status).toBe(403);
+        const crossSite = await request({ port: page.port, path, method: 'POST', headers: { 'sec-fetch-site': 'cross-site', 'content-type': 'text/plain', 'content-length': '1' }, body: 'x' });
+        expect(crossSite.status).toBe(403);
+        for (const invalidName of ['%', 'x'.repeat(257), 'x'.repeat(769)]) {
+            const response = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '1', 'x-redweb-upload-name': invalidName }, body: 'x' });
+            expect(response.status).toBe(204);
+            expect([...server.manager.pending.values()][0].page.nested.received).toBe('null:x');
+        }
+    });
+
+    test('drains an unread upload stream before completing its HTTP response', async () => {
+        class NoReadPage {
+            received = false;
+            receive(_file) { this.received = true; }
+            render() { return '<p>Unread upload</p>'; }
+        }
+        page('/unread-upload')(NoReadPage);
+        upload({ maxBytes: 32 })(NoReadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(NoReadPage.prototype, 'receive'));
+        const server = await start(options => startPages(NoReadPage, options));
+        const pageResponse = await getPage(server, '/unread-upload');
+        const uploadPath = `/__redweb/upload?pageId=${encodeURIComponent(pageResponse.config.pageId)}&action=receive`;
+        const response = await request({ port: pageResponse.port, path: uploadPath, method: 'POST',
+            headers: { 'content-type': 'application/octet-stream', 'content-length': '7' }, body: 'payload' });
+        expect(response.status).toBe(204);
+        expect([...server.manager.pending.values()][0].page.received).toBe(true);
     });
 
     test('aborting an upload releases its handler and page work stays transport-ordered', async () => {
