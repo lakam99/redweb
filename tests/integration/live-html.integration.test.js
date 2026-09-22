@@ -13,13 +13,22 @@ const createCardsServer = options => startPages(CardsPage, options);
 const createComponentsServer = options => startPages(ComponentsPage, options);
 const createJsxServer = options => startPages(JsxPage, options);
 const clipboardUpdates = liveResource();
+class UploadComponent {
+    received = '';
+    async receiveFile(file) { let value = ''; for await (const chunk of file.stream) value += chunk; this.received = `${file.name}:${value}`; }
+    render() { return html`<output>${this.received}</output>`; }
+}
+component()(UploadComponent);
+state()(UploadComponent.prototype, 'received');
+upload({ maxBytes: 8, accept: 'text/plain' })(UploadComponent.prototype, 'receiveFile', Object.getOwnPropertyDescriptor(UploadComponent.prototype, 'receiveFile'));
 class ResourcePage extends LivePage {
     sessionId = '';
     clipboard = '';
     tracker;
+    nested = new UploadComponent();
     connect(input) { this.sessionId = input.session; this.clipboard = this.tracker.label; }
     async receiveFile(file) { let value = ''; for await (const chunk of file.stream) value += chunk; this.clipboard = `${file.type}:${value}`; }
-    render() { return html`<output>${this.clipboard}</output>`; }
+    render() { return html`<output>${this.clipboard}</output>${this.nested}`; }
 }
 page('/resource')(ResourcePage);
 state()(ResourcePage.prototype, 'sessionId');
@@ -253,6 +262,10 @@ describe('Live HTML integration without mocks', () => {
         expect(rejected.status).toBe(415);
         const large = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '9' }, body: '123456789' });
         expect(large.status).toBe(413);
+        const componentPath = `${path}&component=nested`;
+        const componentUpload = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': 'part.txt' }, body: 'part' });
+        expect(componentUpload.status).toBe(204);
+        expect([...server.manager.pending.values()][0].page.nested.received).toBe('part.txt:part');
     });
 
     test('serves a site layout and generated metadata through a real HTTP listener', async () => {
