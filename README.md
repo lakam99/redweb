@@ -82,7 +82,7 @@ Choose the recipe's `--template` option when initializing. Shared memory survive
 - A page is a decorated class whose `render()` returns server-side TSX.
 - Ordinary expressions over `@state()` update after assignment. Replace arrays/objects rather than mutating them in place.
 - `@action()` explicitly exposes a method to the browser. Validate inputs and authorize the operation on the server.
-- `@upload()` streams a selected or pasted browser file to a bounded, same-origin server action; persist it in an application provider and keep only a small asset reference in state.
+- `@upload()` streams a browser file—selected, pasted, or supplied by another browser file source—to a bounded, same-origin server action; persist it in an application provider and keep only a small asset reference in state.
 - `liveResource()` and `@resource()` project keyed server updates to matching active pages without hand-written socket fan-out. `@inject()` supplies explicit application services.
 - Function components reuse presentation; decorated class components reuse state, actions, and lifecycle.
 - Stable JSX keys preserve DOM identity for lists. CSS lives in ordinary external files.

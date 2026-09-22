@@ -235,30 +235,30 @@ save(form: { displayName: string }) {
 
 `rw-click="action"` prevents default navigation and invokes an action without arguments. `rw-submit="action"` prevents submission, passes form fields as the first argument, preserves duplicate field names as arrays, and resets only an unchanged, still-connected form after the server acknowledges success. `rw-bind="property"` sends text values or checkbox state only when that property was declared with `@state({ writable: true })`.
 
-### Native files and clipboard images
+### Browser file actions
 
-Use `@upload()` when a page needs the original browser file rather than a base64 string in socket state. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; the file is streamed through a byte cap to the server method. A present foreign `Origin` or cross-site Fetch Metadata value is rejected, and the page identity and policy are checked again for that request. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
+Use `@upload()` when a page needs an original browser file rather than base64 in socket state. It is a general file-action contract: selected documents, profile images, game mods, captured media, and pasted content all arrive as the same bounded stream. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; other browser file sources can use that same action protocol. A present foreign `Origin` or cross-site Fetch Metadata value is rejected, and the page identity and policy are checked again for that request. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
 
 ```tsx
 import { page, state, upload } from 'redweb';
 
-@page('/clipboard')
-class ClipboardPage {
-  @state() preview = 'Nothing pasted yet.';
+@page('/assets')
+class AssetPage {
+  @state() assetUrl = '';
 
   @upload({ maxBytes: 2 * 1024 * 1024, accept: ['image/png', 'image/jpeg'] })
-  async pasteImage(file: { stream: NodeJS.ReadableStream; type: string; name: string | null }) {
+  async saveAsset(file: { stream: NodeJS.ReadableStream; type: string; name: string | null }) {
     // Stream directly to your application storage. Do not turn arbitrary files
     // into data URLs or place their bytes in @state.
     const reference = await this.storage.put(file.stream, { type: file.type, name: file.name });
-    this.preview = reference.url;
+    this.assetUrl = reference.url;
   }
 
   render() {
     return <main>
-      <input type="file" accept="image/png,image/jpeg" rw-upload="pasteImage" />
-      <div contenteditable="true" tabindex="0" rw-paste="pasteImage">Paste an image here</div>
-      <p rw-status="pasteImage" role="status" aria-live="polite" />
+      <input type="file" accept="image/png,image/jpeg" rw-upload="saveAsset" />
+      <div contenteditable="true" tabindex="0" rw-paste="saveAsset">Paste an image here</div>
+      <p rw-status="saveAsset" role="status" aria-live="polite" />
     </main>;
   }
 }
@@ -275,19 +275,19 @@ When a shared service changes data for a known key, avoid manual socket loops. `
 ```tsx
 import { defineApp, inject, liveResource, page, resource, state } from 'redweb';
 
-const clipboardUpdates = liveResource<string, string>();
+const projectUpdates = liveResource<ProjectSummary, string>();
 
-@page('/clip')
-class ClipPage {
-  @state({ writable: true }) sessionId = '';
-  @resource(clipboardUpdates, page => page.sessionId) preview = '';
-  @inject('clipboardStore') declare storage: ClipboardStore;
+@page('/projects/:projectId')
+class ProjectPage {
+  @state() projectId = '';
+  @resource(projectUpdates, page => page.projectId) project: ProjectSummary | null = null;
+  @inject('projectStore') declare store: ProjectStore;
 
-  render() { return <output>{this.preview}</output>; }
+  render() { return <main><h1>{this.project?.name ?? 'Loading…'}</h1></main>; }
 }
 
-const app = defineApp({ pages: [ClipPage], providers: { clipboardStore } });
-clipboardUpdates.publish('session-42', '/private/assets/opaque-reference');
+const app = defineApp({ pages: [ProjectPage], providers: { projectStore } });
+projectUpdates.publish('redweb', { name: 'Redweb' });
 ```
 
 `@inject('name')` deliberately receives an explicit object from `defineApp({ providers })`; it has no container, reflection, or hidden global. Injected fields cannot have initializers and are immutable on the page instance. Keep persistence, storage URLs, scanning and authorization in these application-owned services.
