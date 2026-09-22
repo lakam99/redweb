@@ -99,6 +99,8 @@ describe('single-source documentation', () => {
         expect(changelog).toContain(`## ${version}`);
         expect(trust).toContain(`npm install --save-exact redweb@${version}`);
         expect(trust).toContain('gitHead');
+        const socketGuide = fs.readFileSync(path.join(root, 'docs/SOCKET_CONTRACTS.md'), 'utf8');
+        expect(socketGuide).toContain(`npx --yes redweb@${version} init my-match --template socket`);
         expect(new Documentation(root).build().channel).toBe('unreleased');
     });
 
