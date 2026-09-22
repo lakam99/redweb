@@ -67,8 +67,10 @@ test('standard resource, provider and upload decorators register reusable page c
     expect(getInjectMetadata(ProjectPage).get('projects')).toBe('projects');
     expect(getUploadMetadata(ProjectPage).get('receiveFile')).toEqual({ maxBytes: 16, accept: ['text/plain'] });
     expect(getActionMetadata(ProjectPage).has('receiveFile')).toBe(true);
-    uploadInitializer.call({ constructor: class OtherPage {}, receiveFile() {} });
-    expect(getUploadMetadata(class OtherPage {})).toEqual(new Map());
+    class OtherPage {}
+    uploadInitializer.call({ constructor: OtherPage, receiveFile() {} });
+    expect(getUploadMetadata(OtherPage)).toEqual(new Map());
+    expect(getActionMetadata(OtherPage)).toEqual(new Set());
 });
 
 describe('decorator-first Live HTML units', () => {
