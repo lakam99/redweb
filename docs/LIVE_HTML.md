@@ -278,7 +278,7 @@ class NoteStore {
 
 @page('/notes')
 class NotesPage {
-  @inject('notes') declare notes: NoteStore;
+  @inject('notes') notes!: NoteStore;
   @resource(noteUpdates, () => 'shared-note') note: string | null = null;
 
   @upload({ maxBytes: 64 * 1024, accept: 'text/plain' })
