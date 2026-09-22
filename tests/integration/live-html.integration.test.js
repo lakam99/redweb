@@ -360,14 +360,16 @@ describe('Live HTML integration without mocks', () => {
     });
 
     test('cancels a file request disconnected during identity lookup', async () => {
-        let releaseIdentity, identityEntered;
+        let releaseIdentity, identityEntered, requestAborted;
         const entered = new Promise(resolve => { identityEntered = resolve; });
+        const aborted = new Promise(resolve => { requestAborted = resolve; });
         const identityGate = new Promise(resolve => { releaseIdentity = resolve; });
         class IdentityPage {
-            failure = null;
+            calls = 0;
+            received = '';
             async receive(file) {
-                try { for await (const _chunk of file.stream) {} }
-                catch (error) { this.failure = error.code; }
+                this.calls += 1;
+                for await (const chunk of file.stream) this.received += chunk;
             }
             render() { return '<p>identity upload</p>'; }
         }
@@ -376,7 +378,11 @@ describe('Live HTML integration without mocks', () => {
         const server = await start(options => startPages(IdentityPage, {
             ...options,
             authenticate: async request => {
-                if (request.url?.startsWith('/__redweb/upload')) { identityEntered(); await identityGate; }
+                if (request.url?.startsWith('/__redweb/upload')) {
+                    request.once('aborted', requestAborted);
+                    identityEntered();
+                    await identityGate;
+                }
                 return 'owner';
             },
         }));
@@ -389,8 +395,14 @@ describe('Live HTML integration without mocks', () => {
         try {
             await require('../helpers/network').withTimeout(entered, 'upload identity lookup');
             outgoing.destroy();
+            await require('../helpers/network').withTimeout(aborted, 'aborted upload request');
             releaseIdentity();
-            await waitForCondition(() => [...server.manager.pending.values()][0].page.failure === 'ACCESS_CANCELLED', 'pre-disconnected upload cancellation');
+            const recovery = await request({ port: pageResponse.port, path: uploadPath, method: 'POST',
+                headers: { 'content-type': 'text/plain', 'content-length': '2' }, body: 'ok' });
+            expect(recovery.status).toBe(204);
+            const instance = [...server.manager.pending.values()][0].page;
+            expect(instance.calls).toBe(1);
+            expect(instance.received).toBe('ok');
         } finally { outgoing.destroy(); releaseIdentity(); }
     });
 

@@ -539,53 +539,58 @@ class PageManager {
 
     async receiveUploadTask(session, request, response, name, component) {
         session.lifetime.check();
-        const principal = await this.identity.resolve(request, session.lifetime.signal);
-        if (!Object.is(principal, session.principal)) throw new AccessDenied('ACCESS_DENIED');
-        const snapshot = requestSnapshot(request);
-        const context = Object.freeze({ ...session.context, request: snapshot, params: snapshot.params, query: snapshot.query,
-            body: snapshot.body, principal, signal: session.lifetime.signal });
-        await session.record.metadata.policy?.check(context);
-        const target = component === null || component === '' ? session.page : session.page._component(boundedName(component, 'Upload component name'));
-        if (!target) throw new AccessDenied('ACCESS_DENIED');
-        const config = getUploadMetadata(target.constructor).get(name);
-        const implementation = getActionImplementation(target.constructor, name);
-        if (!config || !implementation || target[name] !== implementation) throw new AccessDenied('ACCESS_DENIED');
-        const contentLength = Number(request.headers['content-length']);
-        if (Number.isFinite(contentLength) && contentLength > config.maxBytes) throw new RequestFailure('UPLOAD_TOO_LARGE');
-        const contentType = String(request.headers['content-type'] || '').split(';', 1)[0].toLowerCase();
-        if (config.accept.length && !config.accept.some(type => type === contentType || type.endsWith('/*') && contentType.startsWith(type.slice(0, -1)))) {
-            throw new RequestFailure('UPLOAD_TYPE_REJECTED');
-        }
-        let bytes = 0;
-        const stream = request.pipe(new Transform({ transform(chunk, _encoding, done) {
-            bytes += chunk.length;
-            if (bytes > config.maxBytes) return done(new RequestFailure('UPLOAD_TOO_LARGE'));
-            done(null, chunk);
-        } }));
-        const cancel = () => stream.destroy(new AccessDenied('ACCESS_CANCELLED'));
-        const timeout = () => stream.destroy(new RequestFailure('UPLOAD_TIMEOUT'));
-        stream.once('error', () => {});
+        let stream;
+        let timer;
+        let cancelled = request.destroyed || response.destroyed || session.lifetime.signal.aborted;
+        const cancel = () => { cancelled = true; stream?.destroy(new AccessDenied('ACCESS_CANCELLED')); };
         request.once('aborted', cancel);
         request.once('error', cancel);
         response.once('close', cancel);
         session.lifetime.signal.addEventListener('abort', cancel, { once: true });
-        if (request.destroyed || response.destroyed || session.lifetime.signal.aborted) cancel();
-        const timer = setTimeout(timeout, this.uploadTimeoutMs);
-        timer.unref?.();
-        const uploadedName = request.headers['x-redweb-upload-name'];
-        let decodedName = null;
-        if (typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 768) {
-            try { decodedName = decodeURIComponent(uploadedName); }
-            catch { decodedName = null; }
-        }
-        const file = Object.freeze({ stream, type: contentType,
-            name: decodedName && decodedName.length <= 256 ? decodedName : null });
         try {
+            if (cancelled) throw new AccessDenied('ACCESS_CANCELLED');
+            const principal = await this.identity.resolve(request, session.lifetime.signal);
+            if (!Object.is(principal, session.principal)) throw new AccessDenied('ACCESS_DENIED');
+            const snapshot = requestSnapshot(request);
+            const context = Object.freeze({ ...session.context, request: snapshot, params: snapshot.params, query: snapshot.query,
+                body: snapshot.body, principal, signal: session.lifetime.signal });
+            await session.record.metadata.policy?.check(context);
+            session.lifetime.check();
+            if (cancelled || request.destroyed || response.destroyed) throw new AccessDenied('ACCESS_CANCELLED');
+            const target = component === null || component === '' ? session.page : session.page._component(boundedName(component, 'Upload component name'));
+            if (!target) throw new AccessDenied('ACCESS_DENIED');
+            const config = getUploadMetadata(target.constructor).get(name);
+            const implementation = getActionImplementation(target.constructor, name);
+            if (!config || !implementation || target[name] !== implementation) throw new AccessDenied('ACCESS_DENIED');
+            const contentLength = Number(request.headers['content-length']);
+            if (Number.isFinite(contentLength) && contentLength > config.maxBytes) throw new RequestFailure('UPLOAD_TOO_LARGE');
+            const contentType = String(request.headers['content-type'] || '').split(';', 1)[0].toLowerCase();
+            if (config.accept.length && !config.accept.some(type => type === contentType || type.endsWith('/*') && contentType.startsWith(type.slice(0, -1)))) {
+                throw new RequestFailure('UPLOAD_TYPE_REJECTED');
+            }
+            let bytes = 0;
+            stream = request.pipe(new Transform({ transform(chunk, _encoding, done) {
+                bytes += chunk.length;
+                if (bytes > config.maxBytes) return done(new RequestFailure('UPLOAD_TOO_LARGE'));
+                done(null, chunk);
+            } }));
+            stream.once('error', () => {});
+            timer = setTimeout(() => stream.destroy(new RequestFailure('UPLOAD_TIMEOUT')), this.uploadTimeoutMs);
+            timer.unref?.();
+            const uploadedName = request.headers['x-redweb-upload-name'];
+            let decodedName = null;
+            if (typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 768) {
+                try { decodedName = decodeURIComponent(uploadedName); }
+                catch { decodedName = null; }
+            }
+            const file = Object.freeze({ stream, type: contentType,
+                name: decodedName && decodedName.length <= 256 ? decodedName : null });
             await implementation.call(target, file, context);
             if (!stream.readableEnded) {
                 stream.resume();
                 await finished(stream);
             }
+            response.status(204).end();
         } finally {
             request.off('aborted', cancel);
             request.off('error', cancel);
@@ -593,7 +598,6 @@ class PageManager {
             session.lifetime.signal.removeEventListener('abort', cancel);
             clearTimeout(timer);
         }
-        response.status(204).end();
     }
 
     route() {

@@ -76,8 +76,9 @@ test('standard resource, provider and upload decorators register reusable page c
 });
 
 test.each(['request', 'response', 'lifetime'])('a closed upload %s cannot enter a page action', async closed => {
+    let calls = 0;
     class UploadPage extends LivePage {
-        async receive(file) { for await (const _chunk of file.stream) {} }
+        async receive(file) { calls += 1; for await (const _chunk of file.stream) {} }
         render() { return '<p>upload</p>'; }
     }
     page('/closed-upload')(UploadPage);
@@ -92,9 +93,10 @@ test.each(['request', 'response', 'lifetime'])('a closed upload %s cannot enter 
         if (closed === 'request') request.destroy();
         if (closed === 'response') response.destroy();
         const uploadTask = manager.receiveUploadTask(session, request, response, 'receive', null);
-        if (closed === 'lifetime') session.lifetime.controller.abort();
+        if (closed === 'lifetime') session.lifetime.abort();
         await expect(uploadTask)
             .rejects.toMatchObject({ code: 'ACCESS_CANCELLED' });
+        expect(calls).toBe(0);
     } finally { await manager.shutdown(); }
 });
 
