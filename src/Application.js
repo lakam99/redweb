@@ -37,7 +37,7 @@ function bounded(operation, milliseconds, label, signal) {
 class Application {
     constructor(options = {}) {
         if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Application options must be an object.');
-        const { pages = [], sockets = [], services = [], port = 8181, bind = '0.0.0.0',
+        const { pages = [], sockets = [], services = [], providers = {}, port = 8181, bind = '0.0.0.0',
             startupTimeoutMs = 5000, shutdownTimeoutMs = 5000, signals = true, ...rest } = options;
         if ('static' in rest) throw new TypeError('Use exportStatic() for static output; defineApp() owns a live HTTP listener.');
         for (const name of ['listen', 'routes', 'socketRoutes', 'closeServerOnShutdown']) {
@@ -49,7 +49,7 @@ class Application {
         }
         if (typeof signals !== 'boolean') throw new TypeError('`signals` must be a boolean.');
         this.options = { ...rest, pages: classes(pages, 'pages'), sockets: classes(sockets, 'sockets'),
-            services: classes(services, 'services'), port, bind, startupTimeoutMs, shutdownTimeoutMs, signals };
+            services: classes(services, 'services'), providers, port, bind, startupTimeoutMs, shutdownTimeoutMs, signals };
         if (this.options.services.some(Type => Type === SocketService || Type.prototype instanceof SocketService)) {
             throw new TypeError('SocketService belongs to a socket route, not application services.');
         }
@@ -98,14 +98,14 @@ class Application {
     }
 
     async _start() {
-        const { pages, sockets, services, startupTimeoutMs, shutdownTimeoutMs, signals, httpServices = [], ...options } = this.options;
+        const { pages, sockets, services, providers, startupTimeoutMs, shutdownTimeoutMs, signals, httpServices = [], ...options } = this.options;
         if (signals) {
             process.on('SIGINT', this._onSignal);
             process.on('SIGTERM', this._onSignal);
         }
         const httpOptions = { ...options, services: httpServices, listen: false, shutdownTimeoutMs };
         if (pages.length) {
-            this._live = new LiveHtmlServer({ ...httpOptions, pages, socketRoutes: sockets });
+            this._live = new LiveHtmlServer({ ...httpOptions, pages, providers, socketRoutes: sockets });
             this.http = this._live.http;
             this.sockets = this._live.sockets;
             this._owner = this._live._ownedServer;

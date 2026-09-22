@@ -648,6 +648,21 @@ declare module 'redweb' {
             (this: This, initialValue: Value) => Value;
     }
 
+    export interface LiveResourceDecorator extends LiveStateDecorator {}
+
+    export interface LiveInjectDecorator {
+        (target: object, propertyKey: string): void;
+        <This, Value>(value: undefined, context: ClassFieldDecoratorContext<This, Value>):
+            (this: This, initialValue: Value) => Value;
+    }
+
+    /** A server-owned keyed publisher for connection-scoped page state. */
+    export class LiveResource<Value = unknown, Key extends string | number | bigint | boolean = string> {
+        publish(key: Key, value: Value): number;
+    }
+
+    export function liveResource<Value = unknown, Key extends string | number | bigint | boolean = string>(): LiveResource<Value, Key>;
+
     export interface LiveActionDecorator {
         (target: object, propertyKey: string, descriptor: PropertyDescriptor): void | PropertyDescriptor;
         <This, Value extends (this: This, ...args: any[]) => any>(
@@ -680,6 +695,12 @@ declare module 'redweb' {
     export function component<Props = void>(render: (properties: Props) => HtmlFragment):
         (properties: Props) => HtmlFragment;
     export function state(options?: StateOptions): LiveStateDecorator;
+    /** Keeps this state field synchronized with values published for its server-derived key. */
+    export function resource<Value, Key extends string | number | bigint | boolean>(
+        source: LiveResource<Value, Key>, select: (page: any) => Key | null | undefined
+    ): LiveResourceDecorator;
+    /** Receives an explicit instance from defineApp({ providers }). */
+    export function inject(provider: string): LiveInjectDecorator;
     export function action(): LiveActionDecorator;
     export interface ActionAuthorization<Input> {
         authorize: (context: LivePageConnectionContext, input: Input) => boolean | Promise<boolean>;
@@ -725,6 +746,8 @@ declare module 'redweb' {
         shutdownTimeoutMs?: number;
         heartbeat?: HeartbeatOptions;
         origins?: string[] | ((origin: string | undefined, request: import('http').IncomingMessage) => boolean | Promise<boolean>);
+        /** Explicit application-owned instances available through @inject fields on pages. */
+        providers?: Record<string, unknown>;
     }
 
     export type LiveHtmlAuthentication = {
@@ -773,6 +796,8 @@ declare module 'redweb' {
         pages?: readonly LivePageClass[];
         sockets?: ReadonlyArray<new () => SocketRoute>;
         services?: ReadonlyArray<new () => ApplicationService>;
+        /** Application-owned instances available to decorated page fields. Redweb never constructs them. */
+        providers?: Record<string, unknown>;
         httpServices?: RedWebOptions['services'];
         startupTimeoutMs?: number;
         /** Install process signal handlers only when run() is called; defaults to true. */

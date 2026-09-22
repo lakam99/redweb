@@ -10,7 +10,7 @@ const LivePage = require('./LivePage');
 const ReactiveRenderer = require('./ReactiveRenderer');
 const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
-const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
+const { getInjectMetadata, getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
 const synchronous = require('./synchronous');
 const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
@@ -70,7 +70,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, logger = console }, reservedPaths = {}) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, providers = {}, logger = console }, reservedPaths = {}) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -83,6 +83,12 @@ class PageManager {
         if (origins !== undefined && typeof origins !== 'function' &&
             (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
             throw new TypeError('`origins` must be a function or an array of non-empty origins.');
+        }
+        if (!providers || typeof providers !== 'object' || Array.isArray(providers) || Object.getPrototypeOf(providers) !== Object.prototype) {
+            throw new TypeError('`providers` must be a plain object.');
+        }
+        if (Object.keys(providers).some(name => !/^[A-Za-z_$][\w$-]{0,127}$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name))) {
+            throw new TypeError('Provider names must be safe identifiers of at most 128 characters.');
         }
         this.paths = { ...DEFAULT_PATHS, ...paths, ...reservedPaths };
         Object.entries(this.paths).forEach(([name, value]) => {
@@ -105,6 +111,7 @@ class PageManager {
         this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.heartbeat = heartbeat;
         this.logger = logger || { log() {}, warn() {}, error() {} };
+        this.providers = Object.freeze({ ...providers });
         this.authenticateRequest = authenticate;
         this.identity = new PageIdentity(authenticate, authenticationTimeoutMs);
         this.lifetimes = new Set();
@@ -167,6 +174,11 @@ class PageManager {
     instantiate(record) {
         const instance = new record.PageClass();
         if (!(instance instanceof record.PageClass)) throw new TypeError('Page construction returned an incompatible object.');
+        getInjectMetadata(record.PageClass).forEach((provider, property) => {
+            if (!Object.hasOwn(this.providers, provider)) throw new Error(`Page requires missing provider "${provider}".`);
+            if (instance[property] !== undefined) throw new Error(`Injected property "${property}" must not have an initializer.`);
+            Object.defineProperty(instance, property, { configurable: false, enumerable: true, writable: false, value: this.providers[provider] });
+        });
         const page = LivePage.adopt(instance);
         page._activateState();
         return page;

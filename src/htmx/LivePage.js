@@ -5,7 +5,8 @@ const ReactiveRenderer = require('./ReactiveRenderer');
 const dataProperty = require('../dataProperty');
 const { ActionInputError } = require('./ActionDefinition');
 const { isHtml, markHtml, renderValue } = require('./Html');
-const { forEachState, getActionImplementation, getActionDefinition, getStateConfig, isComponentClass } = require('./metadata');
+const { forEachState, getActionImplementation, getActionDefinition, getResourceMetadata, getStateConfig, isComponentClass } = require('./metadata');
+const { LiveResource } = require('./LiveResource');
 
 const RUNTIME = new WeakMap();
 const COMPONENT_RENDER_CONTEXT = new AsyncLocalStorage();
@@ -159,6 +160,7 @@ class LivePage {
             });
         });
         internal.stateActive = true;
+        getResourceMetadata(this.constructor).forEach((config, name) => config.resource.bind(this, name, config.select));
         Object.keys(this).forEach(name => {
             const value = this[name];
             if (isComponentClass(value?.constructor) && getStateConfig(this.constructor, name)) {
@@ -226,6 +228,7 @@ class LivePage {
 
     _stateChanged(name, value) {
         if (!getStateConfig(this.constructor, name)) return false;
+        LiveResource.refresh(this);
         const payload = LivePage.statePayload(this, name, value, true);
         runtime(this).connections.forEach(socket => {
             const session = socket.__redwebPageSession;
@@ -261,6 +264,7 @@ class LivePage {
         const internal = runtime(this);
         if (internal.disposePromise) return internal.disposePromise;
         internal.disposed = true;
+        LiveResource.release(this);
         internal.connections.clear();
         internal.disposePromise = Promise.resolve().then(async () => {
             const tasks = [...internal.children.values()].map(component => LivePage.dispose(component));

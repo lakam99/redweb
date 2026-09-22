@@ -32,6 +32,7 @@ class LiveHtmlServer {
             authenticate,
             authenticationTimeoutMs,
             origins,
+            providers,
             development,
             server: suppliedApp,
             ...httpOptions
@@ -58,6 +59,7 @@ class LiveHtmlServer {
             authenticate,
             authenticationTimeoutMs,
             origins,
+            providers,
             logger: httpOptions.logger,
         });
         if (this._inspection) this.manager.Renderer = this._inspection.Renderer;

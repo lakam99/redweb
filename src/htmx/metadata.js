@@ -7,6 +7,10 @@ const STANDARD_ACTIONS = new WeakMap();
 const VIEW_METADATA = new WeakMap();
 const RESOLVED_VIEW = new WeakMap();
 const STANDARD_VIEWS = new WeakMap();
+const RESOURCE_METADATA = new WeakMap();
+const RESOLVED_RESOURCE = new WeakMap();
+const INJECT_METADATA = new WeakMap();
+const RESOLVED_INJECT = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
 const PAGE_STYLESHEET_ROOTS = new WeakMap();
 const COMPONENT_CLASSES = new WeakSet();
@@ -65,6 +69,20 @@ function registerView(store, PageClass, stateName, method, implementation) {
     metadataVersion += 1;
 }
 
+function registerResource(PageClass, property, config) {
+    const properties = new Map(RESOURCE_METADATA.get(PageClass) || []);
+    properties.set(property, config);
+    RESOURCE_METADATA.set(PageClass, properties);
+    metadataVersion += 1;
+}
+
+function registerInject(PageClass, property, provider) {
+    const properties = new Map(INJECT_METADATA.get(PageClass) || []);
+    properties.set(property, provider);
+    INJECT_METADATA.set(PageClass, properties);
+    metadataVersion += 1;
+}
+
 function resolvedState(PageClass) {
     const cached = RESOLVED_STATE.get(PageClass);
     if (cached?.version === metadataVersion) return cached.value;
@@ -109,6 +127,15 @@ function resolvedView(PageClass) {
         own.forEach((entry, stateName) => value.set(stateName, entry));
     });
     RESOLVED_VIEW.set(PageClass, { version: metadataVersion, value });
+    return value;
+}
+
+function resolved(store, cache, PageClass) {
+    const cached = cache.get(PageClass);
+    if (cached?.version === metadataVersion) return cached.value;
+    const value = new Map();
+    hierarchy(PageClass).forEach(CurrentClass => store.get(CurrentClass)?.forEach((config, property) => value.set(property, config)));
+    cache.set(PageClass, { version: metadataVersion, value });
     return value;
 }
 
@@ -250,6 +277,47 @@ function state(options = {}) {
     };
 }
 
+function resource(liveResource, select) {
+    const { LiveResource } = require('./LiveResource');
+    if (!(liveResource instanceof LiveResource)) throw new TypeError('resource() requires a value created by liveResource().');
+    if (typeof select !== 'function') throw new TypeError('resource() requires a key selector.');
+    const config = Object.freeze({ resource: liveResource, select });
+    return (target, property) => {
+        if (property?.kind === 'field') {
+            if (property.static || property.private || typeof property.name !== 'string' || !property.name) {
+                throw new TypeError('resource() requires a public instance field with a string name.');
+            }
+            property.addInitializer(function registerStandardResource() {
+                registerState(this.constructor, property.name, Object.freeze({ writable: false }));
+                registerResource(this.constructor, property.name, config);
+            });
+            return initialValue => initialValue;
+        }
+        const PageClass = assertDecoratorTarget(target, 'resource()');
+        if (typeof property !== 'string' || !property) throw new TypeError('Resource property must be a non-empty string.');
+        registerState(PageClass, property, Object.freeze({ writable: false }));
+        registerResource(PageClass, property, config);
+    };
+}
+
+function inject(provider) {
+    if (typeof provider !== 'string' || !provider || provider.length > 128 || ['__proto__', 'prototype', 'constructor'].includes(provider)) {
+        throw new TypeError('inject() requires a safe non-empty provider name of at most 128 characters.');
+    }
+    return (target, property) => {
+        if (property?.kind === 'field') {
+            if (property.static || property.private || typeof property.name !== 'string' || !property.name) {
+                throw new TypeError('inject() requires a public instance field with a string name.');
+            }
+            property.addInitializer(function registerStandardInject() { registerInject(this.constructor, property.name, provider); });
+            return initialValue => initialValue;
+        }
+        const PageClass = assertDecoratorTarget(target, 'inject()');
+        if (typeof property !== 'string' || !property) throw new TypeError('Injected property must be a non-empty string.');
+        registerInject(PageClass, property, provider);
+    };
+}
+
 function action(options) {
     const definition = new ActionDefinition(options);
     return (target, method, descriptor) => {
@@ -321,6 +389,9 @@ function getStateConfig(PageClass, property) {
     return resolvedState(PageClass).get(property);
 }
 
+function getResourceMetadata(PageClass) { return new Map(resolved(RESOURCE_METADATA, RESOLVED_RESOURCE, PageClass)); }
+function getInjectMetadata(PageClass) { return new Map(resolved(INJECT_METADATA, RESOLVED_INJECT, PageClass)); }
+
 function forEachState(PageClass, callback) {
     resolvedState(PageClass).forEach(callback);
 }
@@ -349,6 +420,8 @@ module.exports = {
     getActionDefinition,
     getActionMetadata,
     getPageMetadata,
+    getInjectMetadata,
+    getResourceMetadata,
     getPageStylesheetRoots,
     getPageTemplateRoot,
     getStateConfig,
@@ -356,10 +429,12 @@ module.exports = {
     getViewImplementation,
     getViewMetadata,
     isComponentClass,
+    inject,
     page,
     pageCache,
     pageHead,
     setPageStylesheetRoots,
     state,
+    resource,
     view,
 };
