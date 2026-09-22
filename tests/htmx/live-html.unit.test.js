@@ -22,6 +22,7 @@ const {
     resource,
     start,
     state,
+    upload,
     url,
     view,
 } = require('../..');
@@ -90,6 +91,11 @@ describe('decorator-first Live HTML units', () => {
         await second.dispose();
         expect(clips.publish('ABCD', 'none')).toBe(0);
         expect(() => clips.publish('', 'bad')).toThrow('without a key');
+        expect(() => clips.publish({}, 'bad')).toThrow('keys');
+        expect(() => clips.publish(NaN, 'bad')).toThrow('keys');
+        expect(() => clips.bind(null, 'value', () => 'key')).toThrow('page instances');
+        expect(() => clips.bind(first, '', () => 'key')).toThrow('properties');
+        expect(() => clips.bind(first, 'value', null)).toThrow('key selector');
         expect(() => resource({}, () => 'key')).toThrow('liveResource');
         expect(() => resource(clips, null)).toThrow('key selector');
     });
@@ -232,6 +238,17 @@ describe('decorator-first Live HTML units', () => {
         expect(() => action()(null, 'run', { value() {} })).toThrow('class member');
         expect(() => action()({}, 'run', {})).toThrow('method');
         expect(() => action()(() => {}, { kind: 'method', private: true, name: 'run' })).toThrow('public instance method');
+        expect(() => inject('')).toThrow('safe non-empty');
+        expect(() => inject('__proto__')).toThrow('safe non-empty');
+        expect(() => inject('service')({}, '')).toThrow('non-empty');
+        expect(() => inject('service')(() => {}, { kind: 'field', private: true, name: 'service' })).toThrow('public instance field');
+        expect(() => resource(liveResource(), () => 'key')({}, '')).toThrow('non-empty');
+        expect(() => resource(liveResource(), () => 'key')(() => {}, { kind: 'field', private: true, name: 'value' })).toThrow('public instance field');
+        expect(() => upload(null)).toThrow('options');
+        expect(() => upload({ maxBytes: 0 })).toThrow('maxBytes');
+        expect(() => upload({ accept: 'not a type' })).toThrow('MIME');
+        expect(() => upload()({}, 'receive', {})).toThrow('method');
+        expect(() => upload()(() => {}, { kind: 'method', private: true, name: 'receive' })).toThrow('public instance method');
         expect(() => view('')).toThrow('state name');
         expect(() => view('items')(null, 'item', { value() {} })).toThrow('class member');
         expect(() => view('items')({}, 'item', {})).toThrow('method');
