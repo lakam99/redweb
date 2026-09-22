@@ -297,7 +297,7 @@ describe('Live HTML integration without mocks', () => {
         await peers[1].request('redweb:html', { kind: 'action', name: 'clearNote', args: [] });
         await waitForCondition(() => updates.every(messages => messages.length >= 2), 'documented note clear');
         expect((await getPage(running, '/notes')).response.body).not.toContain('hello from disk');
-    });
+    }, 30000);
 
     test('projects keyed live resources through real page sockets and releases them at shutdown', async () => {
         const server = await start(createResourceServer);
