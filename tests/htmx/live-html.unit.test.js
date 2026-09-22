@@ -6,6 +6,7 @@ const Module = require('module');
 const ts = require('typescript');
 const { pathToFileURL } = require('url');
 const { spawn } = require('child_process');
+const { PassThrough } = require('stream');
 const {
     HtmlRenderer,
     LivePage,
@@ -17,17 +18,22 @@ const {
     exportStatic,
     html,
     page,
+    inject,
+    liveResource,
+    resource,
     start,
     state,
+    upload,
     url,
     view,
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
+const PageTaskLane = require('../../src/htmx/PageTaskLane');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const TemplateRenderer = require('../../src/htmx/TemplateRenderer');
 const browserRuntime = require('../../src/htmx/browserRuntime');
-const { getActionMetadata, getPageMetadata, getStateMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
+const { getActionMetadata, getInjectMetadata, getPageMetadata, getResourceMetadata, getStateMetadata, getUploadMetadata, getViewImplementation, isComponentClass } = require('../../src/htmx/metadata');
 const { callerDirectory, filePath } = require('../../src/htmx/sourceRoot');
 const { stopBrowser } = require('../../scripts/verify-live-html-browser');
 
@@ -38,6 +44,61 @@ function decorateAction(PageClass, name) {
 function decorateView(PageClass, stateName, name) {
     view(stateName)(PageClass.prototype, name, Object.getOwnPropertyDescriptor(PageClass.prototype, name));
 }
+
+test('standard resource, provider and upload decorators register reusable page capabilities', () => {
+    const updates = liveResource();
+    class ProjectPage extends LivePage {
+        receiveFile() { return 'received'; }
+    }
+    const initializers = [];
+    const field = (name) => ({ kind: 'field', static: false, private: false, name,
+        addInitializer: initializer => initializers.push(initializer) });
+    expect(resource(updates, page => page.projectId)(undefined, field('latest'))(null)).toBeNull();
+    expect(inject('projects')(undefined, field('projects'))(null)).toBeNull();
+    let uploadInitializer;
+    const uploadOptions = { maxBytes: 16, accept: 'text/plain' };
+    const decorated = upload(uploadOptions)(ProjectPage.prototype.receiveFile, {
+        kind: 'method', static: false, private: false, name: 'receiveFile',
+        addInitializer: initializer => { uploadInitializer = initializer; },
+    });
+    const instance = new ProjectPage();
+    initializers.forEach(initializer => initializer.call(instance));
+    uploadInitializer.call(instance);
+    expect(decorated).toBe(ProjectPage.prototype.receiveFile);
+    expect(getResourceMetadata(ProjectPage).get('latest').resource).toBe(updates);
+    expect(getInjectMetadata(ProjectPage).get('projects')).toBe('projects');
+    expect(getUploadMetadata(ProjectPage).get('receiveFile')).toEqual({ maxBytes: 16, accept: ['text/plain'] });
+    expect(getActionMetadata(ProjectPage).has('receiveFile')).toBe(true);
+    class OtherPage {}
+    uploadInitializer.call({ constructor: OtherPage, receiveFile() {} });
+    expect(getUploadMetadata(OtherPage)).toEqual(new Map());
+    expect(getActionMetadata(OtherPage)).toEqual(new Set());
+});
+
+test.each(['request', 'response', 'lifetime'])('a closed upload %s cannot enter a page action', async closed => {
+    let calls = 0;
+    class UploadPage extends LivePage {
+        async receive(file) { calls += 1; for await (const _chunk of file.stream) {} }
+        render() { return '<p>upload</p>'; }
+    }
+    page('/closed-upload')(UploadPage);
+    upload()(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
+    const manager = new PageManager({ pages: [UploadPage] });
+    try {
+        await manager.render(manager.records.get('/closed-upload'), { params: {}, query: {}, body: null });
+        const session = [...manager.pending.values()][0];
+        const request = new PassThrough();
+        request.url = '/__redweb/upload'; request.method = 'POST'; request.headers = { 'content-type': 'text/plain' };
+        const response = new PassThrough();
+        if (closed === 'request') request.destroy();
+        if (closed === 'response') response.destroy();
+        const uploadTask = manager.receiveUploadTask(session, request, response, 'receive', null);
+        if (closed === 'lifetime') session.lifetime.abort();
+        await expect(uploadTask)
+            .rejects.toMatchObject({ code: 'ACCESS_CANCELLED' });
+        expect(calls).toBe(0);
+    } finally { await manager.shutdown(); }
+});
 
 describe('decorator-first Live HTML units', () => {
     test('lazy reactive payloads materialize once and keep legacy bindings compatible', () => {
@@ -64,6 +125,39 @@ describe('decorator-first Live HTML units', () => {
             name: 'content', component: 'child', html: true,
             value: '<button rw-click="save" data-rw-component="child">Save</button>',
         }]);
+    });
+    test('keys live resources server-side and releases subscriptions with their pages', async () => {
+        const clips = liveResource();
+        class ClipboardPage extends LivePage {
+            sessionId = '';
+            clipboard = null;
+        }
+        state()(ClipboardPage.prototype, 'sessionId');
+        resource(clips, page => page.sessionId)(ClipboardPage.prototype, 'clipboard');
+        const first = new ClipboardPage();
+        const second = new ClipboardPage();
+        LivePage.activate(first); LivePage.activate(second);
+        first.sessionId = 'ABCD'; second.sessionId = 'EFGH';
+        expect(clips.publish('ABCD', 'first')).toBe(1);
+        expect(first.clipboard).toBe('first'); expect(second.clipboard).toBeNull();
+        second.sessionId = 'ABCD';
+        expect(clips.publish('ABCD', 'shared')).toBe(2);
+        for (let index = 0; index < 64; index += 1) first.sessionId = `rotated-${index}`;
+        expect(clips.subscribers.size).toBe(2);
+        first.sessionId = 'ABCD';
+        await first.dispose();
+        expect(clips.publish('ABCD', 'after-dispose')).toBe(1);
+        expect(second.clipboard).toBe('after-dispose');
+        await second.dispose();
+        expect(clips.publish('ABCD', 'none')).toBe(0);
+        expect(() => clips.publish('', 'bad')).toThrow('without a key');
+        expect(() => clips.publish({}, 'bad')).toThrow('keys');
+        expect(() => clips.publish(NaN, 'bad')).toThrow('keys');
+        expect(() => clips.bind(null, 'value', () => 'key')).toThrow('page instances');
+        expect(() => clips.bind(first, '', () => 'key')).toThrow('properties');
+        expect(() => clips.bind(first, 'value', null)).toThrow('key selector');
+        expect(() => resource({}, () => 'key')).toThrow('liveResource');
+        expect(() => resource(clips, null)).toThrow('key selector');
     });
     test('browser cleanup recognizes a real child terminated by signal', async () => {
         const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
@@ -204,6 +298,17 @@ describe('decorator-first Live HTML units', () => {
         expect(() => action()(null, 'run', { value() {} })).toThrow('class member');
         expect(() => action()({}, 'run', {})).toThrow('method');
         expect(() => action()(() => {}, { kind: 'method', private: true, name: 'run' })).toThrow('public instance method');
+        expect(() => inject('')).toThrow('safe non-empty');
+        expect(() => inject('__proto__')).toThrow('safe non-empty');
+        expect(() => inject('service')({}, '')).toThrow('non-empty');
+        expect(() => inject('service')(() => {}, { kind: 'field', private: true, name: 'service' })).toThrow('public instance field');
+        expect(() => resource(liveResource(), () => 'key')({}, '')).toThrow('non-empty');
+        expect(() => resource(liveResource(), () => 'key')(() => {}, { kind: 'field', private: true, name: 'value' })).toThrow('public instance field');
+        expect(() => upload(null)).toThrow('options');
+        expect(() => upload({ maxBytes: 0 })).toThrow('maxBytes');
+        expect(() => upload({ accept: 'not a type' })).toThrow('MIME');
+        expect(() => upload()({}, 'receive', {})).toThrow('method');
+        expect(() => upload()(() => {}, { kind: 'method', private: true, name: 'receive' })).toThrow('public instance method');
         expect(() => view('')).toThrow('state name');
         expect(() => view('items')(null, 'item', { value() {} })).toThrow('class member');
         expect(() => view('items')({}, 'item', {})).toThrow('method');
@@ -1030,9 +1135,24 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], maxSessions: 0 })).toThrow('maxSessions');
         expect(() => new PageManager({ pages: [PlainPage], maxConcurrentRenders: 0 })).toThrow('maxConcurrentRenders');
         expect(() => new PageManager({ pages: [PlainPage], shutdownTimeoutMs: -1 })).toThrow('shutdownTimeoutMs');
+        expect(() => new PageManager({ pages: [PlainPage], uploadTimeoutMs: 0 })).toThrow('uploadTimeoutMs');
         expect(() => new PageManager({ pages: [PlainPage], paths: null })).toThrow('paths');
         expect(() => new PageManager({ pages: [PlainPage], authenticate: true })).toThrow('authenticate');
         expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');
+        expect(() => new PageManager({ pages: [PlainPage], providers: [] })).toThrow('providers');
+        expect(() => new PageManager({ pages: [PlainPage], providers: { constructor: 1 } })).toThrow('Provider names');
+        class MissingProviderPage extends LivePage { render() { return 'missing provider'; } }
+        page('/missing-provider')(MissingProviderPage);
+        inject('required')(MissingProviderPage.prototype, 'service');
+        const missingProvider = new PageManager({ pages: [MissingProviderPage] });
+        expect(() => missingProvider.instantiate(missingProvider.records.get('/missing-provider'))).toThrow('missing provider');
+        await missingProvider.shutdown();
+        class InitializedProviderPage extends LivePage { service = 'occupied'; render() { return 'initialized provider'; } }
+        page('/initialized-provider')(InitializedProviderPage);
+        inject('required')(InitializedProviderPage.prototype, 'service');
+        const initializedProvider = new PageManager({ pages: [InitializedProviderPage], providers: { required: {} } });
+        expect(() => initializedProvider.instantiate(initializedProvider.records.get('/initialized-provider'))).toThrow('must not have an initializer');
+        await initializedProvider.shutdown();
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('absolute');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/live?unsafe="' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');
@@ -1129,6 +1249,18 @@ describe('decorator-first Live HTML units', () => {
         await expect(manager.render(record, request)).rejects.toMatchObject({ status: 503 });
 
         const pending = [...manager.pending.values()][0];
+        await expect(manager.receiveUpload({ url: '/__redweb/upload?action=echo', headers: {} }, {}))
+            .rejects.toMatchObject({ code: 'ACCESS_DENIED' });
+        const originalTasks = pending.tasks;
+        pending.tasks = new PageTaskLane(1);
+        let releaseTask;
+        const runningTask = manager.enqueue(pending, () => new Promise(resolve => { releaseTask = resolve; }));
+        let capacityFailure;
+        try { manager.enqueue(pending, () => 'overflow'); } catch (error) { capacityFailure = error; }
+        expect(capacityFailure).toMatchObject({ code: 'ACCESS_CAPACITY' });
+        releaseTask();
+        await runningTask;
+        pending.tasks = originalTasks;
         await expect(manager.authenticate({ url: '[', headers: { host: '[' } })).resolves.toBe(false);
         await expect(manager.authenticate({ url: '/', headers: {} })).resolves.toBe(false);
         await expect(manager.authenticate({ url: `/?pageId=${'x'.repeat(129)}`, headers: {} })).resolves.toBe(false);

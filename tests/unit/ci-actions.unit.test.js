@@ -26,6 +26,16 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
     expect(workflow).not.toContain('ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION');
 });
 
+test('CI de-duplicates matching push and PR runs without cancelling manual observation', () => {
+    expect(workflow).toContain("github.event_name == 'workflow_dispatch'");
+    expect(workflow).toContain("format('manual-{0}', github.ref_name)");
+    expect(workflow).toContain("format('auto-{0}', github.event.pull_request.head.ref || github.ref_name)");
+    expect(workflow).toContain('cancel-in-progress: true');
+    const group = ({ event, ref, head }) => event === 'workflow_dispatch' ? `manual-${ref}` : `auto-${head || ref}`;
+    expect(group({ event: 'push', ref: 'feature' })).toBe(group({ event: 'pull_request', ref: 'base', head: 'feature' }));
+    expect(group({ event: 'workflow_dispatch', ref: 'main' })).not.toBe(group({ event: 'push', ref: 'manual-main' }));
+});
+
 test('the default and hosted gates exclude soak and long fixed-window benchmark tests', () => {
     const matrix = workflow.slice(workflow.indexOf('  test:'), workflow.indexOf('  lifecycle-smoke:'));
     expect(matrix).toMatch(/run: xvfb-run -a npm test -- --runInBand --silent\s+id: matrix-tests/);
@@ -37,10 +47,12 @@ test('the default and hosted gates exclude soak and long fixed-window benchmark 
     const patterns = [...command.matchAll(/--testPathIgnorePatterns=([^ ]+)/g)].map(match => new RegExp(match[1]));
     expect(patterns).toHaveLength(2);
     for (const separator of ['/', '\\']) {
-        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-command.test.js`))).toBe(true);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}soak-tools.integration.test.js`))).toBe(true);
         expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurement.integration.test.js`))).toBe(true);
-        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-commandXtestYjs`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}soak-toolsXintegrationYtestZjs`))).toBe(false);
         expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}benchmark-measurementXintegrationYtestZjs`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}unit${separator}soak-command.unit.test.js`))).toBe(false);
+        expect(patterns.some(pattern => pattern.test(`tests${separator}integration${separator}room-rotation-phase.integration.test.js`))).toBe(false);
     }
 });
 

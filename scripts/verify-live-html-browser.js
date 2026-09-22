@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { action, attribute, codeBlock, component, each, html, page, start, state, url } = require('..');
+const { action, attribute, codeBlock, component, each, html, page, start, state, upload, url } = require('..');
 const HtmlRenderer = require('../src/htmx/HtmlRenderer');
 const { CounterPage } = require('../examples/live-html/counter');
 const { createChatroomPage } = require('../examples/live-html/chatroom');
@@ -48,6 +48,29 @@ class ComponentBoundaryPage {
     }
 }
 page('/')(ComponentBoundaryPage);
+
+function createUploadPage() {
+    class UploadPage {
+        received = '';
+        async receive(file) {
+            let content = '';
+            for await (const chunk of file.stream) content += chunk;
+            this.received = `${file.name}:${file.type}:${content}`;
+        }
+        render() {
+            return jsxs('main', { children: [
+                jsx('input', { id: 'upload', type: 'file', 'rw-upload': 'receive' }),
+                jsx('textarea', { id: 'paste', 'rw-paste': 'receive' }),
+                jsx('p', { id: 'upload-status', 'rw-status': 'receive', role: 'status', 'aria-live': 'polite' }),
+                jsx('output', { id: 'received', children: this.received }),
+            ] });
+        }
+    }
+    page('/')(UploadPage);
+    state()(UploadPage.prototype, 'received');
+    upload({ maxBytes: 3, accept: 'text/plain' })(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
+    return UploadPage;
+}
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -231,6 +254,7 @@ async function main() {
     const reactiveServer = start(ReactivePage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
     const validatedActions = start(createActionPage(), { port: 0, bind: '127.0.0.1', logger });
+    const uploads = start(createUploadPage(), { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     let failure;
@@ -244,6 +268,7 @@ async function main() {
             waitForListening(reactiveServer.server),
             waitForListening(componentBoundaries.server),
             waitForListening(validatedActions.server),
+            waitForListening(uploads.server),
         ]);
         const launched = await launchBrowserWithRetry(executable, profile, { headless: false });
         browser = launched.browser;
@@ -280,6 +305,36 @@ async function main() {
         })()`);
         await actionPage.evaluate(eventual(`document.querySelector('form[data-rw-component="first"] output').textContent === '3'`, 'corrected validated form'));
         if (!await actionPage.evaluate(`document.querySelector('form[data-rw-component="second"] output').textContent === '0'`)) throw new Error('Validated action escaped its component scope.');
+
+        const uploadPage = await openPage(debugPort, `http://127.0.0.1:${uploads.server.address().port}/`);
+        pages.push(uploadPage);
+        await uploadPage.evaluate(`(() => {
+            const input = document.getElementById('upload');
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['ok'], 'clip😀.txt', { type: 'text/plain' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await uploadPage.evaluate(eventual(`document.getElementById('received').textContent === 'clip😀.txt:text/plain:ok'`, 'browser upload delivery'));
+        await uploadPage.evaluate(eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'success'`, 'browser upload success feedback'));
+        await uploadPage.evaluate(`(() => {
+            const input = document.getElementById('upload');
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['no'], 'clip.png', { type: 'image/png' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await uploadPage.evaluate(eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'error'`, 'browser upload rejection feedback'));
+        if (!await uploadPage.evaluate(`document.getElementById('upload-status').textContent === 'That type of file is not accepted here.'`)) {
+            throw new Error('Browser upload rejection did not provide safe feedback.');
+        }
+        await uploadPage.evaluate(`(() => {
+            const paste = document.getElementById('paste');
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['yes'], 'paste.txt', { type: 'text/plain' }));
+            paste.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: transfer }));
+        })()`);
+        await uploadPage.evaluate(eventual(`document.getElementById('received').textContent === 'paste.txt:text/plain:yes'`, 'browser paste delivery'));
 
         const counterPage = await openPage(debugPort, `http://127.0.0.1:${counter.server.address().port}/`);
         pages.push(counterPage);
@@ -533,7 +588,7 @@ async function main() {
         pages.forEach(page => page.socket.close());
         await stopBrowser(browser?.child);
         await Promise.allSettled([
-            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), reactiveServer.shutdown(), componentBoundaries.shutdown(), validatedActions.shutdown(),
+            counter.shutdown(), chat.shutdown(), cards.shutdown(), components.shutdown(), jsxServer.shutdown(), reactiveServer.shutdown(), componentBoundaries.shutdown(), validatedActions.shutdown(), uploads.shutdown(),
         ]);
         try {
             await removeTemporaryDirectory(profile);

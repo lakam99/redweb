@@ -33,7 +33,7 @@ class FrozenBrowserBoundary {
             return template();
         };
         const api = {
-            action: () => () => {}, component: () => () => {}, state: () => () => {}, page: () => () => {},
+            action: () => () => {}, component: () => () => {}, state: () => () => {}, page: () => () => {}, upload: () => () => {},
             html: template, attribute: String, url: String, codeBlock: template,
             each: (items, callback) => items.map(callback).join(''),
             start: (Page, { logger }) => {

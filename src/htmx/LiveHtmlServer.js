@@ -28,10 +28,12 @@ class LiveHtmlServer {
             maxSessions,
             maxConcurrentRenders,
             shutdownTimeoutMs = 1000,
+            uploadTimeoutMs,
             heartbeat,
             authenticate,
             authenticationTimeoutMs,
             origins,
+            providers,
             development,
             server: suppliedApp,
             ...httpOptions
@@ -54,10 +56,12 @@ class LiveHtmlServer {
             maxSessions,
             maxConcurrentRenders,
             shutdownTimeoutMs,
+            uploadTimeoutMs,
             heartbeat,
             authenticate,
             authenticationTimeoutMs,
             origins,
+            providers,
             logger: httpOptions.logger,
         });
         if (this._inspection) this.manager.Renderer = this._inspection.Renderer;

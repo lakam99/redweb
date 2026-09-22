@@ -11,15 +11,19 @@ Redweb 0.14.0 adds [`defineApp({ pages, sockets, services, port })`](docs/APPLIC
 Start with a neutral, tested application foundation:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.16.2. Install that exact version when following these examples.
+> Unreleased development documentation. Package metadata is 0.16.2, but these features are not claimed to be published in that npm version. Use the matching Redweb tarball described in the recipe setup; its published client dependency installs automatically. Do not install latest and assume compatibility.
+
+Replace `TARBALL` with the absolute path to the matching Redweb tarball produced by `npm pack` (quoted if it contains spaces):
 
 ```sh
-npx --yes redweb@0.16.2 init my-app
+npx --yes --package TARBALL redweb init my-app
 cd my-app
-npm install --save-exact redweb@0.16.2
+npm install --save-exact TARBALL
 npm test
 npm run dev
 ```
+
+This prerelease Redweb artifact is development-only until its release checks finish.
 <!-- redweb:setup:end -->
 
 Append `--with auth,multiplayer` when you need those dependency sets without copying example-domain code. Use `--bare` only to omit generated tests. The application, CSS, TypeScript configuration, build scripts, and development watcher remain.
@@ -78,6 +82,8 @@ Choose the recipe's `--template` option when initializing. Shared memory survive
 - A page is a decorated class whose `render()` returns server-side TSX.
 - Ordinary expressions over `@state()` update after assignment. Replace arrays/objects rather than mutating them in place.
 - `@action()` explicitly exposes a method to the browser. Validate inputs and authorize the operation on the server.
+- `@upload()` streams a browser file—selected, pasted, or supplied by another browser file source—to a bounded, same-origin server action; persist it in an application provider and keep only a small asset reference in state.
+- `liveResource()` and `@resource()` project keyed server updates to matching active pages without hand-written socket fan-out. `@inject()` supplies explicit application services.
 - Function components reuse presentation; decorated class components reuse state, actions, and lifecycle.
 - Stable JSX keys preserve DOM identity for lists. CSS lives in ordinary external files.
 - Pages are connection-scoped by default. `shared: true` deliberately shares one instance: do not put private visitor data there.

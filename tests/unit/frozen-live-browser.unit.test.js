@@ -51,7 +51,7 @@ test.each(observations)('frozen main rejects a failed %s observation and perform
         await expect(probe.context.main()).rejects.toThrow(message);
         expect(selected).toBeGreaterThan(0);
         expect(probe.logs).toEqual([]);
-        expect(probe.apps.map(app => app.stops)).toEqual(Array(8).fill(1));
+        expect(probe.apps.map(app => app.stops)).toEqual(Array(9).fill(1));
         expect(probe.sockets.every(socket => socket.closed === 1)).toBe(true);
         expect(probe.children[0].signalCode).toBe('SIGTERM');
         expect(probe.removals).toHaveLength(1);
@@ -66,9 +66,9 @@ test('frozen main completes the synthetic orchestration with delayed listeners a
         expect(probe.logs[0]).toContain('Live HTML browser gate passed:');
         expect(probe.children[0].args).not.toContain('--headless=new');
         expect(probe.children[0].settings.windowsHide).toBe(false);
-        expect(probe.sockets).toHaveLength(13);
+        expect(probe.sockets).toHaveLength(14);
         expect(probe.sockets.every(socket => socket.closed === 1)).toBe(true);
-        expect(probe.apps.map(app => app.stops)).toEqual(Array(8).fill(1));
+        expect(probe.apps.map(app => app.stops)).toEqual(Array(9).fill(1));
         expect(fs.readdirSync(probe.directory)).toEqual([]);
     });
 });
@@ -122,15 +122,15 @@ test.each(['close', 'kill', 'shutdown'])('characterizes frozen synchronous %s cl
         await expect(probe.context.main()).rejects.toBe(probe.cleanup);
         expect(probe.logs).toHaveLength(1);
         expect(probe.removals).toEqual([]);
-        expect(probe.apps.map(app => app.stops)).toEqual(stage === 'shutdown' ? [1, 0, 0, 0, 0, 0, 0, 0] : Array(8).fill(0));
-        expect(probe.sockets.filter(socket => socket.closed).length).toBe(stage === 'close' ? 1 : 13);
+        expect(probe.apps.map(app => app.stops)).toEqual(stage === 'shutdown' ? [1, 0, 0, 0, 0, 0, 0, 0, 0] : Array(9).fill(0));
+        expect(probe.sockets.filter(socket => socket.closed).length).toBe(stage === 'close' ? 1 : 14);
     });
 });
 
 test('characterizes frozen shutdown rejection being ignored, not verified cleanup', async () => {
     await boundary({ shutdown: 'reject' }, async probe => {
         await expect(probe.context.main()).resolves.toBeUndefined();
-        expect(probe.apps.map(app => app.stops)).toEqual(Array(8).fill(1));
+        expect(probe.apps.map(app => app.stops)).toEqual(Array(9).fill(1));
         expect(probe.logs).toHaveLength(1);
     });
 });

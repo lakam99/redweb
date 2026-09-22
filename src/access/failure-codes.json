@@ -19,6 +19,10 @@
   "ACCESS_CAPACITY": { "status": 503, "message": "Authorization capacity reached. The operation was not run." },
   "PAGE_FAILED": { "status": 500, "message": "Page request failed." },
   "PAGE_CAPACITY": { "status": 503, "message": "Page session capacity reached." },
+  "UPLOAD_TOO_LARGE": { "status": 413, "message": "The uploaded file exceeds this action's size limit." },
+  "UPLOAD_TYPE_REJECTED": { "status": 415, "message": "This action does not accept that file type." },
+  "UPLOAD_TIMEOUT": { "status": 408, "message": "The uploaded file took too long to arrive." },
+  "UPLOAD_FAILED": { "status": 500, "message": "File upload failed." },
   "ACTION_INVALID_INPUT": { "status": 400, "message": "Action input is invalid. Check the form values and try again." },
   "ACTION_VALIDATION_TIMEOUT": { "status": 503, "message": "Action input validation timed out. The action was not run." },
   "ACTION_CANCELLED": { "status": 503, "message": "The connection closed before input validation completed. The action was not run." }

@@ -5,7 +5,7 @@ const { SoakClients } = require('../../scripts/lib/SoakClients');
 const { waitFor, silentLogger } = require('../../scripts/realtime-harness');
 const { waitForCondition, withTimeout } = require('../helpers/network');
 
-test('real soak rotation has a room-free phase before the replacement sends its next tick', async () => {
+test('real room rotation has a room-free phase before the replacement sends its next tick', async () => {
     class Join extends BaseHandler {
         constructor() { super('cycle'); }
         onMessage(socket, message) { socket.joinRoom(`room-${message.slot % 8}`); socket.sendJson({ tick: message.tick }); }

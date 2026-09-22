@@ -1,4 +1,7 @@
 const { createHash, randomUUID } = require('crypto');
+const { Transform } = require('stream');
+const { finished } = require('stream/promises');
+const PageTaskLane = require('./PageTaskLane');
 const { RequestFailure } = require('../access/RequestFailure');
 const path = require('path');
 const { setMaxListeners } = require('events');
@@ -10,7 +13,7 @@ const LivePage = require('./LivePage');
 const ReactiveRenderer = require('./ReactiveRenderer');
 const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
-const { getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
+const { getActionImplementation, getInjectMetadata, getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot, getUploadMetadata } = require('./metadata');
 const synchronous = require('./synchronous');
 const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
@@ -25,6 +28,7 @@ const DEFAULT_PATHS = Object.freeze({
     client: '/__redweb/client.js',
     runtime: '/__redweb/runtime.js',
     css: '/__redweb/css',
+    upload: '/__redweb/upload',
 });
 
 function boundedName(value, label) {
@@ -70,7 +74,7 @@ function matchesIfNoneMatch(header, etag) {
 }
 
 class PageManager {
-    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, logger = console }, reservedPaths = {}) {
+    constructor({ pages, templateRoot, paths = {}, sessionTtlMs = 30_000, maxSessions = 1000, maxConcurrentRenders = maxSessions, shutdownTimeoutMs = 1000, uploadTimeoutMs = 30_000, heartbeat = DEFAULT_HEARTBEAT, authenticate, authenticationTimeoutMs, origins, providers = {}, logger = console }, reservedPaths = {}) {
         if (!Array.isArray(pages) || pages.length === 0) throw new TypeError('`pages` must be a non-empty array.');
         if (templateRoot !== undefined && (typeof templateRoot !== 'string' || !templateRoot)) throw new TypeError('`templateRoot` must be a non-empty string.');
         if (!Number.isInteger(sessionTtlMs) || sessionTtlMs < 0) throw new TypeError('`sessionTtlMs` must be a non-negative integer.');
@@ -79,10 +83,17 @@ class PageManager {
             throw new TypeError('`maxConcurrentRenders` must be a positive integer.');
         }
         if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) throw new TypeError('`shutdownTimeoutMs` must be a non-negative integer.');
+        if (!Number.isInteger(uploadTimeoutMs) || uploadTimeoutMs < 1 || uploadTimeoutMs > 300_000) throw new TypeError('`uploadTimeoutMs` must be an integer between 1 and 300000.');
         if (!paths || typeof paths !== 'object' || Array.isArray(paths)) throw new TypeError('`paths` must be an object.');
         if (origins !== undefined && typeof origins !== 'function' &&
             (!Array.isArray(origins) || origins.some(origin => typeof origin !== 'string' || !origin))) {
             throw new TypeError('`origins` must be a function or an array of non-empty origins.');
+        }
+        if (!providers || typeof providers !== 'object' || Array.isArray(providers) || Object.getPrototypeOf(providers) !== Object.prototype) {
+            throw new TypeError('`providers` must be a plain object.');
+        }
+        if (Object.keys(providers).some(name => !/^[A-Za-z_$][\w$-]{0,127}$/.test(name) || ['__proto__', 'prototype', 'constructor'].includes(name))) {
+            throw new TypeError('Provider names must be safe identifiers of at most 128 characters.');
         }
         this.paths = { ...DEFAULT_PATHS, ...paths, ...reservedPaths };
         Object.entries(this.paths).forEach(([name, value]) => {
@@ -103,8 +114,10 @@ class PageManager {
         this.maxSessions = maxSessions;
         this.maxConcurrentRenders = maxConcurrentRenders;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
+        this.uploadTimeoutMs = uploadTimeoutMs;
         this.heartbeat = heartbeat;
         this.logger = logger || { log() {}, warn() {}, error() {} };
+        this.providers = Object.freeze({ ...providers });
         this.authenticateRequest = authenticate;
         this.identity = new PageIdentity(authenticate, authenticationTimeoutMs);
         this.lifetimes = new Set();
@@ -167,6 +180,11 @@ class PageManager {
     instantiate(record) {
         const instance = new record.PageClass();
         if (!(instance instanceof record.PageClass)) throw new TypeError('Page construction returned an incompatible object.');
+        getInjectMetadata(record.PageClass).forEach((provider, property) => {
+            if (!Object.hasOwn(this.providers, provider)) throw new Error(`Page requires missing provider "${provider}".`);
+            if (instance[property] !== undefined) throw new Error(`Injected property "${property}" must not have an initializer.`);
+            Object.defineProperty(instance, property, { configurable: false, enumerable: true, writable: false, value: this.providers[provider] });
+        });
         const page = LivePage.adopt(instance);
         page._activateState();
         return page;
@@ -177,6 +195,11 @@ class PageManager {
             const clientFile = path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js');
             app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
             app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
+            app.post(this.paths.upload, (request, response) => this.receiveUpload(request, response).catch(error => {
+                if (response.headersSent) return response.destroy();
+                const failure = RequestFailure.from(error, 'UPLOAD_FAILED');
+                response.status(failure.status).json({ error: { code: failure.code, message: failure.message } });
+            }));
         }
         this.stylesheets.forEach((content, url) => app.get(url, (_request, response) => {
             response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
@@ -281,6 +304,7 @@ class PageManager {
                 pageId: session.id,
                 socketPath: record.socketPath || this.paths.socket,
                 runtimePath: this.paths.runtime,
+                uploadPath: this.paths.upload,
                 version: PROTOCOL_VERSION,
             };
             if (renderer.enabled) {
@@ -309,7 +333,8 @@ class PageManager {
 
     createSession(page, ownsPage, principal, context = {}, record, lifetime = this.createLifetime(principal)) {
         const id = randomUUID();
-        const session = { id, page, ownsPage, principal, context, record, lifetime, socket: null, timer: null, detaching: null };
+        const session = { id, page, ownsPage, principal, context, record, lifetime, socket: null, timer: null, detaching: null,
+            tasks: new PageTaskLane() };
         lifetime.session = session;
         this.pending.set(id, session);
         this.expire(session);
@@ -416,6 +441,7 @@ class PageManager {
 
     async release(session) {
         session.lifetime.revoked = true;
+        session.tasks.close(new AccessDenied('ACCESS_CANCELLED'));
         const cleanup = [];
         if (session.socket) {
             session.socket.terminate?.();
@@ -459,9 +485,19 @@ class PageManager {
         return affected.length;
     }
 
+    enqueue(session, task) {
+        const result = session.tasks.enqueue(task);
+        if (!result) throw new RequestFailure('ACCESS_CAPACITY');
+        return result;
+    }
+
     async receive(socket, message) {
         const session = socket.__redwebPageSession;
         if (!session) throw new Error('Page session is not connected.');
+        return this.enqueue(session, () => this.receiveMessage(session, socket, message));
+    }
+
+    async receiveMessage(session, socket, message) {
         this.checkConnected(session, socket);
         const payload = message.payload;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Live HTML payload must be an object.');
@@ -485,6 +521,83 @@ class PageManager {
             return;
         }
         throw new TypeError('Live HTML message kind must be "action" or "state".');
+    }
+
+    async receiveUpload(request, response) {
+        const address = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+        const id = address.searchParams.get('pageId');
+        const name = boundedName(address.searchParams.get('action'), 'Upload action name');
+        const component = address.searchParams.get('component');
+        const session = typeof id === 'string' ? this.pending.get(id) || this.active.get(id) : null;
+        if (!session || !this.available(session)) throw new AccessDenied('ACCESS_DENIED');
+        if (request.headers.origin !== undefined && !await this.acceptsOrigin(request.headers.origin, request)) throw new RequestFailure('ORIGIN_DENIED');
+        if (request.headers['sec-fetch-site'] !== undefined && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) {
+            throw new RequestFailure('ORIGIN_DENIED');
+        }
+        return this.enqueue(session, () => this.receiveUploadTask(session, request, response, name, component));
+    }
+
+    async receiveUploadTask(session, request, response, name, component) {
+        session.lifetime.check();
+        let stream;
+        let timer;
+        let cancelled = request.destroyed || response.destroyed || session.lifetime.signal.aborted;
+        const cancel = () => { cancelled = true; stream?.destroy(new AccessDenied('ACCESS_CANCELLED')); };
+        request.once('aborted', cancel);
+        request.once('error', cancel);
+        response.once('close', cancel);
+        session.lifetime.signal.addEventListener('abort', cancel, { once: true });
+        try {
+            if (cancelled) throw new AccessDenied('ACCESS_CANCELLED');
+            const principal = await this.identity.resolve(request, session.lifetime.signal);
+            if (!Object.is(principal, session.principal)) throw new AccessDenied('ACCESS_DENIED');
+            const snapshot = requestSnapshot(request);
+            const context = Object.freeze({ ...session.context, request: snapshot, params: snapshot.params, query: snapshot.query,
+                body: snapshot.body, principal, signal: session.lifetime.signal });
+            await session.record.metadata.policy?.check(context);
+            session.lifetime.check();
+            if (cancelled || request.destroyed || response.destroyed) throw new AccessDenied('ACCESS_CANCELLED');
+            const target = component === null || component === '' ? session.page : session.page._component(boundedName(component, 'Upload component name'));
+            if (!target) throw new AccessDenied('ACCESS_DENIED');
+            const config = getUploadMetadata(target.constructor).get(name);
+            const implementation = getActionImplementation(target.constructor, name);
+            if (!config || !implementation || target[name] !== implementation) throw new AccessDenied('ACCESS_DENIED');
+            const contentLength = Number(request.headers['content-length']);
+            if (Number.isFinite(contentLength) && contentLength > config.maxBytes) throw new RequestFailure('UPLOAD_TOO_LARGE');
+            const contentType = String(request.headers['content-type'] || '').split(';', 1)[0].toLowerCase();
+            if (config.accept.length && !config.accept.some(type => type === contentType || type.endsWith('/*') && contentType.startsWith(type.slice(0, -1)))) {
+                throw new RequestFailure('UPLOAD_TYPE_REJECTED');
+            }
+            let bytes = 0;
+            stream = request.pipe(new Transform({ transform(chunk, _encoding, done) {
+                bytes += chunk.length;
+                if (bytes > config.maxBytes) return done(new RequestFailure('UPLOAD_TOO_LARGE'));
+                done(null, chunk);
+            } }));
+            stream.once('error', () => {});
+            timer = setTimeout(() => stream.destroy(new RequestFailure('UPLOAD_TIMEOUT')), this.uploadTimeoutMs);
+            timer.unref?.();
+            const uploadedName = request.headers['x-redweb-upload-name'];
+            let decodedName = null;
+            if (typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 768) {
+                try { decodedName = decodeURIComponent(uploadedName); }
+                catch { decodedName = null; }
+            }
+            const file = Object.freeze({ stream, type: contentType,
+                name: decodedName && decodedName.length <= 256 ? decodedName : null });
+            await implementation.call(target, file, context);
+            if (!stream.readableEnded) {
+                stream.resume();
+                await finished(stream);
+            }
+            response.status(204).end();
+        } finally {
+            request.off('aborted', cancel);
+            request.off('error', cancel);
+            response.off('close', cancel);
+            session.lifetime.signal.removeEventListener('abort', cancel);
+            clearTimeout(timer);
+        }
     }
 
     route() {
