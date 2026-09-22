@@ -4,8 +4,8 @@ const PAGE_BINDINGS = new WeakMap();
 const UNBOUND = Symbol('unbound');
 
 function key(value) {
-    if (value === undefined || value === null) return UNBOUND;
-    if (typeof value === 'string' && value) return value;
+    if (value === undefined || value === null || value === '') return UNBOUND;
+    if (typeof value === 'string') return value;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
     if (typeof value === 'bigint' || typeof value === 'boolean') return value;
     throw new TypeError('Live resource keys must be non-empty strings, finite numbers, bigints, booleans, null, or undefined.');

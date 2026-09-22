@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { LiveHtmlServer, LivePage, codeBlock, component, defineSite, html, page, start: startPages } = require('../..');
+const { action, inject, LiveHtmlServer, LivePage, liveResource, codeBlock, component, defineSite, html, page, resource, start: startPages, state } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { createChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
@@ -12,6 +12,20 @@ const createChatroomServer = options => startPages(createChatroomPage(), options
 const createCardsServer = options => startPages(CardsPage, options);
 const createComponentsServer = options => startPages(ComponentsPage, options);
 const createJsxServer = options => startPages(JsxPage, options);
+const clipboardUpdates = liveResource();
+class ResourcePage extends LivePage {
+    sessionId = '';
+    clipboard = '';
+    tracker;
+    connect(input) { this.sessionId = input.session; this.clipboard = this.tracker.label; }
+    render() { return html`<output>${this.clipboard}</output>`; }
+}
+page('/resource')(ResourcePage);
+state()(ResourcePage.prototype, 'sessionId');
+resource(clipboardUpdates, page => page.sessionId)(ResourcePage.prototype, 'clipboard');
+inject('tracker')(ResourcePage.prototype, 'tracker');
+action()(ResourcePage.prototype, 'connect', Object.getOwnPropertyDescriptor(ResourcePage.prototype, 'connect'));
+const createResourceServer = options => startPages(ResourcePage, { ...options, providers: { tracker: { label: 'ready' } } });
 class StaticReferencePage {
     render() { return '<html><body><h1>Static reference</h1></body></html>'; }
 }
@@ -170,9 +184,9 @@ describe('Live HTML integration without mocks', () => {
         return server;
     }
 
-    async function getPage(server) {
+    async function getPage(server, path = '/') {
         const port = server.server.address().port;
-        const response = await request({ port, path: '/' });
+        const response = await request({ port, path });
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/html');
         return { port, response, config: pageConfig(response.body) };
@@ -207,6 +221,25 @@ describe('Live HTML integration without mocks', () => {
         await client.connect();
         return client;
     }
+
+    test('projects keyed live resources through real page sockets and releases them at shutdown', async () => {
+        const server = await start(createResourceServer);
+        const port = server.server.address().port;
+        const first = await getPage(server, '/resource');
+        const second = await getPage(server, '/resource');
+        const firstClient = await connectClient(port, first.config);
+        const secondClient = await connectClient(port, second.config);
+        const firstUpdates = []; const secondUpdates = [];
+        firstClient.on('redweb:state', message => firstUpdates.push(message.payload));
+        secondClient.on('redweb:state', message => secondUpdates.push(message.payload));
+        await firstClient.request('redweb:html', { kind: 'action', name: 'connect', args: [{ session: 'ABCD' }] });
+        await secondClient.request('redweb:html', { kind: 'action', name: 'connect', args: [{ session: 'EFGH' }] });
+        clipboardUpdates.publish('ABCD', 'first-only');
+        await waitForCondition(() => firstUpdates.some(update => JSON.stringify(update).includes('first-only')), 'keyed first page update');
+        expect(secondUpdates.some(update => JSON.stringify(update).includes('first-only'))).toBe(false);
+        await server.shutdown(); servers.delete(server);
+        expect(clipboardUpdates.publish('ABCD', 'released')).toBe(0);
+    });
 
     test('serves a site layout and generated metadata through a real HTTP listener', async () => {
         const server = await start(createSiteReferenceServer);

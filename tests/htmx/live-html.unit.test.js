@@ -17,6 +17,9 @@ const {
     exportStatic,
     html,
     page,
+    inject,
+    liveResource,
+    resource,
     start,
     state,
     url,
@@ -64,6 +67,31 @@ describe('decorator-first Live HTML units', () => {
             name: 'content', component: 'child', html: true,
             value: '<button rw-click="save" data-rw-component="child">Save</button>',
         }]);
+    });
+    test('keys live resources server-side and releases subscriptions with their pages', async () => {
+        const clips = liveResource();
+        class ClipboardPage extends LivePage {
+            sessionId = '';
+            clipboard = null;
+        }
+        state()(ClipboardPage.prototype, 'sessionId');
+        resource(clips, page => page.sessionId)(ClipboardPage.prototype, 'clipboard');
+        const first = new ClipboardPage();
+        const second = new ClipboardPage();
+        LivePage.activate(first); LivePage.activate(second);
+        first.sessionId = 'ABCD'; second.sessionId = 'EFGH';
+        expect(clips.publish('ABCD', 'first')).toBe(1);
+        expect(first.clipboard).toBe('first'); expect(second.clipboard).toBeNull();
+        second.sessionId = 'ABCD';
+        expect(clips.publish('ABCD', 'shared')).toBe(2);
+        await first.dispose();
+        expect(clips.publish('ABCD', 'after-dispose')).toBe(1);
+        expect(second.clipboard).toBe('after-dispose');
+        await second.dispose();
+        expect(clips.publish('ABCD', 'none')).toBe(0);
+        expect(() => clips.publish('', 'bad')).toThrow('without a key');
+        expect(() => resource({}, () => 'key')).toThrow('liveResource');
+        expect(() => resource(clips, null)).toThrow('key selector');
     });
     test('browser cleanup recognizes a real child terminated by signal', async () => {
         const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
