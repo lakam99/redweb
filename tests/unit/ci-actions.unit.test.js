@@ -29,8 +29,11 @@ test('the action runtime upgrade preserves Redweb compatibility and read-only CI
 test('CI de-duplicates matching push and PR runs without cancelling manual observation', () => {
     expect(workflow).toContain("github.event_name == 'workflow_dispatch'");
     expect(workflow).toContain("format('manual-{0}', github.ref_name)");
-    expect(workflow).toContain('github.event.pull_request.head.ref || github.ref_name');
+    expect(workflow).toContain("format('auto-{0}', github.event.pull_request.head.ref || github.ref_name)");
     expect(workflow).toContain('cancel-in-progress: true');
+    const group = ({ event, ref, head }) => event === 'workflow_dispatch' ? `manual-${ref}` : `auto-${head || ref}`;
+    expect(group({ event: 'push', ref: 'feature' })).toBe(group({ event: 'pull_request', ref: 'base', head: 'feature' }));
+    expect(group({ event: 'workflow_dispatch', ref: 'main' })).not.toBe(group({ event: 'push', ref: 'manual-main' }));
 });
 
 test('the default and hosted gates exclude soak and long fixed-window benchmark tests', () => {
