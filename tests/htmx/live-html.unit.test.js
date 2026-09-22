@@ -28,6 +28,7 @@ const {
 } = require('../..');
 const { escapeHtml, isHtml, renderValue } = require('../../src/htmx/Html');
 const { PageManager } = require('../../src/htmx/PageManager');
+const PageTaskLane = require('../../src/htmx/PageTaskLane');
 const PageAssetLoader = require('../../src/htmx/PageAssetLoader');
 const TemplateRenderer = require('../../src/htmx/TemplateRenderer');
 const browserRuntime = require('../../src/htmx/browserRuntime');
@@ -1114,6 +1115,18 @@ describe('decorator-first Live HTML units', () => {
         expect(() => new PageManager({ pages: [PlainPage], origins: [null] })).toThrow('origins');
         expect(() => new PageManager({ pages: [PlainPage], providers: [] })).toThrow('providers');
         expect(() => new PageManager({ pages: [PlainPage], providers: { constructor: 1 } })).toThrow('Provider names');
+        class MissingProviderPage extends LivePage { render() { return 'missing provider'; } }
+        page('/missing-provider')(MissingProviderPage);
+        inject('required')(MissingProviderPage.prototype, 'service');
+        const missingProvider = new PageManager({ pages: [MissingProviderPage] });
+        expect(() => missingProvider.instantiate(missingProvider.records.get('/missing-provider'))).toThrow('missing provider');
+        await missingProvider.shutdown();
+        class InitializedProviderPage extends LivePage { service = 'occupied'; render() { return 'initialized provider'; } }
+        page('/initialized-provider')(InitializedProviderPage);
+        inject('required')(InitializedProviderPage.prototype, 'service');
+        const initializedProvider = new PageManager({ pages: [InitializedProviderPage], providers: { required: {} } });
+        expect(() => initializedProvider.instantiate(initializedProvider.records.get('/initialized-provider'))).toThrow('must not have an initializer');
+        await initializedProvider.shutdown();
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: 'relative' } })).toThrow('absolute');
         expect(() => new PageManager({ pages: [PlainPage], paths: { socket: '/live?unsafe="' } })).toThrow('safe');
         expect(() => new PageManager({ pages: [PlainPage], paths: { runtime: '//evil.example/runtime.js' } })).toThrow('safe');
@@ -1210,6 +1223,18 @@ describe('decorator-first Live HTML units', () => {
         await expect(manager.render(record, request)).rejects.toMatchObject({ status: 503 });
 
         const pending = [...manager.pending.values()][0];
+        await expect(manager.receiveUpload({ url: '/__redweb/upload?action=echo', headers: {} }, {}))
+            .rejects.toMatchObject({ code: 'ACCESS_DENIED' });
+        const originalTasks = pending.tasks;
+        pending.tasks = new PageTaskLane(1);
+        let releaseTask;
+        const runningTask = manager.enqueue(pending, () => new Promise(resolve => { releaseTask = resolve; }));
+        let capacityFailure;
+        try { manager.enqueue(pending, () => 'overflow'); } catch (error) { capacityFailure = error; }
+        expect(capacityFailure).toMatchObject({ code: 'ACCESS_CAPACITY' });
+        releaseTask();
+        await runningTask;
+        pending.tasks = originalTasks;
         await expect(manager.authenticate({ url: '[', headers: { host: '[' } })).resolves.toBe(false);
         await expect(manager.authenticate({ url: '/', headers: {} })).resolves.toBe(false);
         await expect(manager.authenticate({ url: `/?pageId=${'x'.repeat(129)}`, headers: {} })).resolves.toBe(false);
