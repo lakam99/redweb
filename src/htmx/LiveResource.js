@@ -50,7 +50,11 @@ class LiveResource {
         if (!binding.active) return false;
         const next = key(binding.select(binding.page));
         if (Object.is(next, binding.key)) return false;
-        if (binding.key !== UNBOUND) this.subscribers.get(binding.key)?.delete(binding);
+        if (binding.key !== UNBOUND) {
+            const subscribers = this.subscribers.get(binding.key);
+            subscribers?.delete(binding);
+            if (subscribers?.size === 0) this.subscribers.delete(binding.key);
+        }
         binding.key = next;
         if (next !== UNBOUND) {
             const subscribers = this.subscribers.get(next) || new Set();

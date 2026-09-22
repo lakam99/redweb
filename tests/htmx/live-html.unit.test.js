@@ -85,6 +85,9 @@ describe('decorator-first Live HTML units', () => {
         expect(first.clipboard).toBe('first'); expect(second.clipboard).toBeNull();
         second.sessionId = 'ABCD';
         expect(clips.publish('ABCD', 'shared')).toBe(2);
+        for (let index = 0; index < 64; index += 1) first.sessionId = `rotated-${index}`;
+        expect(clips.subscribers.size).toBe(2);
+        first.sessionId = 'ABCD';
         await first.dispose();
         expect(clips.publish('ABCD', 'after-dispose')).toBe(1);
         expect(second.clipboard).toBe('after-dispose');
