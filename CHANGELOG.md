@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.3
+
+- Add explicit `defineApp({ providers })` dependencies through `@inject`, keyed `liveResource()` and `@resource()` projections, and bounded streaming `@upload()` actions for Live HTML pages and components.
+- Keep upload and socket actions ordered per page, cancel disconnected or aborted uploads before handlers run, and retain server-side file limits and origin checks. Applications still own persistence, authorization, and file scanning.
+- Clarify the relationship between providers and lifecycle services, and document a complete TSX upload-to-live-page example verified through real HTTP and WebSocket integration tests in the generated standard-decorator configuration.
+
 ## 0.16.2
 
 - Make `redweb init` generate a neutral, runnable TypeScript/TSX foundation by default so tutorials and original applications share one low-boilerplate starting structure.
