@@ -49,25 +49,28 @@ class ComponentBoundaryPage {
 }
 page('/')(ComponentBoundaryPage);
 
-class UploadPage {
-    received = '';
-    async receive(file) {
-        let content = '';
-        for await (const chunk of file.stream) content += chunk;
-        this.received = `${file.name}:${file.type}:${content}`;
+function createUploadPage() {
+    class UploadPage {
+        received = '';
+        async receive(file) {
+            let content = '';
+            for await (const chunk of file.stream) content += chunk;
+            this.received = `${file.name}:${file.type}:${content}`;
+        }
+        render() {
+            return jsxs('main', { children: [
+                jsx('input', { id: 'upload', type: 'file', 'rw-upload': 'receive' }),
+                jsx('textarea', { id: 'paste', 'rw-paste': 'receive' }),
+                jsx('p', { id: 'upload-status', 'rw-status': 'receive', role: 'status', 'aria-live': 'polite' }),
+                jsx('output', { id: 'received', children: this.received }),
+            ] });
+        }
     }
-    render() {
-        return jsxs('main', { children: [
-            jsx('input', { id: 'upload', type: 'file', 'rw-upload': 'receive' }),
-            jsx('textarea', { id: 'paste', 'rw-paste': 'receive' }),
-            jsx('p', { id: 'upload-status', 'rw-status': 'receive', role: 'status', 'aria-live': 'polite' }),
-            jsx('output', { id: 'received', children: this.received }),
-        ] });
-    }
+    page('/')(UploadPage);
+    state()(UploadPage.prototype, 'received');
+    upload({ maxBytes: 3, accept: 'text/plain' })(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
+    return UploadPage;
 }
-page('/')(UploadPage);
-state()(UploadPage.prototype, 'received');
-upload({ maxBytes: 3, accept: 'text/plain' })(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
 
 const logger = Object.freeze({ log() {}, warn() {}, error() {} });
 const browserCandidates = process.platform === 'win32'
@@ -251,7 +254,7 @@ async function main() {
     const reactiveServer = start(ReactivePage, { port: 0, bind: '127.0.0.1', logger });
     const componentBoundaries = start(ComponentBoundaryPage, { port: 0, bind: '127.0.0.1', logger });
     const validatedActions = start(createActionPage(), { port: 0, bind: '127.0.0.1', logger });
-    const uploads = start(UploadPage, { port: 0, bind: '127.0.0.1', logger });
+    const uploads = start(createUploadPage(), { port: 0, bind: '127.0.0.1', logger });
     const pages = [];
     let browser;
     let failure;

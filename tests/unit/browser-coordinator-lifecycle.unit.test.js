@@ -43,10 +43,13 @@ async function exercise(fault = '', mode = 'runtime') {
     const requireBoundary = name => {
         if (name === 'node:fs') return { existsSync: () => fault !== 'missing', readFileSync: () => source };
         if (name === 'express') return () => ({ get(route, handler) { assets.push([route, handler]); } });
-        if (name === '..') return { start(_page, options) {
-            options.logger.log(); options.logger.warn(); options.logger.error();
-            return application;
-        } };
+        if (name === '..') return {
+            page: () => () => {}, state: () => () => {}, upload: () => () => {},
+            start(_page, options) {
+                options.logger.log(); options.logger.warn(); options.logger.error();
+                return application;
+            },
+        };
         if (name === './lib/VerificationWorkspace') return { VerificationWorkspace: class { run(operation) { return operation(owner); } } };
         if (name === '../tests/helpers/network') return { withTimeout: promise => promise, waitForListening: async () => {} };
         if (name === './verify-live-html-browser') return {
@@ -92,6 +95,7 @@ async function exercise(fault = '', mode = 'runtime') {
     let rejected = false, result;
     try { await context.module.exports.runBrowserChecks({ mode, run,
         coverage: { source, instrumented: 'unit covered', collect() { events.push('collect'); } },
+        uploadCheck: async () => null,
         ...(mode === 'source' ? { frontends } : {}) }); }
     catch (error) { rejected = true; result = error; }
     if (process.argv.includes('--collectCoverageFrom=scripts/verify-browser-coverage.js')) {

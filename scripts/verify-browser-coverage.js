@@ -33,20 +33,23 @@ const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
 const command = (tab, method, params) => bounded(tab.command(method, params), method);
 
-class BrowserUploadPage {
-    received = '';
-    async receive(file) {
-        let value = '';
-        for await (const chunk of file.stream) value += chunk;
-        this.received = `${file.name}:${file.type}:${value}`;
+function createBrowserUploadPage() {
+    class BrowserUploadPage {
+        received = '';
+        async receive(file) {
+            let value = '';
+            for await (const chunk of file.stream) value += chunk;
+            this.received = `${file.name}:${file.type}:${value}`;
+        }
+        render() {
+            return '<input id="upload" type="file" rw-upload="receive"><textarea id="paste" rw-paste="receive"></textarea><p id="upload-status" rw-status="receive"></p><output id="received" data-rw-state="received">' + this.received + '</output>';
+        }
     }
-    render() {
-        return '<input id="upload" type="file" rw-upload="receive"><textarea id="paste" rw-paste="receive"></textarea><p id="upload-status" rw-status="receive"></p><output id="received" data-rw-state="received">' + this.received + '</output>';
-    }
+    page('/')(BrowserUploadPage);
+    state()(BrowserUploadPage.prototype, 'received');
+    upload({ maxBytes: 3, accept: 'text/plain' })(BrowserUploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(BrowserUploadPage.prototype, 'receive'));
+    return BrowserUploadPage;
 }
-page('/')(BrowserUploadPage);
-state()(BrowserUploadPage.prototype, 'received');
-upload({ maxBytes: 3, accept: 'text/plain' })(BrowserUploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(BrowserUploadPage.prototype, 'receive'));
 
 async function runCases(tab) {
     const result = await evaluate(tab, `(() => {
@@ -148,7 +151,7 @@ async function verifyUpload({ coverage, visit, mode, frontends, instrumented }) 
             mode === 'runtime' && instrumented ? frontend.replace(coverage.source, () => coverage.instrumented) : frontend));
     app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
         'import { mountLivePage } from "/__redweb/client.js"; mountLivePage();'));
-    const application = start(BrowserUploadPage, { server: app, port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
+    const application = start(createBrowserUploadPage(), { server: app, port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
     try {
         await waitForListening(application.server);
         const tab = await visit(`http://127.0.0.1:${application.server.address().port}/`);
@@ -223,7 +226,7 @@ async function main(mode = process.argv[2] || 'runtime') {
     }, outcome.failure, 'passed');
 }
 
-async function runBrowserChecks({ coverage, mode, run, frontends }) {
+async function runBrowserChecks({ coverage, mode, run, frontends, uploadCheck = verifyUpload }) {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     return new VerificationWorkspace().run(async execution => {
@@ -252,9 +255,11 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
                         },
                     });
                 }
-                const upload = await verifyUpload({ coverage, visit, mode, frontends, instrumented: true });
-                uploadApplication = upload.application;
-                coveredTabs.push(upload.tab);
+                const upload = await uploadCheck({ coverage, visit, mode, frontends, instrumented: true });
+                if (upload) {
+                    uploadApplication = upload.application;
+                    coveredTabs.push(upload.tab);
+                }
                 assert.deepEqual(run.instrumentedCases, run.plainCases, 'Plain and instrumented cases must agree');
                 run.integration = { transport: 'actual Redweb HTTP/WebSocket actions', cases: 'existing action feedback acceptance driver, twice' };
                 application = start(SelectionPage, { port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
