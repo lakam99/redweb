@@ -239,30 +239,7 @@ save(form: { displayName: string }) {
 
 Use `@upload()` when a page needs an original browser file rather than base64 in socket state. It is a general file-action contract: selected documents, profile images, game mods, captured media, and pasted content all arrive as the same bounded stream. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; other browser file sources can use that same action protocol. A present foreign `Origin` or cross-site Fetch Metadata value is rejected, and the page identity and policy are checked again for that request. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
 
-```tsx
-import { page, state, upload } from 'redweb';
-
-@page('/assets')
-class AssetPage {
-  @state() assetUrl = '';
-
-  @upload({ maxBytes: 2 * 1024 * 1024, accept: ['image/png', 'image/jpeg'] })
-  async saveAsset(file: { stream: NodeJS.ReadableStream; type: string; name: string | null }) {
-    // Stream directly to your application storage. Do not turn arbitrary files
-    // into data URLs or place their bytes in @state.
-    const reference = await this.storage.put(file.stream, { type: file.type, name: file.name });
-    this.assetUrl = reference.url;
-  }
-
-  render() {
-    return <main>
-      <input type="file" accept="image/png,image/jpeg" rw-upload="saveAsset" />
-      <div contenteditable="true" tabindex="0" rw-paste="saveAsset">Paste an image here</div>
-      <p rw-status="saveAsset" role="status" aria-live="polite" />
-    </main>;
-  }
-}
-```
+The [complete example below](#putting-uploads-providers-and-resources-together) shows the upload handler, its injected storage provider, and the pages receiving the result. There is no browser-side socket code.
 
 `accept` is an allow-list of MIME types (including `image/*`) and `maxBytes` defaults to 10 MiB; both are enforced by Redweb on the server. The browser's `accept` attribute is only a picker hint. The handler receives `{ stream, type, name }` and must persist or process the stream before it resolves. Redweb serializes uploads with socket actions for the same page and bounds queued page work; disconnecting, session expiry, server shutdown, or an aborted HTTP request destroys the file stream. Redweb drains an otherwise unread stream so its size limit is still enforced, but it intentionally provides no file storage, public URL, durable asset reference, virus scanning, or content sniffing. Put those policies behind an injected application provider and store only its small, authorized asset reference in page state.
 
@@ -272,23 +249,66 @@ File actions may live on decorated class components as well as pages. Their `rw-
 
 When a shared service changes data for a known key, avoid manual socket loops. `liveResource()` routes a server publication only to active page/component instances whose `@resource()` selector currently returns that key. Changing the selector state moves the subscription; disconnecting or disposing the page removes it. A resource is in-process projection, not a database, authorization mechanism, or cross-worker event bus.
 
+### Putting uploads, providers, and resources together
+
+Starting from a Redweb project created with `redweb init`, replace `src/app.tsx` with this example and run `npm run dev`. Open `/notes` in two tabs and upload a small text file in either one. Both tabs display the text without a custom WebSocket handler. The example stores only one note in memory; it is deliberately not durable or suitable for private user data.
+
 ```tsx
-import { defineApp, inject, liveResource, page, resource, state } from 'redweb';
+import { action, defineApp, inject, liveResource, page, resource, upload, type UploadedFile } from 'redweb';
 
-const projectUpdates = liveResource<ProjectSummary, string>();
+const noteUpdates = liveResource<string, string>();
 
-@page('/projects/:projectId')
-class ProjectPage {
-  @state() projectId = '';
-  @resource(projectUpdates, page => page.projectId) project: ProjectSummary | null = null;
-  @inject('projectStore') declare store: ProjectStore;
+class NoteStore {
+  current = '';
 
-  render() { return <main><h1>{this.project?.name ?? 'Loading…'}</h1></main>; }
+  async save(file: UploadedFile) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    this.current = Buffer.concat(chunks).toString('utf8');
+    noteUpdates.publish('shared-note', this.current);
+  }
+
+  clear() {
+    this.current = '';
+    noteUpdates.publish('shared-note', this.current);
+  }
 }
 
-const app = defineApp({ pages: [ProjectPage], providers: { projectStore } });
-projectUpdates.publish('redweb', { name: 'Redweb' });
+@page('/notes')
+class NotesPage {
+  @inject('notes') declare notes: NoteStore;
+  @resource(noteUpdates, () => 'shared-note') note: string | null = null;
+
+  @upload({ maxBytes: 64 * 1024, accept: 'text/plain' })
+  async saveNote(file: UploadedFile) {
+    await this.notes.save(file);
+  }
+
+  @action()
+  clearNote() {
+    this.notes.clear();
+  }
+
+  render() {
+    return <main>
+      <h1>Shared note</h1>
+      <input type="file" accept="text/plain" rw-upload="saveNote" />
+      <button rw-click="clearNote">Clear</button>
+      <p rw-status="saveNote" role="status" aria-live="polite" />
+      <pre>{this.note ?? this.notes.current}</pre>
+    </main>;
+  }
+}
+
+const notes = new NoteStore();
+export const app = defineApp({ pages: [NotesPage], providers: { notes } });
+
+if (require.main === module) void app.run();
 ```
+
+`defineApp` owns the page instances. `providers` supplies the same `NoteStore` to each page's `@inject('notes')` field. The upload action writes through that store; `noteUpdates.publish()` then assigns the new value only to subscribed pages, causing their JSX to update. A newly opened page reads `notes.current` before its first publication. The fixed key is appropriate only because this is a public shared note; for multiple documents use a document ID as the resource key and authorize every read and write on the server. Replace the in-memory store with application-owned persistence for durable data, and apply content validation appropriate to the files you accept.
 
 `@inject('name')` deliberately receives an explicit object from `defineApp({ providers })`; it has no container, reflection, or hidden global. Injected fields cannot have initializers and are immutable on the page instance. Keep persistence, storage URLs, scanning and authorization in these application-owned services.
 
