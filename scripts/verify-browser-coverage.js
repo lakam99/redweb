@@ -159,11 +159,11 @@ async function verifyUpload({ coverage, visit, mode, frontends, instrumented }) 
         await evaluate(tab, `(() => {
             const input = document.getElementById('upload');
             const transfer = new DataTransfer();
-            transfer.items.add(new File(['ok'], 'clip.txt', { type: 'text/plain' }));
+            transfer.items.add(new File(['ok'], 'clip😀.txt', { type: 'text/plain' }));
             input.files = transfer.files;
             input.dispatchEvent(new Event('change', { bubbles: true }));
         })()`);
-        await evaluate(tab, eventual(`document.getElementById('received').textContent === 'clip.txt:text/plain:ok'`, 'browser upload delivery'));
+        await evaluate(tab, eventual(`document.getElementById('received').textContent === 'clip😀.txt:text/plain:ok'`, 'browser upload delivery'));
         await evaluate(tab, eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'success'`, 'browser upload success feedback'));
         await evaluate(tab, `(() => {
             const input = document.getElementById('upload');

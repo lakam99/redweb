@@ -237,7 +237,7 @@ save(form: { displayName: string }) {
 
 ### Native files and clipboard images
 
-Use `@upload()` when a page needs the original browser file rather than a base64 string in socket state. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; the file is streamed through a byte cap to the server method. The page identity and policy are checked again for that request, and a copied page ID cannot cross principals. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
+Use `@upload()` when a page needs the original browser file rather than a base64 string in socket state. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; the file is streamed through a byte cap to the server method. A present foreign `Origin` or cross-site Fetch Metadata value is rejected, and the page identity and policy are checked again for that request. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
 
 ```tsx
 import { page, state, upload } from 'redweb';
@@ -264,7 +264,7 @@ class ClipboardPage {
 }
 ```
 
-`accept` is an allow-list of MIME types (including `image/*`) and `maxBytes` defaults to 10 MiB; both are enforced by Redweb on the server. The browser's `accept` attribute is only a picker hint. The handler receives `{ stream, type, name }` and must persist or process the stream before it resolves. Redweb drains an otherwise unread stream so its size limit is still enforced, but it intentionally provides no file storage, public URL, durable asset reference, virus scanning, or content sniffing. Put those policies behind an injected application provider and store only its small, authorized asset reference in page state.
+`accept` is an allow-list of MIME types (including `image/*`) and `maxBytes` defaults to 10 MiB; both are enforced by Redweb on the server. The browser's `accept` attribute is only a picker hint. The handler receives `{ stream, type, name }` and must persist or process the stream before it resolves. Redweb serializes uploads with socket actions for the same page and bounds queued page work; disconnecting, session expiry, server shutdown, or an aborted HTTP request destroys the file stream. Redweb drains an otherwise unread stream so its size limit is still enforced, but it intentionally provides no file storage, public URL, durable asset reference, virus scanning, or content sniffing. Put those policies behind an injected application provider and store only its small, authorized asset reference in page state.
 
 File actions may live on decorated class components as well as pages. Their `rw-upload`/`rw-paste` directives are scoped to the owning component automatically, exactly like regular actions.
 

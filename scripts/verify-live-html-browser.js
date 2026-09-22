@@ -308,11 +308,11 @@ async function main() {
         await uploadPage.evaluate(`(() => {
             const input = document.getElementById('upload');
             const transfer = new DataTransfer();
-            transfer.items.add(new File(['ok'], 'clip.txt', { type: 'text/plain' }));
+            transfer.items.add(new File(['ok'], 'clip😀.txt', { type: 'text/plain' }));
             input.files = transfer.files;
             input.dispatchEvent(new Event('change', { bubbles: true }));
         })()`);
-        await uploadPage.evaluate(eventual(`document.getElementById('received').textContent === 'clip.txt:text/plain:ok'`, 'browser upload delivery'));
+        await uploadPage.evaluate(eventual(`document.getElementById('received').textContent === 'clip😀.txt:text/plain:ok'`, 'browser upload delivery'));
         await uploadPage.evaluate(eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'success'`, 'browser upload success feedback'));
         await uploadPage.evaluate(`(() => {
             const input = document.getElementById('upload');

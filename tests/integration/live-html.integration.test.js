@@ -1,4 +1,5 @@
 const WebSocket = require('ws');
+const http = require('http');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
 const { action, inject, LiveHtmlServer, LivePage, liveResource, codeBlock, component, defineSite, html, page, resource, start: startPages, state, upload } = require('../..');
@@ -262,10 +263,57 @@ describe('Live HTML integration without mocks', () => {
         expect(rejected.status).toBe(415);
         const large = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '9' }, body: '123456789' });
         expect(large.status).toBe(413);
+        const chunked = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain' }, body: '123456789' });
+        expect(chunked.status).toBe(413);
+        const foreign = await request({ port: page.port, path, method: 'POST', headers: { Origin: 'https://evil.example', 'content-type': 'text/plain', 'content-length': '1' }, body: 'x' });
+        expect(foreign.status).toBe(403);
         const componentPath = `${path}&component=nested`;
-        const componentUpload = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': 'part.txt' }, body: 'part' });
+        const componentUpload = await request({ port: page.port, path: componentPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': encodeURIComponent('part😀.txt') }, body: 'part' });
         expect(componentUpload.status).toBe(204);
-        expect([...server.manager.pending.values()][0].page.nested.received).toBe('part.txt:part');
+        expect([...server.manager.pending.values()][0].page.nested.received).toBe('part😀.txt:part');
+    });
+
+    test('aborting an upload releases its handler and page work stays transport-ordered', async () => {
+        let entered, release;
+        const enteredUpload = new Promise(resolve => { entered = resolve; });
+        const releaseFirst = new Promise(resolve => { release = resolve; });
+        const order = [];
+        class UploadPage {
+            async receive(file) {
+                try {
+                    entered();
+                    for await (const _chunk of file.stream) {}
+                } finally { order.push('aborted'); }
+            }
+            async ordered(file) {
+                let content = ''; for await (const chunk of file.stream) content += chunk;
+                order.push(`start:${content}`);
+                if (content === 'first') await releaseFirst;
+                order.push(`end:${content}`);
+            }
+            render() { return '<p>upload</p>'; }
+        }
+        page('/abort-upload')(UploadPage);
+        upload({ maxBytes: 16, accept: 'text/plain' })(UploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'receive'));
+        upload({ maxBytes: 16, accept: 'text/plain' })(UploadPage.prototype, 'ordered', Object.getOwnPropertyDescriptor(UploadPage.prototype, 'ordered'));
+        const server = await start(options => startPages(UploadPage, options));
+        const documentPage = await getPage(server, '/abort-upload');
+        const abortPath = `/__redweb/upload?pageId=${encodeURIComponent(documentPage.config.pageId)}&action=receive`;
+        const client = http.request({ host: '127.0.0.1', port: documentPage.port, path: abortPath, method: 'POST', headers: { 'content-type': 'text/plain' } });
+        client.once('error', () => {});
+        client.write('cut');
+        await enteredUpload;
+        client.destroy();
+        await waitForCondition(() => order.includes('aborted'), 'aborted upload handler cleanup');
+
+        const orderedPath = `/__redweb/upload?pageId=${encodeURIComponent(documentPage.config.pageId)}&action=ordered`;
+        const first = request({ port: documentPage.port, path: orderedPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '5' }, body: 'first' });
+        await waitForCondition(() => order.includes('start:first'), 'first ordered upload start');
+        const second = request({ port: documentPage.port, path: orderedPath, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '6' }, body: 'second' });
+        release();
+        expect((await first).status).toBe(204);
+        expect((await second).status).toBe(204);
+        expect(order).toEqual(['aborted', 'start:first', 'end:first', 'start:second', 'end:second']);
     });
 
     test('serves a site layout and generated metadata through a real HTTP listener', async () => {

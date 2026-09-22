@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require('crypto');
 const { Transform } = require('stream');
 const { finished } = require('stream/promises');
+const PageTaskLane = require('./PageTaskLane');
 const { RequestFailure } = require('../access/RequestFailure');
 const path = require('path');
 const { setMaxListeners } = require('events');
@@ -330,7 +331,8 @@ class PageManager {
 
     createSession(page, ownsPage, principal, context = {}, record, lifetime = this.createLifetime(principal)) {
         const id = randomUUID();
-        const session = { id, page, ownsPage, principal, context, record, lifetime, socket: null, timer: null, detaching: null };
+        const session = { id, page, ownsPage, principal, context, record, lifetime, socket: null, timer: null, detaching: null,
+            tasks: new PageTaskLane() };
         lifetime.session = session;
         this.pending.set(id, session);
         this.expire(session);
@@ -437,6 +439,7 @@ class PageManager {
 
     async release(session) {
         session.lifetime.revoked = true;
+        session.tasks.close(new AccessDenied('ACCESS_CANCELLED'));
         const cleanup = [];
         if (session.socket) {
             session.socket.terminate?.();
@@ -480,9 +483,19 @@ class PageManager {
         return affected.length;
     }
 
+    enqueue(session, task) {
+        const result = session.tasks.enqueue(task);
+        if (!result) throw new RequestFailure('ACCESS_CAPACITY');
+        return result;
+    }
+
     async receive(socket, message) {
         const session = socket.__redwebPageSession;
         if (!session) throw new Error('Page session is not connected.');
+        return this.enqueue(session, () => this.receiveMessage(session, socket, message));
+    }
+
+    async receiveMessage(session, socket, message) {
         this.checkConnected(session, socket);
         const payload = message.payload;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new TypeError('Live HTML payload must be an object.');
@@ -515,6 +528,15 @@ class PageManager {
         const component = address.searchParams.get('component');
         const session = typeof id === 'string' ? this.pending.get(id) || this.active.get(id) : null;
         if (!session || !this.available(session)) throw new AccessDenied('ACCESS_DENIED');
+        if (request.headers.origin !== undefined && !await this.acceptsOrigin(request.headers.origin, request)) throw new RequestFailure('ORIGIN_DENIED');
+        if (request.headers['sec-fetch-site'] !== undefined && !['same-origin', 'none'].includes(request.headers['sec-fetch-site'])) {
+            throw new RequestFailure('ORIGIN_DENIED');
+        }
+        return this.enqueue(session, () => this.receiveUploadTask(session, request, response, name, component));
+    }
+
+    async receiveUploadTask(session, request, response, name, component) {
+        session.lifetime.check();
         const principal = await this.identity.resolve(request, session.lifetime.signal);
         if (!Object.is(principal, session.principal)) throw new AccessDenied('ACCESS_DENIED');
         const snapshot = requestSnapshot(request);
@@ -538,13 +560,32 @@ class PageManager {
             if (bytes > config.maxBytes) return done(new RequestFailure('UPLOAD_TOO_LARGE'));
             done(null, chunk);
         } }));
+        const cancel = () => stream.destroy(new AccessDenied('ACCESS_CANCELLED'));
+        stream.once('error', () => {});
+        request.once('aborted', cancel);
+        request.once('error', cancel);
+        response.once('close', cancel);
+        session.lifetime.signal.addEventListener('abort', cancel, { once: true });
+        if (request.destroyed || response.destroyed || session.lifetime.signal.aborted) cancel();
         const uploadedName = request.headers['x-redweb-upload-name'];
+        let decodedName = null;
+        if (typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 768) {
+            try { decodedName = decodeURIComponent(uploadedName); }
+            catch { decodedName = null; }
+        }
         const file = Object.freeze({ stream, type: contentType,
-            name: typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 256 ? uploadedName : null });
-        await implementation.call(target, file, context);
-        if (!stream.readableEnded) {
-            stream.resume();
-            await finished(stream);
+            name: decodedName && decodedName.length <= 256 ? decodedName : null });
+        try {
+            await implementation.call(target, file, context);
+            if (!stream.readableEnded) {
+                stream.resume();
+                await finished(stream);
+            }
+        } finally {
+            request.off('aborted', cancel);
+            request.off('error', cancel);
+            response.off('close', cancel);
+            session.lifetime.signal.removeEventListener('abort', cancel);
         }
         response.status(204).end();
     }
