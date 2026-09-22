@@ -701,6 +701,12 @@ declare module 'redweb' {
     ): LiveResourceDecorator;
     /** Receives an explicit instance from defineApp({ providers }). */
     export function inject(provider: string): LiveInjectDecorator;
+    export interface UploadedFile {
+        readonly stream: import('stream').Readable;
+        readonly type: string;
+        readonly name: string | null;
+    }
+    export function upload(options?: { maxBytes?: number; accept?: string | readonly string[] }): LiveActionDecorator;
     export function action(): LiveActionDecorator;
     export interface ActionAuthorization<Input> {
         authorize: (context: LivePageConnectionContext, input: Input) => boolean | Promise<boolean>;
@@ -738,6 +744,8 @@ declare module 'redweb' {
             client?: string;
             runtime?: string;
             css?: string;
+            /** Same-origin bounded streaming endpoint used by rw-upload and rw-paste. */
+            upload?: string;
         };
         sessionTtlMs?: number;
         maxSessions?: number;

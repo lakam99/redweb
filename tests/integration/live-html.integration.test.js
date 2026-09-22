@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 const path = require('path');
 const { RedwebClient } = require('redweb-client');
-const { action, inject, LiveHtmlServer, LivePage, liveResource, codeBlock, component, defineSite, html, page, resource, start: startPages, state } = require('../..');
+const { action, inject, LiveHtmlServer, LivePage, liveResource, codeBlock, component, defineSite, html, page, resource, start: startPages, state, upload } = require('../..');
 const { CounterPage } = require('../../examples/live-html/counter');
 const { createChatroomPage } = require('../../examples/live-html/chatroom');
 const { CardsPage } = require('../../examples/live-html/cards');
@@ -18,6 +18,7 @@ class ResourcePage extends LivePage {
     clipboard = '';
     tracker;
     connect(input) { this.sessionId = input.session; this.clipboard = this.tracker.label; }
+    async receiveFile(file) { let value = ''; for await (const chunk of file.stream) value += chunk; this.clipboard = `${file.type}:${value}`; }
     render() { return html`<output>${this.clipboard}</output>`; }
 }
 page('/resource')(ResourcePage);
@@ -25,6 +26,7 @@ state()(ResourcePage.prototype, 'sessionId');
 resource(clipboardUpdates, page => page.sessionId)(ResourcePage.prototype, 'clipboard');
 inject('tracker')(ResourcePage.prototype, 'tracker');
 action()(ResourcePage.prototype, 'connect', Object.getOwnPropertyDescriptor(ResourcePage.prototype, 'connect'));
+upload({ maxBytes: 8, accept: 'text/plain' })(ResourcePage.prototype, 'receiveFile', Object.getOwnPropertyDescriptor(ResourcePage.prototype, 'receiveFile'));
 const createResourceServer = options => startPages(ResourcePage, { ...options, providers: { tracker: { label: 'ready' } } });
 class StaticReferencePage {
     render() { return '<html><body><h1>Static reference</h1></body></html>'; }
@@ -239,6 +241,18 @@ describe('Live HTML integration without mocks', () => {
         expect(secondUpdates.some(update => JSON.stringify(update).includes('first-only'))).toBe(false);
         await server.shutdown(); servers.delete(server);
         expect(clipboardUpdates.publish('ABCD', 'released')).toBe(0);
+    });
+
+    test('streams a bounded page-authorized upload over real HTTP', async () => {
+        const server = await start(createResourceServer);
+        const page = await getPage(server, '/resource');
+        const path = `/__redweb/upload?pageId=${encodeURIComponent(page.config.pageId)}&action=receiveFile`;
+        const accepted = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '4', 'x-redweb-upload-name': 'note.txt' }, body: 'safe' });
+        expect(accepted.status).toBe(204);
+        const rejected = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'image/png', 'content-length': '1' }, body: 'x' });
+        expect(rejected.status).toBe(415);
+        const large = await request({ port: page.port, path, method: 'POST', headers: { 'content-type': 'text/plain', 'content-length': '9' }, body: '123456789' });
+        expect(large.status).toBe(413);
     });
 
     test('serves a site layout and generated metadata through a real HTTP listener', async () => {

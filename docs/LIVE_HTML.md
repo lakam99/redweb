@@ -235,6 +235,63 @@ save(form: { displayName: string }) {
 
 `rw-click="action"` prevents default navigation and invokes an action without arguments. `rw-submit="action"` prevents submission, passes form fields as the first argument, preserves duplicate field names as arrays, and resets only an unchanged, still-connected form after the server acknowledges success. `rw-bind="property"` sends text values or checkbox state only when that property was declared with `@state({ writable: true })`.
 
+### Native files and clipboard images
+
+Use `@upload()` when a page needs the original browser file rather than a base64 string in socket state. `rw-upload` on a file input and `rw-paste` on any focusable element make one same-origin `POST` to the current page session; the file is streamed through a byte cap to the server method. The page identity and policy are checked again for that request, and a copied page ID cannot cross principals. Uploads use the same pending/success/error feedback as `rw-click` and `rw-submit`; point `rw-status` at the upload method when the status should have a dedicated accessible location.
+
+```tsx
+import { page, state, upload } from 'redweb';
+
+@page('/clipboard')
+class ClipboardPage {
+  @state() preview = 'Nothing pasted yet.';
+
+  @upload({ maxBytes: 2 * 1024 * 1024, accept: ['image/png', 'image/jpeg'] })
+  async pasteImage(file: { stream: NodeJS.ReadableStream; type: string; name: string | null }) {
+    // Stream directly to your application storage. Do not turn arbitrary files
+    // into data URLs or place their bytes in @state.
+    const reference = await this.storage.put(file.stream, { type: file.type, name: file.name });
+    this.preview = reference.url;
+  }
+
+  render() {
+    return <main>
+      <input type="file" accept="image/png,image/jpeg" rw-upload="pasteImage" />
+      <div contenteditable="true" tabindex="0" rw-paste="pasteImage">Paste an image here</div>
+      <p rw-status="pasteImage" role="status" aria-live="polite" />
+    </main>;
+  }
+}
+```
+
+`accept` is an allow-list of MIME types (including `image/*`) and `maxBytes` defaults to 10 MiB; both are enforced by Redweb on the server. The browser's `accept` attribute is only a picker hint. The handler receives `{ stream, type, name }` and must persist or process the stream before it resolves. Redweb drains an otherwise unread stream so its size limit is still enforced, but it intentionally provides no file storage, public URL, durable asset reference, virus scanning, or content sniffing. Put those policies behind an injected application provider and store only its small, authorized asset reference in page state.
+
+File actions may live on decorated class components as well as pages. Their `rw-upload`/`rw-paste` directives are scoped to the owning component automatically, exactly like regular actions.
+
+### Server-projected resources and providers
+
+When a shared service changes data for a known key, avoid manual socket loops. `liveResource()` routes a server publication only to active page/component instances whose `@resource()` selector currently returns that key. Changing the selector state moves the subscription; disconnecting or disposing the page removes it. A resource is in-process projection, not a database, authorization mechanism, or cross-worker event bus.
+
+```tsx
+import { defineApp, inject, liveResource, page, resource, state } from 'redweb';
+
+const clipboardUpdates = liveResource<string, string>();
+
+@page('/clip')
+class ClipPage {
+  @state({ writable: true }) sessionId = '';
+  @resource(clipboardUpdates, page => page.sessionId) preview = '';
+  @inject('clipboardStore') declare storage: ClipboardStore;
+
+  render() { return <output>{this.preview}</output>; }
+}
+
+const app = defineApp({ pages: [ClipPage], providers: { clipboardStore } });
+clipboardUpdates.publish('session-42', '/private/assets/opaque-reference');
+```
+
+`@inject('name')` deliberately receives an explicit object from `defineApp({ providers })`; it has no container, reflection, or hidden global. Injected fields cannot have initializers and are immutable on the page instance. Keep persistence, storage URLs, scanning and authorization in these application-owned services.
+
 When an HTML-valued component state renders new actions or bindings, Redweb automatically scopes those directives back to that component. A component can therefore replace a join form with a composer—or swap any other interactive view—without manual component IDs or browser glue.
 
 The document emits `redweb:connection` events as transport state changes and `redweb:error` events when an interaction fails. Interactions require an open connection; they are not queued during initial connection or reconnect. Actions use request/response operations and are never automatically replayed.

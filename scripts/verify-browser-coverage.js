@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
+const { createCoverageMap } = require('istanbul-lib-coverage');
 const BrowserCoverage = require('./lib/BrowserCoverage');
 const { VerificationWorkspace } = require('./lib/VerificationWorkspace');
 const { verificationError } = require('./lib/verificationError');
@@ -14,7 +15,7 @@ const { withTimeout, waitForListening } = require('../tests/helpers/network');
 
 const runMorphCases = require('../tests/fixtures/browser-morph-cases');
 const SelectionPage = require('../tests/fixtures/selection-page');
-const { start } = require('..');
+const { start, page, state, upload } = require('..');
 const express = require('express');
 
 
@@ -31,6 +32,21 @@ const { verifyLivePageOwnership } = require('./lib/verify-live-page-ownership');
 const bounded = (promise, label) => withTimeout(promise, label, 15000);
 const evaluate = (tab, expression) => bounded(tab.evaluate(expression), 'browser evaluation');
 const command = (tab, method, params) => bounded(tab.command(method, params), method);
+
+class BrowserUploadPage {
+    received = '';
+    async receive(file) {
+        let value = '';
+        for await (const chunk of file.stream) value += chunk;
+        this.received = `${file.name}:${file.type}:${value}`;
+    }
+    render() {
+        return '<input id="upload" type="file" rw-upload="receive"><textarea id="paste" rw-paste="receive"></textarea><p id="upload-status" rw-status="receive"></p><output id="received" data-rw-state="received">' + this.received + '</output>';
+    }
+}
+page('/')(BrowserUploadPage);
+state()(BrowserUploadPage.prototype, 'received');
+upload({ maxBytes: 3, accept: 'text/plain' })(BrowserUploadPage.prototype, 'receive', Object.getOwnPropertyDescriptor(BrowserUploadPage.prototype, 'receive'));
 
 async function runCases(tab) {
     const result = await evaluate(tab, `(() => {
@@ -124,6 +140,53 @@ async function verifyFeedback({ coverage, visit, debugPort, run, instrumented, o
     });
 }
 
+async function verifyUpload({ coverage, visit, mode, frontends, instrumented }) {
+    const app = express();
+    const frontend = frontends?.plain || fs.readFileSync(path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js'), 'utf8');
+    app.get('/__redweb/client.js', (_request, response) => response.type('text/javascript').send(
+        mode === 'source' && instrumented ? frontends.instrumented :
+            mode === 'runtime' && instrumented ? frontend.replace(coverage.source, () => coverage.instrumented) : frontend));
+    app.get('/__redweb/runtime.js', (_request, response) => response.type('text/javascript').send(
+        'import { mountLivePage } from "/__redweb/client.js"; mountLivePage();'));
+    const application = start(BrowserUploadPage, { server: app, port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
+    try {
+        await waitForListening(application.server);
+        const tab = await visit(`http://127.0.0.1:${application.server.address().port}/`);
+        await evaluate(tab, `document.body.dispatchEvent(new Event('change', { bubbles: true }))`);
+        await evaluate(tab, `document.getElementById('upload').dispatchEvent(new Event('change', { bubbles: true }))`);
+        await evaluate(tab, `document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: new DataTransfer() }))`);
+        await evaluate(tab, `document.getElementById('paste').dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: new DataTransfer() }))`);
+        await evaluate(tab, `(() => {
+            const input = document.getElementById('upload');
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['ok'], 'clip.txt', { type: 'text/plain' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await evaluate(tab, eventual(`document.getElementById('received').textContent === 'clip.txt:text/plain:ok'`, 'browser upload delivery'));
+        await evaluate(tab, eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'success'`, 'browser upload success feedback'));
+        await evaluate(tab, `(() => {
+            const input = document.getElementById('upload');
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['no'], 'clip.png', { type: 'image/png' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        })()`);
+        await evaluate(tab, eventual(`document.getElementById('upload').getAttribute('data-rw-status') === 'error'`, 'browser upload rejection feedback'));
+        assert.equal(await evaluate(tab, `document.getElementById('upload-status').textContent`), 'That type of file is not accepted here.');
+        await evaluate(tab, `(() => {
+            const transfer = new DataTransfer();
+            transfer.items.add(new File(['yes'], 'paste.txt', { type: 'text/plain' }));
+            document.getElementById('paste').dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: transfer }));
+        })()`);
+        await evaluate(tab, eventual(`document.getElementById('received').textContent === 'paste.txt:text/plain:yes'`, 'browser paste delivery'));
+        return { tab, application };
+    } catch (error) {
+        await application.shutdown();
+        throw error;
+    }
+}
+
 async function main(mode = process.argv[2] || 'runtime') {
     let bundle;
     let frontendOffset;
@@ -164,7 +227,8 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
     const executable = process.env.REDWEB_BROWSER || browserCandidates.find(fs.existsSync);
     if (!executable) throw new Error('Chromium is required for generated browser coverage.');
     return new VerificationWorkspace().run(async execution => {
-        let browser, coveredTab, application, refreshPeer, clientPeer, failure;
+        let browser, application, uploadApplication, refreshPeer, clientPeer, failure;
+        const coveredTabs = [];
         const pages = new BrowserPages(execution, openPage, bounded);
         const recordFailure = value => { const error = verificationError(value); failure = failure ? new AggregateError([failure, error], failure.message, { cause: failure }) : error; };
         const recordCleanup = error => { execution.cleanupFailure = verificationError(error); recordFailure(error); };
@@ -183,11 +247,14 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
                         onPeer: peer => { clientPeer = peer; },
                         visit: async url => {
                             const tab = await visit(url);
-                            if (instrumented) coveredTab = tab;
+                            if (instrumented) coveredTabs.push(tab);
                             return tab;
                         },
                     });
                 }
+                const upload = await verifyUpload({ coverage, visit, mode, frontends, instrumented: true });
+                uploadApplication = upload.application;
+                coveredTabs.push(upload.tab);
                 assert.deepEqual(run.instrumentedCases, run.plainCases, 'Plain and instrumented cases must agree');
                 run.integration = { transport: 'actual Redweb HTTP/WebSocket actions', cases: 'existing action feedback acceptance driver, twice' };
                 application = start(SelectionPage, { port: 0, bind: '127.0.0.1', logger: { log() {}, warn() {}, error() {} } });
@@ -196,9 +263,14 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
             }
         } catch (error) { recordFailure(error); }
         finally {
-            if (coveredTab) {
-                try { coverage.collect(await evaluate(coveredTab, mode === 'source' ? 'window.__redwebApplicationCoverage__' : 'window.__redwebBrowserCoverage__')); }
-                catch (error) { recordFailure(error); }
+            if (coveredTabs.length) {
+                try {
+                    const reports = await Promise.all(coveredTabs.map(coveredTab => evaluate(coveredTab,
+                        mode === 'source' ? 'window.__redwebApplicationCoverage__' : 'window.__redwebBrowserCoverage__')));
+                    const merged = createCoverageMap();
+                    reports.forEach(report => merged.merge(report));
+                    coverage.collect(merged.toJSON());
+                } catch (error) { recordFailure(error); }
             }
             try { await pages.close(); } catch (error) { recordCleanup(error); }
             try { if (application) await bounded(application.shutdown(), 'live server shutdown'); }
@@ -206,6 +278,8 @@ async function runBrowserChecks({ coverage, mode, run, frontends }) {
                 recordCleanup(error);
                 try { application.server.unref(); } catch (error) { recordCleanup(error); }
             }
+            try { if (uploadApplication) await bounded(uploadApplication.shutdown(), 'upload server shutdown'); }
+            catch (error) { recordCleanup(error); }
             try { if (refreshPeer) await bounded(refreshPeer.pause(), 'revision peer cleanup'); }
             catch (error) {
                 recordCleanup(error);

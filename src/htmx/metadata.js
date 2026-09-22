@@ -11,6 +11,8 @@ const RESOURCE_METADATA = new WeakMap();
 const RESOLVED_RESOURCE = new WeakMap();
 const INJECT_METADATA = new WeakMap();
 const RESOLVED_INJECT = new WeakMap();
+const UPLOAD_METADATA = new WeakMap();
+const RESOLVED_UPLOAD = new WeakMap();
 const PAGE_ROOTS = new WeakMap();
 const PAGE_STYLESHEET_ROOTS = new WeakMap();
 const COMPONENT_CLASSES = new WeakSet();
@@ -80,6 +82,13 @@ function registerInject(PageClass, property, provider) {
     const properties = new Map(INJECT_METADATA.get(PageClass) || []);
     properties.set(property, provider);
     INJECT_METADATA.set(PageClass, properties);
+    metadataVersion += 1;
+}
+
+function registerUpload(PageClass, method, config) {
+    const methods = new Map(UPLOAD_METADATA.get(PageClass) || []);
+    methods.set(method, config);
+    UPLOAD_METADATA.set(PageClass, methods);
     metadataVersion += 1;
 }
 
@@ -318,6 +327,30 @@ function inject(provider) {
     };
 }
 
+function upload(options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('upload() options must be an object.');
+    const { maxBytes = 10 * 1024 * 1024, accept = [] } = options;
+    if (!Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > 1024 * 1024 * 1024) throw new RangeError('upload() maxBytes must be an integer between 1 and 1 GiB.');
+    const types = Array.isArray(accept) ? accept : [accept];
+    if (types.some(type => typeof type !== 'string' || !/^[a-z]+\/(?:[a-z0-9.+-]+|\*)$/.test(type))) throw new TypeError('upload() accept must contain MIME types or type wildcards.');
+    const config = Object.freeze({ maxBytes, accept: Object.freeze([...new Set(types)]) });
+    return (target, method, descriptor) => {
+        if (method?.kind === 'method') {
+            if (method.static || method.private || typeof method.name !== 'string' || !method.name || typeof target !== 'function') throw new TypeError('upload() requires a public instance method with a string name.');
+            const entry = Object.freeze({ implementation: target, definition: new ActionDefinition() });
+            method.addInitializer(function registerStandardUpload() {
+                if (this[method.name] === target) { registerStandardAction(this.constructor, method.name, entry); registerUpload(this.constructor, method.name, config); }
+            });
+            return target;
+        }
+        const PageClass = assertDecoratorTarget(target, 'upload()');
+        if (typeof method !== 'string' || !method || typeof descriptor?.value !== 'function') throw new TypeError('upload() must decorate a method.');
+        registerAction(PageClass, method, Object.freeze({ implementation: descriptor.value, definition: new ActionDefinition() }));
+        registerUpload(PageClass, method, config);
+        return descriptor;
+    };
+}
+
 function action(options) {
     const definition = new ActionDefinition(options);
     return (target, method, descriptor) => {
@@ -391,6 +424,7 @@ function getStateConfig(PageClass, property) {
 
 function getResourceMetadata(PageClass) { return new Map(resolved(RESOURCE_METADATA, RESOLVED_RESOURCE, PageClass)); }
 function getInjectMetadata(PageClass) { return new Map(resolved(INJECT_METADATA, RESOLVED_INJECT, PageClass)); }
+function getUploadMetadata(PageClass) { return new Map(resolved(UPLOAD_METADATA, RESOLVED_UPLOAD, PageClass)); }
 
 function forEachState(PageClass, callback) {
     resolvedState(PageClass).forEach(callback);
@@ -421,6 +455,7 @@ module.exports = {
     getActionMetadata,
     getPageMetadata,
     getInjectMetadata,
+    getUploadMetadata,
     getResourceMetadata,
     getPageStylesheetRoots,
     getPageTemplateRoot,
@@ -436,5 +471,6 @@ module.exports = {
     setPageStylesheetRoots,
     state,
     resource,
+    upload,
     view,
 };

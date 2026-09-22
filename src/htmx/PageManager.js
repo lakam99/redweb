@@ -1,4 +1,6 @@
 const { createHash, randomUUID } = require('crypto');
+const { Transform } = require('stream');
+const { finished } = require('stream/promises');
 const { RequestFailure } = require('../access/RequestFailure');
 const path = require('path');
 const { setMaxListeners } = require('events');
@@ -10,7 +12,7 @@ const LivePage = require('./LivePage');
 const ReactiveRenderer = require('./ReactiveRenderer');
 const browserRuntime = require('./browserRuntime');
 const { isHtml, renderValue, trustedHtml } = require('./Html');
-const { getInjectMetadata, getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot } = require('./metadata');
+const { getActionImplementation, getInjectMetadata, getPageMetadata, getPageStylesheetRoots, getPageTemplateRoot, getUploadMetadata } = require('./metadata');
 const synchronous = require('./synchronous');
 const { AccessDenied } = require('../access/AccessPolicy');
 const { PageIdentity, AuthenticationFailure, isPrincipal } = require('./PageIdentity');
@@ -25,6 +27,7 @@ const DEFAULT_PATHS = Object.freeze({
     client: '/__redweb/client.js',
     runtime: '/__redweb/runtime.js',
     css: '/__redweb/css',
+    upload: '/__redweb/upload',
 });
 
 function boundedName(value, label) {
@@ -189,6 +192,11 @@ class PageManager {
             const clientFile = path.join(path.dirname(require.resolve('redweb-client/live-html')), 'live-html.js');
             app.get(this.paths.client, (_request, response) => response.sendFile(clientFile));
             app.get(this.paths.runtime, (_request, response) => response.type('text/javascript').send(browserRuntime(this.paths.client)));
+            app.post(this.paths.upload, (request, response) => this.receiveUpload(request, response).catch(error => {
+                if (response.headersSent) return response.destroy();
+                const failure = RequestFailure.from(error, 'UPLOAD_FAILED');
+                response.status(failure.status).json({ error: { code: failure.code, message: failure.message } });
+            }));
         }
         this.stylesheets.forEach((content, url) => app.get(url, (_request, response) => {
             response.set('Cache-Control', 'public, max-age=31536000, immutable').type('text/css').send(content);
@@ -293,6 +301,7 @@ class PageManager {
                 pageId: session.id,
                 socketPath: record.socketPath || this.paths.socket,
                 runtimePath: this.paths.runtime,
+                uploadPath: this.paths.upload,
                 version: PROTOCOL_VERSION,
             };
             if (renderer.enabled) {
@@ -497,6 +506,47 @@ class PageManager {
             return;
         }
         throw new TypeError('Live HTML message kind must be "action" or "state".');
+    }
+
+    async receiveUpload(request, response) {
+        const address = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+        const id = address.searchParams.get('pageId');
+        const name = boundedName(address.searchParams.get('action'), 'Upload action name');
+        const component = address.searchParams.get('component');
+        const session = typeof id === 'string' ? this.pending.get(id) || this.active.get(id) : null;
+        if (!session || !this.available(session)) throw new AccessDenied('ACCESS_DENIED');
+        const principal = await this.identity.resolve(request, session.lifetime.signal);
+        if (!Object.is(principal, session.principal)) throw new AccessDenied('ACCESS_DENIED');
+        const snapshot = requestSnapshot(request);
+        const context = Object.freeze({ ...session.context, request: snapshot, params: snapshot.params, query: snapshot.query,
+            body: snapshot.body, principal, signal: session.lifetime.signal });
+        await session.record.metadata.policy?.check(context);
+        const target = component === null || component === '' ? session.page : session.page._component(boundedName(component, 'Upload component name'));
+        if (!target) throw new AccessDenied('ACCESS_DENIED');
+        const config = getUploadMetadata(target.constructor).get(name);
+        const implementation = getActionImplementation(target.constructor, name);
+        if (!config || !implementation || target[name] !== implementation) throw new AccessDenied('ACCESS_DENIED');
+        const contentLength = Number(request.headers['content-length']);
+        if (Number.isFinite(contentLength) && contentLength > config.maxBytes) throw new RequestFailure('UPLOAD_TOO_LARGE');
+        const contentType = String(request.headers['content-type'] || '').split(';', 1)[0].toLowerCase();
+        if (config.accept.length && !config.accept.some(type => type === contentType || type.endsWith('/*') && contentType.startsWith(type.slice(0, -1)))) {
+            throw new RequestFailure('UPLOAD_TYPE_REJECTED');
+        }
+        let bytes = 0;
+        const stream = request.pipe(new Transform({ transform(chunk, _encoding, done) {
+            bytes += chunk.length;
+            if (bytes > config.maxBytes) return done(new RequestFailure('UPLOAD_TOO_LARGE'));
+            done(null, chunk);
+        } }));
+        const uploadedName = request.headers['x-redweb-upload-name'];
+        const file = Object.freeze({ stream, type: contentType,
+            name: typeof uploadedName === 'string' && uploadedName.length > 0 && uploadedName.length <= 256 ? uploadedName : null });
+        await implementation.call(target, file, context);
+        if (!stream.readableEnded) {
+            stream.resume();
+            await finished(stream);
+        }
+        response.status(204).end();
     }
 
     route() {

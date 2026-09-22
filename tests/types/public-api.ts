@@ -12,6 +12,7 @@ import {
     ERROR_CODES,
     LiveHtmlServer,
     LivePage,
+    UploadedFile,
     action,
     attribute,
     codeBlock,
@@ -20,9 +21,13 @@ import {
     each,
     exportStatic,
     html,
+    inject,
+    liveResource,
     page,
     state,
     start,
+    resource,
+    upload,
     url,
     view,
 } from 'redweb';
@@ -68,6 +73,24 @@ class CounterPage extends LivePage {
         return html`<strong>${this.count}</strong>`;
     }
 }
+
+const previews = liveResource<string, string>();
+class FilePage {
+    @state()
+    key = 'visitor';
+
+    @resource(previews, page => page.key)
+    preview = '';
+
+    @inject('storage')
+    declare storage: { write(file: UploadedFile): Promise<string> };
+
+    @upload({ maxBytes: 1024, accept: ['text/plain', 'image/*'] })
+    async receive(file: UploadedFile) {
+        this.preview = await this.storage.write(file);
+    }
+}
+void FilePage;
 
 class CardView {
     @state()
