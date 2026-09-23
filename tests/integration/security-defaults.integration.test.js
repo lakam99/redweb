@@ -6,7 +6,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page } = require('../..');
 const {
-    closeWebSocket, request, silentLogger, waitForListening,
+    closeWebSocket, request, silentLogger, waitForCondition, waitForListening,
     waitForOpen, websocketUpgradeStatus,
 } = require('../helpers/network');
 
@@ -166,5 +166,38 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         const frameAncestors = /(?:^|;)\s*frame-ancestors\s+(?:'none'|'self')(?:\s|;|$)/i.test(policy);
         const frameOptions = /^(?:deny|sameorigin)$/i.test(response.headers['x-frame-options'] || '');
         expect(frameAncestors || frameOptions).toBe(true);
+    });
+
+    test('revoked protected-room membership cannot send or receive private broadcasts', async () => {
+        let allowed = true;
+        class Enter extends BaseHandler {
+            constructor() { super('enter'); }
+            async onMessage(socket) { socket.sendJson({ joined: await socket.enterRoom('private') }); }
+        }
+        class Broadcast extends BaseHandler {
+            constructor() { super('broadcast'); }
+            onMessage(socket) { socket.sendJson({ sent: socket.roomBroadcast('private', { secret: 'private-update' }) }); }
+        }
+        class PrivateRoom extends SocketRoute {
+            constructor() {
+                super({ path: '/room', handlers: [Enter, Broadcast], allowDuplicateConnections: true,
+                    admission: { authenticate: () => 'owner' }, rooms: { authorize: () => allowed }, logger: silentLogger });
+            }
+        }
+        const server = new SocketServer({ routes: [PrivateRoom], port: 0, bind: '127.0.0.1', logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const socket = new WebSocket(`ws://127.0.0.1:${server.server.address().port}/room`);
+        clients.add(socket);
+        const messages = [];
+        socket.on('message', data => messages.push(JSON.parse(data.toString())));
+        await waitForOpen(socket);
+        socket.send(JSON.stringify({ type: 'enter' }));
+        await waitForCondition(() => messages.some(message => message.joined === true), 'private-room entry');
+        allowed = false;
+        socket.send(JSON.stringify({ type: 'broadcast' }));
+        await waitForCondition(() => messages.some(message => Object.hasOwn(message, 'sent')), 'revoked broadcast result');
+        expect(messages.find(message => Object.hasOwn(message, 'sent')).sent).toBe(0);
+        expect(messages.some(message => message.secret === 'private-update')).toBe(false);
     });
 });
