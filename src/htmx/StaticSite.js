@@ -3,7 +3,7 @@ const os = require('os');
 const path = require('path');
 const { decoratorDirectory } = require('./sourceRoot');
 const { getPageTemplateRoot, page, pageCache, pageHead, setPageStylesheetRoots } = require('./metadata');
-const { exportStatic } = require('./StaticExporter');
+const { exportStatic, replaceOutput } = require('./StaticExporter');
 
 function plainObject(value, label) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${label} must be an object.`);
@@ -95,8 +95,7 @@ function merge(directory, outDir) {
     rejectOutputLinks(outDir);
     for (const entry of publicFiles(directory)) {
         const destination = path.join(outDir, entry.relative);
-        fs.mkdirSync(path.dirname(destination), { recursive: true });
-        fs.copyFileSync(entry.source, destination);
+        replaceOutput(outDir, destination, temporary => fs.copyFileSync(entry.source, temporary, fs.constants.COPYFILE_EXCL));
     }
 }
 

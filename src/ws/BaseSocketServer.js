@@ -6,7 +6,6 @@
  * @property {Array<new () => import('./SocketRoute').SocketRoute>} [routes]
  */
 
-const DefaultRoute = require('./DefaultRoute');
 const { createInspection } = require('../development/Inspection');
 const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
@@ -57,7 +56,7 @@ class BaseSocketServer {
     this._connectionHandler = this._ownedServer?.onConnection ?? null;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
-    const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
+    const RouteClasses = [...this.routes];
     this.routes = [];
     try {
       for (const RouteClass of RouteClasses) {
@@ -130,6 +129,9 @@ class BaseSocketServer {
 
     try { route.runtime.prepareRequest(req); }
     catch { return this.rejectFailure(sock, 'REQUEST_INVALID'); }
+    if (!route.acceptsDefaultOrigin(req)) return this.rejectFailure(sock, 'ORIGIN_DENIED');
+    if (!route.allowDuplicateConnections && !route.canReplaceConnection &&
+        route.clients.has(route.resolveRemoteAddress(req))) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
 
     if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
       let reservation;
@@ -155,6 +157,7 @@ class BaseSocketServer {
               ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
               : this.rejectFailure(sock, 'AUTHENTICATION_REQUIRED');
           }
+          if (!route.canReplaceRequest(req)) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
           this.completeUpgrade(route, req, sock, head);
         })
         .catch(() => {

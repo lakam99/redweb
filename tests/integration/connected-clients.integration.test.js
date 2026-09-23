@@ -77,6 +77,31 @@ describe('connected clients with real HTTP, page sockets and rooms', () => {
     }
     const own = (f, user) => [...f.route.clients.values()].filter(socket => socket.context.principal === user).map(socket => f.players.get(socket));
 
+    test('a projected object cannot change a connected page prototype', async () => {
+        const malicious = JSON.parse('{"__proto__":{"isAdmin":true},"value":"safe"}');
+        let hostile = false;
+        const f = await fixture({ project: () => hostile ? malicious : { value: 'safe' } });
+        const visitor = await f.connect('alice');
+        const pageInstance = [...f.route.clients.values()][0].__redwebPageSession.page;
+        await visitor.send('join', { room: 'one' });
+        hostile = true;
+        await f.players.refresh('one');
+        expect(Object.getPrototypeOf(pageInstance)).toBe(f.Board.prototype);
+        expect(pageInstance.isAdmin).toBeUndefined();
+    });
+
+    test('an error-state object cannot change a connected page prototype', async () => {
+        const malicious = JSON.parse('{"__proto__":{"isAdmin":true},"value":"rejected"}');
+        const f = await fixture({ move: () => { throw new ClientError('Rejected'); },
+            clients: { errorState: () => malicious } });
+        const visitor = await f.connect('alice');
+        const pageInstance = [...f.route.clients.values()][0].__redwebPageSession.page;
+        await visitor.send('join', { room: 'one' });
+        await visitor.send('move', { value: 1 });
+        expect(Object.getPrototypeOf(pageInstance)).toBe(f.Board.prototype);
+        expect(pageInstance.isAdmin).toBeUndefined();
+    });
+
     test('projects per-connection pages, deduplicates tabs, and automatically removes only disconnected membership', async () => {
         const f = await fixture(); const a = await f.connect('alice'), tab = await f.connect('alice'), b = await f.connect('bob');
         await a.send('join', { room: 'one' }); await tab.send('join', { room: 'one' }); await b.send('join', { room: 'one' });
@@ -151,6 +176,15 @@ describe('connected clients with real HTTP, page sockets and rooms', () => {
         const onlyPages = await fixture({ raw: false }); const b = await onlyPages.connect('bob', true);
         expect((await b.send('join', { room: 'denied' })).type).toBe('error');
         expect(onlyPages.commits).toHaveLength(0);
+    });
+
+    test('an authenticated raw page-bound client cannot dispatch binary commands', async () => {
+        const f = await fixture();
+        const raw = await f.connect('alice', true);
+        raw.socket.send(Buffer.from('binary'));
+        await waitForCondition(() => raw.frames.some(frame => frame.type === 'error'), 'raw binary rejection');
+        expect(f.commits).toHaveLength(0);
+        expect(raw.socket.readyState).toBe(WebSocket.OPEN);
     });
 
     test.each(['projection', 'authorization'])('obsolete %s failures cannot disconnect a healthy newer generation', async mode => {

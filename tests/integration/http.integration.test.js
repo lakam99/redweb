@@ -88,7 +88,7 @@ describe('HTTP and HTTPS integration', () => {
             path: '/form',
             method: 'POST',
             headers: {
-                origin: 'https://allowed.example',
+                origin: `http://127.0.0.1:${encoded.server.address().port}`,
                 'content-type': 'application/x-www-form-urlencoded',
             },
             body: 'name=Redweb',

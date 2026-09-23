@@ -3,13 +3,14 @@ const { sendJson, sendPayload, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
 const { closeWebSocketServer } = require('./shutdown');
-const { AdmissionPolicy } = require('./AdmissionPolicy');
+const { AdmissionPolicy, ADMISSION_CONTEXT } = require('./AdmissionPolicy');
 const TransportPolicy = require('./TransportPolicy');
 const Metrics = require('./Metrics');
 const RouteRuntime = require('./RouteRuntime');
 const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
 const { InboundContractValidationError } = require('./ContractValidationError');
-const { RequestFailure } = require('../access/RequestFailure');
+const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
+const { sameOrigin } = require('../access/sameOrigin');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
@@ -140,13 +141,14 @@ class SocketRoute {
          * @type {string}
          */
         this.path = path;
-        this.websocketOptions = { ...websocketOptions, closeTimeout };
+        this.websocketOptions = { maxPayload: 1024 * 1024, ...websocketOptions, closeTimeout };
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
         this.exposeErrors = exposeErrors;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.admissionPolicy = admission === undefined ? null : new AdmissionPolicy(admission);
+        this.canReplaceConnection = Boolean(getClientKey && this.admissionPolicy?.authenticate);
         this.transportPolicy = limits === undefined && !orderedMessages
             ? null
             : new TransportPolicy(limits, orderedMessages);
@@ -234,7 +236,25 @@ class SocketRoute {
         return req?.socket?.remoteAddress || 'unknown';
     }
 
+    canReplaceRequest(request) {
+        if (this.allowDuplicateConnections) return true;
+        const existing = this.clients.get(this.resolveRemoteAddress(request));
+        if (!existing) return true;
+        const principal = request?.[ADMISSION_CONTEXT]?.principal;
+        return this.canReplaceConnection && principal !== undefined &&
+            Object.is(existing.context?.principal, principal);
+    }
+
+    acceptsDefaultOrigin(request) {
+        return Boolean(this.admissionPolicy?.origins) || request?.headers?.origin === undefined ||
+            sameOrigin(request, request.headers.origin, this.trustProxy);
+    }
+
     authorizeUpgrade(request, rawSocket, signal) {
+        if (!this.acceptsDefaultOrigin(request)) {
+            request[UPGRADE_REJECTION] = new RequestFailure('ORIGIN_DENIED').rejection;
+            return false;
+        }
         if (!this.admissionPolicy && !this.protocolPolicy) return true;
         return this.authorizePolicies(request, rawSocket, signal);
     }
@@ -248,6 +268,7 @@ class SocketRoute {
         if (this.draining || this.pendingUpgrades >= this.maxPendingUpgrades) return null;
         const clientKey = this.resolveRemoteAddress(request);
         const replacing = !this.allowDuplicateConnections && this.clients.has(clientKey);
+        if (replacing && !this.canReplaceConnection) return null;
         const capacity = !replacing;
         if (capacity && this.clients.size + this.pendingCapacity >= (this.transportPolicy?.maxConnections ?? Infinity)) {
             return null;
@@ -271,6 +292,11 @@ class SocketRoute {
     handleConnection(socket, req) {
         const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
+
+        if (!this.canReplaceRequest(req)) {
+            socket.close?.(1008, 'Connection already active');
+            return;
+        }
 
         this.runtime.decorate(socket, req);
 
@@ -300,6 +326,7 @@ class SocketRoute {
 
         this.clients.set(clientKey, socket);
         socket.__redwebRouteOwner = this;
+        socket.__redwebInFlightMessages = 0;
         socket.clientKey = clientKey;
         socket.__redwebClientKey = clientKey;
         socket.remoteAddress = socket.remoteAddress || ip;
@@ -387,7 +414,18 @@ class SocketRoute {
         }
         const task = () => this.runMessageTask(() => this.dispatchMessage(socket, message, isBinary));
         if (!runtime?.queue) {
-            void task();
+            if (socket.__redwebInFlightMessages >= (this.transportPolicy?.maxPendingMessages ?? 64)) {
+                this.sendFailure(socket, ERROR_CODES.QUEUE_FULL, 'Message capacity reached');
+                socket.close?.(1013, 'Message capacity reached');
+                this.metrics?.increment('redweb.messages.queue_full');
+                return false;
+            }
+            socket.__redwebInFlightMessages += 1;
+            void Promise.resolve().then(task).catch(error => {
+                try { this.handleError(socket, error); }
+                catch { /* Application logging cannot turn a failed task into an unhandled rejection. */ }
+                socket.close?.(1011, 'Message processing failed');
+            }).finally(() => { socket.__redwebInFlightMessages -= 1; });
             return true;
         }
         if (runtime.queue.enqueue(task)) return true;
@@ -448,7 +486,7 @@ class SocketRoute {
         }
         const handler = this.handlers.find((handler) => handler.name == data.type);
         if (!handler) {
-            this.sendFailure(sock, ERROR_CODES.UNKNOWN_HANDLER, `No such handler ${data.type}`, { requestId: data.requestId });
+            this.sendFailure(sock, ERROR_CODES.UNKNOWN_HANDLER, 'Unknown handler', { requestId: data.requestId });
             sock.close?.(1008, 'Unknown handler');
             return false;
         } else {

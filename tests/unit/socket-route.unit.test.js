@@ -327,6 +327,27 @@ describe('SocketRoute units', () => {
         expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
     });
 
+    test.each([false, true])('contains unexpected failures from unordered dispatch when logging throws=%s', async loggingThrows => {
+        const logger = { log() {}, warn() {}, error: jest.fn(() => {
+            if (loggingThrows) throw new Error('logger failure');
+        }) };
+        const route = new SocketRoute({ path: '/unordered-error', handlers: [NoopHandler], logger });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        route.dispatchMessage = () => { throw new Error('unexpected dispatch failure'); };
+        socket.emit('message', JSON.stringify({ type: 'noop' }), false);
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('Socket error from unknown:', expect.any(Error));
+        expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
+        expect(socket.__redwebInFlightMessages).toBe(0);
+    });
+
+    test('rejects a cross-origin request through direct upgrade authorization', () => {
+        const route = new SocketRoute({ path: '/origin', handlers: [NoopHandler], logger: null });
+        const request = { headers: { host: 'redweb.example', origin: 'https://foreign.example' }, socket: {} };
+        expect(route.authorizeUpgrade(request, {})).toBe(false);
+    });
+
     test('cancels pending ordered work synchronously when the queue overflows', async () => {
         const route = new SocketRoute({
             path: '/ordered-overflow',
@@ -376,6 +397,8 @@ describe('SocketRoute units', () => {
         const route = new SocketRoute({
             path: '/reservations', handlers: [NoopHandler], logger: null,
             limits: { maxConnections: 1 }, maxPendingUpgrades: 1,
+            getClientKey: request => request.socket.remoteAddress,
+            admission: { authenticate: () => 'owner' },
         });
         const request = { socket: { remoteAddress: 'client' } };
         const reservation = route.reserveUpgrade(request);
@@ -392,6 +415,10 @@ describe('SocketRoute units', () => {
         route.clients.clear();
         route.draining = true;
         expect(route.reserveUpgrade(request)).toBeNull();
+
+        const untrusted = new SocketRoute({ path: '/untrusted-reservations', handlers: [NoopHandler], logger: null });
+        untrusted.clients.set('client', {});
+        expect(untrusted.reserveUpgrade(request)).toBeNull();
 
         const full = new SocketRoute({
             path: '/full-reservations', handlers: [NoopHandler], logger: null,
@@ -561,6 +588,7 @@ describe('SocketRoute units', () => {
             path: '/protocol-output',
             handlers: [NoopHandler],
             logger: null,
+            allowDuplicateConnections: true,
             metrics,
             protocol: {
                 versions: ['1'],

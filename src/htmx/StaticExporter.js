@@ -1,7 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const { PageManager } = require('./PageManager');
 const { getPageMetadata } = require('./metadata');
+const { outside } = require('./pathBoundary');
 
 const WINDOWS_RESERVED = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 
@@ -15,9 +17,22 @@ function pageFile(outDir, route) {
     return path.join(outDir, relative);
 }
 
-function write(file, content) {
+function replaceOutput(root, file, createTemporary) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, content, 'utf8');
+    if (outside(fs.realpathSync(root), fs.realpathSync(path.dirname(file)))) {
+        throw new Error(`Static export path is outside the configured output directory: ${file}`);
+    }
+    const temporary = path.join(path.dirname(file), `.redweb-${randomUUID()}.tmp`);
+    try {
+        createTemporary(temporary);
+        fs.renameSync(temporary, file);
+    } finally {
+        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
+}
+
+function write(root, file, content) {
+    replaceOutput(root, file, temporary => fs.writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx' }));
 }
 
 async function exportStatic(pageOrPages, options = {}) {
@@ -64,8 +79,8 @@ async function exportStatic(pageOrPages, options = {}) {
             });
             renderedPages.push({ file, content: await manager.render(record, request) });
         }
-        renderedPages.forEach(entry => write(entry.file, entry.content));
-        assetPlan.forEach(entry => write(entry.file, entry.content));
+        renderedPages.forEach(entry => write(root, entry.file, entry.content));
+        assetPlan.forEach(entry => write(root, entry.file, entry.content));
         return Object.freeze({
             pages: Object.freeze(renderedPages.map(entry => entry.file)),
             assets: Object.freeze(assetPlan.map(entry => entry.file)),
@@ -75,4 +90,4 @@ async function exportStatic(pageOrPages, options = {}) {
     }
 }
 
-module.exports = { exportStatic };
+module.exports = { exportStatic, replaceOutput };

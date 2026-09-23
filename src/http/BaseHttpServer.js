@@ -1,7 +1,9 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const { validateListenerOptions } = require('../serverLifecycle');
+const { sameOrigin } = require('../access/sameOrigin');
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -22,6 +24,7 @@ const { validateListenerOptions } = require('../serverLifecycle');
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
  * @property {import('express').Application} [server] - Existing Express application to configure.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
+ * @property {string} [publicOrigin] - Exact external HTTP(S) origin when a trusted TLS proxy forwards to this listener.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -35,7 +38,8 @@ const HTTP_OPTIONS = {
     encoding: ENCODINGS.json,
     ssl: null,
     server: undefined,
-    corsOptions: undefined,
+    corsOptions: false,
+    publicOrigin: undefined,
     exposeErrors: false,
     logger: console,
 };
@@ -44,6 +48,15 @@ function assertOptions(options) {
     validateListenerOptions(options);
     if (!Object.values(ENCODINGS).includes(options.encoding)) {
         throw new TypeError('`encoding` must be either "json" or "urlencoded".');
+    }
+    if (options.publicOrigin !== undefined) {
+        let parsed;
+        try { parsed = new URL(options.publicOrigin); }
+        catch { throw new TypeError('`publicOrigin` must be an exact HTTP(S) origin.'); }
+        if (typeof options.publicOrigin !== 'string' || !['http:', 'https:'].includes(parsed.protocol) ||
+            parsed.origin !== options.publicOrigin) {
+            throw new TypeError('`publicOrigin` must be an exact HTTP(S) origin.');
+        }
     }
     if (!Array.isArray(options.publicPaths)) {
         throw new TypeError('`publicPaths` must be an array.');
@@ -80,7 +93,8 @@ function BaseHttpServer(options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('HTTP server options must be an object.');
     }
-    const mergedOptions = { ...HTTP_OPTIONS, ...options };
+    const mergedOptions = { ...HTTP_OPTIONS, ...options,
+        corsOptions: options.corsOptions == null ? false : options.corsOptions };
     assertOptions(mergedOptions);
     this.options = {
         ...mergedOptions,
@@ -104,16 +118,60 @@ function BaseHttpServer(options = {}) {
         this.app.use(cors(this.options.corsOptions));
     }
 
+    this.app.use((request, response, next) => {
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+            const origin = request.headers.origin;
+            const fetchSite = request.headers['sec-fetch-site'];
+            const trusted = origin !== undefined ? sameOrigin(request, origin) || origin === this.options.publicOrigin :
+                !request.headers.cookie || fetchSite === 'same-origin';
+            if (!trusted || (fetchSite !== undefined && !['same-origin', 'none'].includes(fetchSite))) {
+                response.status(403).end();
+                return;
+            }
+        }
+        next();
+    });
+
     // Serve static files from public paths
-    this.publicPaths.forEach((publicPath) =>
-        this.app.use(express.static(path.resolve(process.cwd(), publicPath)))
-    );
+    this.publicPaths.forEach((publicPath) => {
+        const root = path.resolve(process.cwd(), publicPath);
+        this.app.use(async (request, response, next) => {
+            try {
+                const pathname = decodeURIComponent(new URL(request.url, 'http://redweb.invalid').pathname);
+                const [canonicalRoot, target] = await Promise.all([
+                    fs.promises.realpath(root), fs.promises.realpath(path.resolve(root, `.${pathname}`)),
+                ]);
+                const relative = path.relative(canonicalRoot, target);
+                if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+                    response.sendStatus(404);
+                    return;
+                }
+            } catch (error) {
+                if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+                    response.sendStatus(404);
+                    return;
+                }
+            }
+            next();
+        });
+        this.app.use(express.static(root));
+    });
 
     const catchAll = this.services.find((service) => service.serviceName === '*');
-    this.services.filter((service) => service !== catchAll).forEach((service) =>
-        this.app[service.method](service.serviceName, service.function)
-    );
-    if (catchAll) this.app[catchAll.method](catchAll.serviceName, catchAll.function);
+    const registerService = service => this.app[service.method](service.serviceName, (request, response, next) => {
+        try {
+            Promise.resolve(service.function(request, response, next)).catch(next);
+        } catch (error) { next(error); }
+    });
+    this.services.filter((service) => service !== catchAll).forEach(registerService);
+    if (catchAll) registerService(catchAll);
+
+    this.app.use((error, _request, response, next) => {
+        if (response.headersSent) return next(error);
+        try { this.logger?.error?.('HTTP service failed:', error); }
+        catch { /* Application logging must not prevent a safe error response. */ }
+        response.status(500).json({ error: { code: 'HTTP_SERVICE_FAILED', message: 'HTTP service failed.' } });
+    });
 
     return this;
 }

@@ -5,6 +5,32 @@ const { BaseHttpServer, ENCODINGS, HTTP_OPTIONS } = require('../../src/http/Base
 describe('BaseHttpServer', () => {
     let serverInstance;
 
+    test.each([
+        [null, 'options must be an object'],
+        [[], 'options must be an object'],
+        [{ encoding: 'xml' }, '`encoding`'],
+        [{ publicOrigin: null }, '`publicOrigin`'],
+        [{ publicOrigin: ['https://dashboard.example'] }, '`publicOrigin`'],
+        [{ publicOrigin: 'ftp://dashboard.example' }, '`publicOrigin`'],
+        [{ publicOrigin: 'https://dashboard.example/path' }, '`publicOrigin`'],
+        [{ publicOrigin: 'https://dashboard.example/' }, '`publicOrigin`'],
+        [{ publicOrigin: 'https://user:pass@dashboard.example' }, '`publicOrigin`'],
+        [{ publicPaths: false }, '`publicPaths`'],
+        [{ publicPaths: [''] }, 'public path'],
+        [{ services: false }, '`services`'],
+        [{ services: [null] }, '`serviceName`'],
+        [{ services: [{ serviceName: '', method: 'get', function() {} }] }, '`serviceName`'],
+        [{ services: [{ serviceName: '/x', method: 'trace', function() {} }] }, 'Unsupported'],
+        [{ services: [{ serviceName: '/x', method: 'get', function: false }] }, 'function'],
+        [{ services: [
+            { serviceName: '*', method: 'get', function() {} },
+            { serviceName: '*', method: 'post', function() {} },
+        ] }, 'catch-all'],
+        [{ server: {} }, 'Express-compatible'],
+    ])('rejects invalid HTTP configuration %#', (options, message) => {
+        expect(() => new BaseHttpServer(options)).toThrow(message);
+    });
+
     afterEach(() => {
         jest.restoreAllMocks();
     });

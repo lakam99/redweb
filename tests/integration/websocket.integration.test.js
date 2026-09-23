@@ -2,6 +2,7 @@ const http = require('http');
 const net = require('net');
 const path = require('path');
 const WebSocket = require('ws');
+const DefaultRoute = require('../../src/ws/DefaultRoute');
 const {
     BaseHandler,
     FixedStepService,
@@ -91,7 +92,7 @@ describe('WebSocket integration without mocks', () => {
     }
 
     test('the default route handles a real message', async () => {
-        const server = await start();
+        const server = await start({ routes: [DefaultRoute] });
         const client = await trackedConnect(address(server));
         client.send(JSON.stringify({ type: 'DefaultHandler', value: 7 }));
 
@@ -160,7 +161,7 @@ describe('WebSocket integration without mocks', () => {
 
         const unknown = await trackedConnect(address(malformedServer, '/fail'));
         unknown.send(JSON.stringify({ type: 'missing' }));
-        expect(await nextJson(unknown)).toEqual({ error: 'No such handler missing' });
+        expect(await nextJson(unknown)).toEqual({ error: 'Unknown handler' });
         expect((await waitForClose(unknown)).code).toBe(1008);
         clients.delete(unknown);
 
@@ -638,29 +639,36 @@ describe('WebSocket integration without mocks', () => {
         const strict = await start();
         expect(await expectConnectionFailure(address(strict, '/unknown'))).toBe('error');
 
-        const fallback = await start({ fallbackToRoot: true });
+        const fallback = await start({ fallbackToRoot: true, routes: [DefaultRoute] });
         const client = await trackedConnect(address(fallback, '/legacy-path'));
         client.send(JSON.stringify({ type: 'DefaultHandler' }));
         expect((await nextJson(client)).message).toContain('I got your message');
     });
 
-    test('replaces duplicate client identities and supports trusted proxy or custom keys', async () => {
+    test('replaces only the same authenticated identity sharing an explicit client key', async () => {
         class NoopHandler extends BaseHandler {
             constructor() { super('noop'); }
             onMessage() {}
         }
         class ProxyRoute extends SocketRoute {
             constructor() {
-                super({ path: '/proxy', handlers: [NoopHandler], trustProxy: true, logger: silentLogger });
+                super({ path: '/proxy', handlers: [NoopHandler], trustProxy: true,
+                    getClientKey: request => request.headers['x-key'],
+                    admission: { authenticate: request => request.headers['x-account'] },
+                    logger: silentLogger });
             }
         }
         const server = await start({ routes: [ProxyRoute] });
-        const first = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.1' } });
-        const second = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.2, 10.0.0.1' } });
+        const first = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'shared', 'x-account': 'alice' } });
+        const second = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'other', 'x-account': 'bob' } });
         expect(server.routes[0].clients.size).toBe(2);
 
+        expect(await websocketUpgradeStatus(address(server, '/proxy'), {
+            headers: { 'x-key': 'shared', 'x-account': 'mallory' } })).toBe(503);
+        expect(first.readyState).toBe(WebSocket.OPEN);
+
         const firstClosed = waitForClose(first);
-        const replacement = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.1' } });
+        const replacement = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'shared', 'x-account': 'alice' } });
         expect((await firstClosed).code).toBe(1000);
         clients.delete(first);
         expect(server.routes[0].clients.size).toBe(2);
@@ -1134,7 +1142,7 @@ describe('WebSocket integration without mocks', () => {
 
         client.send(JSON.stringify({ v: '1', type: 'missing', payload: {}, requestId: 'r2' }));
         expect(await nextJson(client)).toEqual({
-            v: '1', type: 'error', error: { code: 'UNKNOWN_HANDLER', message: 'No such handler missing' }, requestId: 'r2',
+            v: '1', type: 'error', error: { code: 'UNKNOWN_HANDLER', message: 'Unknown handler' }, requestId: 'r2',
         });
         await waitForClose(client);
         clients.delete(client);
@@ -1154,6 +1162,7 @@ describe('WebSocket integration without mocks', () => {
     test('supports TLS WebSockets with real certificates', async () => {
         const server = await start({
             ssl: { key: fixture('localhost.key'), cert: fixture('localhost.crt') },
+            routes: [DefaultRoute],
         }, SecureSocketServer);
         const client = await trackedConnect(address(server, '/', true), { rejectUnauthorized: false });
         client.send(JSON.stringify({ type: 'DefaultHandler', secure: true }));

@@ -24,6 +24,7 @@ declare module 'redweb' {
         ssl?: { key: string; cert: string };
         server?: ExpressApplication;
         corsOptions?: CorsOptions | false;
+        publicOrigin?: string;
         exposeErrors?: boolean;
         logger?: RedWebLogger | null;
     }

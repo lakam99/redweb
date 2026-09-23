@@ -82,6 +82,13 @@ describe('production multiplayer policies', () => {
         destroyed.destroyed = true;
         expect(await new AdmissionPolicy(() => true).authorize({ headers: {} }, destroyed, route())).toBe(false);
 
+        const closedAfterAuthentication = rawSocket();
+        const lateClose = new AdmissionPolicy(() => {
+            closedAfterAuthentication.destroyed = true;
+            return 'owner';
+        });
+        expect(await lateClose.authorize({ headers: {} }, closedAfterAuthentication, route())).toBe(false);
+
         const closing = rawSocket();
         const closePolicy = new AdmissionPolicy({ authenticate: () => new Promise(() => {}), timeoutMs: 100 });
         const closeResult = closePolicy.authorize({ headers: {} }, closing, route());

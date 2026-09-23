@@ -170,7 +170,8 @@ describe('protected rooms over real WebSockets', () => {
         const { route, connect, send, response } = await fixture(context => new Promise(resolve => {
             pending.push({ context, resolve });
             context.signal.addEventListener('abort', () => publications.push(route.rooms.broadcast('private', { notice: 'late' })), { once: true });
-        }), { allowDuplicateConnections: false });
+        }), { allowDuplicateConnections: false,
+            getClientKey: request => request.headers['x-account'] });
         const first = await connect(); send(first, 'enter', 'private', 'old');
         await waitForCondition(() => pending.length === 1, 'old permission');
         const replacement = await connect();
