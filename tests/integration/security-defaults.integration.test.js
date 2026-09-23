@@ -6,7 +6,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page } = require('../..');
 const {
-    closeWebSocket, request, silentLogger, waitForCondition, waitForListening,
+    closeWebSocket, nextMessage, request, silentLogger, waitForCondition, waitForListening,
     waitForOpen, websocketUpgradeStatus,
 } = require('../helpers/network');
 
@@ -199,5 +199,24 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         await waitForCondition(() => messages.some(message => Object.hasOwn(message, 'sent')), 'revoked broadcast result');
         expect(messages.find(message => Object.hasOwn(message, 'sent')).sent).toBe(0);
         expect(messages.some(message => message.secret === 'private-update')).toBe(false);
+    });
+
+    test('a second unauthenticated peer on the same address cannot evict an existing connection', async () => {
+        const url = await socketServer({ allowDuplicateConnections: false });
+        const first = new WebSocket(url);
+        clients.add(first);
+        await waitForOpen(first);
+        const second = new WebSocket(url);
+        clients.add(second);
+        const outcome = await new Promise(resolve => {
+            second.once('open', () => resolve('open'));
+            second.once('error', () => resolve('rejected'));
+        });
+        if (outcome === 'open') {
+            const reply = nextMessage(second);
+            second.send(JSON.stringify({ type: 'ping' }));
+            expect(JSON.parse((await reply).data.toString())).toEqual({ type: 'pong' });
+        }
+        expect(first.readyState).toBe(WebSocket.OPEN);
     });
 });
