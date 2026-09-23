@@ -327,6 +327,27 @@ describe('SocketRoute units', () => {
         expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
     });
 
+    test.each([false, true])('contains unexpected failures from unordered dispatch when logging throws=%s', async loggingThrows => {
+        const logger = { log() {}, warn() {}, error: jest.fn(() => {
+            if (loggingThrows) throw new Error('logger failure');
+        }) };
+        const route = new SocketRoute({ path: '/unordered-error', handlers: [NoopHandler], logger });
+        const socket = createSocket();
+        route.handleConnection(socket, {});
+        route.dispatchMessage = () => { throw new Error('unexpected dispatch failure'); };
+        socket.emit('message', JSON.stringify({ type: 'noop' }), false);
+        await new Promise(setImmediate);
+        expect(logger.error).toHaveBeenCalledWith('Socket error from unknown:', expect.any(Error));
+        expect(socket.closed).toContainEqual([1011, 'Message processing failed']);
+        expect(socket.__redwebInFlightMessages).toBe(0);
+    });
+
+    test('rejects a cross-origin request through direct upgrade authorization', () => {
+        const route = new SocketRoute({ path: '/origin', handlers: [NoopHandler], logger: null });
+        const request = { headers: { host: 'redweb.example', origin: 'https://foreign.example' }, socket: {} };
+        expect(route.authorizeUpgrade(request, {})).toBe(false);
+    });
+
     test('cancels pending ordered work synchronously when the queue overflows', async () => {
         const route = new SocketRoute({
             path: '/ordered-overflow',
