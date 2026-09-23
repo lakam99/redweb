@@ -140,7 +140,7 @@ class SocketRoute {
          * @type {string}
          */
         this.path = path;
-        this.websocketOptions = { ...websocketOptions, closeTimeout };
+        this.websocketOptions = { maxPayload: 1024 * 1024, ...websocketOptions, closeTimeout };
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
