@@ -110,10 +110,19 @@ function BaseHttpServer(options = {}) {
     );
 
     const catchAll = this.services.find((service) => service.serviceName === '*');
-    this.services.filter((service) => service !== catchAll).forEach((service) =>
-        this.app[service.method](service.serviceName, service.function)
-    );
-    if (catchAll) this.app[catchAll.method](catchAll.serviceName, catchAll.function);
+    const registerService = service => this.app[service.method](service.serviceName, (request, response, next) => {
+        try {
+            Promise.resolve(service.function(request, response, next)).catch(next);
+        } catch (error) { next(error); }
+    });
+    this.services.filter((service) => service !== catchAll).forEach(registerService);
+    if (catchAll) registerService(catchAll);
+
+    this.app.use((error, _request, response, next) => {
+        if (response.headersSent) return next(error);
+        this.logger?.error?.('HTTP service failed:', error);
+        response.status(500).json({ error: { code: 'HTTP_SERVICE_FAILED', message: 'HTTP service failed.' } });
+    });
 
     return this;
 }

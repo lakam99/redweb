@@ -12,6 +12,13 @@ class ClientError extends Error {
     }
 }
 
+function assignPageState(page, state) {
+    if (Object.keys(state).some(name => ['__proto__', 'prototype', 'constructor'].includes(name))) {
+        throw new TypeError('Projected page state contains a reserved property.');
+    }
+    Object.assign(page, state);
+}
+
 class ConnectedClient {
     #owner;
     constructor(owner, socket) {
@@ -152,7 +159,7 @@ class ConnectedClients {
                     }, socket.context.signal);
                     await this.check(socket);
                     if (!current(socket)) return;
-                    if (socket.page) Object.assign(client.page, state);
+                    if (socket.page) assignPageState(client.page, state);
                     else socket.sendEvent(frame.type, frame.payload);
                 } catch (error) { if (current(socket)) this.exclude(socket, error); }
             }));
@@ -192,7 +199,7 @@ class ConnectedClients {
                             await this.projection.run(() => this.options.raw.reject(text), socket.context.signal);
                         await this.check(socket);
                         if (socket.page) {
-                            if (this.options.errorState) Object.assign(client.page, this.options.errorState(text));
+                            if (this.options.errorState) assignPageState(client.page, this.options.errorState(text));
                         } else if (frame) socket.sendEvent(frame.type, frame.payload);
                         socket.sendProtocolError('COMMAND_REJECTED', text, metadata);
                         return false;

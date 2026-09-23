@@ -121,7 +121,9 @@ class AdmissionPolicy {
             route,
         };
         const principal = this.authenticate ? await this.authenticate(request, context) : undefined;
-        if (principal === false) throw new RequestFailure('AUTHENTICATION_REQUIRED');
+        if (this.authenticate && (principal === false || principal === null || principal === undefined)) {
+            throw new RequestFailure('AUTHENTICATION_REQUIRED');
+        }
         checkpoint();
         if (!this.place) return { principal };
         const placement = await this.place(principal, request, context);

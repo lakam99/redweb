@@ -79,10 +79,12 @@ describe('connected clients with real HTTP, page sockets and rooms', () => {
 
     test('a projected object cannot change a connected page prototype', async () => {
         const malicious = JSON.parse('{"__proto__":{"isAdmin":true},"value":"safe"}');
-        const f = await fixture({ project: () => malicious });
+        let hostile = false;
+        const f = await fixture({ project: () => hostile ? malicious : { value: 'safe' } });
         const visitor = await f.connect('alice');
         const pageInstance = [...f.route.clients.values()][0].__redwebPageSession.page;
         await visitor.send('join', { room: 'one' });
+        hostile = true;
         await f.players.refresh('one');
         expect(Object.getPrototypeOf(pageInstance)).toBe(f.Board.prototype);
         expect(pageInstance.isAdmin).toBeUndefined();
