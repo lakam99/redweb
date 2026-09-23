@@ -245,4 +245,11 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(receivedName).not.toContain('..');
         expect(receivedName).not.toMatch(/[\\/]/);
     });
+
+    test('an authentication hook returning no identity cannot admit a socket client', async () => {
+        const url = await socketServer({ admission: { authenticate: incoming =>
+            incoming.headers.cookie === 'session=owner' ? 'owner' : undefined } });
+        expect(await websocketUpgradeStatus(url)).not.toBe(101);
+        expect(await websocketUpgradeStatus(url, { headers: { Cookie: 'session=owner' } })).toBe(101);
+    });
 });
