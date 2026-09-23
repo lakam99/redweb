@@ -161,7 +161,7 @@ describe('WebSocket integration without mocks', () => {
 
         const unknown = await trackedConnect(address(malformedServer, '/fail'));
         unknown.send(JSON.stringify({ type: 'missing' }));
-        expect(await nextJson(unknown)).toEqual({ error: 'No such handler missing' });
+        expect(await nextJson(unknown)).toEqual({ error: 'Unknown handler' });
         expect((await waitForClose(unknown)).code).toBe(1008);
         clients.delete(unknown);
 
@@ -1135,7 +1135,7 @@ describe('WebSocket integration without mocks', () => {
 
         client.send(JSON.stringify({ v: '1', type: 'missing', payload: {}, requestId: 'r2' }));
         expect(await nextJson(client)).toEqual({
-            v: '1', type: 'error', error: { code: 'UNKNOWN_HANDLER', message: 'No such handler missing' }, requestId: 'r2',
+            v: '1', type: 'error', error: { code: 'UNKNOWN_HANDLER', message: 'Unknown handler' }, requestId: 'r2',
         });
         await waitForClose(client);
         clients.delete(client);

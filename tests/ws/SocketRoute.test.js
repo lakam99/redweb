@@ -249,7 +249,7 @@ describe('SocketRoute', () => {
         route.handleMessage(mockSocket, JSON.parse(invalidMessage));
 
         expect(mockSocket.send).toHaveBeenCalledWith(
-            JSON.stringify({ error: 'No such handler NonExistentHandler' })
+            JSON.stringify({ error: 'Unknown handler' })
         );
         expect(mockSocket.close).toHaveBeenCalled();
     });

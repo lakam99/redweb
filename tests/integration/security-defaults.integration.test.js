@@ -113,6 +113,18 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         } finally { release(); }
     });
 
+    test('an unknown handler cannot amplify a large client-supplied type in its error', async () => {
+        const url = await socketServer();
+        const socket = new WebSocket(url);
+        clients.add(socket);
+        await waitForOpen(socket);
+        const reply = nextMessage(socket);
+        socket.send(JSON.stringify({ type: 'x'.repeat(100_000) }));
+        const response = (await reply).data.toString();
+        expect(response.length).toBeLessThan(512);
+        expect(response).not.toContain('x'.repeat(100));
+    });
+
     test('default HTTP responses do not grant arbitrary browser origins read access', async () => {
         const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
             services: [{ method: 'get', serviceName: '/private', function: (_request, response) => response.send('private') }],

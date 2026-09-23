@@ -477,7 +477,7 @@ class SocketRoute {
         }
         const handler = this.handlers.find((handler) => handler.name == data.type);
         if (!handler) {
-            this.sendFailure(sock, ERROR_CODES.UNKNOWN_HANDLER, `No such handler ${data.type}`, { requestId: data.requestId });
+            this.sendFailure(sock, ERROR_CODES.UNKNOWN_HANDLER, 'Unknown handler', { requestId: data.requestId });
             sock.close?.(1008, 'Unknown handler');
             return false;
         } else {
