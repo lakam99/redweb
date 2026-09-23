@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const WebSocket = require('ws');
 const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page } = require('../..');
 const {
@@ -117,5 +120,31 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         const response = await request({ port: server.server.address().port, path: '/failure' });
         expect(response.status).toBe(500);
         expect(response.body).not.toContain('database-password-is-private');
+    });
+
+    test('a public asset symlink cannot disclose a file outside the public directory', async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-public-boundary-'));
+        const publicDir = path.join(root, 'public');
+        const privateDir = path.join(root, 'private');
+        const privateFile = path.join(privateDir, 'leak.txt');
+        const link = path.join(publicDir, 'linked');
+        fs.mkdirSync(publicDir);
+        fs.mkdirSync(privateDir);
+        fs.writeFileSync(privateFile, 'private-asset-marker');
+        try {
+            fs.symlinkSync(privateDir, link, 'junction');
+            const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [publicDir], logger: silentLogger });
+            servers.add(server);
+            await waitForListening(server.server);
+            const response = await request({ port: server.server.address().port, path: '/linked/leak.txt' });
+            expect(response.status).not.toBe(200);
+            expect(response.body).not.toContain('private-asset-marker');
+        } finally {
+            if (fs.existsSync(link)) fs.rmdirSync(link);
+            fs.unlinkSync(privateFile);
+            fs.rmdirSync(privateDir);
+            fs.rmdirSync(publicDir);
+            fs.rmdirSync(root);
+        }
     });
 });
