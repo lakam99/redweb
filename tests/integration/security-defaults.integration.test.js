@@ -137,6 +137,27 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
 
+    test('an explicit CORS read origin does not authorize cross-origin mutations', async () => {
+        let mutations = 0;
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            corsOptions: { origin: 'https://foreign.example' },
+            services: [{ method: 'get', serviceName: '/resource', function: (_request, response) => response.send('read') },
+                { method: 'post', serviceName: '/resource', function: (_request, response) => {
+                    mutations += 1;
+                    response.sendStatus(204);
+                } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const port = server.server.address().port;
+        const headers = { Origin: 'https://foreign.example' };
+        const read = await request({ port, path: '/resource', headers });
+        expect(read.status).toBe(200);
+        expect(read.headers['access-control-allow-origin']).toBe('https://foreign.example');
+        const write = await request({ port, path: '/resource', method: 'POST', headers, body: 'change' });
+        expect(write.status).toBe(403);
+        expect(mutations).toBe(0);
+    });
+
     test('a cross-site cookie-bearing POST cannot mutate a default HTTP service', async () => {
         let mutations = 0;
         const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
