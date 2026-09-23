@@ -110,11 +110,10 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         expect(f.called).toBe(0);
     });
 
-    test('raw clients remain raw, without a page or automatic completion', async () => {
-        const f = await fixture(), a = await f.connect(`${f.origin.replace('http:', 'ws:')}/match?redwebVersion=1`);
-        a.socket.send(JSON.stringify({ v: '1', type: 'move', payload: { cell: 3 } }));
-        await waitForCondition(() => a.frames.length, 'raw result');
-        expect(a.frames).toEqual([{ v: '1', type: 'raw', payload: 3 }]); expect(f.socket.page).toBeUndefined();
+    test('page-bound socket routes reject raw clients without a page session', async () => {
+        const f = await fixture();
+        expect(await websocketUpgradeStatus(`${f.origin.replace('http:', 'ws:')}/match?redwebVersion=1`,
+            { headers: { Origin: f.origin, Cookie: 'alice' } })).not.toBe(101);
     });
 
     test('an explicit async false rejects a command without acknowledging success or closing its socket', async () => {
@@ -167,9 +166,8 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         a.socket.send(Buffer.from('binary'));
         await waitForCondition(() => a.socket.readyState === WebSocket.CLOSED, 'binary rejection');
         expect(f.called).toBe(0);
-        const raw = await f.connect(`${f.origin.replace('http:', 'ws:')}/match?redwebVersion=1`);
-        raw.socket.send(Buffer.from('binary'));
-        await waitForCondition(() => raw.frames.some(frame => frame.type === 'error'), 'raw binary protocol rejection');
+        expect(await websocketUpgradeStatus(`${f.origin.replace('http:', 'ws:')}/match?redwebVersion=1`,
+            { headers: { Origin: f.origin } })).not.toBe(101);
     });
 
     test('denied page commands and fan-out cannot publish private updates', async () => {
@@ -218,9 +216,9 @@ describe('typed socket page actions over actual HTTP and WebSockets', () => {
         expect(f.called).toBe(0);
     });
 
-    test('raw connection closed by its opening callback never initializes handlers', async () => {
+    test('page connection closed by its opening callback never initializes handlers', async () => {
         const f = await fixture({ open: async socket => { socket.close(); await require('events').once(socket, 'close'); } });
-        const a = await f.connect(`${f.origin.replace('http:', 'ws:')}/match?redwebVersion=1`);
+        const a = await f.connect((await f.get()).url);
         await waitForCondition(() => a.socket.readyState === WebSocket.CLOSED, 'closed opening callback');
         await f.server.shutdown();
         expect(f.called).toBe(0);

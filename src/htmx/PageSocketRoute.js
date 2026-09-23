@@ -58,7 +58,7 @@ function bindRoute(manager, RouteClass, records) {
 
         async authorizeUpgrade(request, rawSocket, signal) {
             if (!await super.authorizeUpgrade(request, rawSocket, signal)) return false;
-            if (!new URL(request.url, 'http://localhost').searchParams.has('pageId')) return true;
+            if (!new URL(request.url, 'http://localhost').searchParams.has('pageId')) return false;
             return this.pageAdmission.authorize(request, rawSocket, this, signal);
         }
 
