@@ -645,7 +645,7 @@ describe('WebSocket integration without mocks', () => {
         expect((await nextJson(client)).message).toContain('I got your message');
     });
 
-    test('replaces duplicate client identities and supports trusted proxy or custom keys', async () => {
+    test('replaces only the same authenticated identity sharing an explicit client key', async () => {
         class NoopHandler extends BaseHandler {
             constructor() { super('noop'); }
             onMessage() {}
@@ -653,17 +653,22 @@ describe('WebSocket integration without mocks', () => {
         class ProxyRoute extends SocketRoute {
             constructor() {
                 super({ path: '/proxy', handlers: [NoopHandler], trustProxy: true,
-                    getClientKey: request => request.headers['x-forwarded-for']?.split(',')[0].trim(),
+                    getClientKey: request => request.headers['x-key'],
+                    admission: { authenticate: request => request.headers['x-account'] },
                     logger: silentLogger });
             }
         }
         const server = await start({ routes: [ProxyRoute] });
-        const first = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.1' } });
-        const second = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.2, 10.0.0.1' } });
+        const first = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'shared', 'x-account': 'alice' } });
+        const second = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'other', 'x-account': 'bob' } });
         expect(server.routes[0].clients.size).toBe(2);
 
+        expect(await websocketUpgradeStatus(address(server, '/proxy'), {
+            headers: { 'x-key': 'shared', 'x-account': 'mallory' } })).toBe(503);
+        expect(first.readyState).toBe(WebSocket.OPEN);
+
         const firstClosed = waitForClose(first);
-        const replacement = await trackedConnect(address(server, '/proxy'), { headers: { 'x-forwarded-for': '198.51.100.1' } });
+        const replacement = await trackedConnect(address(server, '/proxy'), { headers: { 'x-key': 'shared', 'x-account': 'alice' } });
         expect((await firstClosed).code).toBe(1000);
         clients.delete(first);
         expect(server.routes[0].clients.size).toBe(2);

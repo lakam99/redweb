@@ -157,6 +157,7 @@ class BaseSocketServer {
               ? this.rejectUpgrade(sock, rejection.statusCode, rejection.statusText, rejection.headers)
               : this.rejectFailure(sock, 'AUTHENTICATION_REQUIRED');
           }
+          if (!route.canReplaceRequest(req)) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
           this.completeUpgrade(route, req, sock, head);
         })
         .catch(() => {

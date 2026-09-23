@@ -125,8 +125,8 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response).not.toContain('x'.repeat(100));
     });
 
-    test('default HTTP responses do not grant arbitrary browser origins read access', async () => {
-        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+    test.each([undefined, null, false])('HTTP corsOptions=%s does not grant arbitrary browser origins read access', async corsOptions => {
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [], corsOptions,
             services: [{ method: 'get', serviceName: '/private', function: (_request, response) => response.send('private') }],
             logger: silentLogger });
         servers.add(server);
@@ -179,6 +179,7 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         for (const headers of [
             { Origin: 'https://foreign.example', Authorization: 'Basic dGVzdDp0ZXN0' },
             { 'Sec-Fetch-Site': 'cross-site', Authorization: 'Basic dGVzdDp0ZXN0' },
+            { 'Sec-Fetch-Site': 'same-site', Authorization: 'Basic dGVzdDp0ZXN0' },
         ]) {
             const response = await request({ port, path: '/change', method: 'POST', headers, body: 'change' });
             expect(response.status).toBe(403);

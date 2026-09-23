@@ -3,7 +3,7 @@ const { sendJson, sendPayload, broadcast } = require("./util");
 const { randomUUID } = require("crypto");
 const { settleTasks, throwCleanupErrors } = require('../serverLifecycle');
 const { closeWebSocketServer } = require('./shutdown');
-const { AdmissionPolicy } = require('./AdmissionPolicy');
+const { AdmissionPolicy, ADMISSION_CONTEXT } = require('./AdmissionPolicy');
 const TransportPolicy = require('./TransportPolicy');
 const Metrics = require('./Metrics');
 const RouteRuntime = require('./RouteRuntime');
@@ -145,10 +145,10 @@ class SocketRoute {
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
-        this.canReplaceConnection = Boolean(getClientKey);
         this.exposeErrors = exposeErrors;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.admissionPolicy = admission === undefined ? null : new AdmissionPolicy(admission);
+        this.canReplaceConnection = Boolean(getClientKey && this.admissionPolicy?.authenticate);
         this.transportPolicy = limits === undefined && !orderedMessages
             ? null
             : new TransportPolicy(limits, orderedMessages);
@@ -236,6 +236,15 @@ class SocketRoute {
         return req?.socket?.remoteAddress || 'unknown';
     }
 
+    canReplaceRequest(request) {
+        if (this.allowDuplicateConnections) return true;
+        const existing = this.clients.get(this.resolveRemoteAddress(request));
+        if (!existing) return true;
+        const principal = request?.[ADMISSION_CONTEXT]?.principal;
+        return this.canReplaceConnection && principal !== undefined &&
+            Object.is(existing.context?.principal, principal);
+    }
+
     acceptsDefaultOrigin(request) {
         return Boolean(this.admissionPolicy?.origins) || request?.headers?.origin === undefined ||
             sameOrigin(request, request.headers.origin, this.trustProxy);
@@ -284,7 +293,7 @@ class SocketRoute {
         const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
 
-        if (!this.allowDuplicateConnections && !this.canReplaceConnection && this.clients.has(clientKey)) {
+        if (!this.canReplaceRequest(req)) {
             socket.close?.(1008, 'Connection already active');
             return;
         }

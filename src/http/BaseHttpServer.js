@@ -82,7 +82,8 @@ function BaseHttpServer(options = {}) {
     if (!options || typeof options !== 'object' || Array.isArray(options)) {
         throw new TypeError('HTTP server options must be an object.');
     }
-    const mergedOptions = { ...HTTP_OPTIONS, ...options };
+    const mergedOptions = { ...HTTP_OPTIONS, ...options,
+        corsOptions: options.corsOptions == null ? false : options.corsOptions };
     assertOptions(mergedOptions);
     this.options = {
         ...mergedOptions,
@@ -112,7 +113,7 @@ function BaseHttpServer(options = {}) {
             const fetchSite = request.headers['sec-fetch-site'];
             const trusted = origin !== undefined ? sameOrigin(request, origin) :
                 !request.headers.cookie || fetchSite === 'same-origin';
-            if (!trusted || fetchSite === 'cross-site') {
+            if (!trusted || (fetchSite !== undefined && !['same-origin', 'none'].includes(fetchSite))) {
                 response.status(403).end();
                 return;
             }

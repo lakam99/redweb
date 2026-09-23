@@ -75,12 +75,12 @@
         "listen: boolean (default true); set false to build app without binding a port",
         "listenCallback: function invoked after listen",
         "encoding: \"json\" | \"urlencoded\" (default json)",
-        "corsOptions: passed to cors when explicitly configured (default false; no wildcard CORS)"
+        "corsOptions: passed to cors when explicitly configured (default false, including undefined/null; no wildcard CORS)"
       ],
       "methods": [
         {
           "name": "constructor(options)",
-          "detail": "Merges defaults, wires body parsing and opt-in CORS, contains static serving inside each public root, registers REST services, and starts listening unless listen is false. Unsafe requests with an explicit cross-site browser signal are rejected; cookie-bearing unsafe requests also require a same-origin signal."
+          "detail": "Merges defaults, wires body parsing and opt-in CORS, contains static serving inside each public root, registers REST services, and starts listening unless listen is false. Unsafe requests with a foreign Origin or Sec-Fetch-Site other than same-origin/none are rejected; cookie-bearing unsafe requests also require a same-origin signal."
         },
         {
           "name": "app (Express instance)",

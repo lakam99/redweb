@@ -98,18 +98,18 @@ describe('SocketRoute', () => {
         expect(mockSocket.on).toHaveBeenCalledTimes(3); // 'message', 'close', 'error' listeners
     });
 
-    test('should replace an existing connection with the same IP', () => {
+    test('should not replace an existing connection without authenticated identity', () => {
         route = new SocketRoute({ path: '/test', handlers: [MockHandler],
             getClientKey: request => request.socket.remoteAddress });
         const mockSocket1 = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
-        const mockSocket2 = { on: jest.fn(), send: jest.fn() };
+        const mockSocket2 = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const mockReq = { socket: { remoteAddress: '127.0.0.1' } };
 
         route.handleConnection(mockSocket1, mockReq);
         route.handleConnection(mockSocket2, mockReq);
 
-        expect(route.clients.get('127.0.0.1')).toBe(mockSocket2);
-        expect(mockSocket1.close).toHaveBeenCalled();
+        expect(route.clients.get('127.0.0.1')).toBe(mockSocket1);
+        expect(mockSocket2.close).toHaveBeenCalled();
     });
 
     test('should handle messages and route to appropriate handler', async () => {
@@ -288,7 +288,7 @@ describe('SocketRoute', () => {
         expect([...duplicateRoute.clients.values()]).toEqual([socket2]);
     });
 
-    test('should not drop a replacement client when the old one closes later', () => {
+    test('should not drop an existing client when a rejected replacement closes later', () => {
         route = new SocketRoute({ path: '/test', handlers: [MockHandler],
             getClientKey: request => request.socket.remoteAddress });
         const oldSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
@@ -298,10 +298,10 @@ describe('SocketRoute', () => {
         route.handleConnection(oldSocket, mockReq);
         route.handleConnection(newSocket, mockReq);
 
-        expect(route.clients.get('127.0.0.1')).toBe(newSocket);
+        expect(route.clients.get('127.0.0.1')).toBe(oldSocket);
 
         // Simulate the old socket closing after replacement
-        route.handleClose(oldSocket);
-        expect(route.clients.get('127.0.0.1')).toBe(newSocket);
+        route.handleClose(newSocket);
+        expect(route.clients.get('127.0.0.1')).toBe(oldSocket);
     });
 });
