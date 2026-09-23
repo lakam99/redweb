@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const WebSocket = require('ws');
-const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page } = require('../..');
+const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page, upload } = require('../..');
 const {
     closeWebSocket, nextMessage, request, silentLogger, waitForCondition, waitForListening,
     waitForOpen, websocketUpgradeStatus,
@@ -218,5 +218,31 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
             expect(JSON.parse((await reply).data.toString())).toEqual({ type: 'pong' });
         }
         expect(first.readyState).toBe(WebSocket.OPEN);
+    });
+
+    test('an uploaded client filename cannot contain a path that escapes the target directory', async () => {
+        let receivedName;
+        class UploadPage {
+            async save(file) {
+                receivedName = file.name;
+                for await (const _chunk of file.stream) { /* Consume the real request body. */ }
+            }
+            render() { return '<p>Upload</p>'; }
+        }
+        page('/upload')(UploadPage);
+        upload({ maxBytes: 16, accept: 'text/plain' })(UploadPage.prototype, 'save',
+            Object.getOwnPropertyDescriptor(UploadPage.prototype, 'save'));
+        const server = new LiveHtmlServer({ pages: [UploadPage], port: 0, bind: '127.0.0.1', logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const port = server.server.address().port;
+        const document = await request({ port, path: '/upload' });
+        const config = JSON.parse(document.body.match(/<script[^>]+id="__redweb_page"[^>]*>(.*?)<\/script>/s)[1]);
+        const target = `/__redweb/upload?pageId=${config.pageId}&action=save`;
+        const response = await request({ port, path: target, method: 'POST', body: 'data',
+            headers: { 'Content-Type': 'text/plain', 'X-Redweb-Upload-Name': encodeURIComponent('../../secrets.txt') } });
+        expect(response.status).toBe(204);
+        expect(receivedName).not.toContain('..');
+        expect(receivedName).not.toMatch(/[\\/]/);
     });
 });
