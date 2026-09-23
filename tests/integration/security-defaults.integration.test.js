@@ -90,4 +90,20 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response.status).toBe(200);
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
+
+    test('a cross-site cookie-bearing POST cannot mutate a default HTTP service', async () => {
+        let mutations = 0;
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            services: [{ method: 'post', serviceName: '/change', function: (incoming, response) => {
+                if (incoming.headers.cookie === 'session=owner') mutations += 1;
+                response.sendStatus(204);
+            } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const response = await request({ port: server.server.address().port, path: '/change', method: 'POST',
+            headers: { Origin: 'https://foreign.example', Cookie: 'session=owner',
+                'Content-Type': 'text/plain', 'Sec-Fetch-Site': 'cross-site' }, body: 'change' });
+        expect(response.status).toBe(403);
+        expect(mutations).toBe(0);
+    });
 });
