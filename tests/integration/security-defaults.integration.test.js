@@ -247,9 +247,20 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
     });
 
     test('an authentication hook returning no identity cannot admit a socket client', async () => {
+        let missingIdentity;
         const url = await socketServer({ admission: { authenticate: incoming =>
-            incoming.headers.cookie === 'session=owner' ? 'owner' : undefined } });
-        expect(await websocketUpgradeStatus(url)).not.toBe(101);
+            incoming.headers.cookie === 'session=owner' ? 'owner' : missingIdentity } });
+        for (const value of [undefined, null]) {
+            missingIdentity = value;
+            expect(await websocketUpgradeStatus(url)).not.toBe(101);
+        }
         expect(await websocketUpgradeStatus(url, { headers: { Cookie: 'session=owner' } })).toBe(101);
+    });
+
+    test('a socket server with no registered routes does not expose a public echo endpoint', async () => {
+        const server = new SocketServer({ routes: [], port: 0, bind: '127.0.0.1', logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        expect(await websocketUpgradeStatus(`ws://127.0.0.1:${server.server.address().port}/`)).not.toBe(101);
     });
 });
