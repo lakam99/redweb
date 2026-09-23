@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const { validateListenerOptions } = require('../serverLifecycle');
@@ -124,9 +125,28 @@ function BaseHttpServer(options = {}) {
     });
 
     // Serve static files from public paths
-    this.publicPaths.forEach((publicPath) =>
-        this.app.use(express.static(path.resolve(process.cwd(), publicPath)))
-    );
+    this.publicPaths.forEach((publicPath) => {
+        const root = path.resolve(process.cwd(), publicPath);
+        this.app.use((request, response, next) => {
+            let target;
+            try {
+                const pathname = decodeURIComponent(new URL(request.url, 'http://redweb.invalid').pathname);
+                target = fs.realpathSync(path.resolve(root, `.${pathname}`));
+                const relative = path.relative(fs.realpathSync(root), target);
+                if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+                    response.sendStatus(404);
+                    return;
+                }
+            } catch (error) {
+                if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+                    response.sendStatus(404);
+                    return;
+                }
+            }
+            next();
+        });
+        this.app.use(express.static(root));
+    });
 
     const catchAll = this.services.find((service) => service.serviceName === '*');
     const registerService = service => this.app[service.method](service.serviceName, (request, response, next) => {
