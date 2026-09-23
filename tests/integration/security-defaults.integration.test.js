@@ -125,6 +125,14 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
             headers: { Origin: `https://127.0.0.1:${port}`, Cookie: 'session=owner' } });
         expect(wrongScheme.status).toBe(403);
         expect(mutations).toBe(0);
+        const missingOrigin = await request({ port, path: '/change', method: 'POST', body: 'change',
+            headers: { Cookie: 'session=owner' } });
+        expect(missingOrigin.status).toBe(403);
+        expect(mutations).toBe(0);
+        const sameOrigin = await request({ port, path: '/change', method: 'POST', body: 'change',
+            headers: { Cookie: 'session=owner', Origin: `http://127.0.0.1:${port}` } });
+        expect(sameOrigin.status).toBe(204);
+        expect(mutations).toBe(1);
     });
 
     test('an HTTP service failure does not disclose its internal exception text', async () => {
