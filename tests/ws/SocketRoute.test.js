@@ -99,6 +99,8 @@ describe('SocketRoute', () => {
     });
 
     test('should replace an existing connection with the same IP', () => {
+        route = new SocketRoute({ path: '/test', handlers: [MockHandler],
+            getClientKey: request => request.socket.remoteAddress });
         const mockSocket1 = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const mockSocket2 = { on: jest.fn(), send: jest.fn() };
         const mockReq = { socket: { remoteAddress: '127.0.0.1' } };
@@ -287,6 +289,8 @@ describe('SocketRoute', () => {
     });
 
     test('should not drop a replacement client when the old one closes later', () => {
+        route = new SocketRoute({ path: '/test', handlers: [MockHandler],
+            getClientKey: request => request.socket.remoteAddress });
         const oldSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const newSocket = { on: jest.fn(), send: jest.fn(), close: jest.fn() };
         const mockReq = { socket: { remoteAddress: '127.0.0.1' } };

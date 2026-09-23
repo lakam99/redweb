@@ -156,6 +156,7 @@ class SocketRoute {
         this.logger = logger || { log() {}, warn() {}, error() {} };
         this.trustProxy = trustProxy;
         this.getClientKey = getClientKey;
+        this.canReplaceConnection = Boolean(getClientKey || trustProxy);
         this.exposeErrors = exposeErrors;
         this.shutdownTimeoutMs = shutdownTimeoutMs;
         this.admissionPolicy = admission === undefined ? null : new AdmissionPolicy(admission);
@@ -268,6 +269,7 @@ class SocketRoute {
         if (this.draining || this.pendingUpgrades >= this.maxPendingUpgrades) return null;
         const clientKey = this.resolveRemoteAddress(request);
         const replacing = !this.allowDuplicateConnections && this.clients.has(clientKey);
+        if (replacing && !this.canReplaceConnection) return null;
         const capacity = !replacing;
         if (capacity && this.clients.size + this.pendingCapacity >= (this.transportPolicy?.maxConnections ?? Infinity)) {
             return null;
@@ -291,6 +293,11 @@ class SocketRoute {
     handleConnection(socket, req) {
         const ip = this.resolveRemoteAddress(req);
         const clientKey = this.allowDuplicateConnections ? randomUUID() : ip;
+
+        if (!this.allowDuplicateConnections && !this.canReplaceConnection && this.clients.has(clientKey)) {
+            socket.close?.(1008, 'Connection already active');
+            return;
+        }
 
         this.runtime.decorate(socket, req);
 

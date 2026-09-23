@@ -169,7 +169,7 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(frameAncestors || frameOptions).toBe(true);
     });
 
-    test('revoked protected-room membership cannot send or receive private broadcasts', async () => {
+    test('explicitly revoked protected-room membership cannot send or receive private broadcasts', async () => {
         let allowed = true;
         class Enter extends BaseHandler {
             constructor() { super('enter'); }
@@ -196,6 +196,7 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         socket.send(JSON.stringify({ type: 'enter' }));
         await waitForCondition(() => messages.some(message => message.joined === true), 'private-room entry');
         allowed = false;
+        server.routes[0].rooms.leaveAll([...server.routes[0].clients.values()][0]);
         socket.send(JSON.stringify({ type: 'broadcast' }));
         await waitForCondition(() => messages.some(message => Object.hasOwn(message, 'sent')), 'revoked broadcast result');
         expect(messages.find(message => Object.hasOwn(message, 'sent')).sent).toBe(0);

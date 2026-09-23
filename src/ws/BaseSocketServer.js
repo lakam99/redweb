@@ -130,6 +130,8 @@ class BaseSocketServer {
     try { route.runtime.prepareRequest(req); }
     catch { return this.rejectFailure(sock, 'REQUEST_INVALID'); }
     if (!route.acceptsDefaultOrigin(req)) return this.rejectFailure(sock, 'ORIGIN_DENIED');
+    if (!route.allowDuplicateConnections && !route.canReplaceConnection &&
+        route.clients.has(route.resolveRemoteAddress(req))) return this.rejectFailure(sock, 'ADMISSION_CAPACITY');
 
     if (route.admissionPolicy || route.protocolPolicy || route.transportPolicy && route.transportPolicy.maxConnections !== Infinity) {
       let reservation;
