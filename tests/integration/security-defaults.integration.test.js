@@ -106,4 +106,16 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response.status).toBe(403);
         expect(mutations).toBe(0);
     });
+
+    test('an HTTP service failure does not disclose its internal exception text', async () => {
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            services: [{ method: 'get', serviceName: '/failure', function: () => {
+                throw new Error('database-password-is-private');
+            } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const response = await request({ port: server.server.address().port, path: '/failure' });
+        expect(response.status).toBe(500);
+        expect(response.body).not.toContain('database-password-is-private');
+    });
 });
