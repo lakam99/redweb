@@ -140,11 +140,31 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
             expect(response.status).not.toBe(200);
             expect(response.body).not.toContain('private-asset-marker');
         } finally {
-            if (fs.existsSync(link)) fs.rmdirSync(link);
+            if (fs.existsSync(link)) {
+                if (process.platform === 'win32') fs.rmdirSync(link);
+                else fs.unlinkSync(link);
+            }
             fs.unlinkSync(privateFile);
             fs.rmdirSync(privateDir);
             fs.rmdirSync(publicDir);
             fs.rmdirSync(root);
         }
+    });
+
+    test('an authenticated interactive page cannot be framed by another site', async () => {
+        class AccountPage { render() { return '<button>Transfer</button>'; } }
+        page('/account', { authorize: context => context.principal === 'owner' })(AccountPage);
+        const server = new LiveHtmlServer({ pages: [AccountPage], port: 0, bind: '127.0.0.1',
+            authenticate: incoming => incoming.headers.cookie === 'session=owner' ? 'owner' : false,
+            logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const response = await request({ port: server.server.address().port, path: '/account',
+            headers: { Cookie: 'session=owner' } });
+        expect(response.status).toBe(200);
+        const policy = response.headers['content-security-policy'] || '';
+        const frameAncestors = /(?:^|;)\s*frame-ancestors\s+(?:'none'|'self')(?:\s|;|$)/i.test(policy);
+        const frameOptions = /^(?:deny|sameorigin)$/i.test(response.headers['x-frame-options'] || '');
+        expect(frameAncestors || frameOptions).toBe(true);
     });
 });
