@@ -166,6 +166,29 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(mutations).toBe(1);
     });
 
+    test('a cross-site POST without cookies cannot mutate a service using other ambient credentials', async () => {
+        let mutations = 0;
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            services: [{ method: 'post', serviceName: '/change', function: (_incoming, response) => {
+                mutations += 1;
+                response.sendStatus(204);
+            } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const port = server.server.address().port;
+        for (const headers of [
+            { Origin: 'https://foreign.example', Authorization: 'Basic dGVzdDp0ZXN0' },
+            { 'Sec-Fetch-Site': 'cross-site', Authorization: 'Basic dGVzdDp0ZXN0' },
+        ]) {
+            const response = await request({ port, path: '/change', method: 'POST', headers, body: 'change' });
+            expect(response.status).toBe(403);
+        }
+        expect(mutations).toBe(0);
+        const apiClient = await request({ port, path: '/change', method: 'POST', body: 'change' });
+        expect(apiClient.status).toBe(204);
+        expect(mutations).toBe(1);
+    });
+
     test('an HTTP service failure does not disclose its internal exception text', async () => {
         const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
             services: [{ method: 'get', serviceName: '/failure', function: () => {
@@ -283,12 +306,13 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(messages.some(message => message.secret === 'private-update')).toBe(false);
     });
 
-    test('a second unauthenticated peer on the same address cannot evict an existing connection', async () => {
-        const url = await socketServer({ allowDuplicateConnections: false });
-        const first = new WebSocket(url);
+    test.each([false, true])('a second unauthenticated peer cannot evict an existing connection with trustProxy=%s', async trustProxy => {
+        const url = await socketServer({ allowDuplicateConnections: false, trustProxy });
+        const options = { headers: { 'x-forwarded-for': '198.51.100.1' } };
+        const first = new WebSocket(url, options);
         clients.add(first);
         await waitForOpen(first);
-        const second = new WebSocket(url);
+        const second = new WebSocket(url, options);
         clients.add(second);
         const outcome = await new Promise(resolve => {
             second.once('open', () => resolve('open'));

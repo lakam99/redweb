@@ -652,7 +652,9 @@ describe('WebSocket integration without mocks', () => {
         }
         class ProxyRoute extends SocketRoute {
             constructor() {
-                super({ path: '/proxy', handlers: [NoopHandler], trustProxy: true, logger: silentLogger });
+                super({ path: '/proxy', handlers: [NoopHandler], trustProxy: true,
+                    getClientKey: request => request.headers['x-forwarded-for']?.split(',')[0].trim(),
+                    logger: silentLogger });
             }
         }
         const server = await start({ routes: [ProxyRoute] });

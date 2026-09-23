@@ -2,11 +2,11 @@
 
 Redweb remains a small transport foundation. Applications own game rules, authoritative state, matchmaking, databases, and identity providers. Redweb owns bounded connection admission, delivery, grouping, lifecycle, and optional composition points.
 
-## Compatibility invariants
+## Compatibility and security defaults
 
-- Every production feature is opt-in.
-- Existing route, handler, and service subclasses require no source changes.
-- The default route, strict routing, IP collision policy, handler dispatch, error hiding, listener ownership, and shutdown behavior remain compatible with 0.8.
+- Multiplayer features remain opt-in, while transport security defaults are active. Review `docs/SECURITY_DEFAULTS.md` before upgrading a public deployment.
+- Existing route, handler, and service subclass signatures remain supported; applications relying on wildcard CORS, an implicit echo route, or same-IP eviction must configure their intended behavior explicitly.
+- Strict routing, handler dispatch, error hiding, listener ownership, and shutdown behavior retain their established contracts.
 - Disabled multiplayer features create no timers or per-connection queues.
 - No global mutable registry or mandatory infrastructure dependency is permitted.
 - Every timer, listener, queued task, membership, session lease, and adapter subscription has one deterministic cleanup owner.

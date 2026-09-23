@@ -107,11 +107,12 @@ function BaseHttpServer(options = {}) {
     }
 
     this.app.use((request, response, next) => {
-        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.cookie) {
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
             const origin = request.headers.origin;
+            const fetchSite = request.headers['sec-fetch-site'];
             const trusted = origin !== undefined ? sameOrigin(request, origin) :
-                request.headers['sec-fetch-site'] === 'same-origin';
-            if (!trusted || request.headers['sec-fetch-site'] === 'cross-site') {
+                !request.headers.cookie || fetchSite === 'same-origin';
+            if (!trusted || fetchSite === 'cross-site') {
                 response.status(403).end();
                 return;
             }
