@@ -88,6 +88,18 @@ describe('connected clients with real HTTP, page sockets and rooms', () => {
         expect(pageInstance.isAdmin).toBeUndefined();
     });
 
+    test('an error-state object cannot change a connected page prototype', async () => {
+        const malicious = JSON.parse('{"__proto__":{"isAdmin":true},"value":"rejected"}');
+        const f = await fixture({ move: () => { throw new ClientError('Rejected'); },
+            clients: { errorState: () => malicious } });
+        const visitor = await f.connect('alice');
+        const pageInstance = [...f.route.clients.values()][0].__redwebPageSession.page;
+        await visitor.send('join', { room: 'one' });
+        await visitor.send('move', { value: 1 });
+        expect(Object.getPrototypeOf(pageInstance)).toBe(f.Board.prototype);
+        expect(pageInstance.isAdmin).toBeUndefined();
+    });
+
     test('projects per-connection pages, deduplicates tabs, and automatically removes only disconnected membership', async () => {
         const f = await fixture(); const a = await f.connect('alice'), tab = await f.connect('alice'), b = await f.connect('bob');
         await a.send('join', { room: 'one' }); await tab.send('join', { room: 'one' }); await b.send('join', { room: 'one' });
