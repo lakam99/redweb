@@ -178,6 +178,15 @@ describe('connected clients with real HTTP, page sockets and rooms', () => {
         expect(onlyPages.commits).toHaveLength(0);
     });
 
+    test('an authenticated raw page-bound client cannot dispatch binary commands', async () => {
+        const f = await fixture();
+        const raw = await f.connect('alice', true);
+        raw.socket.send(Buffer.from('binary'));
+        await waitForCondition(() => raw.frames.some(frame => frame.type === 'error'), 'raw binary rejection');
+        expect(f.commits).toHaveLength(0);
+        expect(raw.socket.readyState).toBe(WebSocket.OPEN);
+    });
+
     test.each(['projection', 'authorization'])('obsolete %s failures cannot disconnect a healthy newer generation', async mode => {
         const started = deferred(), release = deferred(); let pause = false;
         const failLater = async () => { if (pause) { pause = false; started.resolve(); await release.promise; throw new Error('old failure'); } };

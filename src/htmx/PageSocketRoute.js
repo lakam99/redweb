@@ -11,9 +11,19 @@ function requirePageSession(session) {
     return session;
 }
 
+function requireRawClient(socket) {
+    if (!socket.__redwebRawClient) throw new AccessDenied();
+}
+
+function attachRawClient(socket, request, authorizedRequests) {
+    if (!authorizedRequests.has(request)) throw new AccessDenied();
+    socket.__redwebRawClient = true;
+}
+
 /** Adds page ownership to a route without replacing its admission, handlers or transport. */
 function bindRoute(manager, RouteClass, records) {
     const sessions = new WeakMap();
+    const rawRequests = new WeakSet();
     const ready = new WeakMap();
     return class PageSocketRoute extends RouteClass {
         constructor() {
@@ -44,6 +54,7 @@ function bindRoute(manager, RouteClass, records) {
                         return request[ADMISSION_CONTEXT]?.principal ?? true;
                     },
                 });
+                this.rawClientsAllowed = Boolean(this.admissionPolicy?.authenticate) && records.every(record => !record.metadata.policy);
                 for (const record of records) {
                     record.socketPath = this.path;
                     record.socketHandlers = new Set(this.handlers.map(handler => handler.constructor));
@@ -63,21 +74,27 @@ function bindRoute(manager, RouteClass, records) {
 
         async authorizeUpgrade(request, rawSocket, signal) {
             if (!await super.authorizeUpgrade(request, rawSocket, signal)) return false;
-            if (!new URL(request.url, 'http://localhost').searchParams.has('pageId')) return false;
+            if (!new URL(request.url, 'http://localhost').searchParams.has('pageId')) {
+                if (!this.rawClientsAllowed) return false;
+                rawRequests.add(request);
+                return true;
+            }
             return this.pageAdmission.authorize(request, rawSocket, this, signal);
         }
 
         async connectionOpenCallback(socket, request) {
             try {
-                const session = requirePageSession(sessions.get(request));
-                Object.defineProperty(socket, 'page', { value: PageClass => {
-                    manager.checkConnected(session, socket);
-                    if (!(session.page instanceof PageClass)) throw new TypeError('This connection does not own the requested page.');
-                    return session.page;
-                } });
-                guards.set(socket, () => manager.authorize(session, socket));
-                session.renderer.authorize = () => manager.authorize(session, socket);
-                await manager.connect(session, socket);
+                const session = sessions.get(request);
+                if (session) {
+                    Object.defineProperty(socket, 'page', { value: PageClass => {
+                        manager.checkConnected(session, socket);
+                        if (!(session.page instanceof PageClass)) throw new TypeError('This connection does not own the requested page.');
+                        return session.page;
+                    } });
+                    guards.set(socket, () => manager.authorize(session, socket));
+                    session.renderer.authorize = () => manager.authorize(session, socket);
+                    await manager.connect(session, socket);
+                } else attachRawClient(socket, request, rawRequests);
                 await super.connectionOpenCallback(socket, request);
                 ready.get(socket).resolve();
             } catch (error) { ready.get(socket).reject(error); throw error; }
@@ -86,7 +103,11 @@ function bindRoute(manager, RouteClass, records) {
         async handleMessage(socket, message) {
             try {
                 await ready.get(socket).promise;
-                const session = requirePageSession(socket.__redwebPageSession);
+                const session = socket.__redwebPageSession;
+                if (!session) {
+                    requireRawClient(socket);
+                    return super.handleMessage(socket, message);
+                }
                 await manager.authorize(session, socket);
                 // Only the bound route's registered commands are accepted. Live action/state
                 // envelopes cannot bypass its handlers or mutate page fields.
@@ -109,8 +130,10 @@ function bindRoute(manager, RouteClass, records) {
             finally { await super.connectionCloseCallback?.(socket); }
         }
 
-        async handleBinaryMessage(socket) {
+        async handleBinaryMessage(socket, buffer) {
             await ready.get(socket).promise;
+            if (socket.__redwebRawClient) return super.handleBinaryMessage(socket, buffer);
+            requirePageSession(socket.__redwebPageSession);
             socket.close(1008, 'Page sockets accept JSON commands only');
             return false;
         }
@@ -128,4 +151,4 @@ function bindRoutes(manager, RouteClasses) {
     });
 }
 
-module.exports = { bindRoutes, requirePageSession };
+module.exports = { attachRawClient, bindRoutes, requirePageSession, requireRawClient };
