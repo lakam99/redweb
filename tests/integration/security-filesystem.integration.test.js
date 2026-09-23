@@ -3,7 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { exportStatic, page } = require('../..');
+const { defineSite, exportStatic, page } = require('../..');
 
 test('static export cannot write through a linked output directory', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-export-boundary-'));
@@ -52,6 +52,28 @@ test('static export replaces a hard-linked output without modifying the private 
         fs.unlinkSync(privateFile);
         fs.rmdirSync(output);
         fs.rmdirSync(root);
+    }
+});
+
+test('site public asset merge replaces a hard-linked output without modifying the private file', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-site-file-boundary-'));
+    const output = path.join(root, 'output');
+    const publicDir = path.join(root, 'public');
+    const privateFile = path.join(root, 'private.txt');
+    const link = path.join(output, 'asset.txt');
+    fs.mkdirSync(output);
+    fs.mkdirSync(publicDir);
+    fs.writeFileSync(privateFile, 'private');
+    fs.writeFileSync(path.join(publicDir, 'asset.txt'), 'public');
+    try {
+        fs.linkSync(privateFile, link);
+        class StaticPage { render() { return '<p>exported</p>'; } }
+        defineSite().page('/')(StaticPage);
+        await defineSite().export(StaticPage, { outDir: output, publicDir, logger: null });
+        expect(fs.readFileSync(privateFile, 'utf8')).toBe('private');
+        expect(fs.readFileSync(link, 'utf8')).toBe('public');
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
     }
 });
 

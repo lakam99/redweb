@@ -17,18 +17,22 @@ function pageFile(outDir, route) {
     return path.join(outDir, relative);
 }
 
-function write(root, file, content) {
+function replaceOutput(root, file, createTemporary) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     if (outside(fs.realpathSync(root), fs.realpathSync(path.dirname(file)))) {
         throw new Error(`Static export path is outside the configured output directory: ${file}`);
     }
     const temporary = path.join(path.dirname(file), `.redweb-${randomUUID()}.tmp`);
     try {
-        fs.writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx' });
+        createTemporary(temporary);
         fs.renameSync(temporary, file);
     } finally {
         if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
+}
+
+function write(root, file, content) {
+    replaceOutput(root, file, temporary => fs.writeFileSync(temporary, content, { encoding: 'utf8', flag: 'wx' }));
 }
 
 async function exportStatic(pageOrPages, options = {}) {
@@ -86,4 +90,4 @@ async function exportStatic(pageOrPages, options = {}) {
     }
 }
 
-module.exports = { exportStatic };
+module.exports = { exportStatic, replaceOutput };
