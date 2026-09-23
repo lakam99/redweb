@@ -2,6 +2,7 @@ const http = require('http');
 const net = require('net');
 const path = require('path');
 const WebSocket = require('ws');
+const DefaultRoute = require('../../src/ws/DefaultRoute');
 const {
     BaseHandler,
     FixedStepService,
@@ -91,7 +92,7 @@ describe('WebSocket integration without mocks', () => {
     }
 
     test('the default route handles a real message', async () => {
-        const server = await start();
+        const server = await start({ routes: [DefaultRoute] });
         const client = await trackedConnect(address(server));
         client.send(JSON.stringify({ type: 'DefaultHandler', value: 7 }));
 
@@ -638,7 +639,7 @@ describe('WebSocket integration without mocks', () => {
         const strict = await start();
         expect(await expectConnectionFailure(address(strict, '/unknown'))).toBe('error');
 
-        const fallback = await start({ fallbackToRoot: true });
+        const fallback = await start({ fallbackToRoot: true, routes: [DefaultRoute] });
         const client = await trackedConnect(address(fallback, '/legacy-path'));
         client.send(JSON.stringify({ type: 'DefaultHandler' }));
         expect((await nextJson(client)).message).toContain('I got your message');
@@ -1154,6 +1155,7 @@ describe('WebSocket integration without mocks', () => {
     test('supports TLS WebSockets with real certificates', async () => {
         const server = await start({
             ssl: { key: fixture('localhost.key'), cert: fixture('localhost.crt') },
+            routes: [DefaultRoute],
         }, SecureSocketServer);
         const client = await trackedConnect(address(server, '/', true), { rejectUnauthorized: false });
         client.send(JSON.stringify({ type: 'DefaultHandler', secure: true }));
