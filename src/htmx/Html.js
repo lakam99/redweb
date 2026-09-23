@@ -123,12 +123,13 @@ function codeBlock(code, options = {}) {
         throw new TypeError('codeBlock() language must be a safe name of at most 32 characters.');
     }
     if (typeof label !== 'string') throw new TypeError('codeBlock() label must be a string.');
-    if (highlight !== undefined && typeof highlight !== 'function') throw new TypeError('codeBlock() highlight must be a function.');
+    if (highlight !== undefined && highlight !== false && typeof highlight !== 'function') throw new TypeError('codeBlock() highlight must be a function or false.');
     const caption = label ? html`<figcaption>${label}</figcaption>` : html``;
     let content = isHtml(code) ? code : String(code ?? '');
-    if (highlight) {
+    const highlighter = highlight === false ? undefined : highlight ?? (isHtml(code) ? undefined : require('./CodeHighlight').highlightCode);
+    if (highlighter) {
         if (isHtml(code)) throw new TypeError('codeBlock() cannot highlight an HtmlFragment.');
-        content = synchronous(highlight(content, language), 'codeBlock() highlight must render synchronously.');
+        content = synchronous(highlighter(content, language), 'codeBlock() highlight must render synchronously.');
         if (!isHtml(content)) throw new TypeError('codeBlock() highlight must return an HtmlFragment.');
     }
     return html`<figure class="redweb-code">${caption}<pre><code class="${attribute(`language-${language}`)}">${content}</code></pre></figure>`;

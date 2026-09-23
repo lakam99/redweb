@@ -20,6 +20,7 @@ import {
     defineSite,
     each,
     exportStatic,
+    highlightCode,
     html,
     inject,
     liveResource,
@@ -116,12 +117,14 @@ const sample = codeBlock('const ready = true', {
     label: 'TypeScript',
     highlight: source => html`<span class="token">${source}</span>`,
 });
+const highlighted = highlightCode('const ready = true', 'ts');
 void navigation;
 void nested;
 void readonlyNested;
 void badge;
 void directAttributes;
 void sample;
+void highlighted;
 
 @page('/docs', {
     live: false,

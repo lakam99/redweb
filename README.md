@@ -11,12 +11,12 @@ Use the same package for a live site, static HTML, Express HTTP endpoints, or ro
 Start with a neutral, tested application foundation:
 
 <!-- redweb:setup:start -->
-> Documentation for Redweb 0.16.3. Install that exact version when following these examples.
+> Documentation for Redweb 0.16.4. Install that exact version when following these examples.
 
 ```sh
-npx --yes redweb@0.16.3 init my-app
+npx --yes redweb@0.16.4 init my-app
 cd my-app
-npm install --save-exact redweb@0.16.3
+npm install --save-exact redweb@0.16.4
 npm test
 npm run dev
 ```

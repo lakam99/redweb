@@ -725,10 +725,13 @@ declare module 'redweb' {
     export function attribute(value: string | number | bigint | boolean): HtmlAttribute;
     export function url(value: string): HtmlUrl;
     export function each<Item>(items: readonly Item[], render: (item: Item, index: number) => HtmlFragment): HtmlFragment;
+    /** Escaped JS/TS/TSX token markup, including references inside rw-* JSX expressions. */
+    export function highlightCode(source: string, language: string): HtmlFragment;
     export function codeBlock(code: unknown, options?: {
         language?: string;
         label?: string;
-        highlight?: (source: string, language: string) => HtmlFragment;
+        /** Defaults to Redweb's JS/TS/TSX highlighter. false keeps escaped plain text. */
+        highlight?: false | ((source: string, language: string) => HtmlFragment);
     }): HtmlFragment;
 
     export type LivePageClass = new () => object;

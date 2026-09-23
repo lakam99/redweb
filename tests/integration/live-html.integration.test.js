@@ -80,6 +80,10 @@ class LiteralFragmentPage {
 }
 page('/literal-fragment')(LiteralFragmentPage);
 const createLiteralFragmentServer = options => startPages(LiteralFragmentPage, options);
+class HighlightReferencePage {
+    render() { return codeBlock('<button rw-click={Move.with({ cell: 2 })}>Move</button>', { language: 'tsx' }); }
+}
+page('/highlight-reference', { live: false })(HighlightReferencePage);
 const {
     closeWebSocket,
     nextMessage,
@@ -90,6 +94,18 @@ const {
     waitForOpen,
     websocketUpgradeStatus,
 } = require('../helpers/network');
+
+test('the real HTTP page serves escaped, syntax-highlighted rw-* action references', async () => {
+    const app = startPages(HighlightReferencePage, { port: 0, bind: '127.0.0.1', logger: silentLogger });
+    try {
+        await waitForListening(app.server);
+        const response = await request({ port: app.server.address().port, path: '/highlight-reference' });
+        expect(response.status).toBe(200);
+        expect(response.body).toContain('rw-click={<span class="token-reference">Move</span>');
+        expect(response.body).toContain('<span class="token-reference">cell</span>');
+        expect(response.body).not.toContain('<button rw-click=');
+    } finally { await app.shutdown(); }
+});
 
 test('static pages can own a native HTTPS listener without registering sockets', async () => {
     const app = startPages(DefaultStaticPage, { port: 0, bind: '127.0.0.1', logger: silentLogger,

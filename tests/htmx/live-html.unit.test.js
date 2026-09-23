@@ -232,8 +232,17 @@ describe('decorator-first Live HTML units', () => {
             language: 'js',
             highlight: (source, language) => html`<span class="${`token-${language}`}">${source}</span>`,
         }).toString()).toContain('<span class="token-js">const ready = true</span>');
+        const actionCode = codeBlock('<button rw-click={Move.with({ cell, revision: 2 })}>Move</button>', { language: 'tsx' }).toString();
+        for (const name of ['Move', 'with', 'cell', 'revision']) {
+            expect(actionCode).toContain(`<span class="token-reference">${name}</span>`);
+        }
+        expect(actionCode).toContain('<span class="token-number">2</span>');
+        expect(codeBlock('<button title="rw-click={Ignored}">{plain}</button>', { language: 'tsx' }).toString())
+            .not.toContain('token-reference');
         expect(codeBlock(null, { label: '' }).toString()).not.toContain('figcaption');
         expect(codeBlock('plain').toString()).toContain('language-text');
+        expect(codeBlock('const ready', { language: 'ts', highlight: false }).toString())
+            .toContain('<code class="language-ts">const ready</code>');
         expect(() => codeBlock('x', null)).toThrow('options');
         expect(() => codeBlock('x', { language: 'not valid' })).toThrow('safe name');
         expect(() => codeBlock('x', { label: null })).toThrow('label');
