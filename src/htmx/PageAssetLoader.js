@@ -1,10 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-
-function outside(root, candidate) {
-    const relative = path.relative(root, candidate);
-    return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
-}
+const { outside } = require('./pathBoundary');
 
 class PageAssetLoader {
     constructor() {
