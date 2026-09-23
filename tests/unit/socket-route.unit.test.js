@@ -376,6 +376,8 @@ describe('SocketRoute units', () => {
         const route = new SocketRoute({
             path: '/reservations', handlers: [NoopHandler], logger: null,
             limits: { maxConnections: 1 }, maxPendingUpgrades: 1,
+            getClientKey: request => request.socket.remoteAddress,
+            admission: { authenticate: () => 'owner' },
         });
         const request = { socket: { remoteAddress: 'client' } };
         const reservation = route.reserveUpgrade(request);
@@ -561,6 +563,7 @@ describe('SocketRoute units', () => {
             path: '/protocol-output',
             handlers: [NoopHandler],
             logger: null,
+            allowDuplicateConnections: true,
             metrics,
             protocol: {
                 versions: ['1'],
