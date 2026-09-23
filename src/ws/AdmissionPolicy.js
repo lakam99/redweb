@@ -121,7 +121,8 @@ class AdmissionPolicy {
             route,
         };
         const principal = this.authenticate ? await this.authenticate(request, context) : undefined;
-        if (this.authenticate && (principal === false || principal === null || principal === undefined)) {
+        if (this.authenticate && (principal === false || principal === null || principal === undefined ||
+            principal === '' || Number.isNaN(principal))) {
             throw new RequestFailure('AUTHENTICATION_REQUIRED');
         }
         checkpoint();

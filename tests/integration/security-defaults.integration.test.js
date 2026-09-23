@@ -320,7 +320,7 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         let missingIdentity;
         const url = await socketServer({ admission: { authenticate: incoming =>
             incoming.headers.cookie === 'session=owner' ? 'owner' : missingIdentity } });
-        for (const value of [undefined, null]) {
+        for (const value of [undefined, null, false, '', NaN]) {
             missingIdentity = value;
             expect(await websocketUpgradeStatus(url)).not.toBe(101);
         }

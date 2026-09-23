@@ -5,6 +5,7 @@ Redweb applies transport boundaries; it cannot decide who may read a game room, 
 ## Current defaults
 
 - WebSocket upgrades with an `Origin` header require the same scheme and host as the request. Clients without `Origin` remain possible, so this is browser cross-site protection, not authentication. Configure `admission.origins` for intentionally cross-origin sockets; an explicit policy replaces the default check.
+- An `admission.authenticate` hook fails closed on absent, false, empty-string, or `NaN` identities. Return a concrete principal only after verifying credentials.
 - Ordinary HTTP services do not emit wildcard CORS headers. Configure `corsOptions` only for origins that should read responses. CORS is not authorization.
 - A cookie-bearing unsafe HTTP request needs a matching `Origin` or `Sec-Fetch-Site: same-origin`; cross-site requests and requests with neither signal are rejected. Same-origin POSTs remain valid. Services must still authorize the account and validate input. Apps using a trusted TLS reverse proxy should configure Express proxy trust and verify forwarded headers are set by that proxy, not clients.
 - WebSocket frames have a 1 MiB default maximum, and unordered routes allow at most 64 in-flight messages per connection; override `websocketOptions.maxPayload` or `limits.maxPendingMessages` only when a route genuinely needs more. Application-level payload and rate limits remain useful.
