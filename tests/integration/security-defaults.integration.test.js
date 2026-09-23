@@ -3,11 +3,12 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const { BaseHandler, HttpServer, LiveHtmlServer, SocketRoute, SocketServer, page, upload } = require('../..');
 const {
     closeWebSocket, nextMessage, request, silentLogger, waitForCondition, waitForListening,
-    waitForOpen, websocketUpgradeStatus,
+    waitForOpen, websocketUpgradeStatus, withTimeout,
 } = require('../helpers/network');
 
 // These are security regression gates, not mock-based policy tests. Each request
@@ -262,5 +263,40 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         servers.add(server);
         await waitForListening(server.server);
         expect(await websocketUpgradeStatus(`ws://127.0.0.1:${server.server.address().port}/`)).not.toBe(101);
+    });
+
+    test('a rejecting async HTTP service returns a safe error without terminating its server', async () => {
+        const script = `
+            const { HttpServer } = require(process.argv[1]);
+            const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+                services: [{ method: 'get', serviceName: '/failure', function: async () => {
+                    throw new Error('async-service-private-error');
+                } }], logger: { log() {}, warn() {}, error() {} } });
+            server.server.on('listening', () => process.stdout.write('PORT:' + server.server.address().port + '\\n'));
+        `;
+        const child = spawn(process.execPath, ['--unhandled-rejections=strict', '-e', script, path.join(__dirname, '..', '..')],
+            { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+        let stdout = '';
+        try {
+            const port = await withTimeout(new Promise((resolve, reject) => {
+                child.stdout.on('data', chunk => {
+                    stdout += chunk.toString();
+                    const match = /PORT:(\d+)/.exec(stdout);
+                    if (match) resolve(Number(match[1]));
+                });
+                child.once('error', reject);
+                child.once('exit', code => reject(new Error(`HTTP child exited before listening: ${code}`)));
+            }), 'disposable HTTP server', 5000);
+            const response = await request({ port, path: '/failure' }).catch(error => ({ transportError: error.code }));
+            expect(response.status).toBe(500);
+            expect(response.body).not.toContain('async-service-private-error');
+            expect(child.exitCode).toBeNull();
+        } finally {
+            if (child.exitCode === null) {
+                const stopped = new Promise(resolve => child.once('exit', resolve));
+                child.kill();
+                await withTimeout(stopped, 'disposable HTTP server shutdown', 5000);
+            }
+        }
     });
 });
