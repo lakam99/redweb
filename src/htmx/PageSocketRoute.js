@@ -65,16 +65,15 @@ function bindRoute(manager, RouteClass, records) {
         async connectionOpenCallback(socket, request) {
             try {
                 const session = sessions.get(request);
-                if (session) {
-                    Object.defineProperty(socket, 'page', { value: PageClass => {
-                        manager.checkConnected(session, socket);
-                        if (!(session.page instanceof PageClass)) throw new TypeError('This connection does not own the requested page.');
-                        return session.page;
-                    } });
-                    guards.set(socket, () => manager.authorize(session, socket));
-                    session.renderer.authorize = () => manager.authorize(session, socket);
-                    await manager.connect(session, socket);
-                }
+                if (!session) throw new AccessDenied();
+                Object.defineProperty(socket, 'page', { value: PageClass => {
+                    manager.checkConnected(session, socket);
+                    if (!(session.page instanceof PageClass)) throw new TypeError('This connection does not own the requested page.');
+                    return session.page;
+                } });
+                guards.set(socket, () => manager.authorize(session, socket));
+                session.renderer.authorize = () => manager.authorize(session, socket);
+                await manager.connect(session, socket);
                 await super.connectionOpenCallback(socket, request);
                 ready.get(socket).resolve();
             } catch (error) { ready.get(socket).reject(error); throw error; }
@@ -84,7 +83,7 @@ function bindRoute(manager, RouteClass, records) {
             try {
                 await ready.get(socket).promise;
                 const session = socket.__redwebPageSession;
-                if (!session) return super.handleMessage(socket, message);
+                if (!session) throw new AccessDenied();
                 await manager.authorize(session, socket);
                 // Only the bound route's registered commands are accepted. Live action/state
                 // envelopes cannot bypass its handlers or mutate page fields.
@@ -107,13 +106,10 @@ function bindRoute(manager, RouteClass, records) {
             finally { await super.connectionCloseCallback?.(socket); }
         }
 
-        async handleBinaryMessage(socket, buffer) {
+        async handleBinaryMessage(socket) {
             await ready.get(socket).promise;
-            if (socket.__redwebPageSession) {
-                socket.close(1008, 'Page sockets accept JSON commands only');
-                return false;
-            }
-            return super.handleBinaryMessage(socket, buffer);
+            socket.close(1008, 'Page sockets accept JSON commands only');
+            return false;
         }
     };
 }
