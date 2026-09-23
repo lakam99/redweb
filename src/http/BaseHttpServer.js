@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 const { validateListenerOptions } = require('../serverLifecycle');
+const { sameOrigin } = require('../access/sameOrigin');
 
 /**
  * @typedef {'json' | 'urlencoded'} RedWebEncoding
@@ -108,14 +109,7 @@ function BaseHttpServer(options = {}) {
     this.app.use((request, response, next) => {
         if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.cookie) {
             const origin = request.headers.origin;
-            let foreignOrigin = false;
-            if (origin !== undefined) {
-                try {
-                    const parsed = new URL(origin);
-                    foreignOrigin = !['http:', 'https:'].includes(parsed.protocol) ||
-                        parsed.host.toLowerCase() !== String(request.headers.host || '').toLowerCase();
-                } catch { foreignOrigin = true; }
-            }
+            const foreignOrigin = origin !== undefined && !sameOrigin(request, origin);
             if (foreignOrigin || request.headers['sec-fetch-site'] === 'cross-site') {
                 response.status(403).end();
                 return;

@@ -50,6 +50,17 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(status).not.toBe(101);
     });
 
+    test('a different scheme on the same host is not a trusted socket origin', async () => {
+        const url = await socketServer();
+        const port = new URL(url).port;
+        expect(await websocketUpgradeStatus(url, { headers: {
+            Origin: `https://127.0.0.1:${port}`, Cookie: 'session=owner',
+        } })).not.toBe(101);
+        expect(await websocketUpgradeStatus(url, { headers: {
+            Origin: `http://127.0.0.1:${port}`, Cookie: 'session=owner',
+        } })).toBe(101);
+    });
+
     test('page authorization also protects raw upgrades to its bound socket route', async () => {
         class PrivateRoute extends SocketRoute {
             constructor() {
@@ -108,6 +119,11 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
             headers: { Origin: 'https://foreign.example', Cookie: 'session=owner',
                 'Content-Type': 'text/plain', 'Sec-Fetch-Site': 'cross-site' }, body: 'change' });
         expect(response.status).toBe(403);
+        expect(mutations).toBe(0);
+        const port = server.server.address().port;
+        const wrongScheme = await request({ port, path: '/change', method: 'POST', body: 'change',
+            headers: { Origin: `https://127.0.0.1:${port}`, Cookie: 'session=owner' } });
+        expect(wrongScheme.status).toBe(403);
         expect(mutations).toBe(0);
     });
 

@@ -10,21 +10,10 @@ const RouteRuntime = require('./RouteRuntime');
 const { ProtocolPolicy, ERROR_CODES } = require('./ProtocolPolicy');
 const { InboundContractValidationError } = require('./ContractValidationError');
 const { RequestFailure, UPGRADE_REJECTION } = require('../access/RequestFailure');
+const { sameOrigin } = require('../access/sameOrigin');
 
 function errorMessage(error) {
     return error instanceof Error ? error.message : String(error);
-}
-
-function sameHostOrigin(request) {
-    const origin = request?.headers?.origin;
-    if (origin === undefined) return true; // Non-browser clients do not send Origin.
-    const host = request?.headers?.host;
-    if (typeof origin !== 'string' || typeof host !== 'string') return false;
-    try {
-        const parsed = new URL(origin);
-        return ['http:', 'https:'].includes(parsed.protocol) && parsed.host.toLowerCase() === host.toLowerCase() &&
-            !parsed.username && !parsed.password && parsed.pathname === '/' && !parsed.search && !parsed.hash;
-    } catch { return false; }
 }
 
 function instantiate(ClassType, label) {
@@ -248,7 +237,8 @@ class SocketRoute {
     }
 
     acceptsDefaultOrigin(request) {
-        return Boolean(this.admissionPolicy?.origins) || sameHostOrigin(request);
+        return Boolean(this.admissionPolicy?.origins) || request?.headers?.origin === undefined ||
+            sameOrigin(request, request.headers.origin, this.trustProxy);
     }
 
     authorizeUpgrade(request, rawSocket, signal) {
