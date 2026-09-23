@@ -583,8 +583,10 @@ class PageManager {
                 try { decodedName = decodeURIComponent(uploadedName); }
                 catch { decodedName = null; }
             }
-            const file = Object.freeze({ stream, type: contentType,
-                name: decodedName && decodedName.length <= 256 ? decodedName : null });
+            const filename = decodedName?.replace(/\\/g, '/').split('/').pop();
+            const safeName = filename && filename !== '.' && filename !== '..' &&
+                filename.length <= 256 && !/[\x00-\x1f\x7f]/.test(filename) ? filename : null;
+            const file = Object.freeze({ stream, type: contentType, name: safeName });
             await implementation.call(target, file, context);
             if (!stream.readableEnded) {
                 stream.resume();

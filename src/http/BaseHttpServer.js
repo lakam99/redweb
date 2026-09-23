@@ -35,7 +35,7 @@ const HTTP_OPTIONS = {
     encoding: ENCODINGS.json,
     ssl: null,
     server: undefined,
-    corsOptions: undefined,
+    corsOptions: false,
     exposeErrors: false,
     logger: console,
 };
