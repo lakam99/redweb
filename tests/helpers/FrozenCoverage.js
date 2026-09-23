@@ -1,0 +1,50 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { createInstrumenter } = require('istanbul-lib-instrument');
+const { createCoverageMap } = require('istanbul-lib-coverage');
+
+/** Test-only original-filename instrumentation; frozen files are never replaced. */
+class FrozenCoverage {
+    constructor(directory, scripts) {
+        this.reports = path.join(directory, 'coverage-processes');
+        fs.mkdirSync(this.reports);
+        const compiled = path.join(directory, 'coverage-compiled.json');
+        const selected = {};
+        this.entries = [].concat(scripts).map(script => {
+            const filename = path.resolve(__dirname, '../..', script);
+            const source = fs.readFileSync(filename, 'utf8');
+            const instrumenter = createInstrumenter({ coverageVariable: '__redwebApplicationCoverage__',
+                coverageGlobalScope: 'globalThis', coverageGlobalScopeFunc: false });
+            selected[filename] = instrumenter.instrumentSync(source, filename);
+            return { script, filename, source, expected: instrumenter.lastFileCoverage() };
+        });
+        fs.writeFileSync(compiled, JSON.stringify(selected));
+        this.environment = {
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --require ${JSON.stringify(path.join(__dirname, 'instrument-selected.cjs'))}`,
+            REDWEB_COVERAGE_COMPILED: compiled, REDWEB_APPLICATION_COVERAGE_DIRECTORY: this.reports,
+        };
+    }
+
+    collect() {
+        const files = fs.readdirSync(this.reports);
+        assert.equal(files.length, 1, 'Expected one actual instrumented CLI process');
+        const measured = JSON.parse(fs.readFileSync(path.join(this.reports, files[0]), 'utf8'));
+        assert.deepEqual(Object.keys(measured).sort(), this.entries.map(entry => entry.filename).sort());
+        const map = createCoverageMap(globalThis.__coverage__ || {}); map.merge(measured);
+        for (const { script, filename, source, expected } of this.entries) {
+            assert.equal(fs.readFileSync(filename, 'utf8'), source, 'Frozen source changed');
+            for (const field of ['statementMap', 'fnMap', 'branchMap']) {
+                assert.deepEqual(measured[filename][field], JSON.parse(JSON.stringify(expected[field])));
+            }
+            if (process.argv.includes(`--collectCoverageFrom=${script}`)) {
+                globalThis.__coverage__ ||= {};
+                globalThis.__coverage__[filename] = map.fileCoverageFor(filename).toJSON();
+            }
+        }
+    }
+}
+
+module.exports = { FrozenCoverage };

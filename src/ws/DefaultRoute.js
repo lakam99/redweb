@@ -2,11 +2,12 @@ const SocketRoute  = require("./SocketRoute");
 const DefaultHandler = require('./DefaultHandler');
 
 class DefaultRoute extends SocketRoute {
-    constructor(server) {
+    constructor(server, options = {}) {
         super({
             server,
             path: "/",
-            handlers: [DefaultHandler]
+            handlers: [DefaultHandler],
+            logger: options.logger,
         })
     }
 }

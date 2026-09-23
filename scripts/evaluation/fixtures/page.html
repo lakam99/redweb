@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Evaluator control</title></head><body>
+<output data-testid="count">0</output><button data-testid="increment">Increment</button>
+<input data-testid="name"><button data-testid="join">Join</button>
+<input data-testid="message"><button data-testid="send">Send</button>
+<div data-testid="members"></div><div data-testid="messages"></div>
+<script>
+const fault = __FAULT__;
+const field = name => document.querySelector(`[data-testid="${name}"]`);
+const socket = new WebSocket(`ws://${location.host}`);
+const inputState = {};
+for (const name of ['name', 'message']) field(name).addEventListener(fault === 'change-inputs' ? 'change' : 'input', event => { inputState[name] = event.target.value; });
+const value = name => ['event-inputs', 'change-inputs'].includes(fault) ? inputState[name] : field(name).value;
+function render(state) {
+    field('count').textContent = state.count;
+    field('members').textContent = state.members.join(', ');
+    const text = state.messages.map(message => `${message.name}: ${message.text}`).join('\n');
+    if (fault === 'unsafe-html') field('messages').innerHTML = text;
+    else field('messages').textContent = text;
+    if (fault === 'draft-loss') field('message').value = '';
+}
+socket.onmessage = event => { if (!['http-updates', 'early-sse'].includes(fault)) render(JSON.parse(event.data)); };
+if (fault === 'http-updates') setInterval(() => fetch('/snapshot').then(response => response.json()).then(render).catch(() => {}), 100);
+if (fault === 'early-sse') new EventSource('/events').onmessage = event => render(JSON.parse(event.data));
+field('increment').onclick = () => {
+    if (fault !== 'lazy-asset') return socket.send(JSON.stringify({ type: 'increment' }));
+    if (window.lateIncrement) return window.lateIncrement();
+    const script = document.createElement('script'); script.src = '/late.js';
+    script.onload = () => window.lateIncrement(); document.head.append(script);
+};
+field('join').onclick = () => socket.send(JSON.stringify({ type: 'join', name: value('name') }));
+field('send').onclick = () => {
+    socket.send(JSON.stringify({ type: 'send', text: value('message') }));
+    field('message').value = '';
+};
+</script></body></html>

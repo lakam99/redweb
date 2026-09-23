@@ -1,2 +1,2 @@
-const { METHODS } = require('./BaseHttpServer');
-module.exports = { HttpServer: require('./HttpServer'), HttpsServer: require('./HttpsServer'), METHODS}
+const { BaseHttpServer, METHODS } = require('./BaseHttpServer');
+module.exports = { BaseHttpServer, HttpServer: require('./HttpServer'), HttpsServer: require('./HttpsServer'), METHODS}

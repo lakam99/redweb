@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "experimentalDecorators": false,
+    "baseUrl": "../..",
+    "paths": {
+      "redweb": ["."],
+      "redweb/*": ["*"]
+    }
+  },
+  "files": ["standard-decorators.ts", "action-input.ts"]
+}

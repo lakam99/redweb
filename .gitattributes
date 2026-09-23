@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Trial artifacts are byte-hashed. Preserve exact input and submission bytes.
+evaluations/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

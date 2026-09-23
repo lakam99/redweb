@@ -1,0 +1,42 @@
+{
+  "sealedAt": "2026-08-30T07:03:01.498Z",
+  "sourceCommit": "04c0ac9e665729066d5cffb5127219729d3b95fc",
+  "node": "v22.21.0",
+  "platform": "win32",
+  "arch": "x64",
+  "agentSettings": {
+    "context": "fork_turns=none",
+    "model": "inherited; exact model not captured",
+    "reasoningEffort": "inherited; not captured",
+    "assigned": "/root/adoption_assigned_01",
+    "discovery": "/root/adoption_discovery_01"
+  },
+  "timingNote": "Behavioral protocol/prompt preregistered; checker implemented after agent submissions. Submission copied before independent build; hashes sealed before that build.",
+  "evidenceSha256": {
+    "assigned-prompt.txt": "329031c26ed1560f7d899cac1e513f483f871f5dc9067c9c0bb10cf74a0405d0",
+    "discovery-prompt.txt": "ea134bb7d47c7c1ce091536ffcf7daa5fdbe0a5d3b631f2c70e8cff9b4816d2e",
+    "protocol.md": "a57624bcbcf80d0d27f7a657a45971426f8fc90b0a401a114300b47443e64fe9",
+    "input-manifest.json": "a202cd2a065632ec165008cbbdd14e3bc089525f6a06b2c016bf570027b694bf",
+    "redweb-candidate.tgz": "c753ae17463f7d8e17eade6d631534180cc1f632b34e44af04fed562abe9f914",
+    "DISCOVERY.md": "b3935511cd336ed6269523857d1a73e333b5ed4b2ca20cbb0d108787c3834aaf",
+    "submission-1/README.md": "ba2c388cf7c18517e2bd665866f4a63f7f62eedc063647f3feeb52b5afb20ad4",
+    "submission-1/TRIAL_LOG.md": "63ae085f27ba83b1963490dece33723c7237ba572b0c64ec59bc2374a1a61f50",
+    "submission-1/package-lock.json": "d185065b5f56b903fa5271c75b0c1818c0a3eade4a4623f5055501eb60a3f33f",
+    "submission-1/package.json": "06dc24f2da4d59b3d6df5290e90ac03b13d1c97fc9dbba3904581623f552b14b",
+    "submission-1/src/app.tsx": "7a66205d5748f0fdda70e778445576dd71a0c5dd4c5d16e974bc1812c43021cf",
+    "submission-1/test/app.test.cjs": "30f8c3ceabc65ab57bae4d47da34f525b61ae4261c46a64faddf02a51ba86337",
+    "submission-1/tsconfig.json": "575ba5f9119e6c65fe4b5c8368e8fec9d2b27175c944d2b90691e22ef5dacab9"
+  },
+  "checkerSha256": {
+    "scripts/evaluation/verify.js": "9008136ae8c7e29b5e05ca06247d84bc6721827abf534ab762dd52ba6aa81b53",
+    "scripts/evaluation/process.js": "8bfbf3ad3887b7f215b14414cc9433c1a1f0776f109c41cf2f5c7a6d02ed340b",
+    "scripts/evaluation/validate.js": "ae50f008dce0dd72533c07eb0cb9b6ffb71055263acc992423af667bb0126955",
+    "scripts/evaluation/run-trial.js": "9be48fe5153e505e112467bdfbc87b18da539ade5f1bf4b359fc6e600dad7e35",
+    "scripts/evaluation/seal.js": "46bf4a65fef83f43ab9a7ec9250c2eeada06d35ffb19acefd4f6d4cac87ce09e",
+    "scripts/evaluation/fixtures/app.js": "8b31868eb3347f7ef6ea37ebe5d97e53659245c3e804156898017d06c91759ac",
+    "scripts/evaluation/fixtures/page.html": "db699364fc4642ec7cff3b328253585e0aa304d353014703870a0ed49cbe0aa1",
+    "scripts/verify-live-html-browser.js": "f181d172a911817db154fb08ef22da95e6b98a49f5911408bd3fbc0b7fe24c4d",
+    "tests/helpers/network.js": "4323e5e3c84942d83c83faa8f4ce99b157b40de23307144a84ff6b7fcf8e03d9",
+    "package-lock.json": "52bfb7f0efe48d60a866c82b5787b117d5d9fd08cb181f0c7acc6b347c665509"
+  }
+}
