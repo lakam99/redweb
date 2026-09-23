@@ -52,7 +52,8 @@ describe('documented applications without mocks', () => {
             fs.copyFileSync(path.join(root, 'CHANGELOG.md'), path.join(workspace.directory, 'CHANGELOG.md'));
             const version = require('../../package.json').version;
             const snapshot = path.join(workspace.directory, 'docs', 'releases', `${version}.json`);
-            fs.rmSync(snapshot);
+            fs.rmSync(snapshot, { force: true });
+            expect(fs.existsSync(snapshot)).toBe(false);
             const generator = path.join(workspace.directory, 'scripts', 'generate-docs.js');
             expect(spawnSync(process.execPath, [generator], { cwd: workspace.directory, encoding: 'utf8', timeout: 10000 }).status).toBe(0);
             expect(JSON.parse(fs.readFileSync(path.join(workspace.directory, 'docs', 'generated.json'), 'utf8')).channel).toBe('unreleased');
