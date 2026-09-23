@@ -4,6 +4,8 @@ Build a TypeScript website and its realtime backend together. Decorated classes 
 
 Use the same package for a live site, static HTML, Express HTTP endpoints, or routed WebSocket services.
 
+Review [security defaults and application responsibilities](docs/SECURITY_DEFAULTS.md) before exposing an app publicly.
+
 [`defineApp({ pages, sockets, services, providers, port })`](docs/APPLICATION.md) composes one owned HTTP/WebSocket listener. Register only what your app needs, then call `app.run()`.
 
 ## Install
