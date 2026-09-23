@@ -178,6 +178,19 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response.body).not.toMatch(/private-(?:service|logger)-detail/);
     });
 
+    test('a service error after its response was sent cannot replace that response', async () => {
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            services: [{ method: 'get', serviceName: '/done', function: (_incoming, response, next) => {
+                response.send('ok');
+                next(new Error('private-late-detail'));
+            } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const response = await request({ port: server.server.address().port, path: '/done' });
+        expect(response.status).toBe(200);
+        expect(response.body).toBe('ok');
+    });
+
     test('a public asset symlink cannot disclose a file outside the public directory', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-public-boundary-'));
         const publicDir = path.join(root, 'public');

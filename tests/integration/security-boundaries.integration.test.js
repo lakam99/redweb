@@ -102,7 +102,7 @@ describe('security boundaries over real local listeners', () => {
 
     test('encoded static paths cannot escape their configured public directory', async () => {
         const { port } = await start(HttpServer, { publicPaths: [path.join(__dirname, '..', 'fixtures')] });
-        for (const target of ['/%2e%2e/package.json', '/%2e%2e/%2e%2e/package.json', '/..%5c..%5cpackage.json']) {
+        for (const target of ['/%2e%2e/package.json', '/%2e%2e/%2e%2e/package.json', '/..%5c..%5cpackage.json', '/%zz']) {
             const response = await request({ port, path: target });
             expect(response.status).not.toBe(200);
             expect(response.body).not.toContain('"name": "redweb"');

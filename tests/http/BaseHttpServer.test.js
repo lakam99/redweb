@@ -5,6 +5,26 @@ const { BaseHttpServer, ENCODINGS, HTTP_OPTIONS } = require('../../src/http/Base
 describe('BaseHttpServer', () => {
     let serverInstance;
 
+    test.each([
+        [null, 'options must be an object'],
+        [[], 'options must be an object'],
+        [{ encoding: 'xml' }, '`encoding`'],
+        [{ publicPaths: false }, '`publicPaths`'],
+        [{ publicPaths: [''] }, 'public path'],
+        [{ services: false }, '`services`'],
+        [{ services: [null] }, '`serviceName`'],
+        [{ services: [{ serviceName: '', method: 'get', function() {} }] }, '`serviceName`'],
+        [{ services: [{ serviceName: '/x', method: 'trace', function() {} }] }, 'Unsupported'],
+        [{ services: [{ serviceName: '/x', method: 'get', function: false }] }, 'function'],
+        [{ services: [
+            { serviceName: '*', method: 'get', function() {} },
+            { serviceName: '*', method: 'post', function() {} },
+        ] }, 'catch-all'],
+        [{ server: {} }, 'Express-compatible'],
+    ])('rejects invalid HTTP configuration %#', (options, message) => {
+        expect(() => new BaseHttpServer(options)).toThrow(message);
+    });
+
     afterEach(() => {
         jest.restoreAllMocks();
     });
