@@ -121,12 +121,13 @@ function BaseHttpServer(options = {}) {
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) => {
         const root = path.resolve(process.cwd(), publicPath);
-        this.app.use((request, response, next) => {
-            let target;
+        this.app.use(async (request, response, next) => {
             try {
                 const pathname = decodeURIComponent(new URL(request.url, 'http://redweb.invalid').pathname);
-                target = fs.realpathSync(path.resolve(root, `.${pathname}`));
-                const relative = path.relative(fs.realpathSync(root), target);
+                const [canonicalRoot, target] = await Promise.all([
+                    fs.promises.realpath(root), fs.promises.realpath(path.resolve(root, `.${pathname}`)),
+                ]);
+                const relative = path.relative(canonicalRoot, target);
                 if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
                     response.sendStatus(404);
                     return;
