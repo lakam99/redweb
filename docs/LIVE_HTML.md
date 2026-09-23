@@ -205,7 +205,7 @@ const reference = <>{apiSections.map(section =>
 )}</>;
 ```
 
-`codeBlock()` escapes strings by default. It may also receive an explicit `HtmlFragment`, or a `highlight(source, language)` callback that returns one, allowing a server-side highlighter to compose safe token spans without accepting arbitrary HTML strings.
+`codeBlock()` escapes strings by default. JavaScript, TypeScript, and TSX strings are highlighted automatically, including identifiers inside `rw-*={...}` action bindings. The built-in `highlightCode(source, language)` is also available when composing custom code UI. Both emit escaped `token-keyword`, `token-literal`, `token-number`, `token-string`, `token-comment`, and `token-reference` spans. Copy or import `redweb/code-highlight.css` for a default dark palette, or style those classes in your own CSS. Other languages remain escaped plain text. An explicit `HtmlFragment` remains untouched, `highlight: false` opts out, and a custom `highlight(source, language)` callback overrides the built-in highlighter. A custom callback must return a safe fragment, not arbitrary HTML.
 
 An `HtmlFragment` returned from `render()` is already fully composed and is never reparsed for `{{ bindings }}` or directives. This keeps code samples literal and prevents escaped documentation text from becoming executable template syntax. Return a string or use `template` when Redweb should process declarative bindings.
 

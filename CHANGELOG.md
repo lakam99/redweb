@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.4
+
+- Highlight JavaScript, TypeScript and TSX code blocks by default, including object and handler references inside `rw-*={...}` bindings. Export the safe `highlightCode()` helper and optional `redweb/code-highlight.css` palette for applications that render documentation.
+- Keep custom highlighters, already-composed HTML fragments, and `highlight: false` available. Verify escaping and tokenization with 100% unit coverage and a real HTTP page test.
+
 ## 0.16.3
 
 - Add explicit `defineApp({ providers })` dependencies through `@inject`, keyed `liveResource()` and `@resource()` projections, and bounded streaming `@upload()` actions for Live HTML pages and components.

@@ -1,0 +1,16 @@
+.redweb-code {
+    color: #e5e7eb;
+    background: #111827;
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+.redweb-code pre {
+    overflow-x: auto;
+    padding: 1rem;
+}
+.redweb-code .token-comment { color: #7dd3fc; }
+.redweb-code .token-keyword { color: #93c5fd; }
+.redweb-code .token-literal { color: #c4b5fd; }
+.redweb-code .token-number { color: #fcd34d; }
+.redweb-code .token-string { color: #fca5a5; }
+.redweb-code .token-reference { color: #a7f3d0; }

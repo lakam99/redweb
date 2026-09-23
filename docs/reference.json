@@ -955,7 +955,7 @@
       "name": "html, attribute, url, each, codeBlock",
       "type": "Live HTML",
       "summary": "Safe composition primitives escape text and quoted primitive attributes by default. URL attributes additionally reject executable, protocol-relative, and malformed values. Arrays must contain trusted HtmlFragment values.",
-      "usage": "import { codeBlock, each, html } from 'redweb'\n\nconst links = sections.map(section => ({\n  id: section.id,\n  href: `#${section.id}`,\n  label: section.name,\n}))\n\nconst navigation = each(links, link => html`\n  <a id=\"${link.id}\" href=\"${link.href}\">${link.label}</a>\n`)\n\nconst example = codeBlock(source, {\n  language: 'ts',\n  label: 'TypeScript',\n  highlight: highlightTypeScript,\n})",
+      "usage": "import { codeBlock, each, html } from 'redweb'\n\nconst links = sections.map(section => ({\n  id: section.id,\n  href: `#${section.id}`,\n  label: section.name,\n}))\n\nconst navigation = each(links, link => html`\n  <a id=\"${link.id}\" href=\"${link.href}\">${link.label}</a>\n`)\n\n// TS, TSX and JS highlight automatically, including rw-* action references.\nconst example = codeBlock(source, { language: 'tsx', label: 'TypeScript' })",
       "methods": [
         {
           "name": "html`...`",
@@ -975,7 +975,11 @@
         },
         {
           "name": "codeBlock(code, options?)",
-          "detail": "Builds an escaped figure/pre/code fragment and can invoke a safe server-side highlighter."
+          "detail": "Builds an escaped figure/pre/code fragment with automatic JS/TS/TSX highlighting; custom highlighters and opt-out remain available."
+        },
+        {
+          "name": "highlightCode(source, language)",
+          "detail": "Returns safely escaped token markup, including identifiers inside rw-* JSX action expressions."
         }
       ],
       "article": {

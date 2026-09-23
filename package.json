@@ -1,6 +1,6 @@
 {
   "name": "redweb",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "description": "A small Node.js foundation for HTTP, WebSockets, multiplayer services, and server-rendered HTML",
   "main": "index.js",
   "types": "index.d.ts",
@@ -39,6 +39,7 @@
       "default": "./jsx-dev-runtime.js"
     },
     "./tsconfig.json": "./config/tsconfig.json",
+    "./code-highlight.css": "./styles/code-highlight.css",
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -114,6 +115,7 @@
     "bin",
     "config",
     "src/*",
+    "styles",
     "client.js",
     "client.d.ts",
     "contract.js",
@@ -163,7 +165,9 @@
     "ws": "^8.21.3"
   },
   "overrides": {
-    "express": { "qs": "6.16.0" }
+    "express": {
+      "qs": "6.16.0"
+    }
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

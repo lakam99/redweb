@@ -9,9 +9,9 @@ It is not React, a browser component framework, a database, an identity provider
 Create the same neutral foundation whether you are following a tutorial or starting your own application:
 
 ```sh
-npx --yes redweb@0.16.3 init my-app
+npx --yes redweb@0.16.4 init my-app
 cd my-app
-npm install --save-exact redweb@0.16.3
+npm install --save-exact redweb@0.16.4
 npm test
 npm run dev
 ```
@@ -19,7 +19,7 @@ npm run dev
 Add capability dependencies without importing example-domain code:
 
 ```sh
-npx --yes redweb@0.16.3 init my-game --with auth,multiplayer
+npx --yes redweb@0.16.4 init my-game --with auth,multiplayer
 ```
 
 The default includes its real tests. `--bare` omits only the test directory, test scripts, and test-only coverage dependency; it retains the runnable application, CSS, compiler configuration, build scripts, and development watcher.
@@ -67,7 +67,7 @@ For private raw socket subscriptions, see [room authorization and shared request
 
 Build first. Deploy `dist/`, the package manifest, and the lockfile, then install runtime dependencies with `npm ci --omit=dev`. The starters are tested with `src/` unavailable after compilation. Configure HTTPS/WSS and a proxy that supports WebSocket upgrades when using a reverse proxy.
 
-These deployment commands require a verified release pair. `redweb@0.16.3` installs published `redweb-client@0.3.1` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
+These deployment commands require a verified release pair. `redweb@0.16.4` installs published `redweb-client@0.3.1` automatically through its dependency. Future unreleased Redweb changes require their matching tested tarball until a release containing them is published. The `npm link` workflow is local development only: a clean production install does not preserve that link.
 
 Before public access, add authentication, authorization, trusted-origin policy, input/rate limits, application persistence where needed, and bounded shutdown. Treat reconnect/session tokens as credentials. Do not promise exactly-once delivery or durable sessions from an in-memory starter. See [operations](MULTIPLAYER_OPERATIONS.md) and [guarantees and limits](PRODUCTION_READINESS.md).
 
