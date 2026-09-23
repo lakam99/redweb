@@ -159,7 +159,8 @@ function BaseHttpServer(options = {}) {
 
     this.app.use((error, _request, response, next) => {
         if (response.headersSent) return next(error);
-        this.logger?.error?.('HTTP service failed:', error);
+        try { this.logger?.error?.('HTTP service failed:', error); }
+        catch { /* Application logging must not prevent a safe error response. */ }
         response.status(500).json({ error: { code: 'HTTP_SERVICE_FAILED', message: 'HTTP service failed.' } });
     });
 

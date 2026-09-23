@@ -123,6 +123,18 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(response.body).not.toContain('database-password-is-private');
     });
 
+    test('a failing HTTP logger cannot turn a service exception into a leaked or stalled response', async () => {
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            services: [{ method: 'get', serviceName: '/failure', function: () => {
+                throw new Error('private-service-detail');
+            } }], logger: { error() { throw new Error('private-logger-detail'); } } });
+        servers.add(server);
+        await waitForListening(server.server);
+        const response = await request({ port: server.server.address().port, path: '/failure' });
+        expect(response.status).toBe(500);
+        expect(response.body).not.toMatch(/private-(?:service|logger)-detail/);
+    });
+
     test('a public asset symlink cannot disclose a file outside the public directory', async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), 'redweb-public-boundary-'));
         const publicDir = path.join(root, 'public');
