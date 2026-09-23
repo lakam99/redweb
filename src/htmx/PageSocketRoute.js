@@ -6,6 +6,11 @@ const TransportPolicy = require('../ws/TransportPolicy');
 const { guards } = require('../ws/HandlerGuard');
 const { scheduleStartupCleanup } = require('../StartupCleanup');
 
+function requirePageSession(session) {
+    if (!session) throw new AccessDenied();
+    return session;
+}
+
 /** Adds page ownership to a route without replacing its admission, handlers or transport. */
 function bindRoute(manager, RouteClass, records) {
     const sessions = new WeakMap();
@@ -64,8 +69,7 @@ function bindRoute(manager, RouteClass, records) {
 
         async connectionOpenCallback(socket, request) {
             try {
-                const session = sessions.get(request);
-                if (!session) throw new AccessDenied();
+                const session = requirePageSession(sessions.get(request));
                 Object.defineProperty(socket, 'page', { value: PageClass => {
                     manager.checkConnected(session, socket);
                     if (!(session.page instanceof PageClass)) throw new TypeError('This connection does not own the requested page.');
@@ -82,8 +86,7 @@ function bindRoute(manager, RouteClass, records) {
         async handleMessage(socket, message) {
             try {
                 await ready.get(socket).promise;
-                const session = socket.__redwebPageSession;
-                if (!session) throw new AccessDenied();
+                const session = requirePageSession(socket.__redwebPageSession);
                 await manager.authorize(session, socket);
                 // Only the bound route's registered commands are accepted. Live action/state
                 // envelopes cannot bypass its handlers or mutate page fields.
@@ -125,4 +128,4 @@ function bindRoutes(manager, RouteClasses) {
     });
 }
 
-module.exports = { bindRoutes };
+module.exports = { bindRoutes, requirePageSession };
