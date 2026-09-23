@@ -6,7 +6,6 @@
  * @property {Array<new () => import('./SocketRoute').SocketRoute>} [routes]
  */
 
-const DefaultRoute = require('./DefaultRoute');
 const { createInspection } = require('../development/Inspection');
 const { PLACEMENT_REDIRECT, ADMISSION_SETTLEMENT } = require('./AdmissionPolicy');
 const { PROTOCOL_REJECTION } = require('./ProtocolPolicy');
@@ -57,7 +56,7 @@ class BaseSocketServer {
     this._connectionHandler = this._ownedServer?.onConnection ?? null;
 
     /* ─── ROUTE INITIALISATION ─────────────────────────── */
-    const RouteClasses = options.routes?.length ? [...options.routes] : [DefaultRoute];
+    const RouteClasses = [...this.routes];
     this.routes = [];
     try {
       for (const RouteClass of RouteClasses) {
