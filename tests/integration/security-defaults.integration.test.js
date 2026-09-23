@@ -94,6 +94,25 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(await outcome).toBe(1009);
     });
 
+    test('an unordered socket cannot accumulate unbounded pending handler work', async () => {
+        let release, started = 0;
+        const gate = new Promise(resolve => { release = resolve; });
+        class Slow extends BaseHandler {
+            constructor() { super('slow'); }
+            onMessage() { started += 1; return gate; }
+        }
+        const url = await socketServer({ handlers: [Slow] });
+        const socket = new WebSocket(url);
+        clients.add(socket);
+        try {
+            await waitForOpen(socket);
+            const closed = new Promise(resolve => socket.once('close', resolve));
+            for (let index = 0; index < 70; index += 1) socket.send(JSON.stringify({ type: 'slow' }));
+            await withTimeout(closed, 'message-capacity rejection', 3000);
+            expect(started).toBeLessThanOrEqual(64);
+        } finally { release(); }
+    });
+
     test('default HTTP responses do not grant arbitrary browser origins read access', async () => {
         const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
             services: [{ method: 'get', serviceName: '/private', function: (_request, response) => response.send('private') }],

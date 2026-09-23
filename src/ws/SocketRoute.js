@@ -317,6 +317,7 @@ class SocketRoute {
 
         this.clients.set(clientKey, socket);
         socket.__redwebRouteOwner = this;
+        socket.__redwebInFlightMessages = 0;
         socket.clientKey = clientKey;
         socket.__redwebClientKey = clientKey;
         socket.remoteAddress = socket.remoteAddress || ip;
@@ -404,7 +405,18 @@ class SocketRoute {
         }
         const task = () => this.runMessageTask(() => this.dispatchMessage(socket, message, isBinary));
         if (!runtime?.queue) {
-            void task();
+            if (socket.__redwebInFlightMessages >= (this.transportPolicy?.maxPendingMessages ?? 64)) {
+                this.sendFailure(socket, ERROR_CODES.QUEUE_FULL, 'Message capacity reached');
+                socket.close?.(1013, 'Message capacity reached');
+                this.metrics?.increment('redweb.messages.queue_full');
+                return false;
+            }
+            socket.__redwebInFlightMessages += 1;
+            void Promise.resolve().then(task).catch(error => {
+                try { this.handleError(socket, error); }
+                catch { /* Application logging cannot turn a failed task into an unhandled rejection. */ }
+                socket.close?.(1011, 'Message processing failed');
+            }).finally(() => { socket.__redwebInFlightMessages -= 1; });
             return true;
         }
         if (runtime.queue.enqueue(task)) return true;
