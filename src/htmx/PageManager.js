@@ -223,6 +223,7 @@ class PageManager {
     }
 
     respond(record, request, response, markup) {
+        response.set('X-Frame-Options', 'SAMEORIGIN');
         if (record.metadata.live !== false || this.authenticateRequest || record.metadata.policy) {
             // end() deliberately bypasses Express's automatic conditional-GET/ETag handling.
             response.set('Cache-Control', 'private, no-store').type('html').end(markup);

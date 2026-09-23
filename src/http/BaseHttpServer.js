@@ -104,6 +104,25 @@ function BaseHttpServer(options = {}) {
         this.app.use(cors(this.options.corsOptions));
     }
 
+    this.app.use((request, response, next) => {
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers.cookie) {
+            const origin = request.headers.origin;
+            let foreignOrigin = false;
+            if (origin !== undefined) {
+                try {
+                    const parsed = new URL(origin);
+                    foreignOrigin = !['http:', 'https:'].includes(parsed.protocol) ||
+                        parsed.host.toLowerCase() !== String(request.headers.host || '').toLowerCase();
+                } catch { foreignOrigin = true; }
+            }
+            if (foreignOrigin || request.headers['sec-fetch-site'] === 'cross-site') {
+                response.status(403).end();
+                return;
+            }
+        }
+        next();
+    });
+
     // Serve static files from public paths
     this.publicPaths.forEach((publicPath) =>
         this.app.use(express.static(path.resolve(process.cwd(), publicPath)))
