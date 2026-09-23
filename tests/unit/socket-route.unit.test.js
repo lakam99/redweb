@@ -416,6 +416,10 @@ describe('SocketRoute units', () => {
         route.draining = true;
         expect(route.reserveUpgrade(request)).toBeNull();
 
+        const untrusted = new SocketRoute({ path: '/untrusted-reservations', handlers: [NoopHandler], logger: null });
+        untrusted.clients.set('client', {});
+        expect(untrusted.reserveUpgrade(request)).toBeNull();
+
         const full = new SocketRoute({
             path: '/full-reservations', handlers: [NoopHandler], logger: null,
             allowDuplicateConnections: true, limits: { maxConnections: 1 },

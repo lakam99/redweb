@@ -75,7 +75,8 @@
         "listen: boolean (default true); set false to build app without binding a port",
         "listenCallback: function invoked after listen",
         "encoding: \"json\" | \"urlencoded\" (default json)",
-        "corsOptions: passed to cors when explicitly configured (default false, including undefined/null; no wildcard CORS). CORS read access does not permit cross-origin unsafe methods."
+        "corsOptions: passed to cors when explicitly configured (default false, including undefined/null; no wildcard CORS). CORS read access does not permit cross-origin unsafe methods.",
+        "publicOrigin: exact external HTTP(S) origin when a trusted TLS proxy forwards to a private listener; allows same-origin browser mutations from that public origin without trusting arbitrary forwarded headers"
       ],
       "methods": [
         {

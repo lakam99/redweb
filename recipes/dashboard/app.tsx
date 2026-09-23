@@ -92,6 +92,7 @@ export function createApp(options: DashboardOptions = {}) {
     const server = defineApp({
         pages: [Login, Dashboard], services: [Workspace], signals: options.signals, shutdownTimeoutMs: options.shutdownTimeoutMs,
         server: app, port, bind: configuredOrigin ? '0.0.0.0' : '127.0.0.1', logger: null, templateRoot: __dirname,
+        publicOrigin: configuredOrigin,
         origins: allowsOrigin,
         authenticate: request => request.method === 'GET' && request.url?.split('?')[0] === '/login'
             ? true : store!.session(sessionToken(request.headers.cookie))?.account,

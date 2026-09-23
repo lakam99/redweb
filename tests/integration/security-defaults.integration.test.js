@@ -158,6 +158,31 @@ describe('secure defaults over real HTTP and WebSocket connections', () => {
         expect(mutations).toBe(0);
     });
 
+    test('an exact public origin permits proxied same-origin writes without admitting foreign browser origins', async () => {
+        let mutations = 0;
+        const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],
+            publicOrigin: 'https://dashboard.example',
+            services: [{ method: 'post', serviceName: '/change', function: (_request, response) => {
+                mutations += 1;
+                response.sendStatus(204);
+            } }], logger: silentLogger });
+        servers.add(server);
+        await waitForListening(server.server);
+        const port = server.server.address().port;
+        const base = { port, path: '/change', method: 'POST', body: 'change' };
+        const sameOrigin = await request({ ...base, headers: { Origin: 'https://dashboard.example',
+            'Sec-Fetch-Site': 'same-origin', Cookie: 'session=owner' } });
+        expect(sameOrigin.status).toBe(204);
+        for (const headers of [
+            { Origin: 'https://foreign.example', 'Sec-Fetch-Site': 'same-origin', Cookie: 'session=owner' },
+            { Origin: 'https://dashboard.example', 'Sec-Fetch-Site': 'cross-site', Cookie: 'session=owner' },
+            { Cookie: 'session=owner' },
+        ]) {
+            expect((await request({ ...base, headers })).status).toBe(403);
+        }
+        expect(mutations).toBe(1);
+    });
+
     test('a cross-site cookie-bearing POST cannot mutate a default HTTP service', async () => {
         let mutations = 0;
         const server = new HttpServer({ port: 0, bind: '127.0.0.1', publicPaths: [],

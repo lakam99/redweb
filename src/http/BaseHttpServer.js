@@ -24,6 +24,7 @@ const { sameOrigin } = require('../access/sameOrigin');
  * @property {string} [ssl.cert] - Path to the SSL certificate file.
  * @property {import('express').Application} [server] - Existing Express application to configure.
  * @property {import('cors').CorsOptions} [corsOptions] - The CORS Options.
+ * @property {string} [publicOrigin] - Exact external HTTP(S) origin when a trusted TLS proxy forwards to this listener.
  */
 
 const ENCODINGS = { json: 'json', urlencoded: 'urlencoded' };
@@ -38,6 +39,7 @@ const HTTP_OPTIONS = {
     ssl: null,
     server: undefined,
     corsOptions: false,
+    publicOrigin: undefined,
     exposeErrors: false,
     logger: console,
 };
@@ -46,6 +48,15 @@ function assertOptions(options) {
     validateListenerOptions(options);
     if (!Object.values(ENCODINGS).includes(options.encoding)) {
         throw new TypeError('`encoding` must be either "json" or "urlencoded".');
+    }
+    if (options.publicOrigin !== undefined) {
+        let parsed;
+        try { parsed = new URL(options.publicOrigin); }
+        catch { throw new TypeError('`publicOrigin` must be an exact HTTP(S) origin.'); }
+        if (typeof options.publicOrigin !== 'string' || !['http:', 'https:'].includes(parsed.protocol) ||
+            parsed.origin !== options.publicOrigin) {
+            throw new TypeError('`publicOrigin` must be an exact HTTP(S) origin.');
+        }
     }
     if (!Array.isArray(options.publicPaths)) {
         throw new TypeError('`publicPaths` must be an array.');
@@ -111,7 +122,7 @@ function BaseHttpServer(options = {}) {
         if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
             const origin = request.headers.origin;
             const fetchSite = request.headers['sec-fetch-site'];
-            const trusted = origin !== undefined ? sameOrigin(request, origin) :
+            const trusted = origin !== undefined ? sameOrigin(request, origin) || origin === this.options.publicOrigin :
                 !request.headers.cookie || fetchSite === 'same-origin';
             if (!trusted || (fetchSite !== undefined && !['same-origin', 'none'].includes(fetchSite))) {
                 response.status(403).end();
