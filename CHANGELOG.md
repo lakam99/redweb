@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.5
+
+- Harden HTTP, WebSocket, Live HTML, static asset, upload, and CLI security boundaries with real-network regression coverage and unit tests. Default CORS and unsafe-method origin checks now fail closed, while `publicOrigin` supports an explicitly configured TLS-terminating proxy.
+- Make `npm publish` generate and validate the matching release documentation and immutable snapshot automatically before packing, so an unreleased catalogue no longer requires a separate manual command.
+
 ## 0.16.4
 
 - Highlight JavaScript, TypeScript and TSX code blocks by default, including object and handler references inside `rw-*={...}` bindings. Export the safe `highlightCode()` helper and optional `redweb/code-highlight.css` palette for applications that render documentation.
